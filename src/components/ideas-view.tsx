@@ -1,0 +1,410 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { ArrowBigUp, Rocket, Trash2, ExternalLink } from "lucide-react";
+import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
+import { Button } from "@/components/ui/button";
+import { Input, Select, Textarea, Label } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
+import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
+
+export interface IdeaItem {
+  id: string;
+  title: string;
+  description: string | null;
+  status: "NEW" | "UNDER_REVIEW" | "ACCEPTED" | "REJECTED";
+  taskId: string | null;
+  creatorId: string;
+  creatorName: string;
+  creatorJobTitle: string | null;
+  voteCount: number;
+  votedByMe: boolean;
+}
+
+export interface IdeasCtx {
+  userId: string;
+  orgRole: string;
+  canManage: boolean;
+}
+
+interface WorkspacesResponse {
+  organizations: { id: string; name: string; workspaces: { id: string; name: string }[] }[];
+}
+
+const NEXT_STATUS: Record<IdeaItem["status"], IdeaItem["status"][]> = {
+  NEW: ["UNDER_REVIEW"],
+  UNDER_REVIEW: ["ACCEPTED", "REJECTED"],
+  REJECTED: ["UNDER_REVIEW"],
+  ACCEPTED: [],
+};
+
+const FILTERS: (IdeaItem["status"] | "ALL" | "MINE")[] = [
+  "ALL", "NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED", "MINE",
+];
+
+const STATUS_STYLE: Record<IdeaItem["status"], string> = {
+  NEW: "bg-surface-2 text-fg-muted",
+  UNDER_REVIEW: "bg-amber-500/15 text-amber-600",
+  ACCEPTED: "bg-emerald-500/15 text-emerald-600",
+  REJECTED: "bg-red-500/15 text-red-600",
+};
+
+export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx }) {
+  const { t } = useI18n();
+  const router = useRouter();
+  const { toast } = useToast();
+  const [ideas, setIdeas] = useState<IdeaItem[]>(initial);
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]>("ALL");
+  const [title, setTitle] = useState("");
+  const [desc, setDesc] = useState("");
+  const [converting, setConverting] = useState<IdeaItem | null>(null);
+
+  const canWrite = ctx.orgRole !== "GUEST";
+
+  const shown = useMemo(
+    () =>
+      ideas.filter((i) =>
+        filter === "ALL" ? true : filter === "MINE" ? i.creatorId === ctx.userId : i.status === filter,
+      ),
+    [ideas, filter, ctx.userId],
+  );
+
+  async function createIdea(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    try {
+      const res = await apiPost<{ idea: IdeaItem }>("/api/ideas", {
+        title: title.trim(),
+        description: desc.trim() || null,
+      });
+      setIdeas((prev) => [res.idea, ...prev]);
+      setTitle("");
+      setDesc("");
+      toast(t("ideas.created"), "success");
+    } catch (err) {
+      toast(err instanceof ApiError && err.code === "forbidden" ? t("forbidden") : t("common.error"), "error");
+    }
+  }
+
+  async function vote(idea: IdeaItem) {
+    const previous = ideas;
+    setIdeas((prev) =>
+      prev.map((i) =>
+        i.id === idea.id
+          ? { ...i, voteCount: i.voteCount + (i.votedByMe ? -1 : 1), votedByMe: !i.votedByMe }
+          : i,
+      ),
+    );
+    try {
+      await apiPost(`/api/ideas/${idea.id}/vote`);
+    } catch (err) {
+      setIdeas(previous); // rollback
+      toast(err instanceof ApiError && err.code === "forbidden" ? t("forbidden") : t("common.error"), "error");
+    }
+  }
+
+  async function setStatus(idea: IdeaItem, status: IdeaItem["status"]) {
+    try {
+      const res = await apiPatch<{ idea: IdeaItem }>(`/api/ideas/${idea.id}`, { status });
+      setIdeas((prev) => prev.map((i) => (i.id === idea.id ? res.idea : i)));
+      toast(t("task.updated"), "success");
+      router.refresh();
+    } catch (err) {
+      toast(err instanceof ApiError ? t(err.code.startsWith("idea.") ? err.code : "common.error") : t("common.error"), "error");
+    }
+  }
+
+  async function removeIdea(idea: IdeaItem) {
+    if (!window.confirm(t("ideas.deleteConfirm"))) return;
+    try {
+      await apiDelete(`/api/ideas/${idea.id}`);
+      setIdeas((prev) => prev.filter((i) => i.id !== idea.id));
+      toast(t("ideas.deleted"), "success");
+    } catch (err) {
+      toast(err instanceof ApiError && err.code === "forbidden" ? t("forbidden") : t("common.error"), "error");
+    }
+  }
+
+  return (
+    <main className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
+      <header>
+        <h1 className="text-lg font-semibold text-fg">{t("ideas.title")}</h1>
+        <p className="text-xs text-fg-muted">{t("ideas.subtitle")}</p>
+      </header>
+
+      {canWrite ? (
+        <form onSubmit={createIdea} className="space-y-2 rounded-xl border border-border bg-surface p-4">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={140}
+            placeholder={t("ideas.titlePlaceholder")}
+            aria-label={t("ideas.titlePlaceholder")}
+          />
+          <Textarea
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            maxLength={2000}
+            rows={2}
+            placeholder={t("ideas.descPlaceholder")}
+          />
+          <div className="flex justify-end">
+            <Button type="submit" disabled={title.trim().length < 3}>
+              {t("ideas.add")}
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
+      <nav className="flex flex-wrap gap-1.5" aria-label={t("ideas.title")}>
+        {FILTERS.map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFilter(f)}
+            aria-current={filter === f ? "true" : undefined}
+            className={cn(
+              "rounded-full px-2.5 py-1 text-xs transition-colors",
+              filter === f
+                ? "bg-accent text-accent-fg"
+                : "bg-surface-2 text-fg-muted hover:text-fg",
+            )}
+          >
+            {t(`ideas.filter.${String(f).toLowerCase()}`)}
+          </button>
+        ))}
+      </nav>
+
+      <ul className="space-y-3">
+        {shown.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted">{t("ideas.empty")}</p>
+        ) : null}
+        {shown.map((idea) => {
+          const canEdit = canWrite && (idea.creatorId === ctx.userId || ctx.canManage);
+          const canConvert =
+            canWrite &&
+            !idea.taskId &&
+            idea.status !== "REJECTED" &&
+            (idea.creatorId === ctx.userId || ctx.canManage);
+          const nexts = ctx.canManage ? NEXT_STATUS[idea.status] : [];
+          return (
+            <li key={idea.id} className="rounded-xl border border-border bg-surface p-4">
+              <div className="flex items-start gap-3">
+                <button
+                  type="button"
+                  disabled={!canWrite}
+                  onClick={() => vote(idea)}
+                  aria-pressed={idea.votedByMe}
+                  title={canWrite ? t("ideas.vote") : t("forbidden")}
+                  className={cn(
+                    "flex h-14 w-11 shrink-0 flex-col items-center justify-center gap-0 rounded-lg border text-xs",
+                    idea.votedByMe
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-border text-fg-muted hover:border-accent/50",
+                    !canWrite && "opacity-40",
+                  )}
+                >
+                  <ArrowBigUp className="h-4 w-4" />
+                  <span className="font-bold">{idea.voteCount}</span>
+                </button>
+
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-fg">{idea.title}</h3>
+                  {idea.description ? (
+                    <p className="mt-1 line-clamp-3 text-xs text-fg-muted">{idea.description}</p>
+                  ) : null}
+                  <p className="mt-1.5 text-[10px] text-muted">
+                    {idea.creatorName}
+                    {idea.creatorJobTitle ? ` · ${idea.creatorJobTitle}` : ""}
+                    {idea.taskId ? (
+                      <a href={`/tasks/${idea.taskId}`} className="ms-1 inline-flex items-center gap-0.5 text-accent hover:underline">
+                        <ExternalLink className="h-2.5 w-2.5" />
+                        {t("ideas.converted")}
+                      </a>
+                    ) : null}
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", STATUS_STYLE[idea.status])}>
+                    {t(`ideas.status.${idea.status}`)}
+                  </span>
+                  {canEdit ? (
+                    <div className="flex items-center gap-1">
+                      {canConvert ? (
+                        <button
+                          type="button"
+                          onClick={() => setConverting(idea)}
+                          aria-label={t("ideas.convert")}
+                          title={t("ideas.convert")}
+                          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-accent"
+                        >
+                          <Rocket className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => removeIdea(idea)}
+                        aria-label={t("common.delete")}
+                        title={t("common.delete")}
+                        className="rounded p-1 text-muted hover:bg-surface-2 hover:text-red-500"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : null}
+                  {nexts.length > 0 ? (
+                    <Select
+                      aria-label={t("ideas.setStatus")}
+                      value={idea.status}
+                      className="!h-7 w-28 text-[10px]"
+                      onChange={(e) => {
+                        const target = e.target.value as IdeaItem["status"];
+                        if (target !== idea.status) setStatus(idea, target);
+                      }}
+                    >
+                      <option value={idea.status}>{t(`ideas.status.${idea.status}`)}</option>
+                      {nexts.map((s) => (
+                        <option key={s} value={s}>
+                          {t(`ideas.status.${s}`)}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : null}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {converting ? (
+        <ConvertModal
+          idea={converting}
+          onClose={() => setConverting(null)}
+          onDone={(taskId) => {
+            setIdeas((prev) =>
+              prev.map((i) => (i.id === converting.id ? { ...i, status: "ACCEPTED", taskId } : i)),
+            );
+            setConverting(null);
+            toast(t("ideas.convertedToast"), "success");
+            router.refresh();
+          }}
+        />
+      ) : null}
+    </main>
+  );
+}
+
+interface ProjectsResponse {
+  projects: { id: string; name: string }[];
+}
+interface BoardsResponse {
+  boards: { id: string; name: string }[];
+}
+
+function ConvertModal({
+  idea,
+  onClose,
+  onDone,
+}: {
+  idea: IdeaItem;
+  onClose: () => void;
+  onDone: (taskId: string) => void;
+}) {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [boardId, setBoardId] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const wsQuery = useQuery({
+    queryKey: ["orgs"],
+    queryFn: () => apiGet<WorkspacesResponse>("/api/workspaces"),
+  });
+  const workspaces = useMemo(
+    () => wsQuery.data?.organizations.flatMap((o) => o.workspaces) ?? [],
+    [wsQuery.data],
+  );
+
+  const projectsQuery = useQuery({
+    queryKey: ["convert-projects", workspaceId],
+    queryFn: () => apiGet<ProjectsResponse>(`/api/projects?workspaceId=${workspaceId}`),
+    enabled: workspaceId !== "",
+  });
+  const boardsQuery = useQuery({
+    queryKey: ["convert-boards", projectId],
+    queryFn: () => apiGet<BoardsResponse>(`/api/projects/${projectId}/boards`),
+    enabled: projectId !== "",
+  });
+
+  async function submit() {
+    if (!workspaceId || !projectId || !boardId) return;
+    setBusy(true);
+    try {
+      const res = await apiPost<{ taskId: string }>(`/api/ideas/${idea.id}/convert`, {
+        workspaceId,
+        projectId,
+        boardId,
+      });
+      onDone(res.taskId);
+    } catch (err) {
+      toast(err instanceof ApiError ? t(err.code === "idea.already_converted" ? "ideas.alreadyConverted" : "common.error") : t("common.error"), "error");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={t("ideas.convertTo")}>
+      <div className="space-y-3">
+        <div>
+          <Label>{t("top.workspaces")}</Label>
+          <Select value={workspaceId} onChange={(e) => { setWorkspaceId(e.target.value); setProjectId(""); setBoardId(""); }}>
+            <option value="">—</option>
+            {workspaces.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>{t("nav.projects")}</Label>
+          <Select value={projectId} onChange={(e) => { setProjectId(e.target.value); setBoardId(""); }} disabled={!workspaceId}>
+            <option value="">—</option>
+            {(projectsQuery.data?.projects ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label>{t("board.new")}</Label>
+          <Select value={boardId} onChange={(e) => setBoardId(e.target.value)} disabled={!projectId}>
+            <option value="">—</option>
+            {(boardsQuery.data?.boards ?? []).map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <p className="text-[10px] text-muted">{t("ideas.convertHint")}</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            {t("task.cancel")}
+          </Button>
+          <Button onClick={submit} disabled={!boardId || busy}>
+            {t("ideas.convert")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

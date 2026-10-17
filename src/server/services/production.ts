@@ -1,0 +1,204 @@
+import { z } from "zod";
+import { db } from "@/server/db";
+import { ForbiddenError, NotFoundError, audit } from "@/server/auth";
+import { canManageOrg } from "@/server/services/orgs";
+
+/** Local calendar day string "YYYY-MM-DD" (the whole app runs on one machine). */
+export function dayIso(d: Date): string {
+	const y = d.getFullYear();
+	const m = d.getMonth() + 1;
+	const day = d.getDate();
+	const mm = m < 10 ? "0" + m : String(m);
+	const dd = day < 10 ? "0" + day : String(day);
+	return y + "-" + mm + "-" + dd;
+}
+
+export function parseDayIso(s: string): Date {
+	const parts = s.split("-");
+	const y = Number(parts[0]);
+	const m = Number(parts[1]);
+	const d = Number(parts[2]);
+	return new Date(y, m - 1, d, 12, 0, 0, 0);
+}
+
+export function shiftDay(s: string, delta: number): string {
+	const d = parseDayIso(s);
+	d.setDate(d.getDate() + delta);
+	return dayIso(d);
+}
+
+export interface RoutineRow {
+	id: string;
+	title: string;
+	description: string | null;
+	departmentId: string | null;
+	departmentName: string | null;
+	assigneeId: string | null;
+	assigneeName: string | null;
+	weekdays: string;
+	active: boolean;
+}
+
+export async function listRoutines(orgId: string): Promise<RoutineRow[]> {
+	const rows = await db.routine.findMany({
+		where: { orgId },
+		orderBy: { createdAt: "asc" },
+		select: {
+			id: true,
+			title: true,
+			description: true,
+			departmentId: true,
+			assigneeId: true,
+			assignee: { select: { name: true } },
+			weekdays: true,
+			active: true,
+			department: { select: { name: true } },
+		},
+	});
+	return rows.map((r) => ({
+		id: r.id,
+		title: r.title,
+		description: r.description,
+		departmentId: r.departmentId,
+		departmentName: r.department?.name ?? null,
+		assigneeId: r.assigneeId,
+		assigneeName: r.assignee?.name ?? null,
+		weekdays: r.weekdays,
+		active: r.active,
+	}));
+}
+
+/** Does a routine run on the given day? Empty weekdays = every day. */
+export function runsOnDay(weekdays: string, day: string): boolean {
+	if (!weekdays || weekdays === "") return true;
+	const parts = weekdays.split(",");
+	const weekday = String(parseDayIso(day).getDay());
+	return parts.indexOf(weekday) !== -1;
+}
+
+/** Checklist for one day: active routines scheduled that day + today's completion state. */
+export async function dayChecklist(orgId: string, day: string) {
+	const routines = await db.routine.findMany({
+		where: { orgId, active: true },
+		orderBy: { createdAt: "asc" },
+		select: {
+			id: true,
+			title: true,
+			description: true,
+			departmentId: true,
+			department: { select: { name: true } },
+			assigneeId: true,
+			assignee: { select: { name: true } },
+			weekdays: true,
+		},
+	});
+	const due = routines.filter((r) => runsOnDay(r.weekdays, day));
+	const logs = await db.routineLog.findMany({
+		where: { routineId: { in: due.map((r) => r.id) }, day },
+		select: { routineId: true, completedAt: true, completedById: true },
+	});
+	const doneMap = new Map(logs.map((l) => [l.routineId, l.completedAt.toISOString()]));
+	return {
+		day,
+		items: due.map((r) => ({
+			id: r.id,
+			title: r.title,
+			description: r.description,
+			departmentName: r.department?.name ?? null,
+			assigneeId: r.assigneeId,
+			assigneeName: r.assignee?.name ?? null,
+			doneAt: doneMap.get(r.id) ?? null,
+		})),
+	};
+}
+
+export const routineSchema = z.object({
+	title: z.string().trim().min(2, "title.too_short").max(120),
+	description: z.string().trim().max(500).nullable().optional(),
+	departmentId: z.string().nullable().optional(),
+	assigneeId: z.string().nullable().optional(),
+	weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+	active: z.boolean().optional(),
+});
+
+function weekdaysToCsv(days: number[] | undefined): string {
+	if (!days || days.length === 0 || days.length === 7) return "";
+	const sorted = [...new Set(days)].sort((a, b) => a - b);
+	return sorted.join(",");
+}
+
+async function assertRoutineOrg(orgId: string, routineId: string) {
+	const r = await db.routine.findFirst({ where: { id: routineId, orgId }, select: { id: true } });
+	if (!r) throw new NotFoundError("routine.not_found");
+}
+
+export async function createRoutine(ctx: { orgId: string; userId: string }, input: z.infer<typeof routineSchema>) {
+	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	const routine = await db.routine.create({
+		data: {
+			orgId: ctx.orgId,
+			title: input.title,
+			description: input.description ?? null,
+			departmentId: input.departmentId ?? null,
+			assigneeId: input.assigneeId ?? null,
+			weekdays: weekdaysToCsv(input.weekdays),
+			active: input.active ?? true,
+		},
+		select: { id: true },
+	});
+	await audit("routine.created", { actorId: ctx.userId, orgId: ctx.orgId, target: routine.id });
+	return routine;
+}
+
+export async function updateRoutine(ctx: { orgId: string; userId: string }, id: string, input: z.infer<typeof routineSchema>) {
+	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	await assertRoutineOrg(ctx.orgId, id);
+	await db.routine.update({
+		where: { id },
+		data: {
+			title: input.title ?? undefined,
+			description: input.description ?? undefined,
+			departmentId: input.departmentId ?? undefined,
+			assigneeId: input.assigneeId ?? undefined,
+			weekdays: input.weekdays !== undefined ? weekdaysToCsv(input.weekdays) : undefined,
+			active: input.active ?? undefined,
+		},
+	});
+	await audit("routine.updated", { actorId: ctx.userId, orgId: ctx.orgId, target: id });
+}
+
+export async function deleteRoutine(ctx: { orgId: string; userId: string }, id: string) {
+	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	await assertRoutineOrg(ctx.orgId, id);
+	await db.routine.delete({ where: { id } });
+	await audit("routine.deleted", { actorId: ctx.userId, orgId: ctx.orgId, target: id });
+}
+
+/** Toggle (or force) one routine's completion for one day. Any org member may check off. */
+export async function setRoutineDone(
+	ctx: { orgId: string; userId: string },
+	routineId: string,
+	day: string,
+	done: boolean,
+): Promise<void> {
+	const routine = await db.routine.findFirst({ where: { id: routineId, orgId: ctx.orgId }, select: { id: true } });
+	if (!routine) throw new NotFoundError("routine.not_found");
+	if (done) {
+		await db.routineLog.upsert({
+			where: { routineId_day: { routineId, day } },
+			create: { routineId, day, completedById: ctx.userId },
+			update: { completedById: ctx.userId },
+		});
+	} else {
+		await db.routineLog.deleteMany({ where: { routineId, day } });
+	}
+}
+
+export async function orgRoleOf(orgId: string, userId: string) {
+	const m = await db.organizationMember.findUnique({
+		where: { organizationId_userId: { organizationId: orgId, userId } },
+		select: { role: true },
+	});
+	if (!m) throw new ForbiddenError("not_org_member");
+	return m.role;
+}

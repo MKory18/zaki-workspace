@@ -1,0 +1,70 @@
+import { NextResponse } from "next/server";
+import { ZodError } from "zod";
+import {
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from "./auth";
+import { log } from "./log";
+
+export type ApiErrorCode =
+  | "auth.required"
+  | "forbidden"
+  | "not_found"
+  | "validation.failed"
+  | "conflict"
+  | "internal";
+
+const STATUS: Record<ApiErrorCode, number> = {
+  "auth.required": 401,
+  forbidden: 403,
+  not_found: 404,
+  "validation.failed": 422,
+  conflict: 409,
+  internal: 500,
+};
+
+export function apiError(
+  code: ApiErrorCode,
+  message?: string,
+  details?: unknown,
+): NextResponse {
+  return NextResponse.json(
+    { error: code, message, details },
+    { status: STATUS[code] },
+  );
+}
+
+/** Central handler: consistent shapes, no stack traces in prod responses. */
+export function withApi(fn: () => Promise<NextResponse>): Promise<NextResponse> {
+  return fn().catch((err) => {
+    if (err instanceof UnauthorizedError) return apiError("auth.required", err.message);
+    if (err instanceof ForbiddenError) return apiError("forbidden", err.message);
+    if (err instanceof NotFoundError) return apiError("not_found", err.message);
+    if (err instanceof ValidationError || err instanceof ZodError) {
+      return apiError("validation.failed", "validation.failed", readableIssues(err));
+    }
+    if (typeof err === "object" && err !== null && "code" in err && String(err.code).startsWith("P")) {
+      return apiError("conflict", err instanceof Error ? err.message : String(err));
+    }
+    log.error("api.unhandled", {
+      name: err instanceof Error ? err.name : String(err),
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack?.split("\n").slice(0, 4).join("\n") : undefined,
+    });
+    return apiError("internal");
+  });
+}
+
+interface IssueLike {
+  path: string;
+  message: string;
+}
+
+function readableIssues(err: Error | ZodError): IssueLike[] {
+  if (err instanceof ZodError) {
+    return err.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+  }
+  return (err as ValidationError).issues;
+}

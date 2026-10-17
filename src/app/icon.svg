@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="w" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#0E4C66"/>
+      <stop offset="1" stop-color="#17A5BF"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22" fill="#0F1117"/>
+  <polygon fill="url(#w)" points="80,26 72,19 58,20 52,10 47,22 37,34 28,53 23,69 13,62 21,72 16,80 30,78 44,55 54,41 63,34 72,26"/>
+  <polygon fill="#4FC2D8" opacity="0.9" points="72,19 58,20 52,10 47,22"/>
+  <polygon fill="#4FC2D8" opacity="0.85" points="80,26 72,19 63,34 72,26"/>
+  <polygon fill="#3FB8CF" opacity="0.85" points="47,22 37,34 44,55 54,41"/>
+  <path d="M30,78 Q40,70 47,58 Q55,45 65,36 L72,26 Q58,37 51,46 Q43,57 36,66 Q33,71 30,78 Z" fill="#7FD4E5" opacity="0.7"/>
+  <path d="M36,82 Q46,82 53,75 Q60,68 71,70 Q79,72 83,79" fill="none" stroke="url(#w)" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#8FE3F5">
+    <circle cx="54" cy="79" r="1.6"/>
+    <circle cx="68" cy="80" r="1.6"/>
+    <circle cx="83" cy="79" r="2"/>
+  </g>
+</svg>

@@ -1,0 +1,422 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  DndContext,
+  DragOverlay,
+  useDroppable,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+  closestCorners,
+} from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, MessageSquare, CalendarDays, GripVertical, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { apiPost, apiDelete } from "@/lib/api-client";
+import { useI18n } from "@/lib/i18n";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/card";
+import { PRIORITY_STYLES, formatDate, isOverdue } from "@/lib/format";
+import { useToast } from "@/components/ui/toast";
+
+export interface ColumnData {
+  id: string;
+  name: string;
+  color: string;
+  position: number;
+  done: boolean;
+}
+
+export interface TaskCardData {
+  id: string;
+  key: string;
+  title: string;
+  priority: string;
+  columnId: string;
+  dueDate: string | null;
+  labels: { id: string; name: string; color: string }[];
+  assignee: { id: string; name: string } | null;
+  commentCount: number;
+  completed: boolean;
+}
+
+interface BoardViewProps {
+  board: { id: string; workspaceId: string; projectId: string; name: string; projectName: string };
+  columns: ColumnData[];
+  tasks: TaskCardData[];
+  canEdit: boolean;
+}
+
+interface QuickAddState {
+  columnId: string | null;
+  title: string;
+  error: string | null;
+}
+
+/** Kanban board. Optimistic DnD with server rollback on failure. */
+export function BoardView({ board, columns, tasks, canEdit }: BoardViewProps) {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const [items, setItems] = useState<TaskCardData[]>(tasks);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [quick, setQuick] = useState<QuickAddState>({ columnId: null, title: "", error: null });
+  const queryClient = useQueryClient();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const moveMutation = useMutation({
+    mutationFn: (input: { taskId: string; columnId: string; index: number }) =>
+      apiPost<{ task: unknown }>(`/api/tasks/${input.taskId}/move`, {
+        columnId: input.columnId,
+        index: input.index,
+      }),
+  });
+
+  const tasksByColumn = useMemo(() => {
+    const map = new Map<string, TaskCardData[]>();
+    for (const c of columns) map.set(c.id, []);
+    for (const t of items) map.get(t.columnId)?.push(t);
+    return map;
+  }, [columns, items]);
+
+  function onDragStart(e: DragStartEvent) {
+    setActiveId(String(e.active.id));
+  }
+
+  function onDragEnd(e: DragEndEvent) {
+    setActiveId(null);
+    if (!e.over || !canEdit) return;
+
+    const activeTaskId = String(e.active.id);
+    const overId = String(e.over.id);
+
+    // drop target: column id directly, or a card inside a column
+    const targetColumnId = columns.some((c) => c.id === overId)
+      ? overId
+      : items.find((t) => t.id === overId)?.columnId;
+    if (!targetColumnId) return;
+
+    const colTasks = items.filter((t) => t.columnId === targetColumnId && t.id !== activeTaskId);
+    const index = columns.some((c) => c.id === overId)
+      ? colTasks.length
+      : Math.max(0, colTasks.findIndex((t) => t.id === overId));
+
+    // optimistic move
+    const previous = items;
+    setItems(items.map((t) => (t.id === activeTaskId ? { ...t, columnId: targetColumnId } : t)));
+
+    moveMutation.mutate(
+      { taskId: activeTaskId, columnId: targetColumnId, index },
+      {
+        onError: () => {
+          // rollback — never show success when the server rejected the move
+          setItems(previous);
+          queryClient.invalidateQueries({ queryKey: ["board"] });
+          toast(t("board.moveFailed"), "error");
+          setQuick((q) => ({ ...q, error: t("board.moveFailed") }));
+          window.setTimeout(
+            () => setQuick((q) => ({ ...q, error: null })),
+            2500,
+          );
+        },
+      },
+    );
+  }
+
+  async function addTask(columnId: string) {
+    const title = quick.title.trim();
+    if (!title) {
+      setQuick({ columnId: null, title: "", error: null });
+      return;
+    }
+    setQuick((q) => ({ ...q, error: null }));
+    try {
+      await apiPost<{ task: unknown }>("/api/tasks", {
+        workspaceId: board.workspaceId,
+        projectId: board.projectId,
+        boardId: board.id,
+        columnId,
+        title,
+      });
+      setQuick({ columnId: null, title: "", error: null });
+      window.location.reload(); // server page refetch keeps DB authoritative
+    } catch {
+      toast(t("task.createFailed"), "error");
+      setQuick((q) => ({ ...q, error: t("task.createFailed") }));
+    }
+  }
+
+  const addColumn = useMutation({
+    mutationFn: () =>
+      apiPost<{ column: unknown }>(`/api/boards/${board.id}/columns`, {
+        name: t("board.columnName"),
+      }),
+    onSuccess: () => window.location.reload(),
+    onError: () => toast(t("common.error"), "error"),
+  });
+
+  const activeTask = items.find((t) => t.id === activeId) ?? null;
+
+  return (
+    <div className="flex h-full flex-col">
+      <header className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3">
+        <div>
+          <h1 className="text-base font-semibold text-fg">{board.name}</h1>
+          <p className="text-xs text-fg-muted">{board.projectName}</p>
+        </div>
+      </header>
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+      >
+        <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
+          {columns.map((column) => {
+            const colTasks = tasksByColumn.get(column.id) ?? [];
+            return (
+              <BoardColumn
+                key={column.id}
+                column={column}
+                tasks={colTasks}
+                canEdit={canEdit}
+                boardId={board.id}
+                quick={quick}
+                onOpenQuick={() =>
+                  setQuick(
+                    quick.columnId === column.id
+                      ? { columnId: null, title: "", error: null }
+                      : { columnId: column.id, title: "", error: null },
+                  )
+                }
+                onTitleChange={(title) => setQuick((q) => ({ ...q, title }))}
+                onCancel={() => setQuick({ columnId: null, title: "", error: null })}
+                onSubmit={() => void addTask(column.id)}
+              />
+            );
+          })}
+
+          {canEdit ? (
+            <button
+              onClick={() => addColumn.mutate()}
+              disabled={addColumn.isPending}
+              className="flex h-9 w-72 min-w-72 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-dashed border-border text-xs text-muted transition-colors hover:border-accent/50 hover:text-fg"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t("board.addColumn")}
+            </button>
+          ) : null}
+        </div>
+
+        <DragOverlay>
+          {activeTask ? (
+            <div className="w-64 cursor-grabbing opacity-90">
+              <TaskCardContent task={activeTask} />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
+  );
+}
+
+function BoardColumn({
+  column,
+  tasks,
+  canEdit,
+  boardId,
+  quick,
+  onOpenQuick,
+  onTitleChange,
+  onCancel,
+  onSubmit,
+}: {
+  column: ColumnData;
+  tasks: TaskCardData[];
+  canEdit: boolean;
+  boardId: string;
+  quick: QuickAddState;
+  onOpenQuick: () => void;
+  onTitleChange: (t: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  const { t } = useI18n();
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const deleteColumn = useMutation({
+    mutationFn: () => apiDelete(`/api/boards/${boardId}/columns/${column.id}`),
+    onSuccess: () => window.location.reload(),
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex w-72 min-w-72 shrink-0 flex-col rounded-xl border border-border bg-surface-1",
+        isOver && "border-accent/60",
+      )}
+    >
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <span className="flex items-center gap-2 text-xs font-semibold text-fg">
+          <span
+            aria-hidden
+            className="h-2 w-2 rounded-full"
+            style={{ backgroundColor: column.color }}
+          />
+          {column.name}
+          <span className="font-normal text-muted">{tasks.length}</span>
+        </span>
+        {canEdit ? (
+          <span className="flex items-center gap-0.5">
+            <button
+              aria-label="New task"
+              className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-fg"
+              onClick={onOpenQuick}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              aria-label={t("common.delete")}
+              title={t("board.deleteColumn")}
+              className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-red-500"
+              onClick={() => {
+                if (window.confirm(t("board.deleteColumnConfirm"))) deleteColumn.mutate();
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        ) : null}
+      </div>
+
+      <div className="min-h-16 flex-1 space-y-2 overflow-y-auto p-2">
+        {quick.columnId === column.id ? (
+          <form
+            className="rounded-lg border border-accent/50 bg-surface p-2"
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              onSubmit();
+            }}
+          >
+            <Input
+              autoFocus
+              value={quick.title}
+              onChange={(e) => onTitleChange(e.target.value)}
+              placeholder="Task title"
+              className="h-8 text-xs"
+              maxLength={280}
+            />
+            {quick.error ? <p className="mt-1 text-[10px] text-red-500">{quick.error}</p> : null}
+            <div className="mt-2 flex gap-1">
+              <Button type="submit" size="sm" className="flex-1">
+                Add
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+                ✕
+              </Button>
+            </div>
+          </form>
+        ) : null}
+
+        <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+          {tasks.map((task) => (
+            <TaskCard key={task.id} task={task} />
+          ))}
+        </SortableContext>
+
+        {tasks.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border p-3 text-center text-[11px] text-muted">
+            Drop tasks here
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function TaskCard({ task }: { task: TaskCardData }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(isDragging && "opacity-40")}
+    >
+      <div className="flex items-start gap-1">
+        <button
+          className="mt-2 cursor-grab touch-none text-muted/60 hover:text-fg"
+          aria-label="Drag task"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <Link href={`/tasks/${task.id}`} className="block">
+            <TaskCardContent task={task} />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskCardContent({ task }: { task: TaskCardData }) {
+  const overdue = task.dueDate && isOverdue(task.dueDate) && !task.completed;
+  return (
+    <div className="rounded-lg border border-border bg-surface p-2.5 shadow-sm transition-colors hover:border-accent/40">
+      <div className="flex items-center gap-1.5">
+        <span className="font-mono text-[10px] text-muted">{task.key}</span>
+        {overdue ? <span className="text-[10px] font-medium text-red-500">overdue</span> : null}
+      </div>
+      <p className={cn("mt-1 text-xs font-medium text-fg", task.completed && "line-through opacity-60")}>
+        {task.title}
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-1">
+        {task.labels.slice(0, 3).map((l) => (
+          <Badge key={l.id} color={l.color}>
+            {l.name}
+          </Badge>
+        ))}
+        <span
+          className="ms-auto h-3 w-3 rounded-full"
+          title={task.priority}
+          style={{ backgroundColor: PRIORITY_STYLES[task.priority]?.color ?? "#9ca3af" }}
+        />
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-[10px] text-muted">
+        <span className="truncate">{task.assignee?.name ?? "Unassigned"}</span>
+        {task.dueDate ? (
+          <span
+            className={cn(
+              "flex shrink-0 items-center gap-1",
+              overdue ? "text-red-500" : undefined,
+            )}
+          >
+            <CalendarDays className="h-3 w-3" />
+            {formatDate(task.dueDate, "en")}
+          </span>
+        ) : null}
+        {task.commentCount > 0 ? (
+          <span className="flex shrink-0 items-center gap-1">
+            <MessageSquare className="h-3 w-3" />
+            {task.commentCount}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}

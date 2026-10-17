@@ -1,0 +1,29 @@
+import { NextResponse } from "next/server";
+import { withApi } from "@/server/api";
+import { db } from "@/server/db";
+import { NotFoundError, requireWorkspace } from "@/server/auth";
+
+/** Boards of a project, scoped by workspace membership (for pickers/convert). */
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  return withApi(async () => {
+    const project = await db.project.findFirst({
+      where: { id: params.id },
+      select: { id: true, workspaceId: true },
+    });
+    if (!project) throw new NotFoundError("project.not_found");
+    await requireWorkspace(project.workspaceId);
+    const boards = await db.board.findMany({
+      where: { projectId: project.id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        name: true,
+        columns: {
+          orderBy: { position: "asc" },
+          select: { id: true, name: true, position: true, done: true },
+        },
+      },
+    });
+    return NextResponse.json({ boards });
+  });
+}
