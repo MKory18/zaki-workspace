@@ -28,6 +28,7 @@ import {
   Network,
   Factory,
   Target,
+  Briefcase,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Logo, DolphinMark } from "@/components/logo";import { NotificationBell } from "@/components/notification-bell";
@@ -54,6 +55,7 @@ const SECTIONS: NavSection[] = [
       { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays, tint: "text-orange-500" },
       { href: "/chat", labelKey: "nav.chat", icon: MessageSquare, tint: "text-rose-500" },
       { href: "/production", labelKey: "nav.production", icon: Factory, tint: "text-orange-600" },
+      { href: "/crm", labelKey: "nav.crm", icon: Briefcase, tint: "text-amber-600" },
     ],
   },
   {

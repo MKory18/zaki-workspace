@@ -711,3 +711,21 @@ cleaned.
   showing raw keys on the pages, plus ideas.empty, nav.production,
   nav.goals, ticket edit strings, and the prod.wd_* weekday names). Now 0
   missing.
+
+## Report section 11 - CRM Sales backend (2026-10-19)
+
+- Migration `20261019120000_crm_models`: Customer + Opportunity tables with
+  cascade delete and per-org numbering (`@@unique([orgId, number])` shared with
+  tasks/tickets via Counter).
+- Service layer `src/server/services/crm.ts`: full CRUD for customers
+  (list/get/create/update/delete) and opportunities (create with auto-number,
+  stage transitions, delete). Org-scoped via OrgAccessContext everywhere.
+- API routes: `/api/crm/customers` (GET/POST), `/api/crm/customers/[id]`
+  (GET/PATCH/DELETE), `/api/crm/opportunities` (GET/POST),
+  `/api/crm/opportunities/[id]` (GET/PATCH/DELETE). All use withApi +
+  activeOrgCtx pattern.
+- Fixed ZodEnum tuple typing (`as const satisfies readonly [string,
+  ...string[]]`); tsc clean, vitest 76/76 (one transient failure in
+  session.test.ts was flaky isolation, passes alone and in full rerun).
+
+### Next: CRM UI pages (customers list, opportunity board) then Campaign Calendar.

@@ -41,6 +41,8 @@ model User {
   deptMemberships DepartmentMember[]
   createdTickets  Ticket[]             @relation("TicketCreator")
   assignedTickets Ticket[]             @relation("TicketAssignee")
+  createdCustomers Customer[]          @relation("CustomerCreator")
+  ownedOpportunities Opportunity[]    @relation("OpportunityOwner")
   routines        Routine[]            @relation("RoutineAssignee")
   goals           Goal[]               @relation("GoalCreator")
 }
@@ -289,6 +291,8 @@ model Organization {
   files            StoredFile[]
   departments      Department[]
   tickets          Ticket[]
+  customers        Customer[]
+  opportunities    Opportunity[]
   routines         Routine[]
   goals            Goal[]
 
@@ -758,4 +762,57 @@ model IntegrationEvent {
 
   @@index([orgId, createdAt])
   @@index([orgId, direction])
+}
+
+// ---------- CRM (Sales) ----------
+
+model Customer {
+  id             String       @id @default(cuid())
+  orgId          String
+  name           String
+  company        String?
+  email          String?
+  phone          String?
+  notes          String?
+  creatorId      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  creator      User         @relation("CustomerCreator", fields: [creatorId], references: [id])
+  opportunities Opportunity[]
+
+  @@index([orgId, name])
+}
+
+model Opportunity {
+  id          String          @id @default(cuid())
+  orgId       String
+  number      Int
+  customerId  String
+  title       String
+  value       Float           @default(0)
+  stage       OpportunityStage @default(LEAD)
+  expectedCloseAt DateTime?
+  notes       String?
+  ownerId     String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  owner        User         @relation("OpportunityOwner", fields: [ownerId], references: [id])
+
+  @@unique([orgId, number])
+  @@index([orgId, stage])
+  @@index([customerId])
+}
+
+enum OpportunityStage {
+  LEAD
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
 }
