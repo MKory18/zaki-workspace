@@ -176,7 +176,7 @@
   "ideas.status.ACCEPTED": "معتمدة",
   "ideas.status.REJECTED": "مرفوضة",
   "guest.readonly": "الزوار للعرض فقط",
-  "joincode.invalid": "كود الدعوة غير صالح",
+  "joincode.invalid": "كود الدعوة غير صحيح",
   "coming.badge": "مرحلة قادمة",
   "coming.documents": "مستندات المشروع وصفحاته تنزل مع مرحلة المستندات.",
   "coming.telegram": "تكامل تيليجرام يُفعّل بعد إعداد الحسابات والـ webhooks.",
@@ -670,5 +670,7 @@
   "camp.bad_range": "تاريخ النهاية قبل البداية",
   "camp.no_change": "لا تغيير",
   "camp.not_found": "الحملة غير موجودة",
-  "camp.admin_only": "لا تملك صلاحية على هذه الحملة"
+  "camp.admin_only": "لا تملك صلاحية على هذه الحملة",
+  "email.taken": "هذا البريد مستخدم مسبقًا — سجّل الدخول أو استخدم بريدًا آخر",
+  "auth.validationHint": "تحقق من البيانات: كلمة المرور 8 خانات على الأقل مع حرف ورقم"
 }

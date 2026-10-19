@@ -45,4 +45,6 @@ EXPOSE 3000
 # bookworm-slim has no wget/curl; use node for the healthcheck.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/health',r=>process.exit(r.statusCode<400?0:1)).on('error',()=>process.exit(1))"
-CMD ["npm", "start"]
+# Apply additive-only, idempotent migrations at container start (requires
+# DATABASE_URL from the environment — never baked into the image), then serve.
+CMD ["sh", "-c", "npx prisma migrate deploy && exec npm start"]

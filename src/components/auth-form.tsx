@@ -31,7 +31,19 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       }
       window.location.href = "/";
     } catch (err) {
-      setError(err instanceof ApiError ? t("common.error") : t("common.error"));
+      // show the server's known error keys in Arabic; unknown → generic message
+      let msg = t("common.error");
+      if (err instanceof ApiError) {
+        if (err.messageKey) {
+          const mapped = t(err.messageKey);
+          if (mapped !== err.messageKey) msg = mapped;
+        } else if (err.code === "validation.failed" && Array.isArray(err.details) && err.details.length > 0) {
+          const first = (err.details[0] as { message?: string }).message;
+          const mapped = first ? t(first) : "";
+          msg = mapped && mapped !== first ? mapped : t("auth.validationHint");
+        }
+      }
+      setError(msg);
       setPending(false);
     }
   }

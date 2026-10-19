@@ -1,6 +1,7 @@
 import * as crypto from "node:crypto";
 import { db } from "@/server/db";
 import type { DbClient } from "@/server/db";
+import { log } from "@/server/log";
 import { audit, hashPassword } from "@/server/auth";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import type { OrgRole } from "@prisma/client";
@@ -53,24 +54,41 @@ export async function registerOrganization(input: RegisterOrgInput & ProfileFiel
   const keyPrefix = await availablePrefix(db, base.slice(0, 4).toUpperCase() || "ZW");
   const joinCode = await uniqueJoinCode();
 
-  const user = await db.user.create({
-    data: {
-      email,
-      name: input.name,
-      jobTitle: input.jobTitle ?? null,
-      passwordHash: await hashPassword(input.password),
-      memberships: {
-        create: {
-          role: "OWNER" satisfies OrgRole,
-          organization: { create: { name: input.orgName, slug, keyPrefix, joinCode } },
+  try {
+    const user = await db.user.create({
+      data: {
+        email,
+        name: input.name,
+        jobTitle: input.jobTitle ?? null,
+        passwordHash: await hashPassword(input.password),
+        memberships: {
+          create: {
+            role: "OWNER" satisfies OrgRole,
+            organization: { create: { name: input.orgName, slug, keyPrefix, joinCode } },
+          },
         },
       },
-    },
-    select: { id: true },
-  });
+      select: { id: true },
+    });
 
-  await audit("user.registered", { actorId: user.id });
-  return { userId: user.id };
+    // audit must never fail an already-committed registration (P2002 race → friendly error)
+    try {
+      await audit("user.registered", { actorId: user.id });
+    } catch (err) {
+      log.error("audit.write_failed", {
+        action: "user.registered",
+        actor: user.id,
+        detail: err instanceof Error ? err.name : String(err).slice(0, 80),
+      });
+    }
+    return { userId: user.id };
+  } catch (err) {
+    // concurrent duplicate email (race between the check above and the insert)
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002") {
+      throw new ForbiddenError("email.taken");
+    }
+    throw err;
+  }
 }
 
 /** Joins an existing organization via its invitation code → MEMBER role. */
@@ -85,24 +103,39 @@ export async function joinByCode(input: JoinOrgInput): Promise<{ userId: string;
   });
   if (!org) throw new NotFoundError("joincode.invalid");
 
-  const user = await db.user.create({
-    data: {
-      email,
-      name: input.name,
-      jobTitle: input.jobTitle ?? null,
-      passwordHash: await hashPassword(input.password),
-      memberships: {
-        create: {
-          role: "MEMBER" satisfies OrgRole,
-          organizationId: org.id,
+  try {
+    const user = await db.user.create({
+      data: {
+        email,
+        name: input.name,
+        jobTitle: input.jobTitle ?? null,
+        passwordHash: await hashPassword(input.password),
+        memberships: {
+          create: {
+            role: "MEMBER" satisfies OrgRole,
+            organizationId: org.id,
+          },
         },
       },
-    },
-    select: { id: true },
-  });
+      select: { id: true },
+    });
 
-  await audit("user.joined", { actorId: user.id, orgId: org.id });
-  return { userId: user.id, orgId: org.id };
+    try {
+      await audit("user.joined", { actorId: user.id, orgId: org.id });
+    } catch (err) {
+      log.error("audit.write_failed", {
+        action: "user.joined",
+        actor: user.id,
+        detail: err instanceof Error ? err.name : String(err).slice(0, 80),
+      });
+    }
+    return { userId: user.id, orgId: org.id };
+  } catch (err) {
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002") {
+      throw new ForbiddenError("email.taken");
+    }
+    throw err;
+  }
 }
 
 /** Generates a code that is not already taken (fits the unique index). */

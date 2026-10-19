@@ -45,8 +45,16 @@ export function withApi(fn: () => Promise<NextResponse>): Promise<NextResponse> 
     if (err instanceof ValidationError || err instanceof ZodError) {
       return apiError("validation.failed", "validation.failed", readableIssues(err));
     }
+    // Prisma known errors: never leak the invocation text; log the details instead.
     if (typeof err === "object" && err !== null && "code" in err && String(err.code).startsWith("P")) {
-      return apiError("conflict", err instanceof Error ? err.message : String(err));
+      const prismaCode = String((err as { code: unknown }).code);
+      const target = (err as { meta?: { target?: unknown } }).meta?.target;
+      log.error("api.prisma_error", { code: prismaCode, target: Array.isArray(target) ? target.join(",") : undefined, message: err instanceof Error ? err.message : String(err) });
+      // unique-constraint on a register/login flow most commonly means a duplicate email
+      if (prismaCode === "P2002" && Array.isArray(target) && target.some((t) => String(t).includes("email"))) {
+        return apiError("conflict", "email.taken");
+      }
+      return apiError("conflict");
     }
     log.error("api.unhandled", {
       name: err instanceof Error ? err.name : String(err),
