@@ -1,0 +1,223 @@
+"use client";
+
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Activity, MessageSquare, Send, Ticket as TicketIcon } from "lucide-react";
+import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
+import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/components/ui/toast";
+import { fmtDateTime } from "@/lib/format";
+import { errText } from "@/components/department-tickets";
+
+interface CommentRow {
+  id: string;
+  body: string;
+  editedAt: string | null;
+  createdAt: string;
+  author: { id: string; name: string } | null;
+}
+interface ActivityRow {
+  id: string;
+  event: string;
+  meta: Record<string, unknown> | null;
+  createdAt: string;
+  actor: { id: string; name: string } | null;
+}
+interface TicketDetail {
+  id: string;
+  number: number;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  createdAt: string;
+  creator: { id: string; name: string } | null;
+  assignee: { id: string; name: string } | null;
+  comments: CommentRow[];
+  activities: ActivityRow[];
+}
+
+const EVENT_KEYS: Record<string, string> = {
+  created: "tkAct.created",
+  edited: "tkAct.edited",
+  status_changed: "tkAct.statusChanged",
+  assigned: "tkAct.assigned",
+  commented: "tkAct.commented",
+};
+
+/** نافذة التذكرة: التعليقات + سجل النشاط. */
+export function TicketDetailModal({
+  ticketId,
+  currentUserId,
+  onClose,
+}: {
+  ticketId: string;
+  currentUserId: string;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [body, setBody] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
+
+  const detail = useQuery({
+    queryKey: ["ticket-detail", ticketId],
+    queryFn: () => apiGet<{ ticket: TicketDetail }>(`/api/tickets/${ticketId}/detail`),
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["ticket-detail", ticketId] });
+    qc.invalidateQueries({ queryKey: ["tickets"] });
+  };
+
+  const addComment = useMutation({
+    mutationFn: () => apiPost(`/api/tickets/${ticketId}/detail`, { body }),
+    onSuccess: () => {
+      setBody("");
+      invalidate();
+    },
+    onError: (err) => toast(errText(err, t), "error"),
+  });
+
+  const saveEdit = useMutation({
+    mutationFn: (payload: { id: string; body: string }) =>
+      apiPatch(`/api/tickets/${ticketId}/comments/${payload.id}`, { body: payload.body }),
+    onSuccess: () => {
+      setEditingId(null);
+      invalidate();
+    },
+    onError: (err) => toast(errText(err, t), "error"),
+  });
+
+  const delComment = useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/tickets/${ticketId}/comments/${id}`),
+    onSuccess: () => invalidate(),
+    onError: (err) => toast(errText(err, t), "error"),
+  });
+
+  const tk = detail.data?.ticket;
+  const comments = tk?.comments ?? [];
+  const activities = tk?.activities ?? [];
+
+  return (
+    <Modal open onClose={onClose} title={`T${tk?.number ?? "…"} — ${tk?.title ?? ""}`}>
+      <div className="space-y-4">
+        {tk?.description ? <p className="whitespace-pre-wrap text-xs text-fg-muted">{tk.description}</p> : null}
+
+        {/* Comments */}
+        <section className="space-y-2">
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold text-fg">
+            <MessageSquare className="size-3.5 text-sky-500" />
+            {t("tkAct.comments")} ({comments.length})
+          </h3>
+          <ul className="max-h-56 space-y-2 overflow-y-auto">
+            {comments.map((c) => {
+              const mine = c.author?.id === currentUserId;
+              return (
+                <li key={c.id} className="rounded-lg border border-border bg-surface-1 p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-medium text-fg">{c.author?.name ?? "—"}</p>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-muted">{fmtDateTime(c.createdAt, "ar")}</span>
+                      {mine ? (
+                        <>
+                          <button
+                            type="button"
+                            aria-label={t("common.edit")}
+                            onClick={() => {
+                              setEditingId(c.id);
+                              setEditBody(c.body);
+                            }}
+                            className="text-[10px] text-accent hover:underline"
+                          >
+                            {t("common.edit")}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={t("common.delete")}
+                            className="text-[10px] text-red-500 hover:underline"
+                            disabled={delComment.isPending}
+                            onClick={() => delComment.mutate(c.id)}
+                          >
+                            {t("common.delete")}
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                  {editingId === c.id ? (
+                    <form
+                      className="mt-1.5 space-y-1.5"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (editBody.trim()) saveEdit.mutate({ id: c.id, body: editBody.trim() });
+                      }}
+                    >
+                      <Textarea value={editBody} onChange={(e) => setEditBody(e.target.value)} rows={2} />
+                      <div className="flex justify-end gap-1">
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                          {t("common.cancel")}
+                        </Button>
+                        <Button type="submit" size="sm" disabled={saveEdit.isPending}>
+                          {t("common.save")}
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-fg">{c.body}</p>
+                  )}
+                </li>
+              );
+            })}
+            {comments.length === 0 ? (
+              <li className="py-3 text-center text-[11px] text-muted">{t("tkAct.noComments")}</li>
+            ) : null}
+          </ul>
+          <form
+            className="flex items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (body.trim()) addComment.mutate();
+            }}
+          >
+            <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder={t("tkAct.commentPlaceholder")} />
+            <Button type="submit" size="icon" aria-label={t("tkAct.send")} disabled={!body.trim() || addComment.isPending}>
+              <Send className="size-4" />
+            </Button>
+          </form>
+        </section>
+
+        {/* Activity log */}
+        <section className="space-y-1.5">
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold text-fg">
+            <Activity className="size-3.5 text-emerald-500" />
+            {t("tkAct.log")}
+          </h3>
+          <ul className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-border bg-surface-1 p-2">
+            {activities.map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-2 text-[10px] text-muted">
+                <span>
+                  <b className="font-medium text-fg">{a.actor?.name ?? "—"}</b>{" "}
+                  {t(EVENT_KEYS[a.event] ?? "tkAct.unknown")}
+                  {a.event === "status_changed" && a.meta
+                    ? ` (${String((a.meta as Record<string, unknown>).from ?? "")} → ${String((a.meta as Record<string, unknown>).to ?? "")})`
+                    : ""}
+                </span>
+                <span className="shrink-0">{fmtDateTime(a.createdAt, "ar")}</span>
+              </li>
+            ))}
+            {activities.length === 0 ? <li className="py-2 text-center text-[11px] text-muted">{t("tkAct.noActivity")}</li> : null}
+          </ul>
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
+/** Unused placeholder to keep the TicketIcon import referenced if UI changes. */
+export const _icon = TicketIcon;

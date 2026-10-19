@@ -10,8 +10,9 @@ import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { PRIORITY_STYLES } from "@/lib/format";
+import { TicketDetailModal } from "@/components/ticket-detail-modal";
 
-function errText(err: unknown, t: (k: string) => string): string {
+export function errText(err: unknown, t: (k: string) => string): string {
   if (err instanceof ApiError && err.messageKey) {
     const x = t(err.messageKey);
     return x !== err.messageKey ? x : t("common.error");
@@ -44,11 +45,13 @@ export function DepartmentTickets({
   deptId,
   deptName,
   emoji,
+  currentUserId,
   canAssign,
 }: {
   deptId: string;
   deptName: string;
   emoji: string | null;
+  currentUserId: string;
   canAssign: boolean; // dept member or org admin
 }) {
   const { t } = useI18n();
@@ -56,6 +59,7 @@ export function DepartmentTickets({
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<TicketRow | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("NORMAL");
@@ -131,6 +135,8 @@ export function DepartmentTickets({
         <LifeBuoy className="size-4 text-rose-500" />
         {t("ticket.new")}
       </Button>
+
+      {detailId ? <TicketDetailModal ticketId={detailId} currentUserId={currentUserId} onClose={() => setDetailId(null)} /> : null}
 
       {creating ? (
         <Modal open onClose={() => setCreating(false)} title={`${emoji ?? "🎟️"} ${deptName} — ${t("ticket.newTitle")}`}>
@@ -235,7 +241,13 @@ export function DepartmentTickets({
               <li key={r.id} className="flex flex-wrap items-center gap-2 py-2">
                 <span className="shrink-0 font-mono text-[10px] text-muted">T{r.number}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-fg">{r.title}</p>
+                  <button
+                    type="button"
+                    onClick={() => setDetailId(r.id)}
+                    className="w-full truncate text-start text-xs font-medium text-fg hover:text-accent"
+                  >
+                    {r.title}
+                  </button>
                   <p className="truncate text-[10px] text-muted">
                     {r.creator?.name}
                     {r.assignee ? ` · ${t("ticket.to")} ${r.assignee.name}` : ""}

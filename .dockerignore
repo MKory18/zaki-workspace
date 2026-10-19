@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.gitignore
+audit.json
+*.log
+.temp
+temp
+coverage
+tests
+docs
+.env*
+!.env.example
+README.md

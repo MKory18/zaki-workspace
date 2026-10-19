@@ -134,6 +134,7 @@ export function DepartmentsView({ me }: { me: { role: string; id: string } }) {
                         deptId={d.id}
                         deptName={d.name}
                         emoji={d.emoji}
+                        currentUserId={me.id}
                         canAssign={manage || d.members.some((m) => m.id === me.id)}
                       />
                     </div>

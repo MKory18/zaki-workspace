@@ -631,5 +631,19 @@
   "prod.wd_wed": "أربعاء",
   "prod.wd_thu": "خميس",
   "prod.wd_fri": "جمعة",
-  "prod.wd_sat": "سبت"
+  "prod.wd_sat": "سبت",
+  "tkAct.comments": "التعليقات",
+  "tkAct.noComments": "لا تعليقات بعد",
+  "tkAct.commentPlaceholder": "اكتب تعليقًا…",
+  "tkAct.send": "إرسال",
+  "tkAct.log": "سجل النشاط",
+  "tkAct.noActivity": "لا نشاط بعد",
+  "tkAct.created": "فتح التذكرة",
+  "tkAct.edited": "عدّل التفاصيل",
+  "tkAct.statusChanged": "غيّر الحالة",
+  "tkAct.assigned": "أسند التذكرة",
+  "tkAct.commented": "أضاف تعليقًا",
+  "tkAct.unknown": "حدّث التذكرة",
+  "ticket.commentAdded": "أُضيف التعليق",
+  "comment.required": "التعليق فارغ"
 }

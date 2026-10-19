@@ -28,8 +28,7 @@ import { currentUser } from "@/server/auth";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { getServerT, type ServerT } from "@/lib/i18n/server";
 import { ProjectsToolbar } from "@/components/projects-toolbar";
-import { Card, CardBody } from "@/components/ui/card";
-import { Badge } from "@/components/ui/card";
+import { Card, CardBody, Badge } from "@/components/ui/card";
 import { formatDate, isOverdue } from "@/lib/format";
 
 interface NavCardItem {

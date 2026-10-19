@@ -41,6 +41,8 @@ model User {
   deptMemberships DepartmentMember[]
   createdTickets  Ticket[]             @relation("TicketCreator")
   assignedTickets Ticket[]             @relation("TicketAssignee")
+  ticketComments  TicketComment[]      @relation("TicketCommentAuthor")
+  ticketActivity  TicketActivity[]     @relation("TicketActivityActor")
   createdCustomers Customer[]          @relation("CustomerCreator")
   ownedOpportunities Opportunity[]    @relation("OpportunityOwner")
   routines        Routine[]            @relation("RoutineAssignee")
@@ -95,11 +97,41 @@ model Ticket {
   department   Department   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   creator      User         @relation("TicketCreator", fields: [creatorId], references: [id])
   assignee     User?        @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  comments     TicketComment[]
+  activities   TicketActivity[]
 
   @@unique([orgId, number])
   @@index([departmentId, status])
   @@index([orgId])
   @@index([assigneeId])
+}
+
+model TicketComment {
+  id       String    @id @default(cuid())
+  ticketId String
+  authorId String
+  body     String
+  editedAt DateTime?
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User   @relation("TicketCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([ticketId, createdAt])
+}
+
+model TicketActivity {
+  id        String   @id @default(cuid())
+  ticketId  String
+  actorId   String
+  event     String // created | status_changed | assigned | commented | edited
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor  User   @relation("TicketActivityActor", fields: [actorId], references: [id])
+
+  @@index([ticketId, createdAt])
 }
 
 // ---------- daily production & goals ----------
