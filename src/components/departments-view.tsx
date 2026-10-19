@@ -11,6 +11,7 @@ import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { DepartmentTickets } from "@/components/department-tickets";
+import { DepartmentCampaigns } from "@/components/department-campaigns";
 
 interface DeptRow {
   id: string;
@@ -136,6 +137,13 @@ export function DepartmentsView({ me }: { me: { role: string; id: string } }) {
                         emoji={d.emoji}
                         currentUserId={me.id}
                         canAssign={manage || d.members.some((m) => m.id === me.id)}
+                      />
+                      <DepartmentCampaigns
+                        deptId={d.id}
+                        deptName={d.name}
+                        emoji={d.emoji}
+                        currentUserId={me.id}
+                        canManage={manage || d.members.some((m) => m.id === me.id)}
                       />
                     </div>
                   </div>

@@ -47,6 +47,7 @@ model User {
   ownedOpportunities Opportunity[]    @relation("OpportunityOwner")
   routines        Routine[]            @relation("RoutineAssignee")
   goals           Goal[]               @relation("GoalCreator")
+  campaigns       Campaign[]           @relation("CampaignOwner")
 }
 
 // ---------- departments (the company's pools: design / dev / IT / sales) ----------
@@ -66,6 +67,7 @@ model Department {
   tickets      Ticket[]
   routines     Routine[]
   goals        Goal[]
+  campaigns    Campaign[]
 
   @@index([orgId])
 }
@@ -132,6 +134,55 @@ model TicketActivity {
   actor  User   @relation("TicketActivityActor", fields: [actorId], references: [id])
 
   @@index([ticketId, createdAt])
+}
+
+// ---------- department products: campaign calendar ----------
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  DONE
+  CANCELLED
+}
+
+model Campaign {
+  id           String         @id @default(cuid())
+  orgId        String
+  departmentId String
+  number       Int // per-org sequential → key `${prefix}-C${number}`
+  title        String
+  description  String?
+  status       CampaignStatus @default(DRAFT)
+  priority     TaskPriority   @default(NORMAL)
+  startDate    DateTime
+  endDate      DateTime
+  ownerId      String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  owner        User         @relation("CampaignOwner", fields: [ownerId], references: [id])
+  items        CampaignItem[]
+
+  @@unique([orgId, number])
+  @@index([orgId, status])
+  @@index([departmentId, startDate])
+}
+
+// A dated item on the campaign calendar (post / event / task-link).
+model CampaignItem {
+  id         String    @id @default(cuid())
+  campaignId String
+  title      String
+  kind       String    @default("post") // post | event | task
+  dueDate    DateTime
+  doneAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, dueDate])
 }
 
 // ---------- daily production & goals ----------
@@ -327,6 +378,7 @@ model Organization {
   opportunities    Opportunity[]
   routines         Routine[]
   goals            Goal[]
+  campaigns        Campaign[]
 
   @@index([slug])
 }
