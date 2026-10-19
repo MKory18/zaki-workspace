@@ -80,6 +80,7 @@ async function positionAt(
 
 interface ScopedTask {
   id: string;
+  projectId: string;
   boardId: string;
   columnId: string;
   title: string;
@@ -97,6 +98,7 @@ async function assertTaskScope(taskId: string, orgId: string, tx: Tx): Promise<S
     where: { id: taskId, orgId },
     select: {
       id: true,
+      projectId: true,
       boardId: true,
       columnId: true,
       title: true,
@@ -139,6 +141,15 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
         where: { orgId: actor.orgId, id: { in: uniqueIds } },
       });
       if (count !== uniqueIds.length) throw new ForbiddenError("label.invalid");
+    }
+
+    // P1: never allow assigning a task to a user outside the actor's org
+    if (input.assigneeId) {
+      const member = await tx.organizationMember.findFirst({
+        where: { organizationId: actor.orgId, userId: input.assigneeId },
+        select: { id: true },
+      });
+      if (!member) throw new ForbiddenError("assignee.not_member");
     }
 
     const number = await nextTaskNumber(actor.orgId, tx);
@@ -247,10 +258,17 @@ export async function updateTask(
     if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
     if (data.startDate !== undefined) updateData.startDate = data.startDate;
     if (data.milestoneId !== undefined) {
-      updateData.milestone =
-        data.milestoneId === null
-          ? { disconnect: true }
-          : { connect: { id: data.milestoneId } };
+      if (data.milestoneId === null) {
+        updateData.milestone = { disconnect: true };
+      } else {
+        // P2: milestone must belong to this task's project (and thus the actor's org)
+        const milestone = await tx.milestone.findFirst({
+          where: { id: data.milestoneId, projectId: before.projectId },
+          select: { id: true },
+        });
+        if (!milestone) throw new ForbiddenError("milestone.invalid");
+        updateData.milestone = { connect: { id: data.milestoneId } };
+      }
     }
     if (data.archived !== undefined) updateData.archived = data.archived;
     if (data.labelIds) {

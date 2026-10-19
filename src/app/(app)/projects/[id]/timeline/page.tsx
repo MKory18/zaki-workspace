@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { db } from "@/server/db";
 import { currentUser } from "@/server/auth";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { getProjectTimeline } from "@/server/services/timeline";
@@ -11,12 +12,12 @@ export default async function TimelinePage({ params }: { params: { id: string } 
   const user = await currentUser();
   if (!user) redirect("/login");
   const wsScope = await accessibleWorkspaceIds(user.id);
-  const inScope = wsScope.length
-    ? await (async () => {
-        const data = await getProjectTimeline(params.id).catch(() => null);
-        return data && wsScope.includes(data.project.workspaceId) ? data : null;
-      })()
-    : null;
+  // authorize BEFORE fetching data: resolve the project's workspace first
+  const project = await db.project
+    .findUnique({ where: { id: params.id }, select: { workspaceId: true } })
+    .catch(() => null);
+  const inScope =
+    project && wsScope.includes(project.workspaceId) ? await getProjectTimeline(params.id).catch(() => null) : null;
   if (!inScope) return <div className="p-6 text-sm text-fg-muted">{t("timeline.not_found")}</div>;
 
   return (

@@ -327,7 +327,7 @@ function Stat({
     <Link href={href} className="group rounded-xl border border-border bg-surface p-4 shadow-card transition-all hover:border-accent/40 hover:shadow-card-hover">
       <div className="flex items-center justify-between">
         <span className={`grid size-9 place-items-center rounded-lg ${cls}`}>
-          <Icon className="size-4.5" />
+          <Icon className="size-[18px]" />
         </span>
         <span className={`text-2xl font-bold ${alarm ? "text-red-500" : "text-fg"}`}>{value}</span>
       </div>
