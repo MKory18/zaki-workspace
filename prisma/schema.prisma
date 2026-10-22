@@ -29,6 +29,8 @@ model User {
   transparencyVersion    Int?
   transparencyAcceptedAt DateTime?
   lastLoginAt  DateTime?
+  // Presence for the chat: written at most once a minute while the person has a live connection.
+  lastSeenAt   DateTime?
   locale       String   @default("ar") // ar | fr (en reserved)
   theme        String   @default("system") // light | dark | system
   avatarUrl    String?
@@ -49,7 +51,10 @@ model User {
   ideaVotes       IdeaVote[]           @relation("IdeaVoter")
   chatMemberships ConversationMember[] @relation("ChatMember")
   chatMessages    ChatMessage[]        @relation("ChatAuthor")
+  chatDeletions   ChatMessage[]        @relation("ChatDeleter")
   chatReactions   ChatReaction[]
+  messageRevisions MessageRevision[]   @relation("RevisionEditor")
+  messageNotes    MessageNote[]        @relation("NoteAuthor")
   uploadedFiles   StoredFile[]         @relation("FileUploader")
   deptMemberships DepartmentMember[]
   createdTickets  Ticket[]             @relation("TicketCreator")
@@ -81,6 +86,8 @@ model Department {
   routines     Routine[]
   goals        Goal[]
   campaigns    Campaign[]
+  // The chat space of the department (Phase 3): at most one, created by the data move or on demand.
+  space        Workspace?
 
   @@index([orgId])
 }
@@ -287,40 +294,76 @@ model StoredFile {
   version    Int       @default(1)
   isLatest   Boolean   @default(true)
   deletedAt  DateTime?
+  // Where the file belongs: LIBRARY (the file library lists only these) | CHAT (an attachment) | VOICE (a voice message).
+  purpose    String    @default("LIBRARY")
+  // Chat uploads carry their attachment facts here until the message claims them
+  // (image width/height; voice durationMs and peaks). Null for every library file.
+  meta       Json?
   createdAt  DateTime  @default(now())
 
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  uploader     User         @relation("FileUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+  organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  uploader     User                @relation("FileUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+  chatLinks    MessageAttachment[]
 
   @@index([orgId, familyId, isLatest])
   @@index([familyId])
+  @@index([orgId, purpose])
 }
 
 // ---------- internal chat (Phase: real-time rooms over the org boundary) ----------
 
+// A conversation is one of three things (`kind`):
+//   DM     two people of one company; at most one per pair (`dmKey`)
+//   TOPIC  a topic inside a space (`spaceId`): its audience is the space's people unless `restricted`
+//   GROUP  legacy: a group of the previous release. The Phase 3 data move turns every one into a
+//          space with a general TOPIC; the value stays valid for rows written by a release still running.
 model Conversation {
-  id        String   @id @default(cuid())
-  orgId     String
-  kind      String // DM | GROUP
-  title     String? // GROUP only
-  emoji     String? // GROUP identity marker (🎨 💻 …)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  orgId         String
+  kind          String // DM | GROUP (legacy) | TOPIC
+  title         String? // TOPIC / GROUP
+  emoji         String? // identity marker (🎨 💻 …)
+  // ---- topics (Phase 3) ----
+  // The space the topic lives in. A space that has topics (chat history) can never be deleted: RESTRICT.
+  spaceId       String?
+  topicType     String    @default("DISCUSSION") // DISCUSSION | ANNOUNCEMENTS | TASKS | IDEAS | FOLLOWUP
+  postingPolicy String    @default("ALL") // ALL | ADMINS
+  // restricted: only the people with a ConversationMember row are its audience, not the whole space.
+  restricted    Boolean   @default(false)
+  closedAt      DateTime? // closed topics take no new messages; admins reopen
+  position      Int       @default(0) // order of the topics inside the space
+  // The role of a system topic: announcements | followup | general | ideas | archive (one per space).
+  systemKey     String?
+  // DM only: the two user ids, smaller first, joined with "|". Unique per company (a person can work in
+  // two companies and has a DM with the same colleague in each). Born NULL; the data move fills it for
+  // the OLDEST DM of each pair.
+  dmKey         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  space        Workspace?           @relation(fields: [spaceId], references: [id], onDelete: Restrict)
   members      ConversationMember[]
   messages     ChatMessage[]
 
+  @@unique([orgId, dmKey])
+  @@unique([spaceId, systemKey])
   @@index([orgId, updatedAt])
+  @@index([spaceId, position])
 }
 
 model ConversationMember {
-  id             String   @id @default(cuid())
-  conversationId String
-  userId         String
-  role           String   @default("member") // member | admin (GROUP)
-  lastReadAt     DateTime @default(now())
-  joinedAt       DateTime @default(now())
+  id              String    @id @default(cuid())
+  conversationId  String
+  userId          String
+  role            String    @default("member") // member | admin (GROUP)
+  lastReadAt      DateTime  @default(now())
+  // Newest moment a device of this person received the conversation (DM ticks: sent / delivered / read).
+  lastDeliveredAt DateTime?
+  // The person's own notification mute (Phase 5). It does NOT stop them posting: the moderators' mute is
+  // WorkspaceMember.mutedUntil.
+  mutedUntil      DateTime?
+  joinedAt        DateTime  @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation("ChatMember", fields: [userId], references: [id], onDelete: Cascade)
@@ -330,24 +373,39 @@ model ConversationMember {
 }
 
 model ChatMessage {
-  id             String    @id @default(cuid())
-  orgId          String
-  conversationId String
-  authorId       String
-  body           String
-  replyToId      String?
-  pinned         Boolean   @default(false)
-  editedAt       DateTime?
-  deletedAt      DateTime? // tombstone: body hidden, row kept for threads
-  createdAt      DateTime  @default(now())
+  id              String    @id @default(cuid())
+  orgId           String
+  conversationId  String
+  authorId        String
+  // Deleting a message KEEPS its text from Phase 3 on (the owner reads the original in the archive);
+  // what people see is decided in one place: src/server/chat/redact.ts.
+  body            String
+  kind            String    @default("TEXT") // TEXT | VOICE | SYSTEM
+  replyToId       String?
+  pinned          Boolean   @default(false)
+  editedAt        DateTime?
+  deletedAt       DateTime? // tombstone: the row is kept for threads and the archive
+  deletedById     String? // who deleted it (the author, a space admin or the owner)
+  forwardedFromId String? // the ORIGINAL message of a forward
+  mentions        String[]  @default([]) // user ids
+  // Sending is idempotent: a client retry with the same clientId never creates a second message.
+  clientId        String?
+  createdAt       DateTime  @default(now())
 
-  organization Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  conversation Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  author       User           @relation("ChatAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  replyTo      ChatMessage?   @relation("ChatReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies      ChatMessage[]  @relation("ChatReplies")
-  reactions    ChatReaction[]
+  organization  Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  conversation  Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author        User                @relation("ChatAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  deletedBy     User?               @relation("ChatDeleter", fields: [deletedById], references: [id], onDelete: SetNull)
+  replyTo       ChatMessage?        @relation("ChatReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies       ChatMessage[]       @relation("ChatReplies")
+  forwardedFrom ChatMessage?        @relation("ChatForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
+  forwards      ChatMessage[]       @relation("ChatForwards")
+  reactions     ChatReaction[]
+  revisions     MessageRevision[]
+  notes         MessageNote[]
+  attachments   MessageAttachment[]
 
+  @@unique([authorId, clientId])
   @@index([conversationId, createdAt])
   @@index([orgId, createdAt])
 }
@@ -363,6 +421,72 @@ model ChatReaction {
 
   @@unique([messageId, userId, emoji])
   @@index([messageId])
+}
+
+// The text a message had BEFORE an edit. One row per edit; only the owner reads them.
+model MessageRevision {
+  id        String   @id @default(cuid())
+  messageId String
+  body      String
+  editorId  String
+  createdAt DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  editor  User        @relation("RevisionEditor", fields: [editorId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, createdAt])
+}
+
+// An internal note on a message: seen only by the admins of its space and by the owner.
+model MessageNote {
+  id        String   @id @default(cuid())
+  messageId String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  author  User        @relation("NoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, createdAt])
+}
+
+// A file attached to a message. The bytes are a StoredFile (purpose CHAT / VOICE), never listed in the library.
+// An upload exists first and is claimed by a message afterwards: until then `messageId` is NULL (only its
+// uploader can open it, and an unclaimed row older than a day is cleaned up). A forward links the same file
+// again from a new message.
+model MessageAttachment {
+  id         String   @id @default(cuid())
+  messageId  String?
+  fileId     String
+  kind       String // IMAGE | VIDEO | AUDIO | FILE
+  name       String?
+  width      Int?
+  height     Int?
+  durationMs Int?
+  peaks      Json? // voice waveform: up to 100 integers 0..100
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  message ChatMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  file    StoredFile   @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([messageId, position])
+  @@index([fileId])
+}
+
+// The bus of the chat: every change writes one row (ids only, never content) inside the same transaction;
+// a trigger notifies the listener (channel zaki_rt, payload = the row id). Rows older than two days are purged.
+// ⚠️ `id` is a BigInt: convert it (String(id)) before JSON.stringify, which throws on a bigint.
+model RealtimeEvent {
+  id        BigInt   @id @default(autoincrement())
+  orgId     String
+  kind      String // message.created | message.edited | ... (src/server/realtime/emit.ts)
+  ids       Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([orgId, id])
 }
 
 model Organization {
@@ -446,22 +570,39 @@ enum OrgRole {
 
 // ---------- Workspaces / teams ----------
 
+// A space: the place where a team works AND talks. Its topics are the conversations that point at it.
 model Workspace {
-  id             String   @id @default(cuid())
+  id             String        @id @default(cuid())
   organizationId String
   name           String
   slug           String
   description    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  // STANDARD: made by people | DEPARTMENT: the chat of a department | HQ: the company-wide space (one per company)
+  kind           WorkspaceKind @default(STANDARD)
+  emoji          String?
+  // The role of a system space: "hq". Unique per company, so there is exactly one HQ.
+  systemKey      String?
+  // DEPARTMENT spaces: the department they belong to (at most one space per department).
+  departmentId   String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  members      WorkspaceMember[]
-  teams        Team[]
-  projects     Project[]
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department    Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  members       WorkspaceMember[]
+  teams         Team[]
+  projects      Project[]
+  conversations Conversation[]
 
   @@unique([organizationId, slug])
+  @@unique([organizationId, systemKey])
   @@index([organizationId])
+}
+
+enum WorkspaceKind {
+  STANDARD
+  DEPARTMENT
+  HQ
 }
 
 model WorkspaceMember {
@@ -469,6 +610,9 @@ model WorkspaceMember {
   workspaceId String
   userId      String
   role        WorkspaceRole @default(MEMBER)
+  // The moderators' mute: until this moment the person cannot post in ANY topic of the space.
+  // NULL = not muted; "forever" is stored as 9999-12-31.
+  mutedUntil  DateTime?
   createdAt   DateTime      @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -759,13 +903,19 @@ model AuditLog {
   id        String   @id @default(cuid())
   actorId   String?
   orgId     String?
-  action    String // auth.login | org.created | task.deleted ...
+  action    String // auth.login | org.created | task.deleted | chat.oversight_read ...
   target    String?
   meta      Json?
+  // Moderation and oversight trails (Phase 3): which space / conversation the entry is about.
+  // No foreign keys on purpose: an audit row outlives what it describes.
+  workspaceId    String?
+  conversationId String?
   createdAt DateTime @default(now())
 
   @@index([orgId, createdAt])
   @@index([action, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([workspaceId, createdAt])
 }
 
 enum IdeaStatus {
