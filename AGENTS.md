@@ -280,6 +280,17 @@ other way is a bug.
   in two files and every `t("key")` literal must exist (`tests/encoding-hygiene.test.ts`). Errors
   travel as machine keys (`new ForbiddenError("orgm.role_denied")`) and the screen shows
   `t(key)`, so every new error key needs its Arabic string. There is no English text on screen.
+  Statuses, priorities, ranks and every other enum are shown through `enumLabel()`, board columns
+  through `columnLabel()`, dates and numbers through `src/lib/format.ts` (Arabic names, Western
+  digits); `tests/arabic-ui.test.ts` fails on a raw enum, a Latin word or a French/English date.
+- **Colours come from the theme tokens**, never from Tailwind's default palette or a hex value:
+  `text-danger`, `bg-ok/10`, `border-warn/40`, `text-info`, `bg-cat-3/10` (and `bg-surface-1`,
+  `text-fg-muted`, `border-border`, `bg-accent` ...). Four themes (`islamic-calm` default,
+  `islamic-epic`, `neon-coast`, `day`) define the tokens in `src/lib/themes/palettes.ts`;
+  `src/app/themes.css` and `src/components/theme/decor.css` are generated
+  (`node scripts/build-themes-css.mjs`, `node scripts/build-decor-css.mjs`) and a test fails when
+  they drift. Decoration (ornament, photographs) appears only on the login door, empty states, the
+  sidebar header and the Today strip — never behind a number, an amount or a table.
 - Environment is read through `src/server/env.ts` (zod). A missing or malformed value fails
   at boot, loudly, with the key name and never the value.
 - Read the Next.js 14 documentation for what you use; do not assume Next 15/16 behaviour

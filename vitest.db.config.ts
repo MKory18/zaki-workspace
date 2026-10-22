@@ -1,6 +1,9 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
+// Pin the machine's zone, exactly like vitest.config.ts (see it for the why; `ZK_TEST_TZ` overrides).
+if (!process.env["ZK_TEST_TZ"]) process.env["TZ"] = "UTC";
+
 /**
  * Database-backed suite (`npm run test:db`).
  *
