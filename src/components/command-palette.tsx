@@ -1,236 +1,306 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import {
-  LayoutDashboard,
-  FolderKanban,
-  Inbox,
-  ListFilter,
-  CalendarDays,
-  Search,
-  SquareCheck,
-  Factory,
-  Target,
-  Users,
-} from "lucide-react";
+import { BookOpen, FolderKanban, Search, SquareCheck, UserRound } from "lucide-react";
 import { apiGet } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
+import { rankEntries } from "@/lib/guide/match";
+import type { NavIconKey, NavModel } from "@/lib/nav/places";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { NavIcon } from "@/components/shell/nav-icons";
 
 interface SearchResponse {
   tasks: { id: string; key: string; title: string; priority: string; projectId: string; projectName: string }[];
   projects: { id: string; name: string; workspaceId: string; workspaceName: string }[];
 }
 
-interface Command {
+/** One way to jump somewhere: a place, a tab, the guide or the person's account. */
+export interface PaletteCommand {
   id: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  labelKey: string;
+  /** The place a tab belongs to, shown as a quiet second line (and searched too). */
+  subKey?: string;
   href: string;
+  icon: NavIconKey | "guide" | "account";
 }
 
-/** Global quick navigation. Ctrl/Cmd+K; searches authorized tasks/projects. */
-export function CommandPalette() {
+/** There for everybody, whatever their map: the guide and their own account. */
+const ALWAYS: readonly PaletteCommand[] = [
+  { id: "guide", labelKey: "guide.title", href: "/guide", icon: "guide" },
+  { id: "account", labelKey: "shell.avatar.account", href: "/profile", icon: "account" },
+];
+
+/**
+ * The palette's places and tabs, from the person's own map (src/lib/nav/places.ts): nothing they are
+ * not offered in the menus, in the order of the menus. A place that is one page is one entry; a
+ * place with tabs is its tabs, each with the place underneath (unless the place is called by its tab).
+ */
+export function paletteCommands(nav: NavModel): PaletteCommand[] {
+  const out: PaletteCommand[] = [];
+  const seen = new Set<string>();
+  const add = (command: PaletteCommand) => {
+    if (seen.has(command.href)) return;
+    seen.add(command.href);
+    out.push(command);
+  };
+  for (const place of nav.places) {
+    if (place.tabs.length === 0) add({ id: place.key, labelKey: place.labelKey, href: place.href, icon: place.icon });
+    for (const tab of place.tabs) {
+      add({
+        id: `${place.key}.${tab.key}`,
+        labelKey: tab.labelKey,
+        ...(tab.labelKey === place.labelKey ? {} : { subKey: place.labelKey }),
+        href: tab.href,
+        icon: place.icon,
+      });
+    }
+  }
+  for (const command of ALWAYS) add(command);
+  return out;
+}
+
+/** The part of a keyboard event the shortcut reads. */
+export interface ShortcutEvent {
+  key?: string;
+  code?: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
+}
+
+/**
+ * Ctrl+K (⌘K on a Mac). The PHYSICAL key decides (`code === "KeyK"`): with the Arabic layout the same
+ * key types «ن», so `key` alone never matched. Not with Alt (AltGr is Ctrl+Alt on some layouts) and not
+ * with Shift (Ctrl+Shift+K belongs to the browser's own tools).
+ */
+export function isPaletteShortcut(e: ShortcutEvent): boolean {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return false;
+  return e.code === "KeyK" || e.key === "k" || e.key === "K";
+}
+
+function PaletteIcon({ icon }: { icon: PaletteCommand["icon"] }) {
+  if (icon === "guide") return <BookOpen aria-hidden="true" className="size-4" />;
+  if (icon === "account") return <UserRound aria-hidden="true" className="size-4" />;
+  return <NavIcon icon={icon} className="size-4" />;
+}
+
+interface Row {
+  key: string;
+  main: string;
+  sub?: string;
+  href: string;
+  icon: React.ReactNode;
+}
+
+/**
+ * Global quick navigation: Ctrl/⌘+K anywhere, or the search button in the top bar. Jumps to the places
+ * and tabs of the person's map and searches the tasks and projects they may open (the server decides
+ * which). A Radix dialog: focus moves into the search box and stays inside, Escape or a tap outside
+ * closes it, and focus goes back to whoever opened it.
+ *
+ * `defaultOpen` and `portal={false}` are for server-render tests (a portal draws nothing on the server).
+ */
+export function CommandPalette({ nav, defaultOpen = false, portal = true }: { nav: NavModel; defaultOpen?: boolean; portal?: boolean }) {
   const { t } = useI18n();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [q, setQ] = useState("");
   const [cursor, setCursor] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
+  const optionId = (index: number) => `${listId}-${index}`;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setOpen((v) => !v);
-        setCursor(0);
-      } else if (e.key === "Escape" && open) {
-        setOpen(false);
-      }
+      if (!isPaletteShortcut(e)) return;
+      e.preventDefault();
+      setOpen((v) => !v);
+      setQ("");
+      setCursor(0);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, []);
 
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
+  const query = q.trim();
 
-  const staticCommands: Command[] = useMemo(
-    () => [
-      { id: "home", label: t("nav.home"), icon: LayoutDashboard, href: "/" },
-      { id: "projects", label: t("nav.projects"), icon: FolderKanban, href: "/projects" },
-      { id: "mywork", label: t("nav.myWork"), icon: Inbox, href: "/my-work" },
-      { id: "list", label: t("nav.listView"), icon: ListFilter, href: "/list" },
-      { id: "calendar", label: t("nav.calendar"), icon: CalendarDays, href: "/calendar" },
-  { id: "production", label: t("nav.production"), icon: Factory, href: "/production" },
-  { id: "goals", label: t("nav.goals"), icon: Target, href: "/goals" },
-  { id: "members", label: t("nav.members"), icon: Users, href: "/members" },
-    ],
-    [t],
+  // spelling-tolerant, like the guide's search: «مشاريع» finds «المشاريع», a hamza or not
+  const commands = useMemo(
+    () => paletteCommands(nav).map((c) => ({ ...c, title: t(c.labelKey), keywords: c.subKey ? [t(c.subKey)] : [] })),
+    [nav, t],
   );
+  const shown = useMemo(() => rankEntries(commands, query), [commands, query]);
 
   const search = useQuery({
-    queryKey: ["palette", q],
-    queryFn: () => apiGet<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}`),
-    enabled: open && q.trim().length >= 2,
+    queryKey: ["palette", query],
+    queryFn: () => apiGet<SearchResponse>(`/api/search?q=${encodeURIComponent(query)}`),
+    enabled: open && query.length >= 2,
   });
 
-  interface FlatResult {
-    key: string;
-    main: string;
-    sub: string;
-    href: string;
-    type: "task" | "project";
-  }
-
-  const filteredCommands = q.trim()
-    ? staticCommands.filter((c) => c.label.toLowerCase().includes(q.trim().toLowerCase()))
-    : staticCommands;
-
-  const results: FlatResult[] = [
+  const rows: Row[] = [
+    ...shown.map((c) => ({
+      key: `c:${c.id}`,
+      main: c.title,
+      ...(c.subKey ? { sub: t(c.subKey) } : {}),
+      href: c.href,
+      icon: <PaletteIcon icon={c.icon} />,
+    })),
     ...(search.data?.tasks ?? []).map((task) => ({
       key: `t:${task.id}`,
       main: `${task.key} ${task.title}`,
       sub: task.projectName,
       href: `/tasks/${task.id}`,
-      type: "task" as const,
+      icon: <SquareCheck aria-hidden="true" className="size-4" />,
     })),
     ...(search.data?.projects ?? []).map((p) => ({
       key: `p:${p.id}`,
       main: p.name,
       sub: p.workspaceName,
       href: `/projects/${p.id}`,
-      type: "project" as const,
+      icon: <FolderKanban aria-hidden="true" className="size-4" />,
     })),
   ];
+  const total = rows.length;
+  const active = Math.min(cursor, Math.max(total - 1, 0));
 
-  const total = filteredCommands.length + results.length;
-
-  function go(matchIndex: number) {
-    if (matchIndex < filteredCommands.length) {
-      setOpen(false);
+  function changeOpen(next: boolean) {
+    setOpen(next);
+    if (!next) {
       setQ("");
-      router.push(filteredCommands[matchIndex]!.href);
-      return;
+      setCursor(0);
     }
-    const hit = results[matchIndex - filteredCommands.length];
-    if (!hit) return;
-    setOpen(false);
-    setQ("");
-    router.push(hit.href);
   }
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        aria-label={t("pal.open")}
-        className="flex w-60 items-center gap-2 rounded-lg border border-border bg-surface-1 px-2.5 py-1.5 text-xs text-muted hover:border-ring"
-      >
-        <Search className="h-3.5 w-3.5" />
-        <span className="flex-1 text-start">{t("pal.open")}</span>
-        <kbd className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[9px] text-muted">Ctrl K</kbd>
-      </button>
-    );
+  function go(index: number) {
+    const row = rows[index];
+    if (!row) return;
+    changeOpen(false);
+    router.push(row.href);
   }
+
+  // the highlighted row stays in view while the arrows move it
+  useEffect(() => {
+    if (!open) return;
+    document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" });
+  }, [open, active, listId]);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/40 px-4 pt-24" onClick={() => setOpen(false)}>
-      <div
-        role="dialog"
-        aria-modal="true"
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
         aria-label={t("pal.open")}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-xl border border-border bg-surface shadow-xl"
+        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-xl border-muted bg-surface-1 px-3 text-sm text-muted transition-colors hover:border-accent/50 hover:text-fg-muted"
       >
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-          <Search className="h-4 w-4 text-muted" />
-          <input
-            ref={inputRef}
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setCursor(0);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setCursor((c) => Math.min(c + 1, total - 1));
-              } else if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setCursor((c) => Math.max(c - 1, 0));
-              } else if (e.key === "Enter") {
-                e.preventDefault();
-                if (total > 0) go(cursor);
-              }
-            }}
-            placeholder={t("pal.placeholder")}
-            className="flex-1 bg-transparent text-sm text-fg placeholder:text-muted focus:outline-none"
-            aria-label={t("pal.placeholder")}
-          />
-          <kbd className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[9px] text-muted">Esc</kbd>
-        </div>
+        <Search aria-hidden="true" className="size-4 shrink-0" />
+        <span className="min-w-0 flex-1 truncate text-start">{t("pal.open")}</span>
+        <kbd dir="ltr" className="hidden shrink-0 rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-muted md:inline">
+          Ctrl K
+        </kbd>
+      </button>
 
-        <div className="max-h-80 overflow-y-auto p-1.5">
-          {filteredCommands.map((c, i) => (
-            <PaletteRow
-              key={c.id}
-              active={cursor === i}
-              onClick={() => go(i)}
-              icon={<c.icon className="h-4 w-4" />}
-              main={c.label}
+      <Dialog open={open} onOpenChange={changeOpen}>
+        <DialogContent portal={portal} size="lg" aria-describedby={undefined} className="mb-auto mt-[10dvh]">
+          <DialogTitle className="sr-only">{t("pal.open")}</DialogTitle>
+          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border pe-14 ps-4">
+            <Search aria-hidden="true" className="size-4 shrink-0 text-muted" />
+            <input
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setCursor(0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setCursor(Math.min(active + 1, Math.max(total - 1, 0)));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setCursor(Math.max(active - 1, 0));
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (total > 0) go(active);
+                }
+              }}
+              role="combobox"
+              aria-expanded={total > 0}
+              aria-controls={listId}
+              aria-autocomplete="list"
+              aria-activedescendant={total > 0 ? optionId(active) : undefined}
+              aria-label={t("pal.placeholder")}
+              placeholder={t("pal.placeholder")}
+              autoComplete="off"
+              enterKeyHint="go"
+              className="h-12 min-w-0 flex-1 bg-transparent text-base text-fg placeholder:text-muted focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 md:text-sm"
             />
-          ))}
-          {results.map((r, i) => (
-            <PaletteRow
-              key={r.key}
-              active={cursor === filteredCommands.length + i}
-              onClick={() => go(filteredCommands.length + i)}
-              icon={<SquareCheck className={cn("h-4 w-4", r.type === "project" && "text-muted")} />}
-              main={r.main}
-              sub={r.sub}
-            />
-          ))}
+            <kbd dir="ltr" className="hidden shrink-0 rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-muted md:inline">
+              Esc
+            </kbd>
+          </div>
+
+          <div id={listId} role="listbox" aria-label={t("pal.open")} className="max-h-[min(60dvh,24rem)] overflow-y-auto overscroll-contain p-1.5">
+            {rows.map((row, i) => (
+              <PaletteRow
+                key={row.key}
+                id={optionId(i)}
+                active={active === i}
+                onPick={() => go(i)}
+                onHover={() => setCursor(i)}
+                icon={row.icon}
+                main={row.main}
+                sub={row.sub}
+              />
+            ))}
+          </div>
           {total === 0 ? (
-            <p className="px-3 py-6 text-center text-xs text-muted">
-              {search.isLoading ? t("common.loading") : q.trim().length >= 2 ? t("common.noResults") : t("pal.hint")}
+            <p role="status" className="px-4 pb-6 pt-2 text-center text-sm text-muted">
+              {search.isLoading ? t("common.loading") : query.length >= 2 ? t("common.noResults") : t("pal.hint")}
             </p>
           ) : null}
-        </div>
-      </div>
-    </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
 function PaletteRow({
+  id,
   active,
-  onClick,
+  onPick,
+  onHover,
   icon,
   main,
   sub,
 }: {
+  id: string;
   active: boolean;
-  onClick: () => void;
+  onPick: () => void;
+  onHover: () => void;
   icon: React.ReactNode;
   main: string;
   sub?: string;
 }) {
   return (
     <button
-      onClick={onClick}
+      id={id}
+      type="button"
       role="option"
       aria-selected={active}
+      tabIndex={-1}
+      onClick={onPick}
+      onMouseMove={onHover}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-start text-sm",
-        active ? "bg-surface-2 text-fg" : "text-fg-muted hover:bg-surface-2",
+        "flex min-h-11 w-full items-center gap-3 rounded-lg border-s-4 px-3 py-2 text-start text-sm transition-colors",
+        active ? "border-s-accent bg-accent/10 text-fg" : "border-s-transparent text-fg-muted hover:bg-surface-2",
       )}
     >
-      <span className="text-muted">{icon}</span>
+      <span className="shrink-0 text-muted">{icon}</span>
       <span className="min-w-0 flex-1 truncate">{main}</span>
-      {sub ? <span className="max-w-32 truncate text-[10px] text-muted">{sub}</span> : null}
+      {sub ? <span className="max-w-32 shrink-0 truncate text-xs text-muted">{sub}</span> : null}
     </button>
   );
 }

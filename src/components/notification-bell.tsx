@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiDelete, apiGet, apiPost } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
-import { formatDate } from "@/lib/format";
+import { fmtAgo } from "@/lib/format";
 
 interface NotificationItem {
   id: string;
@@ -24,9 +24,23 @@ interface NotificationsResponse {
   unreadCount: number;
 }
 
-export function NotificationBell() {
+/**
+ * The bell in the top bar, and the guide's «inbox» stop. It polls every 30 s (push notifications come in
+ * Phase 5) and opens a panel of the latest notifications: tap one to go to it, mark it read, delete it.
+ *
+ * The panel fits a 375px phone: pinned 8px from both edges right under the top bar (never wider than the
+ * screen), and from `md` it hangs under the bell. A tap outside or Escape closes it (Escape gives focus back
+ * to the bell). The row actions show on a phone, where there is no hover, and are 44px targets.
+ *
+ * `defaultOpen` is for server-render tests.
+ */
+export function NotificationBell({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+  const headingId = useId();
   const qc = useQueryClient();
   const query = useQuery({
     queryKey: ["notifications"],
@@ -49,42 +63,76 @@ export function NotificationBell() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
+  // while open: a tap anywhere else closes the panel; Escape closes it and gives focus back to the bell
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(e: PointerEvent) {
+      if (rootRef.current && e.target instanceof Node && !rootRef.current.contains(e.target)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      buttonRef.current?.focus();
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   const unread = query.data?.unreadCount ?? 0;
+  const items = query.data?.items ?? [];
 
   return (
-    <div className="relative">
+    <div ref={rootRef} data-tour="inbox" className="relative">
       <button
-        aria-label={t("notif.title")}
+        ref={buttonRef}
+        type="button"
+        aria-label={unread > 0 ? t("shell.inbox_unread", { count: unread }) : t("notif.title")}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-fg"
+        className="relative grid size-11 place-items-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-inset md:hover:bg-transparent md:hover:text-fg-muted md:hover:[@media(hover:hover)]:bg-surface-2 md:hover:[@media(hover:hover)]:text-fg"
       >
-        <Bell className="h-4 w-4" />
+        <Bell aria-hidden="true" className="size-5" />
         {unread > 0 ? (
-          <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-semibold text-white">
+          <span
+            aria-hidden="true"
+            className="absolute end-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-xs font-semibold leading-none text-danger-fg"
+          >
             {unread > 9 ? "9+" : unread}
           </span>
         ) : null}
       </button>
 
       {open ? (
-        <div className="absolute end-0 top-9 z-40 w-80 rounded-xl border border-border bg-surface shadow-lg animate-fade-in">
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <p className="text-xs font-semibold text-fg">{t("notif.title")}</p>
+        <section
+          id={panelId}
+          aria-labelledby={headingId}
+          className="fixed end-2 start-2 top-[calc(3.5rem+0.25rem+env(safe-area-inset-top))] z-50 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-border bg-surface-1 shadow-lg animate-fade-in motion-reduce:animate-none md:absolute md:end-0 md:start-auto md:top-12 md:w-80"
+        >
+          <div className="flex min-h-11 items-center justify-between gap-2 border-b border-border pe-1 ps-4">
+            <h2 id={headingId} className="font-sans text-sm font-semibold text-fg">
+              {t("notif.title")}
+            </h2>
             {unread > 0 ? (
               <button
+                type="button"
                 onClick={() => markAll.mutate()}
-                className="text-[11px] text-accent hover:underline"
+                className="min-h-11 rounded-lg px-3 text-xs font-medium text-accent transition-colors hover:bg-surface-2"
               >
                 {t("notif.markAll")}
               </button>
             ) : null}
           </div>
-          <ul className="max-h-80 overflow-y-auto">
-            {(query.data?.items ?? []).length === 0 ? (
-              <li className="px-3 py-6 text-center text-xs text-muted">{t("notif.empty")}</li>
+          <ul className="max-h-[min(20rem,60dvh)] overflow-y-auto overscroll-contain">
+            {items.length === 0 ? (
+              <li className="px-4 py-8 text-center text-sm text-muted">{t("notif.empty")}</li>
             ) : (
-              query.data!.items.map((n) => (
-                <li key={n.id} className={cn("border-b border-border last:border-0", !n.readAt && "bg-surface-2/40")}>
+              items.map((n) => (
+                <li key={n.id} className={cn("border-b border-border last:border-0", !n.readAt && "bg-accent/5")}>
                   <div className="group flex items-start">
                     <div className="min-w-0 flex-1">
                       {n.linkUrl ? (
@@ -94,32 +142,34 @@ export function NotificationBell() {
                             setOpen(false);
                             if (!n.readAt) markOne.mutate(n.id);
                           }}
-                          className="block px-3 py-2.5 pe-1 hover:bg-surface-2/60"
+                          className="block py-3 pe-1 ps-4 transition-colors hover:bg-surface-2/60"
                         >
                           <NotificationRow n={n} />
                         </Link>
                       ) : (
-                        <div className="px-3 py-2.5 pe-1">
+                        <div className="py-3 pe-1 ps-4">
                           <NotificationRow n={n} />
                         </div>
                       )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-0.5 p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex shrink-0 items-center transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
                       {!n.readAt ? (
                         <button
+                          type="button"
                           aria-label={t("notif.markRead")}
                           onClick={() => markOne.mutate(n.id)}
-                          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-fg"
+                          className="grid size-11 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-fg"
                         >
-                          <Check className="size-3.5" />
+                          <Check aria-hidden="true" className="size-4" />
                         </button>
                       ) : null}
                       <button
+                        type="button"
                         aria-label={t("notif.delete")}
                         onClick={() => del.mutate(n.id)}
-                        className="rounded p-1 text-muted hover:bg-surface-2 hover:text-red-500"
+                        className="grid size-11 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-danger"
                       >
-                        <Trash2 className="size-3.5" />
+                        <Trash2 aria-hidden="true" className="size-4" />
                       </button>
                     </div>
                   </div>
@@ -127,7 +177,7 @@ export function NotificationBell() {
               ))
             )}
           </ul>
-        </div>
+        </section>
       ) : null}
     </div>
   );
@@ -137,10 +187,10 @@ function NotificationRow({ n }: { n: NotificationItem }) {
   return (
     <>
       <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-xs font-medium text-fg">{n.title}</p>
-        <p className="shrink-0 text-[10px] text-muted">{formatDate(n.createdAt, "en")}</p>
+        <p className={cn("truncate text-sm text-fg", !n.readAt && "font-semibold")}><bdi>{n.title}</bdi></p>
+        <p className="shrink-0 text-xs text-muted">{fmtAgo(n.createdAt)}</p>
       </div>
-      {n.body ? <p className="mt-0.5 line-clamp-2 text-[11px] text-fg-muted">{n.body}</p> : null}
+      {n.body ? <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-fg-muted">{n.body}</p> : null}
     </>
   );
 }

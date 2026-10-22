@@ -1,0 +1,694 @@
+/**
+ * The guide's articles («الدليل»): short Arabic pages about what the system does TODAY, as typed
+ * data. A pure module (no React, no server imports).
+ *
+ * Voice: warm, short, second person, concrete, no jargon and no English (a keyboard key like Ctrl
+ * is the only Latin that shows). A risk is a `warn` block: the page draws ⚠️ with the words and 🔧
+ * with the way out, together, so the data carries the words and not the symbols.
+ *
+ * Who reads what - three levels, see audience.ts. An article has a level (the table in audience.ts);
+ * a block or a list item may be narrower still with `for`, so ONE article can read differently to a
+ * guest (an external partner: they look, they do not write, and they never see the library, the
+ * team, the customers or the chat) and to the team. Nothing here describes a later phase.
+ */
+import { ARTICLE_AUDIENCE, canRead, type ArticleSlug, type Audience } from "./audience";
+import { rankEntries } from "./match";
+
+/** A list or steps item, optionally for a narrower audience than its block. */
+export type Item = string | { text: string; for?: Audience };
+
+export type Block =
+  | { type: "h"; text: string; for?: Audience }
+  | { type: "p"; text: string; for?: Audience }
+  | { type: "steps"; title?: string; items: readonly Item[]; for?: Audience }
+  | { type: "list"; title?: string; items: readonly Item[]; for?: Audience }
+  | { type: "tip"; text: string; for?: Audience }
+  | { type: "warn"; text: string; fix: string; for?: Audience }
+  | { type: "keys"; keys: readonly string[]; text: string; for?: Audience };
+
+export interface Article {
+  slug: ArticleSlug;
+  title: string;
+  summary: string;
+  audience: Audience;
+  /** Other words people may type to find it (searched, never shown). */
+  keywords: readonly Item[];
+  blocks: readonly Block[];
+  cta?: { href: string; label: string; for?: Audience };
+  /**
+   * The slot of this article's drawing: the owner's artwork arrives later as public/brand/art/<slot>.webp
+   * (the agreed slot names are ART_SLOTS in src/lib/themes/decor.ts). Until the file exists nothing shows.
+   */
+  art?: string;
+}
+
+// ---- small builders, so the content below reads like the content ----
+
+const h = (text: string, who?: Audience): Block => ({ type: "h", text, ...(who ? { for: who } : {}) });
+const p = (text: string, who?: Audience): Block => ({ type: "p", text, ...(who ? { for: who } : {}) });
+const tip = (text: string, who?: Audience): Block => ({ type: "tip", text, ...(who ? { for: who } : {}) });
+const warn = (text: string, fix: string, who?: Audience): Block => ({ type: "warn", text, fix, ...(who ? { for: who } : {}) });
+const steps = (items: readonly Item[], opts: { title?: string; who?: Audience } = {}): Block => ({
+  type: "steps",
+  items,
+  ...(opts.title ? { title: opts.title } : {}),
+  ...(opts.who ? { for: opts.who } : {}),
+});
+const list = (items: readonly Item[], opts: { title?: string; who?: Audience } = {}): Block => ({
+  type: "list",
+  items,
+  ...(opts.title ? { title: opts.title } : {}),
+  ...(opts.who ? { for: opts.who } : {}),
+});
+const keys = (pressed: readonly string[], text: string, who?: Audience): Block => ({
+  type: "keys",
+  keys: pressed,
+  text,
+  ...(who ? { for: who } : {}),
+});
+/** An item only this audience (and above) reads. */
+const only = (who: Audience, text: string): Item => ({ text, for: who });
+
+function article(slug: ArticleSlug, def: Omit<Article, "slug" | "audience">): Article {
+  return { slug, audience: ARTICLE_AUDIENCE[slug], ...def };
+}
+
+// ---- the articles, in the order of the guide ----
+
+export const ARTICLES: readonly Article[] = [
+  article("start", {
+    art: "guide-welcome",
+    title: "ابدأ من هون",
+    summary: "دقيقتين وبتعرف وين كل شي، وكيف تفهم أي صفحة بضغطة وحدة.",
+    keywords: ["بداية", "ابدا", "اول مرة", "جديد", "شرح", "جولة", "فرجيني", "خطوات", "تعريف"],
+    blocks: [
+      p("أهلًا فيك. هاد مكان شغلك مع الفريق: مهامك ومشاريعك كلها في مكان واحد."),
+      p("ومعها الدردشة مع زملائك، ومكتبة ملفات الشركة.", "staff"),
+      steps(
+        [
+          "افتح «اليوم»: هي أول صفحة بتشوفها كل ما دخلت، وفيها مهامك لليوم.",
+          "شوف الأماكن: بالموبايل بالشريط اللي تحت، وبالكمبيوتر بالقائمة اللي على الجنب.",
+          "اضغط علامة «؟» اللي فوق: بتشرح لك الصفحة اللي إنت فيها، وبتقترح عليك الخطوة الجاية، وفيها زر «فرجيني» بيعمل لك جولة سريعة.",
+          "دوّر على أي شي: اضغط زر البحث اللي فوق، أو Ctrl + K بالكمبيوتر، واكتب اسم مهمة أو مشروع.",
+          "الجرس بيعلمك لما يصير شي بخصّك، مثل لما حدا يعيّن لك مهمة.",
+        ],
+        { title: "أول دقيقتين" },
+      ),
+      p("وفي «اليوم» بطاقة «خطواتك الأولى»: بتمشّيك على أهم الأشياء، وبتختفي لحالها لما تخلّصها."),
+      tip("الدليل بيضل معك: اضغط دائرة اسمك (فوق بالموبايل، وأسفل القائمة الجانبية بالكمبيوتر) واختار «الدليل»، وبأي وقت بتقدر ترجع له."),
+    ],
+    cta: { href: "/", label: "افتح «اليوم»" },
+  }),
+
+  article("places", {
+    title: "الأماكن الخمسة والتنقّل",
+    summary: "شو بتلاقي بكل مكان بالنظام، وكيف تنتقل بين الأماكن بسرعة.",
+    keywords: [
+      "قائمة",
+      "تنقل",
+      "شريط",
+      "تبويبات",
+      "اماكن",
+      "اليوم",
+      "الشغل",
+      "جوال",
+      "موبايل",
+      "كمبيوتر",
+      only("staff", "الدردشة"),
+      only("staff", "المكتبة"),
+      only("staff", "الادارة"),
+    ],
+    blocks: [
+      p(
+        "النظام مقسوم لخمسة أماكن عشان ما تضيع. بالموبايل بتلاقيها بالشريط اللي تحت، وبالكمبيوتر بالقائمة اللي على الجنب. وكل واحد بيشوف منها اللي تناسب صلاحياته: الشريك الخارجي بيشوف أماكن أقل، والعضو العادي بيشوف القسم الإداري باسم «الفريق».",
+      ),
+      h("اليوم"),
+      p("أول شاشة بتفتح. فيها مهامك لليوم، وبطاقة خطواتك الأولى."),
+      h("الدردشة", "staff"),
+      p("محادثات مع زملائك: واحد لواحد، أو مجموعة لفريقك.", "staff"),
+      h("الشغل"),
+      p("قلب النظام. جوّاته تبويبات: مهامي · المشاريع · القائمة · التقويم · الأهداف · الأفكار."),
+      p("ومعها للفريق الداخلي: الروتين اليومي · الأقسام · العملاء.", "staff"),
+      h("المكتبة", "staff"),
+      p("ملفات الشركة في مكان واحد، وكل ملف بنسخه القديمة.", "staff"),
+      h("الإدارة", "staff"),
+      p("الفريق (قائمة زملائك)، والتقارير لقادة الفرق وما فوق. ولمن معه الصلاحية: الأتمتة والتكاملات، وتيليجرام، والإعدادات.", "staff"),
+      h("كيف تنتقل"),
+      steps([
+        "بالموبايل: اضغط أيقونة المكان من الشريط اللي تحت.",
+        "بالكمبيوتر: اضغط المكان من القائمة اللي على الجنب، وتقدر تصغّرها بالسهم.",
+        "التبويبات تحت الشريط اللي فوق: اضغط التبويب اللي بدك إياه. وبالموبايل اسحبها يمين وشمال لتشوف الباقي.",
+        "أسرع طريقة: اضغط Ctrl + K واكتب اسم الصفحة.",
+      ]),
+      tip(
+        "المساحات (مثل «التسويق» أو «الشحن») مش مكان لحالها: بتبدّل بينها من قائمة المساحات، فوق القائمة الجانبية بالكمبيوتر، وجوّا «الشغل» بالموبايل.",
+      ),
+    ],
+  }),
+
+  article("spaces", {
+    art: "guide-spaces",
+    title: "المساحات: مين بيشوف شو",
+    summary: "كل مساحة غرفة شغل لفريق معين، وإنت بتشوف بس المساحات اللي انضفت لها.",
+    keywords: ["مساحة", "غرفة", "خصوصية", "مين يشوف", "فريق", "اعضاء المساحة", "انضمام"],
+    blocks: [
+      p("المساحة هي غرفة شغل لفريق أو لموضوع معين، مثل «التسويق» أو «الشحن». فيها مشاريعها ولوحاتها ومهامها."),
+      h("مين بيشوف شو؟"),
+      list([
+        "إنت بتشوف بس المساحات اللي انضفت لها. أي مساحة مش إنت فيها ما بتظهر لك، لا هي ولا مشاريعها ولا مهامها.",
+        "الزائر (الشريك من خارج الشركة) بيشوف المساحات اللي انضاف لها للاطلاع فقط، وما بيعدّل شي.",
+        only("staff", "المالك بيشوف كل المساحات. أما المشرف فبيشوف بس المساحات اللي هو فيها، مثل أي حدا تاني."),
+      ]),
+      h("افتح مساحة جديدة", "staff"),
+      steps(
+        [
+          "من قائمة المساحات اضغط «مساحة عمل جديدة».",
+          "اكتب اسم المساحة، ووصف قصير إذا بدك.",
+          "بعد ما تنفتح اضغط «أعضاء المساحة» وضيف الناس اللي لازم يشوفوها.",
+        ],
+        { who: "staff" },
+      ),
+      p(
+        "زر «مساحة عمل جديدة» بيظهر إلك إذا معك مفتاح «فتح مساحات جديدة». وهو شغّال افتراضيًا عند المشرف وقائد الفريق والعضو، مش عند الزائر.",
+        "staff",
+      ),
+      h("أدوار الناس داخل المساحة", "staff"),
+      list(
+        [
+          "مدير المساحة: بيضيف ناس وبيشيلهم، وبيرقّي حدا ليصير مدير.",
+          "عضو: بيشتغل بمهامه ومشاريعه.",
+          "زائر: بيشوف بس، ما بيكتب ولا بيعدّل.",
+        ],
+        { who: "staff" },
+      ),
+      warn(
+        "أي حدا بتضيفه للمساحة بيشوف كل اللي فيها.",
+        "ضيف بس اللي لازم، ولو في شي خاص اعمل له مساحة لحالها.",
+        "staff",
+      ),
+      tip("ما لقيت مساحة كنت متوقعها؟ اطلب من مدير المساحة أو من المالك يضيفك لها."),
+    ],
+    cta: { href: "/projects", label: "افتح المشاريع" },
+  }),
+
+  article("tasks", {
+    title: "المهام: أضف وخلّص وانقل",
+    summary: "كيف تضيف مهمة، وتخلّصها، وتنقلها بين المراحل، وتلاقي مهامك بسرعة.",
+    keywords: ["مهمة", "مهام", "اضافة", "انجاز", "خلصت", "نقل", "موعد", "مسؤول", "اولوية", "مهامي", "قائمة", "تقويم", "سحب", "بطاقة"],
+    blocks: [
+      p("المهمة هي أصغر وحدة شغل: عنوان، ومسؤول، وموعد، وأولوية. وكل مهمة بتتبع مشروع ولوحة."),
+      h("أضف مهمة"),
+      p("أسرع طريقة: من «اليوم» اضغط «إضافة سريعة»، واكتب المهمة، واختار المشروع."),
+      steps([
+        "افتح «الشغل» ← «المشاريع»، واختار مشروع (أو اضغط «مشروع جديد» لتبدأ واحد).",
+        "جوّا المشروع اضغط «لوحة جديدة» مرة وحدة بس، وافتحها.",
+        "اضغط علامة + أعلى أي عمود، واكتب عنوان المهمة، وبعدها اضغط Enter لإضافتها.",
+        "افتح المهمة (اضغط عليها) لتحدد المسؤول والموعد والأولوية، أو لتكتب تعليق.",
+      ]),
+      h("خلّص مهمة"),
+      steps([
+        "من «مهامي» أو «القائمة»: اضغط الدائرة اللي بأول المهمة، وبتصير منجزة.",
+        "أو على اللوحة: اسحب بطاقتها إلى عمود «منتهي».",
+        "غلطت؟ اضغط الدائرة مرة تانية وبترجع المهمة مفتوحة.",
+      ]),
+      h("انقل مهمة"),
+      list([
+        "بين المراحل: اسحب البطاقة من عمود لعمود على اللوحة. وبالموبايل امسك المقبض الصغير جنبها واسحب.",
+        "لموعد تاني: بالكمبيوتر اسحب المهمة ليوم تاني من «التقويم». وبالموبايل غيّر الموعد من «مهامي» أو «القائمة».",
+        "لشخص تاني: افتح المهمة وغيّر «المسؤول». بتقدر تعيّن بس ناس موجودين بالمساحة.",
+      ]),
+      h("وين ألاقي مهامي؟"),
+      list([
+        "«مهامي»: مهامك حسب الوقت (اليوم، القادمة، المتأخرة، المكتملة)، وما أُسند إليك، وما أنشأته.",
+        "«القائمة»: مهام المساحة كلها، وبتقدر ترتّبها وتفلترها.",
+        "«التقويم»: المهام على أيامها حسب موعدها.",
+      ]),
+      tip("اكتب عنوان المهمة واضح وقصير، مثل «اطلب كراتين للشحنة»، حتى يفهمها أي حدا من أول نظرة."),
+    ],
+    cta: { href: "/my-work", label: "افتح مهامي" },
+  }),
+
+  article("projects", {
+    title: "المشاريع واللوحة",
+    summary: "المشروع بيجمع شغل موضوع واحد، واللوحة بترتّب مهامه بأعمدة حسب المرحلة.",
+    keywords: ["مشروع", "مشاريع", "لوحة", "لوحات", "اعمدة", "بطاقة", "كانبان", "خط زمني", "تايم لاين", "مرحلة", "معالم"],
+    blocks: [
+      p(
+        "المشروع بيجمع كل شغل موضوع واحد، مثل «إطلاق منتج جديد». جوّا المشروع لوحة أو أكثر، واللوحة بترتّب المهام بأعمدة حسب مرحلتها: من البداية لحد الإنجاز.",
+      ),
+      h("شو بتلاقي هون"),
+      list([
+        "صفحة المشاريع: مشاريع المساحة، وكل مشروع بحالته وموعد هدفه.",
+        "صفحة المشروع: لوحاته ونسبة الإنجاز.",
+        "اللوحة: أعمدة فيها بطاقات المهام.",
+        "الجدول الزمني: كل مهمة كشريط على التاريخ، بمقياس يومي أو أسبوعي أو شهري.",
+      ]),
+      p("الزائر (الشريك من خارج الشركة) بيشوف المشاريع واللوحات للاطلاع فقط، من غير ما يضيف أو يعدّل."),
+      h("ابدأ مشروع جديد", "staff"),
+      steps(
+        [
+          "من «الشغل» ← «المشاريع» اضغط «مشروع جديد».",
+          "اختار المساحة واكتب اسم المشروع، ومعه وصف وتواريخ إذا بدك.",
+          "ادخل على المشروع واضغط «لوحة جديدة»: بتجي جاهزة بأعمدة المراحل.",
+          "ضيف مهامك على اللوحة، واسحب البطاقات من عمود لعمود مع تقدّم الشغل.",
+        ],
+        { who: "staff" },
+      ),
+      h("عدّل على اللوحة", "staff"),
+      list(
+        [
+          "أضف عمود بزر «إضافة عمود».",
+          "احذف عمود بأيقونة سلة المهملات، بس لازم يكون فاضي، وبيضل عندك عمود واحد على الأقل.",
+        ],
+        { who: "staff" },
+      ),
+      tip("عمود «منتهي» هو عمود الإنجاز: أي مهمة بتوصله بتتعلّم منجزة. والأعمدة اللي بتضيفها بزر «إضافة عمود» بتنزل بآخر اللوحة وما بتحسب إنجاز.", "staff"),
+    ],
+    cta: { href: "/projects", label: "افتح المشاريع" },
+  }),
+
+  article("ideas-goals", {
+    title: "الأفكار والأهداف",
+    summary: "الأفكار المقترحة وأهداف الأسبوع والشهر، وكيف تتابعها.",
+    keywords: ["فكرة", "افكار", "تصويت", "هدف", "اهداف", "تقدم", "اقتراح", "اسبوعي", "شهري"],
+    blocks: [
+      h("الأفكار"),
+      p("بتلاقيها بـ«الشغل» ← «الأفكار». كل واحد بيكتب فكرته، والباقي بيصوّتوا عليها."),
+      list([
+        only("staff", "اكتب عنوان الفكرة (وتفاصيلها إذا بدك) واضغط «إضافة فكرة»."),
+        only("staff", "صوّت للأفكار اللي عجبتك."),
+        "تابع حالة كل فكرة: جديدة، تحت المراجعة، معتمدة، أو مرفوضة.",
+        only("staff", "صاحب الفكرة، أو المالك والمشرفين، بيحوّلها لمهمة حقيقية بزر «تحويل إلى مهمة» ويختار لها المشروع واللوحة. والفكرة المرفوضة ما بتتحوّل."),
+        only("staff", "تغيير حالة الفكرة للمالك والمشرفين."),
+      ]),
+      p("الزائر بيقرأ الأفكار بس، وما بيكتب ولا بيصوّت."),
+      h("الأهداف"),
+      p("هون أهداف الأسبوع والشهر، ولكل هدف نسبة تقدّم من 0 لـ 100، وبتتنقل بين الأسابيع والشهور بالأسهم."),
+      p("المالك والمشرفين بيضيفوا الهدف بزر «هدف جديد» وبيحدّثوا نسبته. والباقي بيتابعوه.", "staff"),
+    ],
+    cta: { href: "/ideas", label: "افتح الأفكار" },
+  }),
+
+  article("company", {
+    title: "الروتين والأقسام والعملاء والملفات",
+    summary: "الأشياء اللي بتلاقيها للفريق الداخلي بس: الروتين اليومي والأقسام والعملاء والملفات.",
+    keywords: ["روتين", "يومي", "قسم", "اقسام", "تذكرة", "تذاكر", "حملة", "حملات", "عميل", "عملاء", "فرصة", "فرص", "ملف", "ملفات", "مكتبة", "رفع", "تحميل", "اصدارات"],
+    blocks: [
+      h("الروتين اليومي"),
+      p(
+        "مهام بتتكرر كل يوم (أو بأيام محددة) وبتتوزّع على الموظفين، مثل «إنتاج فيديو يومي». بتلاقيها بـ«الشغل» ← «الروتين اليومي».",
+      ),
+      list([
+        "كل واحد من الفريق بيعلّم مهمته «أُنجزت» لما يخلّصها، وبيقدر يلغي التعليم.",
+        "المالك والمشرفين بيضيفوا المهام المتكررة ويعدّلوها، وبيحددوا أيامها ومين المسؤول عنها.",
+      ]),
+      h("الأقسام"),
+      p("كل قسم (مثل التصميم أو التطوير أو المبيعات) بيجمع أعضاءه ومشاريعه. وفي القسم تذاكر (مشاكل أو طلبات) وحملات."),
+      list([
+        "افتح القسم لتشوف أعضاءه ومشاريعه.",
+        "افتح تذكرة لمشكلة أو طلب، وتابع حالتها: مفتوحة، قيد العمل، تم الحل، مغلقة.",
+        "الحملات بتتابعها بتواريخها وحالتها: مسودة، مجدولة، جارية، منتهية، ملغاة.",
+        "إنشاء الأقسام وتعديلها للمالك والمشرفين.",
+      ]),
+      h("العملاء"),
+      p(
+        "سجّل عملاءك والفرص اللي معهم. كل فرصة بتمشي بمراحل: عميل محتمل ← مؤهَّل ← عرض سعر ← تفاوض ← تمت الصفقة (أو خسارة).",
+      ),
+      list([
+        "بتلاقيهم بـ«الشغل» ← «العملاء».",
+        "للاطلاع عليهم لازم يكون معك مفتاح «رؤية العملاء والفرص»، وللتعديل مفتاح «تعديل العملاء والفرص». أغلب الفريق معهم المفتاحين افتراضيًا، والمالك بيقدر يطفيهم لأي شخص.",
+      ]),
+      h("الملفات"),
+      p("مكتبة ملفات الشركة بـ«المكتبة». ارفع ملف (لحد 25 ميغابايت)، وعاينه ونزّله."),
+      list([
+        "لو رفعت نسخة جديدة من ملف، النسخ القديمة بتضل محفوظة بقائمة الإصدارات.",
+        "الأنواع المسموحة محدودة، وإذا الملف غير مدعوم بيطلع لك تنبيه.",
+      ]),
+    ],
+    cta: { href: "/files", label: "افتح الملفات" },
+  }),
+
+  article("team", {
+    title: "الفريق والصلاحيات",
+    summary: "كيف تضيف شخص، وتحدد رتبته ومفاتيحه، وتوقف حسابه أو تخرجه من الفريق.",
+    keywords: ["موظف", "شخص", "رتبة", "مفتاح", "صلاحية", "تصفير", "كلمة مرور", "ايقاف", "اخراج", "حساب", "مسؤول", "اسم مستخدم"],
+    blocks: [
+      p("هاد المكان لمين بيدير الناس: المالك، واللي أعطاه المالك مفتاح «إدارة الحسابات». بتلاقيه في «الإدارة» ← «الفريق»."),
+      h("أضف شخص جديد"),
+      steps([
+        "افتح «الإدارة» ← «الفريق» واضغط «إضافة شخص».",
+        "اكتب الاسم الكامل واسم المستخدم (حروف إنجليزية صغيرة وأرقام، مثل ali.m). الشخص بيدخل فيه مع كلمة المرور.",
+        "اختار الرتبة، واختار المساحات اللي رح يشوفها.",
+        "اضغط «إنشاء الحساب». بتظهر لك كلمة مرور مؤقتة: انسخها أو اضغط «نسخ بيانات الدخول» وابعتها له.",
+        "أول ما يدخل، النظام بيطلب منه يختار كلمة مرور خاصة فيه ويوافق على تنبيه الخصوصية.",
+      ]),
+      warn(
+        "كلمة المرور المؤقتة بتظهر مرة وحدة فقط.",
+        "انسخها فورًا. إذا ضاعت، صفّر كلمة المرور من خيارات الشخص وبتطلع لك واحدة جديدة.",
+      ),
+      h("الرتب الخمسة"),
+      list([
+        "مالك: عنده كل المفاتيح، وما حدا بيعدّله.",
+        "مشرف: بيدير الحسابات والربط، وبيشوف العملاء.",
+        "قائد فريق: مثل العضو، وبتظهر له صفحة «التقارير».",
+        "عضو: بيشتغل داخل مساحاته على مهامه.",
+        "زائر: شريك من خارج الشركة (مثل المصنع). بيشوف اللي بتشاركه معه بس، من غير كتابة ولا قائمة موظفين.",
+      ]),
+      p(
+        "كل شخص بيدير بس اللي رتبتهم أقل من رتبته: المشرف بيدير قادة الفرق والأعضاء والزوار، وقائد الفريق بيدير الأعضاء والزوار. والمشرفين ما بيديرهم إلا المالك.",
+      ),
+      h("المفاتيح فوق الرتبة"),
+      p(
+        "لكل شخص مفاتيح بتشغّلها أو بتطفّيها بدل ما تخترع رتب جديدة. افتح الشخص ← «المفاتيح (الصلاحيات)». التغيير بينحفظ فورًا، و«حسب الرتبة» يعني المفتاح على وضعه الافتراضي.",
+      ),
+      list([
+        "فتح مساحات جديدة: بيفتح مساحة وبيختار مين يدخلها.",
+        "إدارة الحسابات: بينشئ ناس وبيصفّر كلمات مرورهم.",
+        "دليل الموظفين: بيشوف أسماء الزملاء ومسمّياتهم وبريدهم.",
+        "رؤية العملاء والفرص: بيقرأ بيانات العملاء بدون تعديل.",
+        "تعديل العملاء والفرص: بيضيف وبيعدّل وبيحذف.",
+        "الربط والأتمتة: بيدير Google Drive وn8n وتيليجرام.",
+      ]),
+      warn(
+        "مفتاح «إدارة الحسابات» بيخلّي صاحبه يصفّر كلمة مرور أي حدا تحته، يعني بيقدر يدخل بحسابه.",
+        "ما تعطيه إلا لحدا بتثق فيه. كل تصفير بينسجّل.",
+      ),
+      h("أوقف حساب أو أخرج حدا"),
+      list([
+        "إيقاف الحساب: بيطلع من النظام فورًا من كل أجهزته وما بيقدر يدخل. بيضل بمساحاته وبياناته زي ما هي، وبتقدر تعيد تفعيله بأي وقت.",
+        "إخراج من الفريق: بيطلع من كل المساحات. ولو عنده أعمال مفتوحة (مهام وتذاكر ومهام متكررة) لازم تنقلها لشخص تاني. ورسائله القديمة بتضل زي ما هي.",
+        "تصفير كلمة المرور: بتنولد كلمة مؤقتة جديدة، والشخص بيطلع من كل أجهزته.",
+        "اخرجه من كل الأجهزة: بينتهي دخوله فورًا وبيقدر يدخل من جديد.",
+      ]),
+      warn(
+        "الإخراج بيشيل الشخص من كل المساحات.",
+        "لو رجّعته بعدين بيرجع بكلمة مرور مؤقتة جديدة ومن غير مساحات، فضيفه لمساحاته من جديد.",
+      ),
+      h("تنبيه الخصوصية"),
+      p(
+        "أول مرة بيدخل فيها أي شخص بيشوف تنبيه بيقول إن محادثات العمل وملفاته محفوظة وإن من حق المالك يطّلع عليها. موافقته بتنسجّل مع التاريخ.",
+      ),
+    ],
+    cta: { href: "/members", label: "افتح الفريق" },
+  }),
+
+  article("themes", {
+    title: "الثيمات الأربعة",
+    summary: "اختار شكل النظام اللي بيريّح عينك: فاتح أو داكن، هادي أو نيون.",
+    keywords: ["ثيم", "مظهر", "وضع ليلي", "داكن", "فاتح", "لون", "نيون", "اسلامي", "نهاري", "شكل"],
+    blocks: [
+      p("للنظام أربع ثيمات. اختار اللي بيريّح عينك، وبيتحفظ مع حسابك على كل أجهزتك."),
+      list([
+        "إسلامي هادي (الافتراضي): فاتح، بألوان زمرّدية وذهبية على خلفية عاجية.",
+        "إسلامي ملحمي: داكن، كحلي وذهبي، مريح للسهر.",
+        "ساحل النيون: داكن، وإحساس ليل الساحل بألوان النيون.",
+        "نهاري: فاتح وبسيط، للي بيحب القراءة الصافية.",
+      ]),
+      steps(
+        [
+          "اضغط دائرة اسمك (فوق بالموبايل، وأسفل القائمة الجانبية بالكمبيوتر).",
+          "من القائمة اختار «المظهر»، وبعدين اختار الثيم اللي عجبك.",
+          "بيتغيّر النظام فورًا، وبيتحفظ مع حسابك.",
+        ],
+        { title: "كيف تغيّر الثيم" },
+      ),
+      p(
+        "الزخرفة (الأشكال الهندسية والصور) بتظهر بأماكن محددة بس: شاشة الدخول، والصفحات الفاضية، ورأس القائمة، وشريط «اليوم». وما بتنحط وراء رقم أو جدول، حتى تضل القراءة واضحة. وبتقدر تخفّفها أو توقفها من نفس مكان اختيار الثيم.",
+      ),
+      tip("الثيم إلك إنت بس: اختيارك ما بيغيّر شي عند زملائك."),
+    ],
+  }),
+
+  article("install", {
+    art: "guide-install-app",
+    title: "تثبيت التطبيق على الموبايل",
+    summary: "ثبّت النظام على شاشة موبايلك مثل أي تطبيق، آيفون أو أندرويد.",
+    keywords: ["تطبيق", "موبايل", "جوال", "ايفون", "اندرويد", "شاشة رئيسية", "تثبيت", "كروم", "سفاري", "ايقونة"],
+    blocks: [
+      p(
+        "النظام بيشتغل من المتصفح، بس لما تثبّته على موبايلك بيصير له أيقونة على الشاشة الرئيسية وبيفتح مثل أي تطبيق، بدون شريط المتصفح.",
+      ),
+      steps(
+        [
+          "افتح النظام من متصفح سفاري، مش من داخل تطبيق تاني.",
+          "اضغط زر «مشاركة» في شريط سفاري (مربع يخرج منه سهم إلى الأعلى).",
+          "اختار «إضافة إلى الشاشة الرئيسية» (مربع بداخله علامة +).",
+          "اضغط «إضافة» في أعلى الشاشة. بتلاقي الأيقونة بين تطبيقاتك.",
+        ],
+        { title: "على الآيفون (من سفاري)" },
+      ),
+      steps(
+        [
+          "افتح النظام من متصفح كروم.",
+          "إذا ظهر لك زر «تثبيت التطبيق» داخل النظام اضغطه وخلصت.",
+          "غير هيك اضغط قائمة كروم (النقاط الثلاث) واختار «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».",
+          "أكّد بالزر اللي بيطلع لك.",
+        ],
+        { title: "على الأندرويد (من كروم)" },
+      ),
+      p("بعد التثبيت افتح النظام من الأيقونة الجديدة. ممكن يطلب منك تسجّل دخولك مرة وحدة."),
+      tip(
+        "خطوة «ثبّت التطبيق على موبايلك» في بطاقة خطواتك الأولى بتتعلّم لحالها لما تفتح النظام من الأيقونة. وإذا ثبّتّه وما تعلّمت، اضغط «تم».",
+      ),
+    ],
+  }),
+
+  article("privacy", {
+    title: "الخصوصية: شو بينحفظ ومين بيشوفه",
+    summary: "شو بيتسجّل عنك بالنظام، ومين بيقدر يشوفه، وشو ما بيشوفه حدا.",
+    keywords: [
+      "خصوصية",
+      "بيانات",
+      "كلمة مرور",
+      "ارشيف",
+      "امان",
+      "حماية",
+      "تنبيه",
+      "مين يشوف",
+      "محفوظ",
+      "شفافية",
+      only("staff", "محادثات"),
+      only("staff", "المالك يطلع"),
+    ],
+    blocks: [
+      p("النظام للشغل. هاد شو بيصير بمعلوماتك فيه، بالمختصر."),
+      h("مين بيشوف شغلك"),
+      list([
+        "مساحاتك: بيشوفها بس الناس اللي فيها، والمالك.",
+        "مهامك وتعليقاتك: بيشوفها اللي بيقدر يفتح المساحة اللي فيها المهمة.",
+        only("staff", "محادثاتك: بيشوفها اللي مشاركين فيها. وكل محادثات العمل وملفات العمل محفوظة، ومن حق مالك النظام يطّلع عليها."),
+        only("staff", "قريبًا: أي رسالة أو ملف بيتعدّل أو بينحذف، رح تنحفظ نسخته الأصلية بالأرشيف. لحد ذلك، التعديل بيغيّر النص والحذف بيمسحه."),
+      ]),
+      h("معلوماتك الشخصية"),
+      list([
+        "كلمة مرورك بتنحفظ مشفّرة، وما حدا بيقدر يشوفها، حتى المالك. إذا نسيتها، اللي بيدير الحسابات بيعطيك كلمة مؤقتة جديدة.",
+        only("staff", "اسمك ومسمّاك الوظيفي وبريدك بيظهروا لزملائك في قائمة الفريق، لمن معه مفتاح «دليل الموظفين»."),
+        only("staff", "اللي بيدير الحسابات بيشوف آخر مرة دخلت فيها."),
+        "الزائر (الشريك من خارج الشركة) بيشوف بس اللي بيتشارك معه.",
+      ]),
+      h("لو غادرت الفريق", "staff"),
+      p(
+        "لو أخرجوك من الفريق، بتطلع من كل المساحات، وبتضل رسائلك القديمة زي ما هي. حسابك وبياناتك ما بتنمسح.",
+        "staff",
+      ),
+      h("وبرّا النظام؟", "staff"),
+      p(
+        "النظام ما بيبعت بياناتك لأي جهة خارجية من تلقاء نفسه. الاستثناء: لو المالك ربط خدمة (مثل تيليجرام أو n8n)، ممكن توصلها أحداث الشغل زي إنشاء مهمة. اسأله لو بدك تعرف شو بينبعت.",
+        "staff",
+      ),
+      tip("النظام للشغل وبس: خلّي أمورك الشخصية برّاه."),
+    ],
+  }),
+
+  article("shortcuts", {
+    title: "اختصارات",
+    summary: "طرق سريعة للبحث والتنقّل بدل ما تدوّر بالقوائم.",
+    keywords: ["بحث", "اختصار", "اختصارات", "كيبورد", "ctrl", "control", "ماك", "تنقل سريع", "esc", "enter", "مساعدة"],
+    blocks: [
+      h("البحث والتنقّل السريع"),
+      keys(["Ctrl", "K"], "افتح البحث. على الماك استعمل ⌘ بدل Ctrl، والباقي نفسه."),
+      keys(["Esc"], "سكّر البحث."),
+      keys(["Enter"], "افتح النتيجة المحددة."),
+      keys(["↑", "↓"], "تنقّل بين النتائج."),
+      list([
+        "اكتب حرفين على الأقل وبيدوّر لك بالمهام والمشاريع المسموح لك فيها.",
+        "اكتب اسم صفحة، مثل «القائمة» أو «التقويم»، وبتنتقل لها فورًا.",
+      ]),
+      p("بالموبايل: اضغط زر البحث اللي فوق، وبيشتغل بنفس الطريقة."),
+      h("الشرح جوّا كل صفحة"),
+      p(
+        "علامة «؟» اللي فوق بأي صفحة بتشرح لك الصفحة وبتقترح عليك الخطوة الجاية، وزر «فرجيني» فيها بيعمل لك جولة على عناصر النظام.",
+      ),
+    ],
+  }),
+];
+
+// ---- reading the articles for one viewer ----
+
+/** The narrower of two audiences (the one that needs the higher level): a block is never more public than the article around it. */
+function stricter(a: Audience, b: Audience): Audience {
+  return canRead(a, b) ? a : b;
+}
+
+const itemOf = (item: Item): { text: string; for: Audience } =>
+  typeof item === "string" ? { text: item, for: "everyone" } : { text: item.text, for: item.for ?? "everyone" };
+
+/** A block as one viewer reads it: the marks gone, only the items they may read. */
+export type ResolvedBlock =
+  | { type: "h"; text: string }
+  | { type: "p"; text: string }
+  | { type: "steps"; title?: string; items: string[] }
+  | { type: "list"; title?: string; items: string[] }
+  | { type: "tip"; text: string }
+  | { type: "warn"; text: string; fix: string }
+  | { type: "keys"; keys: string[]; text: string };
+
+function resolveItems(items: readonly Item[], level: Audience, viewer: Audience): string[] {
+  return items
+    .map(itemOf)
+    .filter((item) => canRead(viewer, stricter(level, item.for)))
+    .map((item) => item.text);
+}
+
+/**
+ * The blocks this viewer reads: what is above their level is left out, and so is a heading with
+ * nothing left under it. An article above the viewer's level reads as nothing.
+ */
+export function blocksFor(article: Article, viewer: Audience): ResolvedBlock[] {
+  if (!canRead(viewer, article.audience)) return [];
+  const out: ResolvedBlock[] = [];
+  for (const block of article.blocks) {
+    const level = stricter(article.audience, block.for ?? "everyone");
+    if (!canRead(viewer, level)) continue;
+    switch (block.type) {
+      case "h":
+      case "p":
+      case "tip":
+        out.push({ type: block.type, text: block.text });
+        break;
+      case "warn":
+        out.push({ type: "warn", text: block.text, fix: block.fix });
+        break;
+      case "keys":
+        out.push({ type: "keys", keys: [...block.keys], text: block.text });
+        break;
+      case "steps":
+      case "list": {
+        const items = resolveItems(block.items, level, viewer);
+        if (items.length === 0) break;
+        out.push({ type: block.type, ...(block.title ? { title: block.title } : {}), items });
+        break;
+      }
+    }
+  }
+  // a heading needs something under it
+  return out.filter((block, i) => block.type !== "h" || (out[i + 1] !== undefined && out[i + 1]?.type !== "h"));
+}
+
+/** Every line of an article that this viewer reads, joined: what the search looks in. */
+export function articleText(article: Article, viewer: Audience): string {
+  const lines: string[] = [article.title, article.summary];
+  for (const block of blocksFor(article, viewer)) {
+    switch (block.type) {
+      case "h":
+      case "p":
+      case "tip":
+        lines.push(block.text);
+        break;
+      case "warn":
+        lines.push(block.text, block.fix);
+        break;
+      case "keys":
+        lines.push(block.keys.join(" "), block.text);
+        break;
+      case "steps":
+      case "list":
+        if (block.title) lines.push(block.title);
+        lines.push(...block.items);
+        break;
+    }
+  }
+  return lines.join("\n");
+}
+
+/** The articles this viewer may read, in the guide's order. */
+export function articlesFor(viewer: Audience): Article[] {
+  return ARTICLES.filter((a) => canRead(viewer, a.audience));
+}
+
+/** An article by its slug, whoever is asking (the page checks the viewer). */
+export function findArticle(slug: string): Article | undefined {
+  return ARTICLES.find((a) => a.slug === slug);
+}
+
+/** An article ready to draw for one viewer, or null: it does not exist, or it is above their level. */
+export interface ViewArticle {
+  slug: ArticleSlug;
+  title: string;
+  summary: string;
+  audience: Audience;
+  blocks: ResolvedBlock[];
+  cta: { href: string; label: string } | null;
+  art: string | null;
+}
+
+export function readableArticle(slug: string, viewer: Audience): ViewArticle | null {
+  const found = findArticle(slug);
+  if (!found || !canRead(viewer, found.audience)) return null;
+  const cta = found.cta && canRead(viewer, stricter(found.audience, found.cta.for ?? "everyone")) ? { href: found.cta.href, label: found.cta.label } : null;
+  return {
+    slug: found.slug,
+    title: found.title,
+    summary: found.summary,
+    audience: found.audience,
+    blocks: blocksFor(found, viewer),
+    cta,
+    art: found.art ?? null,
+  };
+}
+
+/** The articles on either side of this one in the viewer's guide (never one they cannot open). */
+export function neighbors(slug: string, viewer: Audience): { prev: Article | null; next: Article | null } {
+  const listed = articlesFor(viewer);
+  const i = listed.findIndex((a) => a.slug === slug);
+  if (i < 0) return { prev: null, next: null };
+  return { prev: listed[i - 1] ?? null, next: listed[i + 1] ?? null };
+}
+
+// ---- searching ----
+
+/** What the guide's search box is given for one article: only what this viewer may read. */
+export interface GuideEntry {
+  slug: string;
+  title: string;
+  summary: string;
+  text: string;
+  keywords: string[];
+  /** The article is for people managers: the card says so. */
+  badge: boolean;
+}
+
+function entryOf(article: Article, viewer: Audience): GuideEntry {
+  const body = articleText(article, viewer);
+  return {
+    slug: article.slug,
+    title: article.title,
+    summary: article.summary,
+    text: body,
+    keywords: resolveItems(article.keywords, article.audience, viewer),
+    badge: article.audience === "managers",
+  };
+}
+
+export function searchEntries(viewer: Audience): GuideEntry[] {
+  return articlesFor(viewer).map((a) => entryOf(a, viewer));
+}
+
+/**
+ * The articles that answer a search, best first, among those this viewer may read. Tolerant of how
+ * Arabic gets spelled (see match.ts). An empty search lists them all in order.
+ */
+export function search(query: string, viewer: Audience = "everyone"): Article[] {
+  const entries = articlesFor(viewer).map((article) => ({ article, ...entryOf(article, viewer) }));
+  return rankEntries(entries, query).map((e) => e.article);
+}

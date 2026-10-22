@@ -1,271 +1,121 @@
 "use client";
 
-import { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import {
-  LayoutDashboard,
-  FolderKanban,
-  Inbox as InboxIcon,
-  Lightbulb,
-  FileText,
-  Send,
-  Workflow,
-  BarChart3,
-  Settings,
-  PanelsTopLeft,
-  ChevronLeft,
-  LogOut,
-  Sun,
-  Moon,
-  Monitor,
-  Users,
-  UserRoundPlus,
-  ListFilter,
-  CalendarDays,
-  MessageSquare,
-  FolderOpen,
-  Network,
-  Factory,
-  Target,
-  Briefcase,
-} from "lucide-react";
-import { useTheme } from "next-themes";
-import { Logo, DolphinMark } from "@/components/logo";import { NotificationBell } from "@/components/notification-bell";
-import { WorkspaceCreateModal } from "@/components/create-forms";
-import { CommandPalette } from "@/components/command-palette";
-import { cn } from "@/lib/utils";
+import { useEffect, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n";
-import { apiGet, apiPost } from "@/lib/api-client";
+import type { Audience } from "@/lib/guide/audience";
+import { browserStore } from "@/lib/guide/storage";
+import { locate, type NavModel, type NavRole } from "@/lib/nav/places";
 import type { CurrentUser } from "@/server/auth";
+import { DolphinMark } from "@/components/logo";
+import { BottomNav } from "@/components/shell/bottom-nav";
+import { PlaceTabs } from "@/components/shell/place-tabs";
+import { Sidebar } from "@/components/shell/sidebar";
+import { SpaceSwitcher } from "@/components/shell/space-switcher";
+import { TopBar } from "@/components/shell/top-bar";
+import { readSidebarCollapsed, writeSidebarCollapsed } from "@/components/shell/sidebar-state";
+import { parseSidebarCookie, writeSidebarCookie } from "@/components/shell/sidebar-cookie";
 
-interface NavSection {
-  titleKey: string;
-  items: { href?: string; labelKey: string; icon: React.ComponentType<{ className?: string }>; tint?: string }[];
-}
-
-const SECTIONS: NavSection[] = [
-  {
-    titleKey: "nav.home",
-    items: [
-      { href: "/", labelKey: "nav.home", icon: LayoutDashboard, tint: "text-blue-500" },
-      { href: "/projects", labelKey: "nav.projects", icon: FolderKanban, tint: "text-violet-500" },
-      { href: "/my-work", labelKey: "nav.myWork", icon: InboxIcon, tint: "text-emerald-500" },
-      { href: "/list", labelKey: "nav.listView", icon: ListFilter, tint: "text-sky-500" },
-      { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays, tint: "text-orange-500" },
-      { href: "/chat", labelKey: "nav.chat", icon: MessageSquare, tint: "text-rose-500" },
-      { href: "/production", labelKey: "nav.production", icon: Factory, tint: "text-orange-600" },
-      { href: "/crm", labelKey: "nav.crm", icon: Briefcase, tint: "text-amber-600" },
-    ],
-  },
-  {
-    titleKey: "nav.ideas",
-    items: [
-      { href: "/ideas", labelKey: "nav.ideas", icon: Lightbulb, tint: "text-amber-500" },
-      { href: "/goals", labelKey: "nav.goals", icon: Target, tint: "text-red-500" },
-      { href: "/documents", labelKey: "nav.docs", icon: FileText, tint: "text-indigo-500" },
-      { href: "/files", labelKey: "nav.files", icon: FolderOpen, tint: "text-teal-500" },
-      { href: "/departments", labelKey: "nav.departments", icon: Network, tint: "text-fuchsia-500" },
-      { href: "/members", labelKey: "nav.members", icon: Users, tint: "text-cyan-600" },
-      { href: "/teams", labelKey: "nav.teams", icon: UserRoundPlus, tint: "text-lime-600" },
-    ],
-  },
-  {
-    titleKey: "top.workspaces",
-    items: [
-      { href: "/telegram", labelKey: "nav.telegram", icon: Send, tint: "text-sky-500" },
-      { href: "/automation", labelKey: "nav.automation", icon: Workflow, tint: "text-purple-500" },
-      { href: "/analytics", labelKey: "nav.analytics", icon: BarChart3, tint: "text-green-500" },
-      { href: "/settings", labelKey: "nav.settings", icon: Settings, tint: "text-slate-500" },
-    ],
-  },
-];
-
-interface OrgsResponse {
-  organizations: {
-    id: string;
-    name: string;
-    keyPrefix: string;
-    role: string;
-    /** The `spaces.create` capability in this organization (the server decides, the menu follows). */
-    canCreateSpaces: boolean;
-    workspaces: { id: string; name: string; slug: string }[];
-  }[];
-}
-
-/** Areas the server refuses to org GUESTs (external partners): not offered in the menu either. */
-const GUEST_HIDDEN = new Set(["/crm", "/departments", "/telegram", "/files"]);
-
-export function AppShell({
-  user,
-  isGuest = false,
-  children,
-}: {
+export interface AppShellProps {
   user: CurrentUser;
+  /** The person's map, computed on the server from their rank and switches (src/lib/nav/places.ts). */
+  nav: NavModel;
+  /** The rank in the active organization, shown in Arabic in the avatar menu. */
+  rank: NavRole;
+  /** The guide level («؟» picks the read-only line for an external partner). */
+  audience: Audience;
+  /** An external partner: never offered to open a space. */
   isGuest?: boolean;
-  children: React.ReactNode;
-}) {
-  const { t, locale, setLocale } = useI18n();
-  const [collapsed, setCollapsed] = useState(false);
-  const [wsModal, setWsModal] = useState(false);
-  const pathname = usePathname();
-  const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  /** What the server read from the `zk-sidebar` cookie: the first frame is already the right width. */
+  defaultCollapsed?: boolean;
+  children: ReactNode;
+}
 
-  const orgsQuery = useQuery({
-    queryKey: ["orgs"],
-    queryFn: () => apiGet<OrgsResponse>("/api/workspaces"),
-    retry: false,
-  });
+/**
+ * THE FRAME OF EVERY SIGNED-IN PAGE — the five places of the owner's plan, mobile first, right to left.
+ *
+ *   phone (< md)       the top bar (mark, search, «؟», bell, avatar), the tab strip of the current place,
+ *                      the page, and the places in a bar fixed along the bottom (no side menu).
+ *   computer (>= md)   the side menu on the start side (the places, the spaces, the avatar; it folds to
+ *                      an icon rail and remembers that on this device), the top bar (search, «؟», bell),
+ *                      the tab strip, the page.
+ *
+ * Both the bottom bar and the side menu are in the page; CSS shows one. The map comes from the server
+ * (`buildNav` in the (app) layout): the frame only draws it, and the server still decides every request.
+ * Theme tokens only, logical CSS only; the decoration is in the side menu's header and nowhere else.
+ */
+export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCollapsed = false, children }: AppShellProps) {
+  const { t } = useI18n();
+  const pathname = usePathname() ?? "/";
+  const here = locate(pathname);
+  // a page of a place this person is not offered (a guest who typed /files) marks nothing
+  const place = nav.places.find((p) => p.key === here.place) ?? null;
+  const tab = place && place.tabs.some((x) => x.key === here.tab) ? here.tab : null;
 
-  const logout = useMutation({
-    mutationFn: () => apiPost("/api/auth/logout"),
-    onSuccess: () => {
-      window.location.href = "/login";
-    },
-  });
+  // The folded state starts from the `zk-sidebar` COOKIE the server layout read: no 256px flash and
+  // no animated shrink after the first paint. localStorage stays as a second memory for a device
+  // whose cookies were cleared, and is only honoured when it DISAGREES after the page has loaded.
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  // the width only animates once the person has toggled the menu in this visit — never on first paint
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => {
+    const stored = readSidebarCollapsed(browserStore());
+    if (stored !== defaultCollapsed) setCollapsed(stored);
+    // the cookie is the truth from now on; this only back-fills a device whose cookie was lost
+    writeSidebarCookie(stored || defaultCollapsed ? true : false, document);
+  }, [defaultCollapsed]);
+  const toggleSidebar = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    setAnimated(true);
+    writeSidebarCollapsed(browserStore(), next);
+    writeSidebarCookie(next, document);
+  };
 
   return (
     <div className="flex h-dvh overflow-hidden bg-surface">
-      {/* Sidebar */}
-      <aside
-        className={cn(
-          "flex flex-col border-s border-border bg-surface-1 transition-all duration-150",
-          collapsed ? "w-14" : "w-60",
-        )}
+      <a
+        href="#zk-main"
+        className="sr-only focus:not-sr-only focus:fixed focus:start-2 focus:top-2 focus:z-[100] focus:rounded-xl focus:bg-surface-1 focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-fg focus:shadow-lg"
       >
-        <div className="flex items-center justify-between px-3 py-3">
-          {!collapsed ? <Logo /> : <DolphinMark className="mx-auto size-7" />}
-          <button
-            onClick={() => setCollapsed((v) => !v)}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden rounded-lg p-1 text-muted hover:bg-surface-2 md:block"
-          >
-            <ChevronLeft className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")} />
-          </button>
-        </div>
+        {t("shell.skip")}
+      </a>
 
-        {!collapsed ? (
-          <div className="px-3 pb-2">
-            <select
-              aria-label={t("top.workspaces")}
-              className="h-8 w-full rounded-lg border border-border bg-surface-1 px-2 text-xs text-fg"
-              defaultValue=""
-              onChange={(e) => {
-                const wsId = e.target.value;
-                if (wsId === "new") setWsModal(true);
-                else if (wsId) router.push(`/projects?workspace=${wsId}`);
-              }}
-            >
-              <option value="" disabled>
-                {t("top.workspaces")}
-              </option>
-              {orgsQuery.data?.organizations.flatMap((org) => org.workspaces).map((ws) => (
-                <option key={ws.id} value={ws.id}>
-                  {ws.name}
-                </option>
-              ))}
-              <option value="new">＋ {t("ws.new")}</option>
-            </select>
-            <WorkspaceCreateModal
-              open={wsModal}
-              onClose={() => setWsModal(false)}
-              organizations={(orgsQuery.data?.organizations ?? []).map((o) => ({
-                id: o.id,
-                name: o.name,
-                canAdmin: o.canCreateSpaces,
-              }))}
-            />
-          </div>
-        ) : null}
-
-        <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-2">
-          {SECTIONS.map((section) => (
-            <div key={section.titleKey}>
-              {!collapsed ? (
-            <p className="px-2.5 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-widest text-muted">
-              {t(section.titleKey)}
-            </p>
-          ) : null}
-          <ul className="space-y-px">
-            {section.items
-              .filter((item) => !(isGuest && item.href && GUEST_HIDDEN.has(item.href)))
-              .map((item) => {
-              const active = pathname === item.href;
-              return (
-                <li key={item.href}>
-                  <a
-                    href={item.href}
-                    className={cn(
-                      "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-                      active
-                        ? "bg-surface-2 font-medium text-fg"
-                        : "text-fg-muted hover:bg-surface-2 hover:text-fg",
-                    )}
-                    title={t(item.labelKey)}
-                  >
-                    <item.icon className={cn("h-4 w-4 shrink-0", item.tint ?? "text-muted")} />
-                        {!collapsed ? t(item.labelKey) : null}
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </nav>
-
-        <div className="border-t border-border p-2">
-          <div className={cn("flex items-center gap-2 px-1", collapsed && "justify-center")}>
-            <a
-              href="/profile"
-              title={t("profile.title")}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-fg-muted hover:bg-surface-2/80"
-            >
-              {user.name.slice(0, 2).toUpperCase()}
-            </a>
-            {!collapsed ? (
-              <a href="/profile" className="min-w-0 flex-1 hover:opacity-90">
-                <p className="truncate text-xs font-medium text-fg">{user.name}</p>
-                <p className="truncate text-[10px] text-muted">{user.username ?? user.email}</p>
-              </a>
-            ) : null}
-            <button
-              onClick={() => logout.mutate()}
-              aria-label={t("common.logout")}
-              className="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-fg"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </aside>
+      <Sidebar
+        nav={nav}
+        current={place?.key ?? null}
+        pathname={pathname}
+        user={user}
+        rank={rank}
+        isGuest={isGuest}
+        collapsed={collapsed}
+        onToggle={toggleSidebar}
+        animated={animated}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Topbar */}
-        <header className="flex h-12 items-center gap-3 border-b border-border bg-surface px-4">
-          <PanelsTopLeft className="h-4 w-4 text-muted md:hidden" />
-          <div className="flex flex-1 justify-center md:justify-start md:pe-6">
-            <CommandPalette />
-          </div>
-          <NotificationBell />
-          <button
-            aria-label={t("top.theme")}
-            onClick={() => setTheme(theme === "dark" ? "light" : theme === "light" ? "system" : "dark")}
-            className="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-fg"
-          >
-            {theme === "dark" ? (
-              <Moon className="h-4 w-4" />
-            ) : theme === "light" ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Monitor className="h-4 w-4" />
-            )}
-          </button>
-        </header>
-
-        <div className="flex min-h-0 flex-1">{children}</div>
+        <TopBar nav={nav} pathname={pathname} audience={audience} user={user} rank={rank} />
+        <PlaceTabs
+          place={place}
+          tab={tab}
+          pathname={pathname}
+          end={
+            place?.key === "work" ? (
+              <div className="shrink-0 border-s border-border px-1 md:hidden">
+                <SpaceSwitcher variant="strip" isGuest={isGuest} />
+              </div>
+            ) : null
+          }
+        />
+        {/* on a phone the content stops above the fixed bottom bar (its 56px, its border and the home-indicator inset) */}
+        <div className="flex min-h-0 flex-1 pb-[calc(3.5rem+1px+env(safe-area-inset-bottom))] md:pb-0">
+          <main id="zk-main" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0">
+            {children}
+          </main>
+        </div>
       </div>
+
+      <BottomNav places={nav.places} current={place?.key ?? null} pathname={pathname} />
     </div>
   );
 }

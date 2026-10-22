@@ -1,23 +1,38 @@
-import { redirect } from "next/navigation";
-import { currentUser } from "@/server/auth";
-import { db } from "@/server/db";
+import { pageActor } from "@/app/(app)/_access";
 import { AppShell } from "@/components/app-shell";
+import { audienceOf } from "@/lib/guide/audience";
+import { buildNav } from "@/lib/nav/places";
+import { cookies } from "next/headers";
+import { parseSidebarCookie, SIDEBAR_COOKIE } from "@/components/shell/sidebar-cookie";
 
+/**
+ * The frame of every signed-in page, decided on the server from the DATABASE (behind the middleware,
+ * which only sees the cookie):
+ *
+ *  - nobody signed in, or a cookie that is no longer honoured: to /login;
+ *  - somebody who still owes the onboarding (a temporary password, or a notice the owner re-issued
+ *    after the cookie was made): to /onboarding;
+ *  - everybody else gets the map of THEIR places: the rank and the switches of the oldest ACTIVE
+ *    membership (`pageActor`), so an old guest seat that was closed decides nothing.
+ *
+ * The map only decides what is OFFERED. Every page still refuses for itself (`pageUser` /
+ * `pageActor`): in Next 14 a page renders beside its layout, even when the layout redirects.
+ */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await currentUser();
-  if (!user) redirect("/login");
-  // Behind the middleware, which only sees the cookie: the owner may have raised the notice
-  // version (or reset the password) after the cookie was issued. The database decides.
-  if (user.mustChangePassword || user.transparencyPending) redirect("/onboarding");
-  // An external partner (org GUEST) is not offered the areas that are closed to guests.
-  const membership = await db.organizationMember.findFirst({
-    where: { userId: user.id, status: "ACTIVE" },
-    orderBy: { createdAt: "asc" },
-    select: { role: true },
-  });
+  const { user, actor } = await pageActor();
+  // The side menu's folded state is a cookie (`zk-sidebar`), read on the server: the first frame is
+  // already the right width, instead of 256px that shrink after the effect runs.
+  const sidebarCollapsed = parseSidebarCookie(cookies().get(SIDEBAR_COOKIE)?.value);
   return (
-    <AppShell user={user} isGuest={membership?.role === "GUEST"}>
-      <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+    <AppShell
+      user={user}
+      rank={actor.role}
+      isGuest={actor.isExternal}
+      nav={buildNav({ role: actor.role, caps: [...actor.caps] })}
+      audience={audienceOf(actor)}
+      defaultCollapsed={sidebarCollapsed}
+    >
+      {children}
     </AppShell>
   );
 }
