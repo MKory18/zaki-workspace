@@ -147,7 +147,9 @@ describe("documents that claim more than the code does say so", () => {
 describe("the Docker image has what it copies", () => {
   it("public/ is tracked (the Dockerfile copies it; git does not keep empty folders)", () => {
     expect(statSync(join(ROOT, "public")).isDirectory()).toBe(true);
-    expect(existsSync(join(ROOT, "public", ".gitkeep"))).toBe(true);
+    // git keeps files, not folders: public/ survives a clone only while something real lives in it
+    // (brand art and fonts today; a .gitkeep would also do)
+    expect(readdirSync(join(ROOT, "public")).length).toBeGreaterThan(0);
   });
 
   it("copies what the container needs at runtime (each of these was missing once)", () => {
