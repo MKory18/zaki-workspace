@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { env } from "./env";
 
-const COOKIE_NAME = "zaki_session";
+export const COOKIE_NAME = "zaki_session";
 
 export interface SessionUser {
   userId: string;

@@ -11,7 +11,12 @@ describe("session tokens", () => {
 
   it("rejects tampered tokens", async () => {
     const token = await createSessionToken("user_123");
-    const tampered = token.replace(/.$/, token.slice(-1) === "a" ? "b" : "a");
+    // Flip a character in the MIDDLE of the signature. (The last base64url char of a
+    // 32-byte signature carries only 4 real bits, so swapping it can decode to the
+    // same bytes and the token would still verify — that made this test flaky.)
+    const [header, payload, signature] = token.split(".") as [string, string, string];
+    const flipped = signature[10] === "a" ? "b" : "a";
+    const tampered = `${header}.${payload}.${signature.slice(0, 10)}${flipped}${signature.slice(11)}`;
     expect(await verifySessionToken(tampered)).toBeNull();
   });
 
