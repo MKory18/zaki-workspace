@@ -93,7 +93,8 @@ describe("/boards/[id]: the edit controls follow the same rule as the API (canWr
 
   it("with no row, nobody but the owner can even open the board (an ADMIN, a lead or a member included)", async () => {
     for (const role of ["admin", "lead", "member"] as const) {
-      await expect(canEditFor(role, null), role).rejects.toThrow("board.not_found");
+      // the shell's «not found» page (notFound()), not a thrown domain error (a 500 «Application error» in production)
+      await expect(canEditFor(role, null), role).rejects.toThrow("NEXT_NOT_FOUND");
     }
   });
 });

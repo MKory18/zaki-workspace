@@ -89,7 +89,7 @@ describe("dead files stay deleted", () => {
 
 describe("every environment variable the code reads is documented", () => {
   /** Provided by the platform, not configuration. */
-  const PLATFORM = new Set(["NODE_ENV", "NEXT_RUNTIME"]);
+  const PLATFORM = new Set(["NODE_ENV", "NEXT_RUNTIME", "NEXT_PHASE"]);
 
   function walkSources(dir: string, out: string[] = []): string[] {
     for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {

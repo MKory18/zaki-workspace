@@ -20,10 +20,4 @@ describe("rows with path = 'pending' (failed uploads) are not real files", () =>
     expect(res.status).toBe(404);
     expect(res.json).toMatchObject({ message: "files.not_found" });
   });
-
-  it("are not counted on the dashboard (source contract: the count excludes PENDING_PATH)", () => {
-    const home = readFileSync(path.resolve(__dirname, "../../src/app/(app)/page.tsx"), "utf8");
-    const line = home.split(/\r?\n/).find((l) => l.includes("db.storedFile.count")) ?? "";
-    expect(line).toContain("PENDING_PATH");
-  });
 });

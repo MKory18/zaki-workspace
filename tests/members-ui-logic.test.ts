@@ -485,9 +485,9 @@ describe("relative time in Arabic", () => {
   const D = 86400;
 
   it("says so when somebody has never signed in", () => {
-    expect(relativeTimeAr(null, now, t)).toBe("لم يسجّل دخولاً بعد");
-    expect(relativeTimeAr(undefined, now, t)).toBe("لم يسجّل دخولاً بعد");
-    expect(relativeTimeAr("not a date", now, t)).toBe("لم يسجّل دخولاً بعد");
+    expect(relativeTimeAr(null, now, t)).toBe("لم يسجّل دخولًا بعد");
+    expect(relativeTimeAr(undefined, now, t)).toBe("لم يسجّل دخولًا بعد");
+    expect(relativeTimeAr("not a date", now, t)).toBe("لم يسجّل دخولًا بعد");
   });
 
   it("just now, and a clock that runs ahead", () => {

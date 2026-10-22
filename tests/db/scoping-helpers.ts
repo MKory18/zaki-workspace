@@ -1,3 +1,4 @@
+import { DEFAULT_TIME_ZONE, zonedParts, zonedWallTime } from "@/lib/zoned-time";
 import { db, makeProject, makeTask, makeTeam, makeWorkspace, uid } from "./helpers";
 
 /**
@@ -5,16 +6,20 @@ import { db, makeProject, makeTask, makeTeam, makeWorkspace, uid } from "./helpe
  * (Kept apart from helpers.ts on purpose: that file belongs to the harness.)
  */
 
-/** Today at 12:00 local time: always inside `dayWindow()`'s [00:00, 23:59:59.999]. */
-export function todayNoon(): Date {
-  const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  return d;
+/**
+ * Noon of the COMPANY's day that contains `now`. `makeTeam()` leaves `Organization.timezone` at the schema default
+ * (Asia/Damascus), and My Work cuts its days there, not in the machine's zone: noon of the machine's own day was the
+ * company's yesterday on a UTC runner between 21:00 and 24:00 UTC. Give the test's `now` to the service too
+ * (`getMyWork(userId, now)`), so both read the same day even when midnight falls between them.
+ */
+export function todayNoon(now: Date = new Date(), timeZone: string = DEFAULT_TIME_ZONE): Date {
+  const p = zonedParts(now, timeZone);
+  return zonedWallTime({ year: p.year, month: p.month, day: p.day, hour: 12 }, timeZone);
 }
 
-/** A moment `n` whole days from now (negative = in the past). */
-export function daysFromNow(n: number): Date {
-  return new Date(Date.now() + n * 24 * 3600 * 1000);
+/** A moment `n` whole days from `now` (negative = in the past). */
+export function daysFromNow(n: number, now: Date = new Date()): Date {
+  return new Date(now.getTime() + n * 24 * 3600 * 1000);
 }
 
 export interface SeedWorkInput {

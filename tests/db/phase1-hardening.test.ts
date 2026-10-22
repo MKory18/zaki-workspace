@@ -165,13 +165,13 @@ describe("review-b: an external partner (org GUEST) never writes", () => {
     expect(await db.idea.count({ where: { id: w.ideaId } })).toBe(1);
   });
 
-  it("a GUEST reading the ideas board gets no job titles (the staff directory is closed to them)", async () => {
+  it("a GUEST gets 403 on the ideas board (WP-ACCESS: ideas are staff-only), so no job titles leak", async () => {
     const t = await makeTeam();
     await db.user.update({ where: { id: t.member.id }, data: { jobTitle: "Head of Secret Projects" } });
     await db.idea.create({ data: { orgId: t.org.id, creatorId: t.member.id, title: "An idea" } });
     await loginAs(t.guest.id);
     const res = await call(ideasRoute.GET, { url: "http://localhost/api/ideas" });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403); // was 200 before WP-ACCESS: guests are refused outright now
     expect(res.text).not.toContain("Head of Secret Projects");
   });
 });

@@ -107,7 +107,7 @@ describe("the people list: cards for the sample contract data", () => {
     expect(cardOf(markup, "عبد الله")).toContain("آخر دخول: قبل 3 ساعات");
     expect(cardOf(markup, "منار")).toContain("آخر دخول: قبل يومين");
     expect(cardOf(markup, "حسن")).toContain("آخر دخول: قبل شهر");
-    expect(cardOf(markup, "قبس")).toContain("لم يسجّل دخولاً بعد");
+    expect(cardOf(markup, "قبس")).toContain("لم يسجّل دخولًا بعد");
     expect(cardOf(markup, "قبس")).not.toContain("آخر دخول");
   });
 
@@ -272,7 +272,7 @@ describe("the add-person form", () => {
 
   it("has the generate-password switch ON by default, and no manual password field then", () => {
     const markup = form();
-    expect(markup).toContain("ولّد كلمة مرور تلقائياً");
+    expect(markup).toContain("ولّد كلمة مرور تلقائيًا");
     expect(markup).toMatch(/role="switch" aria-checked="true"/);
     expect(markup).not.toContain('autoComplete="new-password"');
     expect(markup).not.toContain('autocomplete="new-password"');

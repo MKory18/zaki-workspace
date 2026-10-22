@@ -13,8 +13,11 @@ process.env["AUTH_SECRET"] = process.env["AUTH_SECRET"] ?? "test-secret-at-least
 const jar = new Map<string, string>();
 (globalThis as { __zkCookieJar?: Map<string, string> }).__zkCookieJar = jar;
 
+// Next 14.2's `cookies()` is SYNCHRONOUS; some call sites still `await` it (and await on a plain
+// object is a no-op), so the stub is a plain function, never an async one — an async stub made
+// every un-awaited call site read `.get` off a Promise ("cookies(...).get is not a function").
 vi.mock("next/headers", () => ({
-  cookies: async () => ({
+  cookies: () => ({
     get: (name: string) => (jar.has(name) ? { name, value: jar.get(name) as string } : undefined),
     has: (name: string) => jar.has(name),
     set: (name: string, value: string) => {

@@ -13,6 +13,13 @@ import {
 
 const idsOf = (rows: MyWorkData[keyof MyWorkData]) => rows.map((r) => r.task.id);
 
+/**
+ * One fixed moment for the fixtures and the service: 22:30 UTC on 22 October is already 01:30 on the 23rd in
+ * Damascus, the company's zone (makeTeam() keeps the schema default). Those are exactly the hours in which "today"
+ * by the machine's clock used to disagree with My Work's, which cuts the day in the company's zone.
+ */
+const NOW = new Date("2026-10-22T22:30:00Z");
+
 /** Tabs whose rows must all be assigned to the user (everything except "created"). */
 const ASSIGNED_TABS = ["today", "upcoming", "overdue", "completed", "mine"] as const;
 
@@ -32,20 +39,20 @@ describe("My Work: only the caller's own tasks, only in workspaces they can acce
     const mk = (label: string, extra: Partial<Parameters<typeof seedWork>[0]> = {}) =>
       seedWork({ orgId: f.org.id, workspaceId: f.wsIn.id, token, label, creatorId: colleague.id, ...extra });
 
-    const today = await mk("today", { assigneeId: me.id, dueDate: todayNoon() });
-    const upcoming = await mk("upcoming", { assigneeId: me.id, dueDate: daysFromNow(3) });
-    const overdue = await mk("overdue", { assigneeId: me.id, dueDate: daysFromNow(-3) });
-    const done = await mk("done", { assigneeId: me.id, completedAt: daysFromNow(-0.1) });
+    const today = await mk("today", { assigneeId: me.id, dueDate: todayNoon(NOW) });
+    const upcoming = await mk("upcoming", { assigneeId: me.id, dueDate: daysFromNow(3, NOW) });
+    const overdue = await mk("overdue", { assigneeId: me.id, dueDate: daysFromNow(-3, NOW) });
+    const done = await mk("done", { assigneeId: me.id, completedAt: daysFromNow(-0.1, NOW) });
     const undated = await mk("undated", { assigneeId: me.id });
 
     // work that belongs to a colleague, in the very workspace I am in
-    const theirToday = await mk("their-today", { assigneeId: colleague.id, dueDate: todayNoon() });
-    const theirOverdue = await mk("their-overdue", { assigneeId: colleague.id, dueDate: daysFromNow(-5) });
-    const theirDone = await mk("their-done", { assigneeId: colleague.id, completedAt: daysFromNow(-1) });
-    const unassigned = await mk("unassigned", { dueDate: todayNoon() });
+    const theirToday = await mk("their-today", { assigneeId: colleague.id, dueDate: todayNoon(NOW) });
+    const theirOverdue = await mk("their-overdue", { assigneeId: colleague.id, dueDate: daysFromNow(-5, NOW) });
+    const theirDone = await mk("their-done", { assigneeId: colleague.id, completedAt: daysFromNow(-1, NOW) });
+    const unassigned = await mk("unassigned", { dueDate: todayNoon(NOW) });
     const theirs = [theirToday, theirOverdue, theirDone, unassigned].map((w) => w.task.id);
 
-    const data = await getMyWork(me.id);
+    const data = await getMyWork(me.id, NOW);
 
     expect(idsOf(data.today)).toContain(today.task.id);
     expect(idsOf(data.upcoming)).toContain(upcoming.task.id);
@@ -96,21 +103,21 @@ describe("My Work: only the caller's own tasks, only in workspaces they can acce
     const hidden = (label: string, extra: Partial<Parameters<typeof seedWork>[0]> = {}) =>
       seedWork({ orgId: f.org.id, workspaceId: f.wsOut.id, token: f.token, label, creatorId: f.owner.id, ...extra });
 
-    const h1 = await hidden("h-today", { assigneeId: me.id, dueDate: todayNoon() });
-    const h2 = await hidden("h-upcoming", { assigneeId: me.id, dueDate: daysFromNow(4) });
-    const h3 = await hidden("h-overdue", { assigneeId: me.id, dueDate: daysFromNow(-4) });
-    const h4 = await hidden("h-done", { assigneeId: me.id, completedAt: daysFromNow(-1) });
+    const h1 = await hidden("h-today", { assigneeId: me.id, dueDate: todayNoon(NOW) });
+    const h2 = await hidden("h-upcoming", { assigneeId: me.id, dueDate: daysFromNow(4, NOW) });
+    const h3 = await hidden("h-overdue", { assigneeId: me.id, dueDate: daysFromNow(-4, NOW) });
+    const h4 = await hidden("h-done", { assigneeId: me.id, completedAt: daysFromNow(-1, NOW) });
     const h5 = await hidden("h-created", { creatorId: me.id, assigneeId: f.owner.id });
     const hiddenIds = [h1, h2, h3, h4, h5].map((w) => w.task.id);
 
-    const data = await getMyWork(me.id);
+    const data = await getMyWork(me.id, NOW);
     for (const tab of MY_WORK_TABS) {
       for (const id of hiddenIds) expect(idsOf(data[tab]), `${tab} must not hold ${id}`).not.toContain(id);
     }
 
     // being put into that workspace makes exactly that work appear
     await joinWorkspace(me.id, f.wsOut.id);
-    const after = await getMyWork(me.id);
+    const after = await getMyWork(me.id, NOW);
     expect(idsOf(after.today)).toContain(h1.task.id);
     expect(idsOf(after.upcoming)).toContain(h2.task.id);
     expect(idsOf(after.overdue)).toContain(h3.task.id);
@@ -128,7 +135,7 @@ describe("My Work: only the caller's own tasks, only in workspaces they can acce
       label: "owner-mine",
       creatorId: f.admin.id,
       assigneeId: owner.id,
-      dueDate: todayNoon(),
+      dueDate: todayNoon(NOW),
     });
     const othersOut = await seedWork({
       orgId: f.org.id,
@@ -137,10 +144,10 @@ describe("My Work: only the caller's own tasks, only in workspaces they can acce
       label: "others",
       creatorId: f.admin.id,
       assigneeId: f.member.id,
-      dueDate: todayNoon(),
+      dueDate: todayNoon(NOW),
     });
 
-    const data = await getMyWork(owner.id);
+    const data = await getMyWork(owner.id, NOW);
     expect(idsOf(data.mine)).toContain(mineOut.task.id); // wsOut, which the owner sees without a row
     expect(idsOf(data.today)).toContain(mineOut.task.id);
     for (const tab of MY_WORK_TABS) expect(idsOf(data[tab])).not.toContain(othersOut.task.id);
@@ -159,27 +166,27 @@ describe("My Work: only the caller's own tasks, only in workspaces they can acce
         label,
         creatorId: f.owner.id,
         assigneeId: admin.id,
-        dueDate: todayNoon(),
+        dueDate: todayNoon(NOW),
       });
     const inWsIn = await mk(f.wsIn.id, "admin-in");
     const inWsOut = await mk(f.wsOut.id, "admin-out");
 
     // no row anywhere: an ADMIN's rank opens nothing, even work assigned to them
-    const none = await getMyWork(admin.id);
+    const none = await getMyWork(admin.id, NOW);
     for (const tab of MY_WORK_TABS) {
       expect(idsOf(none[tab]), tab).not.toContain(inWsIn.task.id);
       expect(idsOf(none[tab]), tab).not.toContain(inWsOut.task.id);
     }
 
     await joinWorkspace(admin.id, f.wsIn.id);
-    const some = await getMyWork(admin.id);
+    const some = await getMyWork(admin.id, NOW);
     expect(idsOf(some.mine)).toContain(inWsIn.task.id);
     expect(idsOf(some.mine)).not.toContain(inWsOut.task.id);
     // an ADMIN who is in the space writes there even with a plain MEMBER row
     expect(some.mine.find((r) => r.task.id === inWsIn.task.id)!.editable).toBe(true);
 
     await joinWorkspace(admin.id, f.wsOut.id);
-    expect(idsOf((await getMyWork(admin.id)).mine)).toEqual(expect.arrayContaining([inWsIn.task.id, inWsOut.task.id]));
+    expect(idsOf((await getMyWork(admin.id, NOW)).mine)).toEqual(expect.arrayContaining([inWsIn.task.id, inWsOut.task.id]));
   });
 
   it("GUESTs keep read-only rows; members get editable rows", async () => {

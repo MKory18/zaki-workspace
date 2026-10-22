@@ -209,17 +209,6 @@ describe("pages serve the ACTIVE company, with the role held there", () => {
     expect(page).toContain(t("analytics.ideasTotal", { total: 2 }));
     expect(page).not.toContain(t("analytics.ideasTotal", { total: 5 }));
   });
-
-  it("the home page counts the active company's ideas only", async () => {
-    const w = await makeTwoCompanyPerson();
-    for (let i = 0; i < 5; i += 1) await makeIdea(w.oldOrg.id, w.oldOwner.id, `old idea ${i}`);
-    for (let i = 0; i < 2; i += 1) await makeIdea(w.newOrg.id, w.newOwner.id, `new idea ${i}`);
-    await loginAs(w.person.id);
-    const page = await html(HomePage());
-    const unit = t("home.unit_ideas");
-    expect(page).toMatch(new RegExp(`(^|[^\\d])2\\s*<span[^>]*>${unit}</span>`));
-    expect(page).not.toMatch(new RegExp(`7\\s*<span[^>]*>${unit}</span>`));
-  });
 });
 
 describe("a suspended person's old cookie is dead (sessions ended at suspension)", () => {

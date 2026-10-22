@@ -1,0 +1,404 @@
+import { describe, expect, it } from "vitest";
+import {
+  ARTICLES,
+  articleText,
+  articlesFor,
+  blocksFor,
+  findArticle,
+  neighbors,
+  readableArticle,
+  type Article,
+  type Block,
+  type ResolvedBlock,
+} from "@/lib/guide/articles";
+import { ARTICLE_AUDIENCE, AUDIENCES, canRead, type Audience } from "@/lib/guide/audience";
+import { ART_SLOTS, isArtSlot } from "@/lib/themes/decor";
+
+const HAS_ARABIC = /[؀-ۿ]/;
+/** The only Latin words an article may show: the names of keys on a keyboard and one example user name. */
+const LATIN_ALLOWED = new Set(["Ctrl", "K", "Esc", "Enter", "ali.m", "n8n", "Google", "Drive"]);
+
+const itemText = (item: string | { text: string }) => (typeof item === "string" ? item : item.text);
+
+/** Every string an article can put on the screen, read from the raw data. */
+function strings(article: Article): string[] {
+  const out = [article.title, article.summary];
+  for (const b of article.blocks) {
+    switch (b.type) {
+      case "h":
+      case "p":
+      case "tip":
+        out.push(b.text);
+        break;
+      case "warn":
+        out.push(b.text, b.fix);
+        break;
+      case "steps":
+      case "list":
+        if (b.title) out.push(b.title);
+        out.push(...b.items.map(itemText));
+        break;
+      case "keys":
+        out.push(b.text);
+        break;
+    }
+  }
+  if (article.cta) out.push(article.cta.label);
+  return out;
+}
+
+/** Every string of the view one audience gets. */
+function viewStrings(article: Article, audience: Audience): string[] {
+  const out = [article.title, article.summary];
+  for (const b of blocksFor(article, audience)) {
+    switch (b.type) {
+      case "h":
+      case "p":
+      case "tip":
+        out.push(b.text);
+        break;
+      case "warn":
+        out.push(b.text, b.fix);
+        break;
+      case "steps":
+      case "list":
+        if (b.title) out.push(b.title);
+        out.push(...b.items);
+        break;
+      case "keys":
+        out.push(b.text);
+        break;
+    }
+  }
+  return out;
+}
+
+const bySlug = (slug: string): Article => {
+  const found = findArticle(slug);
+  if (!found) throw new Error(`no article ${slug}`);
+  return found;
+};
+
+describe("the articles: the data itself", () => {
+  it("there are at least ten, with unique URL-safe slugs and unique titles, and the guide opens with «ابدأ من هون»", () => {
+    expect(ARTICLES.length).toBeGreaterThanOrEqual(10);
+    const slugs = ARTICLES.map((a) => a.slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+    for (const slug of slugs) expect(slug, slug).toMatch(/^[a-z][a-z0-9-]*$/);
+    const titles = ARTICLES.map((a) => a.title);
+    expect(new Set(titles).size).toBe(titles.length);
+    expect(ARTICLES[0]?.slug).toBe("start");
+    expect(ARTICLES[0]?.title).toBe("ابدأ من هون");
+  });
+
+  it("covers every subject the owner asked for", () => {
+    const titles = ARTICLES.map((a) => a.title).join("\n");
+    for (const wanted of [
+      "ابدأ من هون",
+      "الأماكن الخمسة",
+      "المساحات",
+      "المهام",
+      "المشاريع",
+      "الفريق والصلاحيات",
+      "الثيمات الأربعة",
+      "تثبيت التطبيق",
+      "الخصوصية",
+      "اختصارات",
+    ]) {
+      expect(titles, wanted).toContain(wanted);
+    }
+  });
+
+  it("is written in Arabic: every title, summary and line has Arabic, and no Latin word except key names", () => {
+    for (const article of ARTICLES) {
+      for (const text of strings(article)) {
+        expect(text, `${article.slug}: ${text}`).toMatch(HAS_ARABIC);
+        for (const word of text.match(/[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*/g) ?? []) {
+          expect(LATIN_ALLOWED.has(word), `${article.slug}: Latin word «${word}» in «${text}»`).toBe(true);
+        }
+      }
+      for (const b of article.blocks) {
+        if (b.type === "keys") for (const key of b.keys) expect(LATIN_ALLOWED.has(key) || !/[A-Za-z]/.test(key), `${article.slug}: key ${key}`).toBe(true);
+      }
+    }
+  });
+
+  it("is short: a summary fits one breath and no single line is a wall of text", () => {
+    for (const article of ARTICLES) {
+      expect(article.summary.length, article.slug).toBeLessThanOrEqual(110);
+      for (const b of article.blocks) {
+        const lines =
+          b.type === "steps" || b.type === "list"
+            ? b.items.map(itemText)
+            : b.type === "warn"
+              ? [b.text, b.fix]
+              : [b.text];
+        for (const line of lines) expect(line.length, `${article.slug}: ${line}`).toBeLessThanOrEqual(260);
+      }
+    }
+  });
+
+  it("no line ends in a Latin word or a digit (in right-to-left text the full stop would land on the wrong side)", () => {
+    for (const article of ARTICLES) {
+      for (const text of strings(article)) {
+        expect(text, `${article.slug}: ${text}`).not.toMatch(/[A-Za-z0-9]\s*[.،:؟!)»]*\s*$/);
+      }
+    }
+  });
+
+  it("leaves the ⚠️ and 🔧 marks to the page: the data carries the words, not the symbols", () => {
+    for (const article of ARTICLES) {
+      for (const text of strings(article)) {
+        expect(text).not.toContain("⚠");
+        expect(text).not.toContain("🔧");
+      }
+    }
+  });
+
+  it("every warning comes with its fix (a risk is never shown without the way out)", () => {
+    let warnings = 0;
+    for (const article of ARTICLES) {
+      for (const b of article.blocks) {
+        if (b.type !== "warn") continue;
+        warnings += 1;
+        expect(b.text.trim().length, article.slug).toBeGreaterThan(5);
+        expect(b.fix.trim().length, article.slug).toBeGreaterThan(5);
+      }
+    }
+    expect(warnings).toBeGreaterThan(0);
+  });
+
+  it("agrees with the audience table: every slug is listed there, with the same level", () => {
+    for (const article of ARTICLES) {
+      expect(ARTICLE_AUDIENCE[article.slug as keyof typeof ARTICLE_AUDIENCE], article.slug).toBe(article.audience);
+    }
+    expect(Object.keys(ARTICLE_AUDIENCE).sort()).toEqual(ARTICLES.map((a) => a.slug).sort());
+  });
+
+  it("only uses audiences that exist, and every article has something to read", () => {
+    for (const article of ARTICLES) {
+      expect(AUDIENCES).toContain(article.audience);
+      expect(article.blocks.length, article.slug).toBeGreaterThan(0);
+      for (const b of article.blocks) {
+        if (b.for) expect(AUDIENCES).toContain(b.for);
+        if (b.type === "steps" || b.type === "list") {
+          for (const item of b.items) if (typeof item !== "string") expect(AUDIENCES).toContain(item.for ?? "everyone");
+        }
+      }
+      if (article.cta) {
+        expect(article.cta.href).toMatch(/^\//);
+        expect(AUDIENCES).toContain(article.cta.for ?? "everyone");
+      }
+    }
+  });
+
+  it("describes only what exists today: nothing of the later phases (assistant, calls, cash, penalties, owner's eye)", () => {
+    // «المساعدة» (help) is an ordinary word and fine; «المساعد» (the assistant) is a later phase
+    const later = [/المساعد(?!ة)/, /مكالمة|المكالمات/, /الجزاءات/, /الصندوق/, /عين المالك/, /بحث بالمعنى/, /الفويس/, /رسالة صوتية/];
+    for (const article of ARTICLES) {
+      const text = strings(article).join("\n");
+      for (const pattern of later) expect(text, `${article.slug}: ${pattern}`).not.toMatch(pattern);
+    }
+  });
+
+  it("gives the iPhone steps in the install hint's own words: مشاركة ← إضافة إلى الشاشة الرئيسية, and the Android way", () => {
+    const text = articleText(bySlug("install"), "everyone");
+    expect(text).toContain("مشاركة");
+    expect(text).toContain("إضافة إلى الشاشة الرئيسية");
+    expect(text).toContain("آيفون");
+    expect(text).toContain("سفاري");
+    expect(text).toContain("أندرويد");
+    expect(text).toContain("كروم");
+  });
+
+  it("says exactly what the install hint says (src/components/pwa/install-hint.tsx): the same labels, the same two taps", async () => {
+    const { AR } = await import("@/lib/i18n/dict");
+    const text = articleText(bySlug("install"), "everyone");
+    // the iPhone steps, word for word
+    expect(text).toContain(AR["pwa.ios_step_share"]);
+    expect(text).toContain(AR["pwa.ios_step_share_icon"]?.replace(/[()]/g, ""));
+    expect(text).toContain(AR["pwa.ios_step_add"]);
+    expect(text).toContain(AR["pwa.ios_step_confirm"]);
+    // the Android button, by the name it has in the app
+    expect(text).toContain(`«${AR["pwa.install_button"]}»`);
+  });
+
+  it("names its drawing, when it has one, by an agreed guide slot (the owner's artwork arrives later as public/brand/art/<slot>.webp)", () => {
+    const drawn = ARTICLES.filter((a) => a.art !== undefined);
+    // the drawings of what exists today: welcome, spaces, install the app
+    expect(drawn.map((a) => `${a.slug}:${a.art}`).sort()).toEqual(
+      ["install:guide-install-app", "spaces:guide-spaces", "start:guide-welcome"].sort(),
+    );
+    for (const article of drawn) {
+      expect(isArtSlot(article.art), article.slug).toBe(true);
+      expect(article.art, article.slug).toMatch(/^guide-/);
+    }
+    // the slots of drawings for features that do not exist yet (message to task, notifications) stay unused
+    const used = new Set(drawn.map((a) => a.art));
+    expect(ART_SLOTS.filter((s) => s.startsWith("guide-") && !used.has(s)).sort()).toEqual(["guide-message-to-task", "guide-notifications"]);
+  });
+
+  it("the shortcuts article shows Ctrl + K as keys", () => {
+    const keys = bySlug("shortcuts").blocks.filter((b): b is Extract<Block, { type: "keys" }> => b.type === "keys");
+    expect(keys.some((b) => b.keys.includes("Ctrl") && b.keys.includes("K"))).toBe(true);
+  });
+});
+
+describe("the articles: who gets which", () => {
+  it("articlesFor grows with the audience: guests ⊆ staff ⊆ managers, and managers get everything", () => {
+    const guests = articlesFor("everyone").map((a) => a.slug);
+    const staff = articlesFor("staff").map((a) => a.slug);
+    const managers = articlesFor("managers").map((a) => a.slug);
+    for (const slug of guests) expect(staff).toContain(slug);
+    for (const slug of staff) expect(managers).toContain(slug);
+    expect(managers).toEqual(ARTICLES.map((a) => a.slug));
+    expect(guests.length).toBeLessThan(staff.length);
+    expect(staff.length).toBeLessThan(managers.length);
+  });
+
+  it("an article is listed for exactly the viewers its audience allows, in the guide's order", () => {
+    for (const audience of AUDIENCES) {
+      const listed = articlesFor(audience);
+      expect(listed.every((a) => canRead(audience, a.audience))).toBe(true);
+      expect(listed.map((a) => a.slug)).toEqual(
+        ARTICLES.filter((a) => canRead(audience, a.audience)).map((a) => a.slug),
+      );
+    }
+  });
+
+  it("the people and permissions article is for managers only; staff and guests never get it", () => {
+    expect(articlesFor("managers").map((a) => a.slug)).toContain("team");
+    expect(articlesFor("staff").map((a) => a.slug)).not.toContain("team");
+    expect(articlesFor("everyone").map((a) => a.slug)).not.toContain("team");
+  });
+
+  it("the task, company and team articles are closed to guests (they cannot write, and the rest is internal)", () => {
+    const guests = articlesFor("everyone").map((a) => a.slug);
+    for (const slug of ["tasks", "company", "team"]) expect(guests, slug).not.toContain(slug);
+    for (const slug of ["start", "places", "spaces", "projects", "themes", "install", "privacy", "shortcuts"]) {
+      expect(guests, slug).toContain(slug);
+    }
+  });
+
+  it("a guest never reads anything about people management, customers, files, chat, departments or integrations", () => {
+    const forbidden = [
+      "CRM",
+      "العملاء",
+      "الفرص",
+      "الملفات",
+      "الملف",
+      "المكتبة",
+      "الأقسام",
+      "الروتين",
+      "الدردشة",
+      "المحادثات",
+      "تيليجرام",
+      "n8n",
+      "الأتمتة",
+      "التكاملات",
+      "الصلاحيات",
+      "المفاتيح",
+      "إدارة الحسابات",
+      "تصفير",
+      "الإدارة",
+      "قائد فريق",
+      "مشرف",
+      "إضافة شخص",
+    ];
+    for (const article of articlesFor("everyone")) {
+      const view = viewStrings(article, "everyone").join("\n");
+      for (const word of forbidden) expect(view, `${article.slug} shows a guest «${word}»`).not.toContain(word);
+    }
+  });
+
+  it("an 'everyone' article shows staff their own material (the library, the chat) and shows guests none of it", () => {
+    const places = bySlug("places");
+    expect(viewStrings(places, "staff").join("\n")).toContain("المكتبة");
+    expect(viewStrings(places, "staff").join("\n")).toContain("الدردشة");
+    expect(viewStrings(places, "everyone").join("\n")).not.toContain("المكتبة");
+    expect(viewStrings(places, "everyone").join("\n")).not.toContain("الدردشة");
+  });
+
+  it("staff never get manager-only blocks, and managers get them", () => {
+    // the privacy article keeps the integrations remark for staff; the places article's admin line is staff-level
+    const spaces = bySlug("spaces");
+    const staffView = viewStrings(spaces, "staff").join("\n");
+    const guestView = viewStrings(spaces, "everyone").join("\n");
+    expect(staffView.length).toBeGreaterThan(guestView.length);
+    for (const article of ARTICLES) {
+      const staff = blocksFor(article, "staff");
+      const managers = blocksFor(article, "managers");
+      if (canRead("staff", article.audience)) expect(managers.length).toBeGreaterThanOrEqual(staff.length);
+    }
+  });
+
+  it("a view never carries an orphan heading (a heading with nothing under it for that audience)", () => {
+    for (const article of ARTICLES) {
+      for (const audience of AUDIENCES) {
+        if (!canRead(audience, article.audience)) continue;
+        const blocks: ResolvedBlock[] = blocksFor(article, audience);
+        blocks.forEach((b, i) => {
+          if (b.type !== "h") return;
+          const next = blocks[i + 1];
+          expect(next, `${article.slug}/${audience}: «${b.text}» ends the article`).toBeDefined();
+          expect(next?.type, `${article.slug}/${audience}: «${b.text}» is followed by a heading`).not.toBe("h");
+        });
+      }
+    }
+  });
+
+  it("a view never carries an empty list or empty steps", () => {
+    for (const article of ARTICLES) {
+      for (const audience of AUDIENCES) {
+        if (!canRead(audience, article.audience)) continue;
+        for (const b of blocksFor(article, audience)) {
+          if (b.type === "steps" || b.type === "list") expect(b.items.length).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("readableArticle gives the resolved article, and null for an unknown slug or one above the viewer", () => {
+    expect(readableArticle("nope", "managers")).toBeNull();
+    expect(readableArticle("team", "staff")).toBeNull();
+    expect(readableArticle("team", "everyone")).toBeNull();
+    expect(readableArticle("tasks", "everyone")).toBeNull();
+    const ok = readableArticle("team", "managers");
+    expect(ok?.slug).toBe("team");
+    expect(ok?.blocks.length).toBeGreaterThan(0);
+    // resolved blocks no longer carry the audience marks
+    for (const b of ok?.blocks ?? []) expect(b).not.toHaveProperty("for");
+  });
+
+  it("findArticle finds by slug whatever the viewer, and says nothing for an unknown one", () => {
+    expect(findArticle("tasks")?.title).toContain("المهام");
+    expect(findArticle("team")?.audience).toBe("managers");
+    expect(findArticle("nope")).toBeUndefined();
+    expect(findArticle("")).toBeUndefined();
+  });
+
+  it("neighbors chain the articles the viewer can read, and never point at one they cannot", () => {
+    for (const audience of AUDIENCES) {
+      const listed = articlesFor(audience);
+      listed.forEach((article, i) => {
+        const { prev, next } = neighbors(article.slug, audience);
+        expect(prev?.slug ?? null).toBe(listed[i - 1]?.slug ?? null);
+        expect(next?.slug ?? null).toBe(listed[i + 1]?.slug ?? null);
+      });
+    }
+    expect(neighbors("nope", "managers")).toEqual({ prev: null, next: null });
+    // the chain a guest follows skips the staff articles
+    const guestChain = articlesFor("everyone").map((a) => a.slug);
+    expect(guestChain).not.toContain("tasks");
+  });
+
+  it("the call to action only shows where the viewer can use it", () => {
+    for (const article of ARTICLES) {
+      for (const audience of AUDIENCES) {
+        if (!canRead(audience, article.audience)) continue;
+        const view = readableArticle(article.slug, audience);
+        if (view?.cta) expect(canRead(audience, article.cta?.for ?? "everyone")).toBe(true);
+      }
+    }
+  });
+});

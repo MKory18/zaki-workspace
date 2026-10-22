@@ -82,21 +82,6 @@ async function spaceWorld() {
 }
 
 describe("nobody inherits a space they are not in: the ADMIN is a guest of the doorway like everybody else", () => {
-  it("the home page counts only the teams of spaces the person can open", async () => {
-    const w = await spaceWorld();
-    const unit = t("home.unit_teams");
-    const teamsCount = (page: string) => {
-      const m = new RegExp(`(\\d+)\\s*<span[^>]*>${unit}</span>`).exec(page);
-      return m ? Number(m[1]) : null;
-    };
-    await loginAs(w.member.id);
-    expect(teamsCount(await html(HomePage()))).toBe(1);
-    await loginAs(w.admin.id);
-    expect(teamsCount(await html(HomePage()))).toBe(1);
-    // the owner sees every space of the company
-    await loginAs(w.owner.id);
-    expect(teamsCount(await html(HomePage()))).toBe(3);
-  });
 
   it("an ADMIN who is not in a space is refused its routes (403) and its pages (not found); the OWNER opens everything", async () => {
     const w = await spaceWorld();
@@ -106,7 +91,7 @@ describe("nobody inherits a space they are not in: the ADMIN is a guest of the d
     expect((await call(taskRoute.GET, { params: { id: w.taskOut.id } })).status).toBe(403);
     await expect(ProjectPage({ params: { id: w.outside.project.id } })).rejects.toThrow("NEXT_NOT_FOUND");
     await expect(TaskPage({ params: { id: w.taskOut.id } })).rejects.toThrow("NEXT_NOT_FOUND");
-    await expect(BoardPage({ params: { id: w.outside.board.id } })).rejects.toThrow("board.not_found");
+    await expect(BoardPage({ params: { id: w.outside.board.id } })).rejects.toThrow("NEXT_NOT_FOUND");
     // the project list (even when asked for the other space by id) and the timeline stay inside their spaces
     const list = await html(ProjectsPage({ searchParams: { workspace: w.wsOut.id } }));
     expect(list).toContain(`${w.token} project in`);

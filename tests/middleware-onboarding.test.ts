@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
@@ -99,6 +99,83 @@ describe("middleware: unfinished onboarding goes to /onboarding", () => {
     expect(res.status).toBe(307);
     expect(new URL(res.headers.get("location") as string).host).toBe("localhost:3000");
     expect(location(res)).toBe("/login");
+  });
+});
+
+describe("middleware: the files a browser fetches by itself pass without a session - and only those", () => {
+  const ROOT = path.resolve(__dirname, "..");
+
+  /** The real files of a folder of public/, as the addresses a browser asks for. */
+  const served = (folder: string, extension: RegExp) =>
+    readdirSync(path.join(ROOT, "public", folder))
+      .filter((name) => extension.test(name))
+      .map((name) => `/${folder}/${name}`);
+
+  /** What the sign-in and onboarding screens, the home-screen icon and the installed app load before anybody is signed in. */
+  const STATIC = [
+    "/manifest.webmanifest", // drawn by Next from src/app/manifest.ts
+    "/apple-icon.png", // src/app/apple-icon.png
+    "/icon.svg", // src/app/icon.svg
+    ...served("icons", /\.png$/),
+    ...served("brand/decor", /\.webp$/),
+    ...served("fonts", /\.woff2$/),
+  ];
+
+  it("the list is real: Next's own files exist in src/app, the others are the files in public/", () => {
+    for (const file of ["src/app/manifest.ts", "src/app/apple-icon.png", "src/app/icon.svg"]) {
+      expect(existsSync(path.join(ROOT, file)), file).toBe(true);
+    }
+    expect(served("icons", /\.png$/).length).toBeGreaterThanOrEqual(3);
+    expect(served("brand/decor", /\.webp$/).length).toBeGreaterThan(0);
+    expect(served("fonts", /\.woff2$/).length).toBeGreaterThan(0);
+  });
+
+  it("an anonymous request for the manifest, an app icon, the Apple icon, a decoration or a font passes untouched", async () => {
+    for (const p of STATIC) {
+      const res = await middleware(req(p));
+      expect(passes(res), p).toBe(true);
+      expect(res.headers.get("location"), p).toBeNull();
+    }
+  });
+
+  it("so does a request from somebody half-way through the onboarding (its own screen needs the font and the icons)", async () => {
+    const pending = await token({ userId: "u1", tv: 0, mcp: true, tp: true });
+    for (const p of STATIC) expect(passes(await middleware(req(p, pending))), p).toBe(true);
+  });
+
+  it("the file extension must end the path: a folder of files, or a name that only contains one, is a page and needs a session", async () => {
+    for (const p of ["/icons", "/brand/decor", "/fonts", "/manifest.json", "/icon.svg.html", "/fonts/reem-kufi-var.woff2x"]) {
+      const res = await middleware(req(p));
+      expect(res.status, p).toBe(307);
+      expect(location(res), p).toBe(`/login?next=${encodeURIComponent(p)}`);
+    }
+  });
+
+  it("an API path that merely looks like a file (/api/x.png) is still the API: the Origin guard refuses a cross-site write", async () => {
+    for (const p of ["/api/x.png", "/api/tasks/abc.png", "/api/fonts/x.woff2", "/%61pi/x.png"]) {
+      const crossSite = new NextRequest(`http://localhost:3000${p}`, {
+        method: "POST",
+        headers: new Headers({ host: "localhost:3000", origin: "https://evil.example", "sec-fetch-site": "cross-site" }),
+      });
+      const res = await middleware(crossSite);
+      expect(res.status, p).toBe(403);
+      expect(await res.json(), p).toEqual({ error: "forbidden", message: "origin.mismatch" });
+    }
+  });
+
+  /**
+   * A PAGE address whose last segment merely ends like a file (`/tasks/abc.png` is the task page with the id
+   * "abc.png") is a page like any other: the middleware sends a stranger to sign in. Only what the browser
+   * really fetches on its own is static: the public folders /icons/, /brand/, /fonts/ and the root names
+   * /icon.svg, /apple-icon.png, /manifest.webmanifest (+ /favicon.ico, /robots.txt).
+   */
+  it("a page address that only ends like a file (/tasks/abc.png) is still sent to sign in", async () => {
+    for (const p of ["/tasks/abc.png", "/u/abc.svg", "/projects/abc.webp", "/icons/%2e%2e/tasks/abc.png"]) {
+      const res = await middleware(req(p));
+      expect(res.status, p).toBe(307);
+      // the URL parser already resolves an encoded dot segment ("/icons/%2e%2e/tasks/abc.png" IS /tasks/abc.png)
+      expect(location(res), p).toBe(`/login?next=${encodeURIComponent(new URL(p, "http://localhost").pathname)}`);
+    }
   });
 });
 
