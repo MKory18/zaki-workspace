@@ -1,0 +1,236 @@
+import type { RealtimeIds, RealtimeKind } from "./emit";
+import { canReadConversation } from "./policy-gate";
+import { dropPresence, touchPresence } from "./presence";
+
+/**
+ * The fan-out registry of connected SSE clients and the in-memory typing state.
+ *
+ * Every payload to a client carries IDS ONLY, never message content: the client
+ * refetches through the normal APIs, where authorization applies again.
+ */
+
+export interface RtEvent {
+  id: string;
+  orgId: string;
+  kind: RealtimeKind | "typing" | "reload";
+  ids: RealtimeIds;
+}
+
+export interface RtClient {
+  userId: string;
+  orgId: string;
+  /** Write one SSE frame ("data: {...}\n\n") to this client's stream. */
+  send: (frame: string) => void;
+  /** Close the stream (the route's abort handler does the rest). */
+  close: () => void;
+  /** Serial number, for "close the OLDEST stream" decisions. */
+  cid: number;
+}
+
+interface RegistryEntry {
+  client: RtClient;
+  /** Per-client visibility cache: conversationId -> allowed (30 s TTL). */
+  cache: Map<string, { ok: boolean; at: number }>;
+}
+
+const VISIBILITY_CACHE_MS = 30_000;
+export { VISIBILITY_CACHE_MS };
+export const MAX_STREAMS_PER_USER = 5;
+export const TYPING_TTL_MS = 6_000;
+/** Postgres advisory lock key for the hourly purge job (any constant bigint). */
+export const PURGE_LOCK_KEY = 742271;
+
+let registry: RegistryEntry[] = [];
+let nextCid = 1;
+const typingUntil = new Map<string, { userId: string; name: string; until: number }>();
+const typingLastSent = new Map<string, number>();
+
+/** Test hook: clears the registry and typing state (never call from server code). */
+export function resetHubForTests(): void {
+  registry = [];
+  typingUntil.clear();
+  typingLastSent.clear();
+}
+
+export function clientCount(): number {
+  return registry.length;
+}
+
+export function clientsOfOrg(orgId: string): RtClient[] {
+  return registry.filter((r) => r.client.orgId === orgId).map((r) => r.client);
+}
+
+export function addClient(client: Omit<RtClient, "cid">): RtClient {
+  const full: RtClient = { ...client, cid: nextCid++ };
+  // A user holds at most MAX_STREAMS_PER_USER streams; a newer connection closes the oldest.
+  const mine = registry.filter((r) => r.client.userId === client.userId);
+  if (mine.length >= MAX_STREAMS_PER_USER) {
+    const oldest = mine.reduce((a, b) => (a.client.cid <= b.client.cid ? a : b));
+    removeClient(oldest.client);
+    try {
+      oldest.client.close();
+    } catch {
+      // already gone
+    }
+  }
+  registry.push({ client: full, cache: new Map() });
+  touchPresence(client.userId);
+  return full;
+}
+
+export function removeClient(client: RtClient): void {
+  registry = registry.filter((r) => r.client !== client && r.client.cid !== client.cid);
+  if (!registry.some((r) => r.client.userId === client.userId)) dropPresence(client.userId);
+}
+
+/** The per-user throttle of POST /api/rt/typing: one emission per 2 s per user+conversation. */
+export function allowTyping(key: string, now: number = Date.now()): boolean {
+  const last = typingLastSent.get(key);
+  if (typeof last === "number" && now - last < 2000) return false;
+  typingLastSent.set(key, now);
+  return true;
+}
+
+/** Records an in-memory typing state (6 s expiry); never stored anywhere. */
+export function setTyping(conversationId: string, userId: string, name: string, now: number = Date.now()): void {
+  typingUntil.set(`${conversationId}|${userId}`, { userId, name, until: now + TYPING_TTL_MS });
+}
+
+export function typingIn(conversationId: string, now: number = Date.now()): { userId: string; name: string }[] {
+  const out: { userId: string; name: string }[] = [];
+  for (const [key, v] of typingUntil) {
+    if (v.until <= now) {
+      typingUntil.delete(key);
+      continue;
+    }
+    if (key.startsWith(`${conversationId}|`)) out.push({ userId: v.userId, name: v.name });
+  }
+  return out;
+}
+
+export function frameOf(event: RtEvent, extra: Record<string, unknown> = {}): string {
+  const payload: Record<string, unknown> = { kind: event.kind };
+  for (const key of ["conversationId", "messageId", "spaceId", "userId"] as const) {
+    const v = event.ids[key];
+    if (v !== undefined) payload[key] = v;
+  }
+  Object.assign(payload, extra);
+  return `id: ${event.id}\ndata: ${JSON.stringify(payload)}\n\n`;
+}
+
+function invalidateCache(event: RtEvent): void {
+  if (event.kind === "membership.changed") {
+    for (const r of registry) r.cache.clear();
+  } else if (event.kind === "conversation.changed" && event.ids.conversationId) {
+    const cv = event.ids.conversationId;
+    for (const r of registry) r.cache.delete(cv);
+  }
+}
+
+async function maySee(entry: RegistryEntry, event: RtEvent): Promise<boolean> {
+  // Events without a conversation go by target user, or to the whole org.
+  if (!event.ids.conversationId) return true;
+  const cv = event.ids.conversationId;
+  const cached = entry.cache.get(cv);
+  const now = Date.now();
+  if (cached && now - cached.at < VISIBILITY_CACHE_MS) return cached.ok;
+  let ok: boolean;
+  try {
+    ok = await canReadConversation(entry.client.userId, cv);
+  } catch {
+    // The policy module is unavailable (mid-wave) or the DB hiccupped: never leak.
+    ok = false;
+  }
+  entry.cache.set(cv, { ok, at: now });
+  return ok;
+}
+
+/**
+ * Fans one loaded event out to the connected clients of its organization.
+ * Resolves after every eligible send has been attempted (send itself is sync).
+ */
+export async function deliverEvent(event: RtEvent): Promise<void> {
+  invalidateCache(event);
+  const targets = registry.filter(
+    (r) => r.client.orgId === event.orgId && (event.ids.userId === undefined || event.ids.userId === r.client.userId),
+  );
+  // DM delivery ticks: a connected recipient of a DM counts the message as delivered at once.
+  if (event.kind === "message.created" && event.ids.conversationId) {
+    const { markDeliveredForUser } = await import("@/server/chat/read-state");
+    for (const t of targets) {
+      try {
+        await markDeliveredForUser(t.client.userId);
+      } catch {
+        // read-state may still be a stub mid-wave; delivery ticks are best-effort
+      }
+    }
+  }
+  for (const entry of targets) {
+    if (event.ids.conversationId && !(await maySee(entry, event))) continue;
+    try {
+      entry.client.send(frameOf(event));
+    } catch {
+      removeClient(entry.client);
+    }
+  }
+}
+
+/**
+ * Broadcasts a typing event to the OTHER viewers of the conversation who may read
+ * it (never to the sender). Never stored; the owner in oversight cannot emit it
+ * (the route refuses for a non-joined owner before calling this).
+ */
+export async function broadcastTyping(
+  orgId: string,
+  conversationId: string,
+  userId: string,
+  name: string,
+): Promise<number> {
+  const event: RtEvent = { id: "", orgId, kind: "typing", ids: { conversationId, userId } };
+  let sent = 0;
+  const targets = registry.filter((r) => r.client.orgId === orgId && r.client.userId !== userId);
+  for (const entry of targets) {
+    if (!(await maySee(entry, event))) continue;
+    try {
+      entry.client.send(frameOf(event, { name }));
+      sent++;
+    } catch {
+      removeClient(entry.client);
+    }
+  }
+  setTyping(conversationId, userId, name);
+  return sent;
+}
+
+/**
+ * Filters replay rows down to what this person may see, used by GET /api/rt for
+ * Last-Event-ID replay: conversation events by canReadConversation, userId events
+ * only for that user, everything else by organization membership (the route only
+ * serves the person's own org).
+ */
+export async function filterVisible(
+  userId: string,
+  rows: { id: string; kind: string; ids: RealtimeIds }[],
+): Promise<{ id: string; kind: string; ids: RealtimeIds }[]> {
+  const out: { id: string; kind: string; ids: RealtimeIds }[] = [];
+  const cache = new Map<string, boolean>();
+  for (const row of rows) {
+    if (row.ids.conversationId) {
+      const cv = row.ids.conversationId;
+      let ok = cache.get(cv);
+      if (ok === undefined) {
+        try {
+          ok = await canReadConversation(userId, cv);
+        } catch {
+          ok = false;
+        }
+        cache.set(cv, ok);
+      }
+      if (!ok) continue;
+    } else if (row.ids.userId && row.ids.userId !== userId) {
+      continue;
+    }
+    out.push(row);
+  }
+  return out;
+}

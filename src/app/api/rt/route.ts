@@ -1,0 +1,188 @@
+import type { NextRequest } from "next/server";
+import { apiError } from "@/server/api";
+import { db } from "@/server/db";
+import { ForbiddenError, UnauthorizedError, requireUser } from "@/server/auth";
+import { RateLimitedError } from "@/server/rate-limit";
+import { log } from "@/server/log";
+import { requireActor } from "@/server/policy/actor";
+import {
+  addClient,
+  filterVisible,
+  frameOf,
+  removeClient,
+  type RtClient,
+  type RtEvent,
+} from "@/server/realtime/hub";
+import { ensureListener } from "@/server/realtime/listener";
+
+/**
+ * GET /api/rt — the one SSE stream per tab.
+ *
+ * Node runtime, never cached, never buffered: `X-Accel-Buffering: no` tells nginx
+ * (and Traefik honours the same header) to flush every frame at once. A heartbeat
+ * comment every 25 s keeps intermediaries from timing the connection out and
+ * doubles as the re-check point: a suspended/offboarded person or a session whose
+ * token version moved stops being served within one heartbeat.
+ */
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const HEARTBEAT_MS = 25_000;
+const REPLAY_WINDOW_MS = 48 * 3600_000;
+
+const RT_KINDS: ReadonlySet<string> = new Set([
+  "message.created",
+  "message.edited",
+  "message.deleted",
+  "message.reacted",
+  "message.pinned",
+  "conversation.read",
+  "conversation.delivered",
+  "conversation.changed",
+  "membership.changed",
+]);
+
+function kindOf(kind: string): RtEvent["kind"] {
+  return RT_KINDS.has(kind) ? (kind as RtEvent["kind"]) : "conversation.changed";
+}
+
+export async function GET(req: NextRequest): Promise<Response> {
+  // An SSE stream is a plain Response (not a NextResponse), so withApi's NextResponse
+  // contract does not fit; the same error mapping is applied manually below.
+  try {
+    return await sse(req);
+  } catch (err) {
+    if (err instanceof ForbiddenError) return apiError("forbidden", err.message);
+    if (err instanceof UnauthorizedError) return apiError("auth.required", err.message);
+    if (err instanceof RateLimitedError) {
+      return apiError("rate_limited", err.message, undefined, { "retry-after": String(err.retryAfterSec) });
+    }
+    log.error("api.rt_unhandled", {
+      name: err instanceof Error ? err.name : String(err),
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return apiError("internal");
+  }
+}
+
+async function sse(req: NextRequest): Promise<Response> {
+  {
+    const actor = await requireActor();
+    const sessionTv = (await requireUser()).tv;
+    await ensureListener();
+
+    const lastEventId = req.headers.get("last-event-id") ?? req.nextUrl.searchParams.get("lastEventId") ?? "";
+    const encoder = new TextEncoder();
+    let client: RtClient | null = null;
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    let done = false;
+
+    function cleanup(): void {
+      if (done) return;
+      done = true;
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = null;
+      }
+      if (client) {
+        removeClient(client);
+        client = null;
+      }
+    }
+
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const write = (text: string) => {
+          if (done) return;
+          try {
+            controller.enqueue(encoder.encode(text));
+          } catch {
+            // the consumer is gone; cleanup happens in cancel()
+          }
+        };
+        const send = (frame: string) => {
+          write(frame);
+        };
+
+        write(`retry: 3000\n\n`);
+        client = addClient({
+          userId: actor.userId,
+          orgId: actor.orgId,
+          send,
+          close: cleanup,
+        });
+
+        try {
+          // Replay: the events of the last 48 h this person may see. An id older
+          // than that (or unparsable) means an unknown gap: one `reload` event makes
+          // the client refetch through the normal APIs instead of a partial window.
+          if (lastEventId) {
+            const sinceId = BigInt(lastEventId);
+            const since = new Date(Date.now() - REPLAY_WINDOW_MS);
+            const boundary = await db.realtimeEvent.findFirst({
+              where: { orgId: actor.orgId, id: { lte: sinceId }, createdAt: { lt: since } },
+              select: { id: true },
+            });
+            if (boundary) {
+              write(`event: reload\ndata: {}\n\n`);
+            } else {
+              const rows = await db.realtimeEvent.findMany({
+                where: { orgId: actor.orgId, id: { gt: sinceId }, createdAt: { gte: since } },
+                orderBy: { id: "asc" },
+                take: 500,
+                select: { id: true, kind: true, ids: true },
+              });
+              const visible = await filterVisible(
+                actor.userId,
+                rows.map((r) => ({ id: r.id.toString(), kind: r.kind, ids: (r.ids ?? {}) as RtEvent["ids"] })),
+              );
+              for (const r of visible) send(frameOf({ id: r.id, orgId: actor.orgId, kind: kindOf(r.kind), ids: r.ids }));
+            }
+          } else {
+            write(`: connected\n\n`);
+          }
+        } catch {
+          // replay is best-effort; the periodic refetch covers a failed window
+        }
+
+        // Every heartbeat: a session whose token version moved (password change,
+        // "log out everywhere") or whose membership left ACTIVE is closed here.
+        const recheckSession = async (): Promise<void> => {
+          try {
+            const user = await db.user.findUnique({
+              where: { id: actor.userId },
+              select: {
+                tokenVersion: true,
+                memberships: { where: { organizationId: actor.orgId }, select: { status: true } },
+              },
+            });
+            const active = user?.memberships.some((m) => m.status === "ACTIVE") ?? false;
+            if (!user || user.tokenVersion !== sessionTv || !active) cleanup();
+          } catch {
+            // a transient DB error must not kill a healthy stream
+          }
+        };
+
+        heartbeat = setInterval(() => {
+          write(`: hb ${Date.now()}\n\n`);
+          void recheckSession();
+        }, HEARTBEAT_MS);
+      },
+      cancel() {
+        cleanup();
+      },
+    });
+
+    req.signal.addEventListener("abort", cleanup);
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  }
+}

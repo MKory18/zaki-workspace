@@ -6,6 +6,7 @@ import { clientIp } from "@/server/rate-limit";
 import { LoginGuard } from "@/server/login-guard";
 import { loginSchema } from "@/server/validation";
 import { onboardingStateOf } from "@/server/policy/org-settings";
+import { THEME_COOKIE, isThemeKey, prefCookieOptions } from "@/lib/themes/registry";
 
 /**
  * Brute-force guard (policy and reasoning live in login-guard.ts): the (typed text, address) pair,
@@ -33,6 +34,7 @@ async function findAccount(identifier: string) {
       tokenVersion: true,
       mustChangePassword: true,
       transparencyVersion: true,
+      theme: true,
       memberships: {
         where: { status: "ACTIVE" },
         orderBy: { createdAt: "asc" },
@@ -96,7 +98,10 @@ export async function POST(req: Request) {
       await startSession(user.id, { tv: user.tokenVersion });
       await audit("auth.login", { actorId: user.id, orgId: active.organizationId });
       const owed = onboardingStateOf(user, active.organization.settings);
-      return NextResponse.json({ ok: true, next: owed.mustChangePassword || owed.transparencyPending ? "/onboarding" : "/" });
+      const res = NextResponse.json({ ok: true, next: owed.mustChangePassword || owed.transparencyPending ? "/onboarding" : "/" });
+      // the person's saved theme comes with them to this device ("system" = never chose: no cookie)
+      if (isThemeKey(user.theme)) res.cookies.set(THEME_COOKIE, user.theme, prefCookieOptions(process.env.NODE_ENV === "production"));
+      return res;
     } finally {
       attempt.done();
     }
