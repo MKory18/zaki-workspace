@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { requireUser } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { ForbiddenError } from "@/server/auth";
+import { accessibleWorkspaceIds } from "@/server/services/access";
 
 /** Strip LIKE wildcards so user input is a literal substring. */
 function sanitize(q: string): string {
@@ -10,8 +11,10 @@ function sanitize(q: string): string {
 }
 
 /**
- * Org-scoped search over tasks/projects the user can reach.
- * Authorization enforced in SQL (org membership list), never client-side.
+ * Search over the tasks/projects of the workspaces the caller can open.
+ * Authorization is enforced in SQL by the same rule every other view uses
+ * (`accessibleWorkspaceIds`: org OWNER/ADMIN inherit their org's workspaces,
+ * everyone else only the workspaces they were put in) — never client-side.
  */
 export async function GET(req: Request) {
   return withApi(async () => {
@@ -27,11 +30,19 @@ export async function GET(req: Request) {
     const orgIds = memberships.map((m) => m.organizationId);
     if (orgIds.length === 0) throw new ForbiddenError("not_org_member");
 
+    const workspaceIds = await accessibleWorkspaceIds(user.id);
+    if (workspaceIds.length === 0) return NextResponse.json({ tasks: [], projects: [] });
+
     const contains = { contains: q, mode: "insensitive" as const };
 
     const [tasks, projects] = await Promise.all([
       db.task.findMany({
-        where: { orgId: { in: orgIds }, archived: false, title: contains },
+        where: {
+          orgId: { in: orgIds },
+          workspaceId: { in: workspaceIds },
+          archived: false,
+          title: contains,
+        },
         orderBy: [{ updatedAt: "desc" }],
         take: 8,
         select: {
@@ -45,7 +56,7 @@ export async function GET(req: Request) {
       }),
       db.project.findMany({
         where: {
-          workspace: { organizationId: { in: orgIds } },
+          workspaceId: { in: workspaceIds },
           name: contains,
         },
         orderBy: [{ createdAt: "desc" }],

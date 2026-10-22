@@ -73,15 +73,17 @@ export const createDmSchema = z.object({
 export async function createDm(ctx: OrgAccessContext, otherUserId: string): Promise<string> {
   await assertChatAllowed(ctx.orgRole);
   if (otherUserId === ctx.userId) throw new ForbiddenError("chat.dm_self");
+  // the other person must be a non-GUEST member of the SAME org (guests cannot chat)
   const other = await db.organizationMember.findFirst({
-    where: { organizationId: ctx.orgId, userId: otherUserId },
+    where: { organizationId: ctx.orgId, userId: otherUserId, role: { not: "GUEST" } },
     select: { userId: true },
   });
   if (!other) throw new NotFoundError("chat.not_org_member");
 
-  // exactly one DM per pair — find it by member signature, whatever creation order
+  // exactly one DM per pair PER ORG — find it by member signature, whatever creation
+  // order; a conversation of another org is never a match
   const mine = await db.conversation.findMany({
-    where: { kind: "DM", members: { some: { userId: ctx.userId } } },
+    where: { orgId: ctx.orgId, kind: "DM", members: { some: { userId: ctx.userId } } },
     select: { id: true, members: { select: { userId: true } } },
   });
   const existing = mine.find(

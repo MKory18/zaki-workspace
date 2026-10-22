@@ -17,7 +17,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
     },
     include: {
       labels: { select: { label: true } },
-      assignee: { select: { id: true, name: true, email: true } },
+      assignee: { select: { id: true, name: true } },
       creator: { select: { id: true, name: true } },
       organization: { select: { keyPrefix: true } },
       column: {

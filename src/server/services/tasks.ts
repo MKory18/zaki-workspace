@@ -30,7 +30,7 @@ export interface MoveTaskInput {
 
 export const TASK_INCLUDE = {
   labels: { select: { label: { select: { id: true, name: true, color: true } } } },
-  assignee: { select: { id: true, name: true, email: true } },
+  assignee: { select: { id: true, name: true } },
   _count: { select: { comments: true } },
 } satisfies Prisma.TaskInclude;
 
@@ -250,6 +250,15 @@ export async function updateTask(
     if (data.priority !== undefined) updateData.priority = data.priority;
     if (data.type !== undefined) updateData.type = data.type;
     if (data.assigneeId !== undefined) {
+      // never assign to a user outside the actor's org (the same rule as on create);
+      // re-sending the current assignee changes nothing, so it is not re-checked
+      if (data.assigneeId !== null && data.assigneeId !== before.assigneeId) {
+        const member = await tx.organizationMember.findFirst({
+          where: { organizationId: actor.orgId, userId: data.assigneeId },
+          select: { id: true },
+        });
+        if (!member) throw new ForbiddenError("assignee.not_member");
+      }
       updateData.assignee =
         data.assigneeId === null
           ? { disconnect: true }

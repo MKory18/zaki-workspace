@@ -3,46 +3,9 @@ import { currentUser, ForbiddenError } from "@/server/auth";
 import { db } from "@/server/db";
 import { getServerT } from "@/lib/i18n/server";
 import { accessibleWorkspaceIds } from "@/server/services/access";
+import { loadAnalytics } from "@/server/services/analytics";
 import { fmtNumber } from "@/lib/format";
 import type { TaskPriority, IdeaStatus } from "@prisma/client";
-
-/** Org-wide analytics, workspace-filtered (verified after source recovery). */
-async function loadAnalytics(wsIds: string[]) {
-  const now = new Date();
-  const since30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
-  const in7 = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
-  const scope = { archived: false, workspaceId: { in: wsIds } };
-  const [total, open, completed, overdue, created30, completed30, upcoming7, byPriority, byStatus30, assignees, ideas, workspaces, projects] =
-    await Promise.all([
-      db.task.count({ where: scope }),
-      db.task.count({ where: { ...scope, completedAt: null } }),
-      db.task.count({ where: { ...scope, completedAt: { not: null } } }),
-      db.task.count({ where: { ...scope, completedAt: null, dueDate: { lt: now } } }),
-      db.task.count({ where: { ...scope, createdAt: { gte: since30 } } }),
-      db.task.count({ where: { ...scope, completedAt: { gte: since30 } } }),
-      db.task.count({ where: { ...scope, completedAt: null, dueDate: { gte: now, lte: in7 } } }),
-      db.task.groupBy({ by: ["priority"], where: { ...scope, completedAt: null }, _count: { _all: true } }),
-      db.idea.groupBy({ by: ["status"], where: {}, _count: { _all: true } }),
-      db.task.groupBy({
-        by: ["assigneeId"],
-        where: { ...scope, completedAt: null, assigneeId: { not: null } },
-        _count: { _all: true },
-        orderBy: { _count: { assigneeId: "desc" } },
-        take: 8,
-      }),
-      db.idea.count({}),
-      db.workspace.count({}),
-      db.project.count({ where: { workspaceId: { in: wsIds } } }),
-    ]);
-  const nameOf = new Map(
-    assignees.length
-      ? (await db.user.findMany({ where: { id: { in: assignees.map((a) => a.assigneeId!) } }, select: { id: true, name: true } })).map(
-          (u) => [u.id, u.name] as const,
-        )
-      : [],
-  );
-  return { total, open, completed, overdue, created30, completed30, upcoming7, byPriority, byStatus30, assignees, ideas, workspaces, projects, nameOf };
-}
 
 export default async function AnalyticsPage() {
   const { t } = getServerT();
@@ -54,8 +17,9 @@ export default async function AnalyticsPage() {
     select: { organizationId: true, role: true },
   });
   if (!membership) throw new ForbiddenError("not_org_member");
+  // numbers for the active org (oldest membership), over the workspaces the user can open
   const wsScope = await accessibleWorkspaceIds(user.id);
-  const data = await loadAnalytics(wsScope.length ? wsScope : ["__none__"]);
+  const data = await loadAnalytics(membership.organizationId, wsScope);
   const byPriority = new Map(data.byPriority.map((row) => [row.priority, row._count._all]));
   const byStatus = new Map(data.byStatus30.map((row) => [row.status, row._count._all]));
   const maxWorkload = Math.max(1, ...data.assignees.map((a) => a._count._all));

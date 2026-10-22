@@ -25,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       where: { id: params.id },
       include: {
         labels: { select: { label: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignee: { select: { id: true, name: true } },
         creator: { select: { id: true, name: true } },
         milestone: { select: { id: true, name: true } },
         comments: { orderBy: { createdAt: "desc" }, include: { author: { select: { id: true, name: true } } } },

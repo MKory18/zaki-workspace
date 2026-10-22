@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 import {
+  listWorkspacePeople,
   queryTasksForView,
   resolveWorkspaceView,
   sortByDue,
   type ViewTask,
 } from "@/server/services/views";
-import { db } from "@/server/db";
 import { TaskRow, type RowMember } from "@/components/task-row";
 import { ListFilters } from "@/components/list-filters";
 import { getServerT } from "@/lib/i18n/server";
@@ -50,14 +50,8 @@ export default async function ListPage({
   const assigneeId = assigneeParam === "__none__" ? "__none__" : assigneeParam || undefined;
   const q = (searchParams.q ?? "").trim();
 
-  const members: RowMember[] = ctx.denied
-    ? []
-    : (
-        await db.organizationMember.findMany({
-          where: { organizationId: ctx.orgId },
-          select: { user: { select: { id: true, name: true } } },
-        })
-      ).map((m) => m.user);
+  // org members: the org's people; org guests: only those who share this workspace
+  const members: RowMember[] = ctx.denied ? [] : await listWorkspacePeople(ctx);
 
   const tasks: ViewTask[] = ctx.denied
     ? []

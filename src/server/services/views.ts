@@ -1,6 +1,7 @@
 import { Prisma, type TaskPriority } from "@prisma/client";
 import { db } from "@/server/db";
 import { TASK_INCLUDE } from "@/server/services/tasks";
+import { accessibleWorkspaceIds } from "@/server/services/access";
 
 // ---------- workspace access resolution for RSC pages ----------
 
@@ -11,18 +12,29 @@ export interface WorkspaceViewCtx {
   workspaceId: string;
   workspaceName: string;
   orgId: string;
+  /** The user's role in that org (not the workspace role): what decides guest-only limits. */
+  orgRole: string;
   /** Effective role (workspace member role wins over org role). */
   role: string;
   editable: boolean;
+  /**
+   * Kept for the pages that still read it. Always false now: a workspace the
+   * user cannot open is never offered or chosen (see `workspaces`).
+   */
   denied: boolean;
-  /** All workspaces visible to the user across their orgs (for selectors). */
+  /** The workspaces the user can open (for selectors) — never an inaccessible one. */
   workspaces: { id: string; name: string }[];
 }
 
 /**
- * Mirrors requireWorkspace() semantics for server components:
- * workspace members ranked per their workspace role; org ADMIN/OWNER/MEMBER
- * inherit; org GUESTs and non-members are denied.
+ * Resolves the workspace a page (List, Calendar) should show.
+ *
+ * Access is the one rule used everywhere (`accessibleWorkspaceIds`): org
+ * OWNER/ADMIN inherit every workspace of their org, everyone else — GUESTs
+ * included — only the workspaces they were put in. The selector list and the
+ * chosen/fallback workspace come from that list only; a requested workspace
+ * outside it silently falls back to the first accessible one, and a user with
+ * none gets `{ none: true }`.
  */
 export async function resolveWorkspaceView(
   wantedId?: string,
@@ -30,63 +42,67 @@ export async function resolveWorkspaceView(
   const user = await currentUser();
   if (!user) return { pageRedirect: true };
 
-  const memberships = await db.organizationMember.findMany({
-    where: { userId: user.id },
-    select: {
-      organizationId: true,
-      role: true,
-      organization: {
-        select: { workspaces: { select: { id: true, name: true }, orderBy: { name: "asc" } } },
-      },
-    },
+  const accessibleIds = await accessibleWorkspaceIds(user.id);
+  if (accessibleIds.length === 0) return { none: true };
+
+  const rows = await db.workspace.findMany({
+    where: { id: { in: accessibleIds } },
+    select: { id: true, name: true, organizationId: true },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
   });
-
-  const workspaces: { id: string; name: string }[] = [];
-  for (const m of memberships) {
-    for (const ws of m.organization.workspaces) {
-      workspaces.push(ws);
-    }
-  }
-  if (workspaces.length === 0) return { none: true };
-
-  const fallback = workspaces[0];
+  const fallback = rows[0];
   if (!fallback) return { none: true };
-  const chosenId = wantedId && workspaces.some((w) => w.id === wantedId) ? wantedId : fallback.id;
-  const chosen = workspaces.find((w) => w.id === chosenId)!;
-  const membership = memberships.find((m) => m.organization.workspaces.some((w) => w.id === chosenId))!;
+  const chosen = (wantedId ? rows.find((w) => w.id === wantedId) : undefined) ?? fallback;
+  const workspaces = rows.map((w) => ({ id: w.id, name: w.name }));
 
-  const wsMember = await db.workspaceMember.findUnique({
-    where: { workspaceId_userId: { workspaceId: chosen.id, userId: user.id } },
-    select: { role: true },
-  });
-  const orgRole = membership.role;
-  if (!wsMember && orgRole === "GUEST") {
-    return {
-      ctx: {
-        userId: user.id,
-        workspaceId: chosen.id,
-        workspaceName: chosen.name,
-        orgId: membership.organizationId,
-        role: "GUEST",
-        editable: false,
-        denied: true,
-        workspaces,
-      },
-    };
-  }
+  const [orgMember, wsMember] = await Promise.all([
+    db.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: chosen.organizationId, userId: user.id } },
+      select: { role: true },
+    }),
+    db.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: chosen.id, userId: user.id } },
+      select: { role: true },
+    }),
+  ]);
+  // accessible ⇒ org member of the workspace's org; "GUEST" is only a safe floor
+  const orgRole = orgMember?.role ?? "GUEST";
   const role = wsMember?.role ?? orgRole;
   return {
     ctx: {
       userId: user.id,
       workspaceId: chosen.id,
       workspaceName: chosen.name,
-      orgId: membership.organizationId,
+      orgId: chosen.organizationId,
+      orgRole,
       role,
       editable: role !== "GUEST",
       denied: false,
       workspaces,
     },
   };
+}
+
+/**
+ * People offered in the List page's assignee filter for the chosen workspace
+ * (names only, never an email). Org members get the organization's people; an
+ * org GUEST (an external partner) only gets the people who share the workspace
+ * with them, never the wider staff.
+ */
+export async function listWorkspacePeople(
+  ctx: Pick<WorkspaceViewCtx, "orgId" | "workspaceId" | "orgRole">,
+): Promise<{ id: string; name: string }[]> {
+  const rows = await db.organizationMember.findMany({
+    where: {
+      organizationId: ctx.orgId,
+      ...(ctx.orgRole === "GUEST"
+        ? { user: { workspaceLinks: { some: { workspaceId: ctx.workspaceId } } } }
+        : {}),
+    },
+    orderBy: { createdAt: "asc" },
+    select: { user: { select: { id: true, name: true } } },
+  });
+  return rows.map((r) => r.user);
 }
 
 export function redirectIfUnauthenticated(): Promise<string | null> {
@@ -164,6 +180,12 @@ export interface ViewQuery {
   creatorId?: string;
   projectId?: string;
   workspaceId?: string;
+  /**
+   * Allow-list of workspaces the caller may see (from `accessibleWorkspaceIds`).
+   * When present it ALWAYS applies: an empty list matches nothing, and a
+   * `workspaceId` outside the list matches nothing. Absent = no workspace limit.
+   */
+  workspaceIds?: string[];
   priority?: TaskPriority;
   dueFrom?: Date;
   dueTo?: Date;
@@ -202,7 +224,14 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
   if (q.assigneeId) where.assigneeId = q.assigneeId;
   if (q.creatorId) where.creatorId = q.creatorId;
   if (q.projectId) where.projectId = q.projectId;
-  if (q.workspaceId) where.workspaceId = q.workspaceId;
+  if (q.workspaceIds !== undefined) {
+    // the allow-list wins: a single workspaceId can only narrow it, never widen it
+    where.workspaceId = {
+      in: q.workspaceId ? q.workspaceIds.filter((id) => id === q.workspaceId) : q.workspaceIds,
+    };
+  } else if (q.workspaceId) {
+    where.workspaceId = q.workspaceId;
+  }
   if (q.priority) where.priority = q.priority;
   if (q.dueFrom || q.dueTo) {
     where.dueDate = {

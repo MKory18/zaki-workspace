@@ -4,6 +4,7 @@ import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, requireUser } from "@/server/auth";
 import type { OrgAccessContext } from "@/server/auth";
 import { canManageOrg } from "@/server/services/orgs";
+import { accessibleWorkspaceIds } from "@/server/services/access";
 import type { ActorContext } from "@/server/services/tasks";
 import { createTask } from "@/server/services/tasks";
 import type { DbClient } from "@/server/db";
@@ -245,6 +246,11 @@ export async function convertIdeaToTask(
   if (!canManageOrg(orgRole) && idea.creatorId !== actor.userId) {
     throw new ForbiddenError("idea.not_owner");
   }
+  // the caller must be able to open the TARGET workspace (the same rule every view
+  // uses); a workspace that does not exist or is closed to them is refused alike,
+  // so the answer never reveals whether an id exists
+  const reachable = await accessibleWorkspaceIds(actor.userId);
+  if (!reachable.includes(target.workspaceId)) throw new ForbiddenError("not_workspace_member");
   // through the single task service so counter/done/labels rules all apply
   const full = await db.idea.findUniqueOrThrow({
     where: { id: idea.id },

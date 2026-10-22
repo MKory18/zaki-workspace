@@ -1,0 +1,147 @@
+import { describe, expect, it } from "vitest";
+import * as searchRoute from "@/app/api/search/route";
+import { call, db, loginAs, logout, makeOrg, makeUser, makeWorkspace } from "./helpers";
+import { joinOrg, joinWorkspace, makeScopedOrg, seedWork } from "./scoping-helpers";
+
+interface SearchBody {
+  tasks: { id: string; key: string; title: string; priority: string; projectId: string; projectName: string }[];
+  projects: { id: string; name: string; workspaceId: string; workspaceName: string }[];
+}
+
+async function search(q: string) {
+  const res = await call(searchRoute.GET, { url: `http://localhost/api/search?q=${encodeURIComponent(q)}` });
+  return { status: res.status, body: res.json as unknown as SearchBody };
+}
+
+describe("search: only work in workspaces the caller can access", () => {
+  it("a plain MEMBER finds the tasks and projects of their own workspace but none of a workspace they are not in", async () => {
+    const f = await makeScopedOrg();
+    await loginAs(f.member.id);
+    const { status, body } = await search(f.token);
+    expect(status).toBe(200);
+    expect(body.tasks.map((t) => t.id)).toEqual([f.inside.task.id]);
+    expect(body.projects.map((p) => p.id)).toEqual([f.inside.project.id]);
+    // and nothing from the other workspace leaks through any field
+    const raw = JSON.stringify(body);
+    expect(raw).not.toContain(f.outside.task.id);
+    expect(raw).not.toContain(f.outside.project.id);
+    expect(raw).not.toContain(f.wsOut.id);
+  });
+
+  it("a plain MEMBER of no workspace at all finds nothing", async () => {
+    const f = await makeScopedOrg();
+    const loner = await makeUser({ orgId: f.org.id, role: "MEMBER" });
+    await loginAs(loner.id);
+    const { status, body } = await search(f.token);
+    expect(status).toBe(200);
+    expect(body).toEqual({ tasks: [], projects: [] });
+  });
+
+  it("an ADMIN finds the work of every workspace in the org", async () => {
+    const f = await makeScopedOrg();
+    await loginAs(f.admin.id);
+    const { body } = await search(f.token);
+    expect(body.tasks.map((t) => t.id).sort()).toEqual([f.inside.task.id, f.outside.task.id].sort());
+    expect(body.projects.map((p) => p.id).sort()).toEqual([f.inside.project.id, f.outside.project.id].sort());
+  });
+
+  it("the OWNER finds the work of every workspace in the org", async () => {
+    const f = await makeScopedOrg();
+    await loginAs(f.owner.id);
+    const { body } = await search(f.token);
+    expect(body.tasks.map((t) => t.id).sort()).toEqual([f.inside.task.id, f.outside.task.id].sort());
+    expect(body.projects.map((p) => p.id).sort()).toEqual([f.inside.project.id, f.outside.project.id].sort());
+  });
+
+  it("a workspace member added later starts finding that workspace's work", async () => {
+    const f = await makeScopedOrg();
+    const other = await makeUser({ orgId: f.org.id, role: "MEMBER" });
+    await loginAs(other.id);
+    expect((await search(f.token)).body.tasks).toEqual([]);
+    await joinWorkspace(other.id, f.wsOut.id);
+    const { body } = await search(f.token);
+    expect(body.tasks.map((t) => t.id)).toEqual([f.outside.task.id]);
+    expect(body.projects.map((p) => p.id)).toEqual([f.outside.project.id]);
+  });
+
+  it("a GUEST finds nothing unless they were put in a workspace, and then only that one", async () => {
+    const f = await makeScopedOrg();
+    await loginAs(f.guest.id);
+    expect((await search(f.token)).body).toEqual({ tasks: [], projects: [] });
+    await joinWorkspace(f.guest.id, f.wsIn.id, "GUEST");
+    const { body } = await search(f.token);
+    expect(body.tasks.map((t) => t.id)).toEqual([f.inside.task.id]);
+    expect(body.projects.map((p) => p.id)).toEqual([f.inside.project.id]);
+  });
+
+  it("never returns another organization's work, even for someone who belongs to both", async () => {
+    const a = await makeScopedOrg();
+    const b = await makeScopedOrg();
+    // a user in both orgs: MEMBER of A inside wsIn only, MEMBER of B inside b.wsOut only
+    const multi = await makeUser({ orgId: a.org.id, role: "MEMBER" });
+    await joinWorkspace(multi.id, a.wsIn.id);
+    await joinOrg(multi.id, b.org.id, "MEMBER");
+    await joinWorkspace(multi.id, b.wsOut.id);
+
+    // a search for A's token must never surface B's work, and vice versa
+    await loginAs(multi.id);
+    const forA = (await search(a.token)).body;
+    expect(forA.tasks.map((t) => t.id)).toEqual([a.inside.task.id]);
+    const forB = (await search(b.token)).body;
+    expect(forB.tasks.map((t) => t.id)).toEqual([b.outside.task.id]);
+    expect(forB.projects.map((p) => p.id)).toEqual([b.outside.project.id]);
+
+    // and a user of only one org cannot find the other org's work at all
+    await loginAs(a.owner.id);
+    expect((await search(b.token)).body).toEqual({ tasks: [], projects: [] });
+  });
+
+  it("an archived task is still left out and the response keeps its shape", async () => {
+    const f = await makeScopedOrg();
+    const extra = await seedWork({
+      orgId: f.org.id,
+      workspaceId: f.wsIn.id,
+      token: f.token,
+      label: "archived",
+      creatorId: f.owner.id,
+    });
+    await db.task.update({ where: { id: extra.task.id }, data: { archived: true } });
+    await loginAs(f.member.id);
+    const { body } = await search(f.token);
+    expect(body.tasks.map((t) => t.id)).toEqual([f.inside.task.id]);
+    const task = body.tasks[0]!;
+    expect(Object.keys(task).sort()).toEqual(["id", "key", "priority", "projectId", "projectName", "title"]);
+    expect(task.projectId).toBe(f.inside.project.id);
+    expect(task.projectName).toBe(f.inside.project.name);
+    const project = body.projects.find((p) => p.id === f.inside.project.id)!;
+    expect(Object.keys(project).sort()).toEqual(["id", "name", "workspaceId", "workspaceName"]);
+    expect(project.workspaceId).toBe(f.wsIn.id);
+    expect(project.workspaceName).toBe(f.wsIn.name);
+  });
+
+  it("keeps its existing contract: 401 anonymous, 403 for someone in no org, empty for a one-letter query", async () => {
+    const f = await makeScopedOrg();
+    logout();
+    expect((await search(f.token)).status).toBe(401);
+
+    const stranger = await makeUser();
+    await loginAs(stranger.id);
+    expect((await search(f.token)).status).toBe(403);
+
+    await loginAs(f.admin.id);
+    const short = await search("a");
+    expect(short.status).toBe(200);
+    expect(short.body).toEqual({ tasks: [], projects: [] });
+  });
+
+  it("work in a same-named workspace of an org the caller does not belong to never shows up", async () => {
+    const f = await makeScopedOrg();
+    const otherOrg = await makeOrg();
+    const intruder = await makeUser({ orgId: otherOrg.id, role: "ADMIN" });
+    const ws = await makeWorkspace(otherOrg.id, [{ userId: intruder.id }], `Out ${f.token}`);
+    await seedWork({ orgId: otherOrg.id, workspaceId: ws.id, token: f.token, label: "theirs", creatorId: intruder.id });
+    await loginAs(f.member.id);
+    const { body } = await search(f.token);
+    expect(body.tasks.map((t) => t.id)).toEqual([f.inside.task.id]);
+  });
+});
