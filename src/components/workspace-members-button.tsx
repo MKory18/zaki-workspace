@@ -41,10 +41,13 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
     enabled: open,
   });
 
+  // A guest gets names only (rows without a role): they see who is in the workspace but cannot manage it.
+  const readOnly = members.isSuccess && members.data.members.every((m) => !m.role);
+
   const directory = useQuery({
     queryKey: ["ws-directory"],
     queryFn: () => apiGet<{ people: DirectoryPerson[] }>("/api/chat/directory"),
-    enabled: open,
+    enabled: open && members.isSuccess && !readOnly,
   });
 
   const manage = useMutation({
@@ -87,7 +90,7 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
                         {t(roleKey === "ADMIN" ? "ws.role_admin" : roleKey === "GUEST" ? "ws.role_guest" : "ws.role_member")}
                       </span>
                     ) : null}
-                    {!isInherited && m.role === "MEMBER" ? (
+                    {!readOnly && !isInherited && m.role === "MEMBER" ? (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -98,7 +101,7 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
                         <Crown className="size-3.5 text-amber-500" />
                       </Button>
                     ) : null}
-                    {!isInherited && m.role === "ADMIN" ? (
+                    {!readOnly && !isInherited && m.role === "ADMIN" ? (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -109,7 +112,7 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
                         <Crown className="size-3.5 text-slate-400" />
                       </Button>
                     ) : null}
-                    {!isInherited ? (
+                    {!readOnly && !isInherited ? (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -126,6 +129,7 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
               })}
               {members.isLoading ? <li className="px-3 py-3 text-xs text-muted">…</li> : null}
             </ul>
+            {readOnly ? null : (
             <div>
               <p className="mb-1 text-xs font-medium text-fg-muted">{t("ws.addMembers")}</p>
               <ul className="max-h-40 divide-y divide-border overflow-y-auto rounded-lg border border-border">
@@ -147,6 +151,7 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
                 ) : null}
               </ul>
             </div>
+            )}
             <div className="flex justify-end">
               <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
                 {t("common.cancel")}
