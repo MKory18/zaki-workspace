@@ -1,12 +1,14 @@
 "use client";
 
+import * as React from "react";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 type ToastKind = "success" | "error" | "info";
 
-interface ToastItem {
+export interface ToastItem {
   id: number;
   kind: ToastKind;
   message: string;
@@ -20,16 +22,30 @@ const ToastCtx = createContext<ToastApi | null>(null);
 
 let seq = 0;
 
-/** App-wide toasts. All mutations should surface results through this. */
+/** How long a toast stays up when the pointer is nowhere near it. */
+export const TOAST_DISMISS_MS = 4000;
+
+/**
+ * App-wide toasts. All mutations should surface results through this.
+ *
+ * Where they appear: at the TOP of the screen on phones, below the notch (safe-area inset) and
+ * below the 56px top bar, so a toast never covers the bottom bar or the bottom of a sheet; in the
+ * bottom corner at the end of the line from the `md` breakpoint (768px). The stack is a polite
+ * live region: `aria-live` is also what keeps it announced while a dialog hides the rest of the
+ * page from screen readers.
+ *
+ * WCAG 2.2.1: the auto-dismiss timer pauses while a toast is hovered or focused, so a slow reader
+ * is never raced by the clock; the timer restarts from the full 4 s when the pointer leaves.
+ *
+ * A tap on a toast must not fall through to the dialog/sheet beneath it: the row carries
+ * `data-zk-toast`, and DialogPanel/SheetPanel ignore interactions from inside it.
+ */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
 
   const toast = useCallback((message: string, kind: ToastKind = "info") => {
     const id = ++seq;
     setItems((prev) => [...prev.slice(-4), { id, kind, message }]);
-    window.setTimeout(() => {
-      setItems((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
   }, []);
 
   const api = useMemo<ToastApi>(() => ({ toast }), [toast]);
@@ -37,7 +53,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={api}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 end-4 z-[70] flex w-80 flex-col gap-2">
+      <div
+        aria-live="polite"
+        className="pointer-events-none fixed end-0 start-0 top-14 z-[70] flex flex-col items-center gap-2 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] md:bottom-4 md:end-4 md:start-auto md:top-auto md:w-80 md:items-stretch md:p-0"
+      >
         {items.map((t) => (
           <ToastRow key={t.id} item={t} onDismiss={() => setItems((p) => p.filter((x) => x.id !== t.id))} />
         ))}
@@ -46,27 +65,42 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function ToastRow({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) {
+export function ToastRow({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) {
+  const { t } = useI18n();
+  const [paused, setPaused] = React.useState(false);
+
+  React.useEffect(() => {
+    if (paused) return; // hover/focus holds the clock still (WCAG 2.2.1)
+    const timer = window.setTimeout(onDismiss, TOAST_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, [paused, onDismiss]);
+
   const icons: Record<ToastKind, ReactNode> = {
-    success: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
-    error: <AlertCircle className="h-4 w-4 text-red-500" />,
-    info: <Info className="h-4 w-4 text-accent" />,
+    success: <CheckCircle2 className="size-4 shrink-0 text-ok" aria-hidden="true" />,
+    error: <AlertCircle className="size-4 shrink-0 text-danger" aria-hidden="true" />,
+    info: <Info className="size-4 shrink-0 text-accent" aria-hidden="true" />,
   };
   return (
     <div
       role="status"
+      data-zk-toast=""
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
       className={cn(
-        "pointer-events-auto flex items-start gap-2 rounded-lg border border-border bg-surface p-3 shadow-md animate-fade-in",
+        "pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-xl border border-border bg-surface-1 ps-3 shadow-md animate-fade-in motion-reduce:animate-none md:max-w-none",
       )}
     >
       {icons[item.kind]}
-      <p className="flex-1 text-xs text-fg">{item.message}</p>
+      <p className="min-w-0 flex-1 py-3 text-sm text-fg">{item.message}</p>
       <button
+        type="button"
         onClick={onDismiss}
-        aria-label="Dismiss"
-        className="rounded p-0.5 text-muted hover:text-fg"
+        aria-label={t("ui.toast_close")}
+        className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted hover:text-fg"
       >
-        <X className="h-3 w-3" />
+        <X className="size-4" aria-hidden="true" />
       </button>
     </div>
   );
