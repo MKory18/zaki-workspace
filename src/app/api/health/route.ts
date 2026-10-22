@@ -19,11 +19,11 @@ export async function GET() {
     await db.$queryRaw`SELECT 1`;
     checks.database = "ok";
   } catch {
-    // stay 200 with degraded status so orchestrators can decide policy
+    // 503 below: a container that cannot reach its database must not report itself healthy
   }
   const allOk = Object.values(checks).every((v) => v === "ok");
   return NextResponse.json(
     { status: allOk ? "ok" : "degraded", checks, time: new Date().toISOString() },
-    { status: allOk ? 200 : 200 },
+    { status: allOk ? 200 : 503 },
   );
 }

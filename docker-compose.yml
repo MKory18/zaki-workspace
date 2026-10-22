@@ -44,7 +44,10 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: postgresql://zaki:${POSTGRES_PASSWORD:-zaki_local}@db:5432/zaki_workspace
-      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      # Required (16+ characters). Not enforced here with `:?` because Compose evaluates that for
+      # EVERY service, which made the very first documented step (`docker compose up db -d`) fail on a
+      # fresh clone. The app refuses to boot without it (src/instrumentation.ts), with a clear message.
+      AUTH_SECRET: ${AUTH_SECRET:-}
       # Optional. Empty = the key for secrets at rest is derived from AUTH_SECRET (the old
       # behaviour). Set it to a separate random value (openssl rand -hex 32) so rotating
       # AUTH_SECRET no longer breaks the stored Telegram / n8n / Google secrets, then run

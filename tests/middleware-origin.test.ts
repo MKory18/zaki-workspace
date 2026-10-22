@@ -78,6 +78,19 @@ describe("middleware", () => {
     expect(v1.headers.get("x-middleware-next")).toBe("1");
   });
 
+  it("the machine-endpoint exemption has a path boundary (a look-alike path is not exempt)", async () => {
+    const evil = { origin: "https://evil.example" };
+    for (const path of ["/api/healthx", "/api/health-check", "/api/v1x/ideas", "/api/integrations/n8n/inbound-evil", "/api/integrations/n8n/inboundx"]) {
+      const res = middleware(req(path, { method: "POST", headers: evil, cookie: true }));
+      expect(res.status, path).toBe(403);
+    }
+    // the real ones, with or without a trailing slash or sub-path
+    for (const path of ["/api/health", "/api/health/", "/api/integrations/n8n/inbound", "/api/integrations/n8n/inbound/", "/api/v1/ideas", "/api/v1"]) {
+      const res = middleware(req(path, { method: "POST", headers: evil }));
+      expect(res.headers.get("x-middleware-next"), path).toBe("1");
+    }
+  });
+
   it("still redirects anonymous page requests to /login", () => {
     const res = middleware(req("/projects"));
     expect(res.status).toBe(307);

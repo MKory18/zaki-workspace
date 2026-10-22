@@ -38,7 +38,7 @@ export class FixedWindowLimiter {
 
   constructor(
     private readonly opts: LimiterOptions,
-    private readonly now: () => number = Date.now,
+    private readonly now: () => number = () => Date.now(),
   ) {}
 
   private live(key: string): Bucket | undefined {
@@ -90,11 +90,40 @@ export class FixedWindowLimiter {
 
 /** The limits themselves, in one place so tests and docs can read them. */
 export const LOGIN_LIMITS = {
-  /** Failed attempts per account (known or not) before it is locked for the window. */
-  perAccount: { limit: 8, windowMs: 10 * 60_000 },
+  /**
+   * Failed attempts for ONE account from ONE address. This is the lock that stops a person
+   * guessing; it follows the pair, so someone hammering an account from their own address
+   * cannot lock the real user out when that user signs in from somewhere else.
+   */
+  perAccountAndIp: { limit: 8, windowMs: 10 * 60_000 },
+  /** Failed attempts for one account from ALL addresses together: caps guessing spread over many addresses. */
+  perAccount: { limit: 30, windowMs: 10 * 60_000 },
   /** All attempts from one address. Generous: an office shares one address. */
   perIp: { limit: 30, windowMs: 10 * 60_000 },
+  /** A short burst from one address (a password check costs ~0.3 s of CPU). */
+  perIpBurst: { limit: 6, windowMs: 10_000 },
 } as const;
+
+/** Password checks running at the same time. bcrypt is CPU-bound; more only starves the server. */
+export const LOGIN_MAX_CONCURRENT_CHECKS = 3;
+
+/** A counting gate: at most `max` holders at once; `tryAcquire` never waits. */
+export class ConcurrencyGate {
+  private active = 0;
+  constructor(private readonly max: number) {}
+
+  /** A release function, or null when the gate is full. The release is idempotent. */
+  tryAcquire(): (() => void) | null {
+    if (this.active >= this.max) return null;
+    this.active += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.active -= 1;
+    };
+  }
+}
 
 export const REGISTER_LIMIT: LimiterOptions = { limit: 10, windowMs: 60 * 60_000 };
 
