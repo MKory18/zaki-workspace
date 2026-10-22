@@ -9,6 +9,15 @@ import { MAX_FILE_BYTES, canManageFile, checksumHex, safeStoredName, sniffMimeTy
 
 export const fileLibrary = process.env.UPLOAD_DIR || join(process.cwd(), ".data", "uploads");
 
+/**
+ * `path` of a row whose bytes are not on disk (yet): `ingest` creates the row first - it needs the
+ * id for the file name - and writes the bytes second. Such a row is never a file: it is not listed,
+ * not counted as a version and not served. Anything that reads `StoredFile` directly must skip it
+ * too (`where: { path: { not: PENDING_PATH } }`).
+ */
+export const PENDING_PATH = "pending";
+const STORED = { path: { not: PENDING_PATH } } as const;
+
 export const PREVIEWABLE = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm", "audio/mpeg", "audio/wav", "audio/ogg", "application/pdf"]);
 export const INLINE_TEXT = new Set(["text/plain", "application/zip"]);
 
@@ -34,13 +43,13 @@ export async function listFiles(orgId: string): Promise<
   }>
 > {
   const heads = await db.storedFile.findMany({
-    where: { orgId, isLatest: true, deletedAt: null },
+    where: { orgId, isLatest: true, deletedAt: null, ...STORED },
     orderBy: { createdAt: "desc" },
     include: { uploader: { select: { name: true } } },
   });
   const counts = await db.storedFile.groupBy({
     by: ["familyId"],
-    where: { orgId },
+    where: { orgId, ...STORED },
     _count: { familyId: true },
   });
   const versionCount = new Map(counts.map((c) => [c.familyId, c._count.familyId]));
@@ -61,23 +70,23 @@ export async function listFiles(orgId: string): Promise<
 
 export async function getFileMeta(orgId: string, id: string) {
   const anchor = await db.storedFile.findFirst({
-    where: { id, orgId, deletedAt: null },
+    where: { id, orgId, deletedAt: null, ...STORED },
     select: { familyId: true, isLatest: true },
   });
   if (!anchor) throw new NotFoundError("files.not_found");
   // meta always describes the family HEAD, whoever asked
   const head = anchor.isLatest
     ? await db.storedFile.findFirst({
-        where: { id, orgId, deletedAt: null },
+        where: { id, orgId, deletedAt: null, ...STORED },
         include: { uploader: { select: { name: true } } },
       })
     : await db.storedFile.findFirst({
-        where: { familyId: anchor.familyId, isLatest: true, deletedAt: null },
+        where: { familyId: anchor.familyId, isLatest: true, deletedAt: null, ...STORED },
         include: { uploader: { select: { name: true } } },
       });
   if (!head) throw new NotFoundError("files.not_found");
   const versions = await db.storedFile.findMany({
-    where: { familyId: head.familyId },
+    where: { familyId: head.familyId, ...STORED },
     orderBy: { version: "desc" },
     select: { id: true, version: true, size: true, createdAt: true, uploader: { select: { name: true } } },
   });
@@ -98,7 +107,7 @@ export async function getFileMeta(orgId: string, id: string) {
 
 /** Raw bytes for the proxy/download endpoints. Permission gate is in the route. */
 export async function readStored(orgId: string, id: string): Promise<{ buffer: Buffer; mimeType: string; name: string }> {
-  const f = await db.storedFile.findFirst({ where: { id, orgId, deletedAt: null } });
+  const f = await db.storedFile.findFirst({ where: { id, orgId, deletedAt: null, ...STORED } });
   if (!f) throw new NotFoundError("files.not_found");
   let buffer: Buffer;
   try {
@@ -133,13 +142,14 @@ export async function ingest(
   const familyId = familyOf ? familyOf.familyId : "";
   const version = familyOf ? familyOf.latestVersion + 1 : 1;
 
+  // The row comes first (its id is part of the file name) and is PENDING until the bytes are on disk.
   const created = await db.storedFile.create({
     data: {
       orgId: ctx.orgId,
       uploaderId: ctx.userId,
       familyId,
       name: display,
-      path: "pending",
+      path: PENDING_PATH,
       mimeType: mime,
       size: input.bytes.length,
       version,
@@ -149,19 +159,32 @@ export async function ingest(
 
   const finalFamilyId = familyId || created.id;
   const path = join(ctx.orgId, `${created.id}_v${version}_${display}`);
-  await fs.mkdir(join(fileLibrary, ctx.orgId), { recursive: true });
-  await fs.writeFile(join(fileLibrary, path), input.bytes);
-
-  const updated = await db.storedFile.update({
-    where: { id: created.id },
-    data: { path, familyId: finalFamilyId },
-    select: { id: true, version: true, mimeType: true },
-  });
-  if (familyOf) {
-    await db.storedFile.updateMany({
-      where: { familyId: finalFamilyId, isLatest: true, id: { not: created.id } },
-      data: { isLatest: false },
+  const target = join(fileLibrary, path);
+  let updated: { id: string; version: number; mimeType: string };
+  try {
+    await fs.mkdir(join(fileLibrary, ctx.orgId), { recursive: true });
+    await fs.writeFile(target, input.bytes);
+    // The row becomes a file, and the previous head steps down, in ONE transaction.
+    updated = await db.$transaction(async (tx) => {
+      const row = await tx.storedFile.update({
+        where: { id: created.id },
+        data: { path, familyId: finalFamilyId },
+        select: { id: true, version: true, mimeType: true },
+      });
+      if (familyOf) {
+        await tx.storedFile.updateMany({
+          where: { familyId: finalFamilyId, isLatest: true, id: { not: created.id } },
+          data: { isLatest: false },
+        });
+      }
+      return row;
     });
+  } catch (err) {
+    // Leave nothing behind. A row without its bytes is listed, then answers 404 on download
+    // (a root-owned volume makes EVERY upload end up here).
+    await fs.rm(target, { force: true }).catch(() => undefined);
+    await db.storedFile.deleteMany({ where: { id: created.id } }).catch(() => undefined);
+    throw err;
   }
 
   await logFile(ctx.orgId, "file.uploaded", {
@@ -177,7 +200,7 @@ export async function ingest(
 
 export async function softDelete(ctx: OrgAccessContext, id: string): Promise<void> {
   const f = await db.storedFile.findFirst({
-    where: { id, orgId: ctx.orgId, deletedAt: null },
+    where: { id, orgId: ctx.orgId, deletedAt: null, ...STORED },
     select: { id: true, uploaderId: true, isLatest: true, familyId: true },
   });
   if (!f) throw new NotFoundError("files.not_found");
@@ -189,7 +212,7 @@ export async function softDelete(ctx: OrgAccessContext, id: string): Promise<voi
     if (f.isLatest) {
       // a head was removed → promote the newest surviving version as the new head
       const heir = await tx.storedFile.findFirst({
-        where: { familyId: f.familyId, deletedAt: null },
+        where: { familyId: f.familyId, deletedAt: null, ...STORED },
         orderBy: { version: "desc" },
         select: { id: true },
       });

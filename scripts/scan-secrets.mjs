@@ -72,6 +72,14 @@ const VENDOR_RULES = [
   { name: "Telegram bot token", re: /\b\d{8,10}:[A-Za-z0-9_-]{35}\b/ },
   { name: "Stripe live key", re: /\b[sr]k_live_[0-9A-Za-z]{16,}/ },
   { name: "npm access token", re: /\bnpm_[A-Za-z0-9]{36}\b/ },
+  // three base64url parts; header and payload both start with eyJ (the base64 of `{"`)
+  { name: "JSON Web Token", re: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/ },
+  // Laravel Sanctum shape `<id>|<40 characters>`: what Coolify's API tokens look like.
+  { name: "Coolify / Sanctum API token", re: /\b\d{1,4}\|[A-Za-z0-9]{36,}\b/ },
+  // A header with its value written out. `value: true` = the captured value must not look fake either
+  // (a template, a reference, a fixture): `Bearer ${token}` and `Bearer $TOKEN` never match at all.
+  { name: "Bearer token", re: /\bBearer\s+([A-Za-z0-9._~+/=-]{20,})/, value: true },
+  { name: "Basic authorization header", re: /\bAuthorization\s*[:=]\s*["'`]?Basic\s+([A-Za-z0-9+/=]{16,})/i, value: true },
 ];
 
 /** A vendor-shaped token that says what it is (the AWS docs' own sample key ends in EXAMPLE). */
@@ -89,14 +97,47 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1", "0.0.0.0"
 // ---------------------------------------------------------------- tier 3
 
 const SECRET_WORDS =
-  "SECRET|TOKEN|PASSWORD|PASSWD|PASSPHRASE|API_?KEY|PRIVATE_?KEY|ACCESS_?KEY|AUTH_?KEY|ENCRYPTION_?KEY|SIGNING_?KEY|CREDENTIALS?";
+  "SECRET_?KEY|SECRET|TOKEN|PASSWORD|PASSWD|PASSPHRASE|API_?KEY|PRIVATE_?KEY|ACCESS_?KEY|AUTH_?KEY|ENCRYPTION_?KEY|SIGNING_?KEY|CREDENTIALS?";
+
+/**
+ * A name starts HERE: not in the middle of a longer run of letters, digits and underscores. Without
+ * this anchor every start position inside one long run (a base64 data URI, a minified bundle) re-reads
+ * the whole run - quadratic: 50 KB took 8 seconds and 200 KB never finished, in a CI gate.
+ */
+const NAME_START = "(?<![A-Za-z0-9_])";
+
+/**
+ * Shape guesses read lines up to this long. A longer line is a minified bundle or a data URI, not an
+ * assignment somebody typed; the vendor-shaped rules (linear, anchored on a literal prefix) still read it.
+ */
+const MAX_SHAPE_LINE = 4000;
+
+/**
+ * `pass` and `pwd`, as a name. They need care the long words do not: `bypass`, `compass` and
+ * `passport` are not passwords. So the name must START at pass/pwd (or follow a `_` or `-`, or sit
+ * at the end of a camelCase name) - `pass`, `DB_PASS`, `db-pwd`, `dbPass`, `adminPwd`. Case
+ * sensitive on purpose: the camelCase half depends on it, and so does telling `Pass` from `pass`.
+ */
+const PASS_NAME = String.raw`(?<![A-Za-z0-9])(?:[A-Za-z0-9]*[_-])?(?:pass|pwd|PASS|PWD)|(?<![A-Za-z0-9])[a-z][a-z0-9]*(?:Pass|Pwd)`;
+const QUOTED_PASS = new RegExp(String.raw`(?:${PASS_NAME})["'\`]?\s*(?::|=>|=)\s*["'\`]([^"'\`\s]{8,})["'\`]`);
+const UNQUOTED_PASS = new RegExp(
+  String.raw`^\s*(?:-\s*|(?:ENV|ARG|export)\s+)?(?:${PASS_NAME})\s*[:=]\s*(?!["'\`$<#\s])([^\s#]{8,})\s*(?:#.*)?$`,
+);
+
+/**
+ * A login and its password written as prose: `login: a@b / Gh7Kq9Zx2Lm4`, ``Demo: `a@b` / `Gh7...` ``,
+ * `| a@b.co | Gh7... |`. This is how the demo password reached the README. The separator needs spaces
+ * around a slash (so `user@host/path123` and git remotes are not it), and the second half may not
+ * contain a slash or an `@` (so a list of addresses is not it).
+ */
+const PROSE_PAIR = /(?<![\w.+@-])[\w.+-]+@[\w.-]+[`'"]?(?:\s+\/\s+|\s*\|\s*)[`'"]?([^\s`'"|)\]/@,]{6,})/;
 
 /**
  * `name = "value"` / `name: 'value'` / `"name": "value"` in source, config or docs,
  * where the NAME ends at a secret word - so `tokenUrl` and `SECRET_NAME` are not it.
  */
 const QUOTED_ASSIGNMENT = new RegExp(
-  `[A-Za-z0-9_]*(?:${SECRET_WORDS})["'\`]?\\s*(?::|=>|=)\\s*["'\`]([^"'\`\\s]{8,})["'\`]`,
+  `${NAME_START}[A-Za-z0-9_]*(?:${SECRET_WORDS})["'\`]?\\s*(?::|=>|=)\\s*["'\`]([^"'\`\\s]{8,})["'\`]`,
   "i",
 );
 
@@ -105,7 +146,7 @@ const QUOTED_ASSIGNMENT = new RegExp(
  * but a hard-coded fallback beside it is a secret in the repository all the same.
  */
 const FALLBACK_LITERAL = new RegExp(
-  `[A-Za-z0-9_]*(?:${SECRET_WORDS})["'\`]?\\s*(?::|=)[^\\n]*?(?:\\?\\?|\\|\\|)\\s*["'\`]([^"'\`\\s]{8,})["'\`]`,
+  `${NAME_START}[A-Za-z0-9_]*(?:${SECRET_WORDS})["'\`]?\\s*(?::|=)[^\\n]*?(?:\\?\\?|\\|\\|)\\s*["'\`]([^"'\`\\s]{8,})["'\`]`,
   "i",
 );
 
@@ -129,6 +170,8 @@ const FAKE_VALUE =
 const IS_ENV_LIKE =
   /(^|\/)\.env(\.[^/]*)?$|\.(env|ini|conf|cfg|properties|toml|sh|ya?ml)$|(^|\/)(docker-)?compose[^/]*\.ya?ml$|(^|\/)Dockerfile[^/]*$/i;
 const IS_TEST = /(^|\/)(tests?|__tests__|fixtures?)\/|\.(test|spec)\.[cm]?[jt]sx?$/i;
+/** Where prose lives, and credentials get written as sentences. */
+const IS_DOC = /\.(md|mdx|markdown|txt|rst|adoc)$/i;
 /** `.env`, `.env.production`, `.env.local` ... but not `.env.example` / `.env.local.sample` and friends. */
 const IS_ENV_FILE = /(^|\/)\.env(\.[^/]+)?$/i;
 const IS_ENV_TEMPLATE = /\.(example|sample|template|dist)$/i;
@@ -210,18 +253,19 @@ export function scanText(text, file) {
   // Shape guesses are noise in tests and lock files; the vendor-shaped rules still run there.
   const shapeGuesses = !IS_TEST.test(unix) && !IS_LOCKFILE.test(unix);
   const isEnvLike = IS_ENV_LIKE.test(unix);
+  const isDoc = IS_DOC.test(unix);
   const lines = text.split(/\r?\n/);
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     if (!line || line.includes("scan-secrets:ignore")) continue;
-    const hit = scanLine(line, { shapeGuesses, isEnvLike });
+    const hit = scanLine(line, { shapeGuesses, isEnvLike, isDoc });
     if (hit) findings.push({ rule: hit, line: i + 1 });
   }
   return findings;
 }
 
-function scanLine(line, { shapeGuesses, isEnvLike }) {
+function scanLine(line, { shapeGuesses, isEnvLike, isDoc }) {
   // Tier 1 - the demo password, wherever it is.
   for (const pw of KNOWN_DEMO_PASSWORDS) {
     if (line.includes(pw)) return "Known demo password";
@@ -230,7 +274,9 @@ function scanLine(line, { shapeGuesses, isEnvLike }) {
   // Tier 1 - vendor-shaped values.
   for (const rule of VENDOR_RULES) {
     const m = rule.re.exec(line);
-    if (m && !OBVIOUSLY_FAKE_TOKEN.test(m[0])) return rule.name;
+    if (!m || OBVIOUSLY_FAKE_TOKEN.test(m[0])) continue;
+    if (rule.value && looksFake(m[1] ?? "")) continue;
+    return rule.name;
   }
 
   // Tier 1 - a connection string that carries its own password.
@@ -239,7 +285,7 @@ function scanLine(line, { shapeGuesses, isEnvLike }) {
     const [, , password, host] = cs;
     if (
       password &&
-      password.length >= 6 && // a 1-5 character "password" is a placeholder, not a credential
+      password.length >= 3 && // `u:p@host` is a placeholder; `root:root@host` and `app:abc@host` are credentials
       host &&
       !isLocalHostName(host) &&
       !looksFake(password) &&
@@ -251,7 +297,16 @@ function scanLine(line, { shapeGuesses, isEnvLike }) {
   }
 
   // Tier 3 - shape guesses. Not in tests.
-  if (!shapeGuesses) return null;
+  if (!shapeGuesses || line.length > MAX_SHAPE_LINE) return null;
+
+  // A login and its password written as a sentence, in a document.
+  if (isDoc) {
+    const pair = PROSE_PAIR.exec(line);
+    const token = pair?.[1];
+    if (token && !looksFake(token) && !PLACEHOLDER_CREDENTIAL.test(token) && (looksLikePassword(token) || looksGenerated(token))) {
+      return "Login and password in prose";
+    }
+  }
 
   // A hard-coded fallback next to an environment read: `process.env.X ?? "value"`.
   const fallback = FALLBACK_LITERAL.exec(line);
@@ -265,20 +320,22 @@ function scanLine(line, { shapeGuesses, isEnvLike }) {
   // Not on lines that merely read a secret.
   if (LINE_READS_SECRET.test(line)) return null;
 
-  const quoted = QUOTED_ASSIGNMENT.exec(line);
-  if (quoted) {
-    const value = quoted[1];
-    if (value && !looksFake(value)) {
+  for (const re of [QUOTED_ASSIGNMENT, QUOTED_PASS]) {
+    const value = re.exec(line)?.[1];
+    if (value && !looksFake(value) && !PLACEHOLDER_CREDENTIAL.test(value)) {
       if (looksGenerated(value)) return "High-entropy secret assignment";
       if (looksLikePassword(value)) return "Hard-coded secret literal";
     }
   }
 
-  if (isEnvLike) {
-    const bare = UNQUOTED_ASSIGNMENT.exec(line);
-    if (bare) {
-      const value = bare[1];
-      if (value && !looksFake(value) && (looksGenerated(value) || looksLikePassword(value) || value.length >= 12)) {
+  // `NAME=value` and `NAME: value` are the grammar of env-like files. In a document they are the
+  // grammar of a code block - where a real value typed in to show how it works is the likeliest accident.
+  if (isEnvLike || isDoc) {
+    for (const re of [UNQUOTED_ASSIGNMENT, UNQUOTED_PASS]) {
+      const value = re.exec(line)?.[1];
+      if (!value || looksFake(value) || PLACEHOLDER_CREDENTIAL.test(value)) continue;
+      // A long unexplained word in a config file is suspect; in prose it is just a word.
+      if (looksGenerated(value) || looksLikePassword(value) || (isEnvLike && value.length >= 12)) {
         return "Unquoted secret assignment";
       }
     }

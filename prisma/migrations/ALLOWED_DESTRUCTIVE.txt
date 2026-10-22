@@ -1,7 +1,10 @@
-# Migration folders exempt from the "no destructive SQL" rule of
-# scripts/lint-migrations.mjs (DROP TABLE / COLUMN / TYPE, TRUNCATE, DELETE FROM,
-# ALTER COLUMN ... TYPE). One folder name per line.
+# Migration folders exempt from the review rules of scripts/lint-migrations.mjs. One folder name per line.
 #
-# Empty today, and it should stay that way: migrations are additive only. A line
-# here is a decision for the owner, taken before the migration is merged and
-# reviewed in the pull request like any other change.
+# Covers BOTH tiers: the destructive statements (DROP TABLE / COLUMN / TYPE, TRUNCATE, DELETE FROM,
+# ALTER COLUMN ... TYPE) and the review tier (DROP CONSTRAINT / INDEX / TRIGGER / FUNCTION / VIEW /
+# SEQUENCE / EXTENSION, RENAME, ADD COLUMN ... NOT NULL without a DEFAULT, SET NOT NULL, UPDATE without
+# WHERE, a unique index on an existing table, CREATE EXTENSION). Each lint message says which rule a
+# folder tripped.
+#
+# Empty today, and it should stay that way: migrations are additive only. A line here is a decision for
+# the owner, taken before the migration is merged and reviewed in the pull request like any other change.

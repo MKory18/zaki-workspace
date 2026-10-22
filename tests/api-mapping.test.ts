@@ -56,3 +56,15 @@ describe("api.withApi", () => {
     expect(res.status).toBe(422);
   });
 });
+
+describe("withApi and Next's build-time dynamic-usage signal", () => {
+  it("rethrows the DYNAMIC_SERVER_USAGE error instead of turning it into a logged 500", async () => {
+    const signal = Object.assign(new Error("Dynamic server usage: used `cookies`"), { digest: "DYNAMIC_SERVER_USAGE" });
+    await expect(withApi(async () => { throw signal; })).rejects.toBe(signal);
+  });
+
+  it("still maps ordinary unexpected errors to a 500 without details", async () => {
+    const res = await withApi(async () => { throw new Error("boom"); });
+    expect(res.status).toBe(500);
+  });
+});

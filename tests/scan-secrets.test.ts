@@ -23,7 +23,8 @@ function scan(files: Record<string, string>): { status: number | null; stdout: s
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, content, "utf8");
     }
-    const r = spawnSync(process.execPath, [SCRIPT, dir], { encoding: "utf8" });
+    // A scan that does not finish is a failure of its own, not a hung test run.
+    const r = spawnSync(process.execPath, [SCRIPT, dir], { encoding: "utf8", timeout: 20_000, killSignal: "SIGKILL" });
     return { status: r.status, stdout: r.stdout, stderr: r.stderr };
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -41,7 +42,14 @@ const vendorSecrets: Array<{ rule: string; value: string }> = [
   { rule: "Slack token", value: "xoxb-" + "123456789012-abcdefghijklmnop" },
   { rule: "Telegram bot token", value: "123456789:" + "AAH8x3Kq9Z0aBcDeFgHiJkLmNoPqRsTuVwX" },
   { rule: "Known demo password", value: DEMO_PASSWORD },
+  // a JWT is three base64url parts: header and payload both start with eyJ (the base64 of `{"`)
+  { rule: "JSON Web Token", value: ["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiJ1c2VyIiwiaWF0IjoxfQ", "c2lnbmF0dXJlLXZhbHVl"].join(".") },
+  { rule: "Bearer token", value: "Authorization: Bearer " + REAL_LOOKING },
+  // Laravel Sanctum shape (`<id>|<40 characters>`): what Coolify's API tokens look like
+  { rule: "Coolify / Sanctum API token", value: "1|" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0" },
 ];
+
+const PROSE_PASSWORD = "Gh7Kq9Zx2Lm4"; // twelve characters, letters and digits, nothing fake about it
 
 describe("scan-secrets: what it catches", () => {
   it.each(vendorSecrets)("catches $rule, names file:line and never prints the value", ({ rule, value }) => {
@@ -122,6 +130,89 @@ describe("scan-secrets: what it catches", () => {
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("Connection string with credentials at src/db.ts:1");
     expect(r.stderr).not.toContain("s3cr3tValue99");
+  });
+
+  describe("a login and its password written as prose (the way the demo one reached the README)", () => {
+    it.each([
+      ["a plain pair", `login: a@b / ${PROSE_PASSWORD}`],
+      ["backticks around both", `Demo login: \`someone@zaki.local\` / \`${PROSE_PASSWORD}\``],
+      ["quotes", `Sign in as "admin@zaki.local" / "${PROSE_PASSWORD}" after the seed.`],
+      ["a table row", `| a@b.co | ${PROSE_PASSWORD} |`],
+      ["a bar instead of a slash", `credentials: a@b.co | ${PROSE_PASSWORD}`],
+    ])("catches %s in a document, names file:line, never prints it", (_what, line) => {
+      const r = scan({ "README.md": `# App\n\n${line}\n` });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain("Login and password in prose at README.md:3");
+      expect(r.stderr).not.toContain(PROSE_PASSWORD);
+      expect(r.stdout).not.toContain(PROSE_PASSWORD);
+    });
+
+    it("also in a .txt or .rst note", () => {
+      expect(scan({ "NOTES.txt": `login: a@b / ${PROSE_PASSWORD}\n` }).status).toBe(1);
+      expect(scan({ "docs/setup.rst": `login: a@b / ${PROSE_PASSWORD}\n` }).status).toBe(1);
+    });
+  });
+
+  it("catches a Coolify token typed into a Markdown file, in a code block", () => {
+    const token = "1|" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0";
+    const r = scan({ "docs/deploy.md": "```sh\nCOOLIFY_TOKEN=" + token + "\n```\n" });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("Coolify / Sanctum API token at docs/deploy.md:2");
+    expect(r.stderr).not.toContain(token);
+  });
+
+  it("catches an unquoted secret in a Markdown code block even when it is not a vendor shape", () => {
+    const r = scan({ "docs/setup.md": `Run it like this:\n\n    export SESSION_SECRET=${REAL_LOOKING}\n` });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("Unquoted secret assignment at docs/setup.md:3");
+  });
+
+  it("catches a Basic authorization header", () => {
+    const basic = "dXNlcjpwYXNzd29yZDEyMzQ1Njc4";
+    const r = scan({ "docs/curl.md": `curl -H "Authorization: Basic ${basic}" https://api.company-hosting.net/\n` });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("Basic authorization header at docs/curl.md:1");
+  });
+
+  describe("variable names the first version did not know", () => {
+    it.each([
+      ["pass", `const pass = "${PROSE_PASSWORD}";`, "Hard-coded secret literal"],
+      ["pwd", `const pwd = "${PROSE_PASSWORD}";`, "Hard-coded secret literal"],
+      ["dbPass (camel case)", `const dbPass = "${PROSE_PASSWORD}";`, "Hard-coded secret literal"],
+      ["DB_PASS", `const DB_PASS = "${PROSE_PASSWORD}";`, "Hard-coded secret literal"],
+      ["adminPwd: in an object", `export const admin = { adminPwd: "${PROSE_PASSWORD}" };`, "Hard-coded secret literal"],
+      ["secretKey", `export const secretKey = "${REAL_LOOKING}";`, "High-entropy secret assignment"],
+      ["SECRET_KEY", `export const SECRET_KEY = "${REAL_LOOKING}";`, "High-entropy secret assignment"],
+      ["a JSON key", `{ "secretKey": "${REAL_LOOKING}" }`, "High-entropy secret assignment"],
+    ])("catches %s", (_what, line, rule) => {
+      const r = scan({ "src/keys.ts": `${line}\n` });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain(`${rule} at src/keys.ts:1`);
+      expect(r.stderr).not.toContain(PROSE_PASSWORD);
+      expect(r.stderr).not.toContain(REAL_LOOKING);
+    });
+
+    it("catches DB_PASS=value and DB_PWD: value in env-like files", () => {
+      expect(scan({ ".env.example": `DB_PASS=${PROSE_PASSWORD}\n` }).stderr).toContain("Unquoted secret assignment at .env.example:1");
+      expect(scan({ "deploy/stack.yml": `    DB_PWD: ${PROSE_PASSWORD}\n` }).stderr).toContain("Unquoted secret assignment at deploy/stack.yml:1");
+      expect(scan({ Dockerfile: `ENV DB_PASS=${PROSE_PASSWORD}\n` }).stderr).toContain("Unquoted secret assignment at Dockerfile:1");
+    });
+  });
+
+  describe("a password inside a connection string, however short and whatever it is made of", () => {
+    it.each([
+      ["five letters, no digit", "root", "root"],
+      ["a username used as the password", "admin", "admin"],
+      ["seven characters with a digit", "app", "hunter2"],
+      ["a long one without a digit", "app", "correcthorse"],
+      ["three characters", "app", "abc"],
+    ])("%s", (_what, user, password) => {
+      const url = `postgres://${user}:` + password + "@pg.prod-hosting.net:5432/app";
+      const r = scan({ "src/db.ts": `const url = "${url}";\n` });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain("Connection string with credentials at src/db.ts:1");
+      expect(r.stdout).not.toContain(password);
+    });
   });
 
   it("reads files with a UTF-8 byte-order mark and CRLF line endings", () => {
@@ -244,6 +335,78 @@ describe("scan-secrets: what it leaves alone", () => {
     expect(r.status).toBe(0);
   });
 
+  it("passes bearer tokens that are templates, references or fixtures", () => {
+    const r = scan({
+      "src/api.ts": [
+        "const header = `Bearer ${token}`;",
+        'const other = "Bearer " + token;',
+        'headers: { Authorization: "Bearer test-token-abcdefghijklmnop" },',
+        'headers: { Authorization: "Bearer " + "x".repeat(40) },',
+        "",
+      ].join("\n"),
+      "docs/curl.md": [
+        'curl -H "Authorization: Bearer $TOKEN" https://x.company-hosting.net/',
+        'curl -H "Authorization: Bearer <your token>" https://x.company-hosting.net/',
+        'curl -H "Authorization: Bearer YOUR_TOKEN_HERE_1234567890abcdef" https://x.company-hosting.net/',
+        "",
+      ].join("\n"),
+    });
+    expect(r.status).toBe(0);
+  });
+
+  it("passes JWT-shaped values that say they are fake", () => {
+    const fake = ["eyJ" + "xxxxxxxxxxxx", "eyJ" + "xxxxxxxxxxxx", "xxxx"].join(".");
+    expect(scan({ "docs/jwt.md": `Example: ${fake}\n` }).status).toBe(0);
+  });
+
+  it("passes names that only END in the letters p-a-s-s, and values that are not secrets", () => {
+    const r = scan({
+      "src/names.ts": [
+        'const bypass = "something123456";',
+        'const compass = "abcdefg12345";',
+        'const passport = "ABCD1234efgh5678";',
+        'const pwd = "/app";',
+        'const pass = "p";',
+        'const pass2 = "x";',
+        'const secretKeyName = "SESSION_SECRET";',
+        "export const secretKey = process.env.SECRET_KEY ?? '';",
+        "",
+      ].join("\n"),
+    });
+    expect(r.status).toBe(0);
+  });
+
+  it("passes prose that names an address and a word, but no password", () => {
+    const r = scan({
+      "README.md": [
+        "Contact: support@zaki.local / replies within a day.",
+        "| Email | Password |",
+        "login: a@b.co / hunter",
+        "See a@b.co / README for details.",
+        "login: a@b / test-password-123",
+        "",
+      ].join("\n"),
+    });
+    expect(r.status).toBe(0);
+  });
+
+  it("passes connection strings with placeholder passwords, and to this machine", () => {
+    const r = scan({
+      "docs/db.md": [
+        "postgres://user:password@pg.prod-hosting.net:5432/app",
+        "postgres://app:secret@pg.prod-hosting.net/app",
+        "postgres://app:changeme@pg.prod-hosting.net/app",
+        "postgres://app:<password>@pg.prod-hosting.net/app",
+        "postgres://app:${DB_PASSWORD}@pg.prod-hosting.net/app",
+        "postgres://root:root@localhost:5432/app",
+        "postgres://app:hunter2@127.0.0.1/app",
+        "postgres://app:hunter2@db:5432/app",
+        "",
+      ].join("\n"),
+    });
+    expect(r.status).toBe(0);
+  });
+
   it("passes the AWS documentation's own sample key (it says EXAMPLE)", () => {
     const r = scan({ "docs/aws.md": `The docs use ${"AKIAIOSFODNN7" + "EXAMPLE"} as a sample.\n` });
     expect(r.status).toBe(0);
@@ -280,6 +443,38 @@ describe("scan-secrets: what it leaves alone", () => {
     });
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("1 files");
+  });
+});
+
+describe("scan-secrets: a long line cannot stall the scan", () => {
+  // The first version of the name rules had no anchor, so on one long run of letters and digits (a data URI
+  // in a stylesheet, a minified bundle) every start position re-read the whole run: 50 KB took 8 seconds
+  // and 200 KB did not finish. The scan is a gate in CI, so a committed blob must not be able to hang it.
+  it.each([
+    ["a 300 KB base64 run in a stylesheet", ".x{background:url(data:font/woff2;base64," + "aB3xK9".repeat(50_000) + ")}\n", "assets/font.css"],
+    ["a 300 KB base64 run on its own line in a document", "aB3xK9".repeat(50_000) + "\n", "docs/blob.md"],
+    ["a 400 KB run of letters and underscores", "a_".repeat(200_000) + "\n", "src/bundle.js"],
+    ["a 560 KB minified line full of secret-looking names", "token=1;secret=2;password=3;pass=4;".repeat(16_000) + "\n", "src/min.js"],
+    ["a 300 KB run that looks like the start of an address", "user.name+tag".repeat(25_000) + "\n", "docs/addresses.md"],
+  ])("%s is read in seconds, not minutes", (_what, content, file) => {
+    const started = Date.now();
+    const r = scan({ [file]: content });
+    expect(r.status, "the scan must finish (a timeout gives null)").toBe(0);
+    expect(Date.now() - started).toBeLessThan(15_000);
+  });
+
+  it("still finds a secret on a long line that is not a blob (under the limit for shape guesses)", () => {
+    const line = "x".repeat(1500) + ` const authSecret = "${REAL_LOOKING}";`;
+    const r = scan({ "src/long.ts": `${line}\n` });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("High-entropy secret assignment at src/long.ts:1");
+  });
+
+  it("a vendor-shaped secret is found even in a line far over that limit", () => {
+    const line = "x".repeat(60_000) + " " + "AKIA" + "QWERTYUIOPASDFGH" + " " + "y".repeat(60_000);
+    const r = scan({ "src/blob.js": `${line}\n` });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("AWS access key id at src/blob.js:1");
   });
 });
 

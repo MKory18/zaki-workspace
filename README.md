@@ -69,8 +69,9 @@ database.
 | -------- | -------- | ------- |
 | `DATABASE_URL` | yes | PostgreSQL connection string |
 | `AUTH_SECRET` | yes | Signs session cookies (16+ characters; use `openssl rand -hex 32`) |
-| `APP_URL` | yes in production | Public URL of the app (OAuth redirects, links) |
-| `ENCRYPTION_KEY` | no | Key for secrets stored in the database (Telegram, n8n, Google). Empty = derived from `AUTH_SECRET`, the old behaviour. Set a separate random value (`openssl rand -hex 32`) so rotating `AUTH_SECRET` does not break the stored secrets, then run `scripts/reencrypt-secrets.ts` once |
+| `APP_URL` | yes in production | The public URL of the app, a full `https://` address (`https://workspace.zakiai.io`). Every link, redirect and the Google OAuth redirect URI is built from it, not from the request. Blank falls back to `http://localhost:3000` and the container logs a `boot.app_url_missing` warning |
+| `ENCRYPTION_KEY` | no | Key for secrets stored in the database (Telegram, n8n, Google). Empty = derived from `AUTH_SECRET`, the old behaviour (production logs a `boot.encryption_key_missing` warning). Set a separate random value (`openssl rand -hex 32`) so rotating `AUTH_SECRET` does not break the stored secrets, then run `scripts/reencrypt-secrets.ts` once |
+| `TRUSTED_PROXY_HOPS` | no | How many reverse proxies sit in front of the app: a whole number from 1 to 5, default **1** (Traefik / Coolify alone). It decides which `X-Forwarded-For` entry the sign-in limiter counts as the caller's address: the app counts that many entries from the **right**, so a visitor cannot choose it by sending the header. **If a CDN (Cloudflare, ...) sits in front of Traefik, set it to 2** - otherwise every user shares the proxy's address and the whole company shares one sign-in budget. Never set it higher than the real number of proxies: the extra step lands on an entry the visitor wrote, and the limit can be dodged |
 | `UPLOAD_DIR` | no | Folder where uploaded files are written. Default `.data/uploads` in the working directory; the Docker image sets `/app/storage/uploads`, which must be a persistent volume |
 | `SESSION_TTL_HOURS` | no | Session lifetime, default 168 (one week) |
 | `LOG_LEVEL` | no | `debug`, `info` (default), `warn` or `error` |
@@ -123,7 +124,9 @@ that image or its webhook is enabled (see the comments in `image.yml`).
   on port 3000. Put your reverse proxy (Traefik, Caddy, Coolify) in front of it.
 - Migrations are additive only and a migration folder that was ever applied is never renamed
   (`prisma/migrations/RELEASED.txt`, `docs/DEPLOYMENT-INCIDENT-2026-10-19.md`).
-- Required environment: `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`; optional `ENCRYPTION_KEY`.
+- Required environment: `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`; optional `ENCRYPTION_KEY` and
+  `TRUSTED_PROXY_HOPS` (set it to 2 if a CDN sits in front of the proxy - see the table above).
+  An invalid value stops the container at boot with the name of the variable, never its value.
 - **Uploads:** mount a persistent volume at `/app/storage/uploads` (the image sets
   `UPLOAD_DIR` to that path and creates it for the runtime user). Without a volume, uploaded
   files disappear on every redeploy. If you mount a host folder instead of a named volume,
@@ -139,22 +142,30 @@ docker compose up -d app worker
 ```
 
 - Database persists in `db_data`; uploads in the `uploads` volume.
+- `db` and `redis` are published on `127.0.0.1` only (ports 5433 and 6380); the app is on 3000.
 - The `redis` service is not used by the application yet.
+- The app refuses to start without `AUTH_SECRET` (16+ characters); compose does not demand it
+  just to start the database.
 - Back up: `docker compose exec db pg_dump -U zaki zaki_workspace > backup.sql`
 - Restore: `docker compose exec -T db psql -U zaki zaki_workspace < backup.sql`
-- ⚠️ `db` and `redis` publish their ports (5433, 6380) on every network interface, and `db`
-  falls back to a well-known default password when `POSTGRES_PASSWORD` is unset.
-  🔧 On a server, set `POSTGRES_PASSWORD` and put a firewall rule (or a `127.0.0.1:` prefix on
-  the port mapping) in front of them.
+- ⚠️ `db` falls back to a well-known default password when `POSTGRES_PASSWORD` is unset.
+  🔧 Fine on a laptop (the port is loopback-only); on a server set `POSTGRES_PASSWORD` in `.env`.
 
 ## Security notes
 
 - Passwords are hashed with bcrypt (cost 12); sessions are signed JWTs in httpOnly cookies.
-- Every API route validates input with Zod and resolves the caller server-side. Some of the
-  authorization rules are known to be too loose or not yet enforced everywhere
-  (workspace membership, list scoping, session revocation, open self-registration) — they are
-  listed with their status in `docs/PHASE0-AUDIT.md`. Earlier audit documents in `docs/`
-  carry a warning banner where they claim more than the code does.
+- Every API route validates input with Zod and resolves the caller server-side. A few rules
+  are known to be too loose and wait for Phase 1 (`requireWorkspace` lets any organisation
+  member through when there is no workspace row, sessions cannot be revoked, registration is
+  still open) — they are listed with their status in `docs/PHASE0-AUDIT.md`. Earlier audit
+  documents in `docs/` carry a warning banner where they claim more than the code does.
+- Signing in is rate limited and answers 429 with `Retry-After`: per account **and** address
+  (8 failed attempts in 10 minutes), a larger cap per account across all addresses, a cap per
+  address, a short-burst cap per address, and at most three password checks at the same time.
+  Attempts are counted before the check, so a burst of guesses cannot all slip through. The
+  state lives in the app process (one container). Which address counts depends on
+  `TRUSTED_PROXY_HOPS` (above). API writes whose `Origin` is not this app are refused by the
+  middleware (machine endpoints with their own signature are exempt).
 - Secrets live in the environment only. The health endpoint reports component status without
   details. The repository is public: `npm run scan:secrets` runs in CI and fails the build on
   anything that looks like a credential.

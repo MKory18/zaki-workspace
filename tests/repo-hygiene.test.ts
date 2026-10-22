@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -87,8 +87,50 @@ describe("dead files stay deleted", () => {
   });
 });
 
+describe("every environment variable the code reads is documented", () => {
+  /** Provided by the platform, not configuration. */
+  const PLATFORM = new Set(["NODE_ENV", "NEXT_RUNTIME"]);
+
+  function walkSources(dir: string, out: string[] = []): string[] {
+    for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) walkSources(rel, out);
+      else if (/\.(ts|tsx|mjs)$/.test(entry.name) && !/\.d\.mts$/.test(entry.name)) out.push(rel);
+    }
+    return out;
+  }
+
+  /** `process.env.NAME` / `process.env["NAME"]` in the application, the worker and the scripts, plus the keys of the env schema. */
+  function variablesRead(): string[] {
+    const names = new Set<string>();
+    for (const file of ["src", "worker", "scripts", "prisma"].flatMap((d) => walkSources(d))) {
+      const text = readFileSync(join(ROOT, file), "utf8");
+      for (const m of text.matchAll(/process\.env(?:\.([A-Z][A-Z0-9_]+)|\[\s*["']([A-Z][A-Z0-9_]+)["']\s*\])/g)) names.add((m[1] ?? m[2]) as string);
+    }
+    const schema = readFileSync(join(ROOT, "src", "server", "env.ts"), "utf8");
+    for (const m of schema.matchAll(/^ {2}([A-Z][A-Z0-9_]+):/gm)) names.add(m[1] as string);
+    return [...names].filter((n) => !PLATFORM.has(n)).sort();
+  }
+
+  it("finds the variables it is supposed to find (so the checks below are not vacuous)", () => {
+    expect(variablesRead()).toEqual(expect.arrayContaining(["DATABASE_URL", "AUTH_SECRET", "ENCRYPTION_KEY", "UPLOAD_DIR", "TRUSTED_PROXY_HOPS"]));
+  });
+
+  it(".env.example mentions each one (commented out when it is optional)", () => {
+    const example = readFileSync(join(ROOT, ".env.example"), "utf8");
+    const missing = variablesRead().filter((name) => !new RegExp(`^#?\\s*${name}=`, "m").test(example));
+    expect(missing, "add these to .env.example").toEqual([]);
+  });
+
+  it("the README's environment table lists each one", () => {
+    const readme = readFileSync(join(ROOT, "README.md"), "utf8");
+    const missing = variablesRead().filter((name) => !readme.includes(`\`${name}\``));
+    expect(missing, "add these to the table in README.md").toEqual([]);
+  });
+});
+
 describe("documents that claim more than the code does say so", () => {
-  const audited = ["ENGINEERING_PROGRESS.md", "SECURITY_AUDIT.md", "DATABASE_AUDIT.md", "PHASE1-REPORT.md"];
+  const audited = ["ENGINEERING_PROGRESS.md", "SECURITY_AUDIT.md", "DATABASE_AUDIT.md", "PHASE1-REPORT.md", "PROJECT-FULL-REPORT.md"];
 
   it.each(audited)("docs/%s opens with the warning banner and points at PHASE0-AUDIT.md", (name) => {
     const head = readFileSync(join(ROOT, "docs", name), "utf8").slice(0, 400);

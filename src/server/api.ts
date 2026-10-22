@@ -43,6 +43,9 @@ export function apiError(
 /** Central handler: consistent shapes, no stack traces in prod responses. */
 export function withApi(fn: () => Promise<NextResponse>): Promise<NextResponse> {
   return fn().catch((err) => {
+    // Next signals "this route uses cookies/headers, render it per request" by THROWING while it
+    // builds; swallowing that turns it into a logged 500 at build time. Let it through untouched.
+    if (typeof err === "object" && err !== null && (err as { digest?: unknown }).digest === "DYNAMIC_SERVER_USAGE") throw err;
     if (err instanceof RateLimitedError) {
       return apiError("rate_limited", err.message, undefined, { "retry-after": String(err.retryAfterSec) });
     }

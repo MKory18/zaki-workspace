@@ -145,15 +145,29 @@ Read `docs/DEPLOYMENT-INCIDENT-2026-10-19.md`. A migration that depended on a ta
 by a *later* migration failed on a fresh database, and a folder was renamed to repair it.
 `scripts/lint-migrations.mjs` (in `npm test` and CI) now enforces these:
 
-- **Additive only.** No `DROP TABLE` / `DROP COLUMN` / `DROP TYPE`, no `TRUNCATE`, no
-  `DELETE FROM`, no `ALTER COLUMN … TYPE`. An exception is a folder named in
-  `prisma/migrations/ALLOWED_DESTRUCTIVE.txt` — empty, and a decision for the owner.
+- **Additive only.** The linter has two tiers; the owner's way out of either is to name the
+  folder in `prisma/migrations/ALLOWED_DESTRUCTIVE.txt` (empty today, a decision for the owner).
+  - *Hard, in every folder:* no `DROP TABLE` / `COLUMN` / `TYPE` / `SCHEMA` / `DATABASE` (a
+    column dropped without writing `COLUMN` counts), no `TRUNCATE`, no `DELETE FROM`, no
+    `ALTER COLUMN … TYPE`.
+  - *Review, in every NEW migration* — what the empty CI database cannot see, because it depends
+    on the rows production already has: a drop of a constraint / index / trigger / function / view /
+    extension, any `RENAME`, `ADD COLUMN … NOT NULL` without a `DEFAULT`, `SET NOT NULL`, `UPDATE`
+    without `WHERE`, a unique index or constraint on a table that already exists, `CREATE EXTENSION`.
+    (A table created in the same migration is empty: its own unique indexes and `NOT NULL`
+    columns are fine, and so is a unique index that includes a column the same migration adds
+    with no `DEFAULT` — born NULL, and NULLs never collide, which is what `String? @unique`
+    produces.) The safe shape is: add nullable or with a `DEFAULT`, backfill in a later
+    migration, tighten in a third; add the new name, copy, remove the old one later.
 - **A folder that was ever applied is never renamed, edited or removed.** The database
   remembers it by name and checksum. `prisma/migrations/RELEASED.txt` lists every released
-  folder (add a line when a migration has been deployed); the linter fails on a listed folder
-  that is gone, and on a new folder that sorts before the last released one. It cannot see an
-  edit to a released file: review that in the PR. Every table a new migration references must
-  be created by an earlier one — CI proves it by deploying everything to an empty database.
+  folder as `<folder> sha256:<hex>` (the hash is over the SQL with CRLF read as LF): the linter
+  fails on a listed folder that is gone, on a released file whose SQL no longer matches its pin,
+  on a line without a pin, and on a new folder that sorts before the last released one. Add the
+  line **after** the migration has been deployed — `node scripts/lint-migrations.mjs --hash <folder>`
+  prints it — and review that change with care: a released folder is frozen and is no longer
+  judged by the review rules. Every table a new migration references must be created by an
+  earlier one — CI proves it by deploying everything to an empty database.
 - **Adding an enum value** (`ALTER TYPE … ADD VALUE`) is a migration of its own — a new value
   cannot be used in the transaction that adds it.
 - **Changing structure and moving data are two migrations.** A data move is safe to repeat:
@@ -164,7 +178,8 @@ by a *later* migration failed on a fresh database, and a folder was renamed to r
   throw-away database, read the SQL, commit it. `migrate deploy` applies it everywhere else.
   Never run `migrate dev` or `migrate reset` against a shared or production database.
 - ⚠️ `pgvector` is not known to be available on the production database, and a migration
-  that creates the extension would stop the deploy exactly as in the incident.
+  that creates the extension would stop the deploy exactly as in the incident (the linter flags
+  every `CREATE EXTENSION` for that reason).
   🔧 Check it with a read-only query on production first.
 - ⚠️ The state of the production `_prisma_migrations` table after the incident is not
   documented. 🔧 Before any new migration, the owner runs the read-only status check
@@ -183,7 +198,10 @@ by a *later* migration failed on a fresh database, and a folder was renamed to r
   from what the browser says or hides. A page or route that reads or writes data without
   checking the caller's organization and workspace is a bug even if the UI hides it.
 - **Uploads** are written to `UPLOAD_DIR` (a persistent volume in production), never inside
-  the image; the bytes are sniffed, the client's content type is ignored.
+  the image; the bytes are sniffed, the client's content type is ignored. A file row exists only
+  once its bytes are on disk: a failed upload removes its row (`ingest`), and a row still being
+  written has `path = PENDING_PATH` — anything that reads `StoredFile` outside the files service
+  must skip those.
 - Secrets stored in the database (Telegram, n8n, Google) are encrypted at rest with
   `ENCRYPTION_KEY` (derived from `AUTH_SECRET` while it is unset).
 
@@ -195,7 +213,11 @@ by a *later* migration failed on a fresh database, and a folder was renamed to r
 - The container runs `prisma migrate deploy` when it starts, then serves on port 3000.
 - Required environment: `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`. Optional: `ENCRYPTION_KEY`,
   `UPLOAD_DIR` (the image sets it to `/app/storage/uploads`, which must be a persistent
-  volume), `SESSION_TTL_HOURS`, `LOG_LEVEL`, Google client id and secret.
+  volume), `TRUSTED_PROXY_HOPS` (how many reverse proxies sit in front of the app, default 1;
+  set it to 2 when a CDN sits in front of Traefik, never above the real number — the sign-in
+  limiter counts that many entries of `X-Forwarded-For` from the right), `SESSION_TTL_HOURS`,
+  `LOG_LEVEL`, Google client id and secret. A variable the code reads is documented in
+  `.env.example` and in the README table, or `tests/repo-hygiene.test.ts` fails.
 - The compose `worker` service is a heartbeat placeholder; background jobs will run inside
   the app process. `redis` is not used by the application yet.
 

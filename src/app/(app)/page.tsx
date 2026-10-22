@@ -26,6 +26,7 @@ import type { LucideIcon } from "lucide-react";
 import { db } from "@/server/db";
 import { currentUser } from "@/server/auth";
 import { accessibleWorkspaceIds } from "@/server/services/access";
+import { PENDING_PATH } from "@/server/services/files";
 import { getServerT, type ServerT } from "@/lib/i18n/server";
 import { ProjectsToolbar } from "@/components/projects-toolbar";
 import { Card, CardBody, Badge } from "@/components/ui/card";
@@ -131,7 +132,7 @@ export default async function HomePage() {
     }),
     db.conversationMember.count({ where: { userId: user.id } }),
     db.idea.count({ where: { organization: { id: { in: orgIds } } } }),
-    db.storedFile.count({ where: { organization: { id: { in: orgIds } }, deletedAt: null } }),
+    db.storedFile.count({ where: { organization: { id: { in: orgIds } }, deletedAt: null, path: { not: PENDING_PATH } } }),
     db.department.count({ where: { orgId: { in: orgIds } } }),
     db.team.count({ where: { workspace: { organizationId: { in: orgIds } } } }),
     wsIds.length,
