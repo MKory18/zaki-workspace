@@ -5,11 +5,21 @@ import type { IntegrationType } from "@prisma/client";
 import { decryptSecrets, encryptSecrets } from "@/server/crypto";
 import { assertPublicHttpsUrl, UnsafeUrlError } from "@/server/net-guard";
 import { unixSeconds, zakiSignatureHeader } from "@/server/webhook-signing";
-import { requireOrgRole, requireUser, ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
+import { requireOrgMember, ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
+import { requireActor } from "@/server/policy/actor";
+import { can } from "@/server/policy/capabilities";
 
-/** OWNER/ADMIN only for connect/disconnect/config changes (org-level assets). */
+/** Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. */
 export async function assertOrgManager(orgId: string): Promise<OrgAccessContext> {
-  return requireOrgRole(orgId, ["OWNER", "ADMIN"]);
+  // Integrations (n8n, Telegram, Google Drive) belong to whoever holds the capability: the OWNER,
+  // an ADMIN by default, or anybody the owner switched it on for (e.g. the automation person).
+  const ctx = await requireOrgMember(orgId);
+  const member = await db.organizationMember.findUnique({
+    where: { organizationId_userId: { organizationId: orgId, userId: ctx.userId } },
+    select: { role: true, capabilities: true, revokedCapabilities: true },
+  });
+  if (!member || !can(member, "integrations.manage")) throw new ForbiddenError("insufficient_role");
+  return ctx;
 }
 
 /**
@@ -17,14 +27,8 @@ export async function assertOrgManager(orgId: string): Promise<OrgAccessContext>
  * Shared by every /api/integrations route.
  */
 export async function activeOrgCtx(): Promise<OrgAccessContext> {
-  const user = await requireUser();
-  const membership = await db.organizationMember.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: { organizationId: true, role: true },
-  });
-  if (!membership) throw new ForbiddenError("not_org_member");
-  return { orgId: membership.organizationId, orgRole: membership.role, userId: user.id };
+  const actor = await requireActor();
+  return { orgId: actor.orgId, orgRole: actor.role, userId: actor.userId };
 }
 
 export interface IntegrationConfigMeta extends Record<string, unknown> {}

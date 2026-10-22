@@ -81,7 +81,7 @@ export async function listWorkspaceMembers(workspaceId: string, viewerId?: strin
     }),
   ]);
   if (!org) return [];
-  const byId = new Map<string, { id: string; name: string; email: string; role: string }>();
+  const byId = new Map<string, { id: string; name: string; email: string | null; role: string }>();
   for (const m of wsMembers) {
     // shown as the role they really have: an org GUEST is a GUEST whatever their row says
     byId.set(m.user.id, {

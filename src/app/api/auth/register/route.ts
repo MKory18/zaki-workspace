@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { setSessionCookie } from "@/server/auth";
+import { startSession } from "@/server/auth";
 import { apiError, withApi } from "@/server/api";
 import { registerSchema } from "@/server/validation";
 import { joinByCode, registerOrganization } from "@/server/services/orgs";
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
             return join;
           })
         : await registerOrganization(parsed.data);
-    await setSessionCookie(result.userId);
+    await startSession(result.userId);
     return NextResponse.json({ ok: true }, { status: 201 });
   });
 }

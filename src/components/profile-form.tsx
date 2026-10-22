@@ -10,7 +10,8 @@ import { useToast } from "@/components/ui/toast";
 
 export interface MeData {
   id: string;
-  email: string;
+  /** Absent for an account that has only a username. */
+  email: string | null;
   name: string;
   jobTitle: string | null;
   bio: string | null;

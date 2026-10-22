@@ -1,6 +1,6 @@
-import ar from "./ar.json";
+import { AR } from "./dict";
 
-const DICT: Record<string, string> = ar;
+const DICT: Record<string, string> = AR;
 
 export type ServerT = (key: string, vars?: Record<string, string | number>) => string;
 

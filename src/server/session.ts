@@ -1,40 +1,23 @@
-import { SignJWT, jwtVerify } from "jose";
-import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { env } from "./env";
+import { signSessionToken, verifySessionTokenWith, type SessionClaims } from "@/lib/session-token";
 
 export const COOKIE_NAME = "zaki_session";
 
-export interface SessionUser {
-  userId: string;
-}
+export type { SessionClaims };
+/** What a valid cookie proves on its own (the database decides whether it is still honoured). */
+export type SessionUser = SessionClaims;
 
-function key(): Uint8Array {
-  // derive stable 32-byte key even if provided secret is shorter
-  return crypto.createHash("sha256").update(env().AUTH_SECRET).digest();
-}
-
-export async function createSessionToken(userId: string): Promise<string> {
-  const ttl = env().SESSION_TTL_HOURS * 3600;
-  return new SignJWT({ userId })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime(Math.floor(Date.now() / 1000) + ttl)
-    .sign(key());
+export async function createSessionToken(claims: SessionClaims): Promise<string> {
+  return signSessionToken(claims, env().AUTH_SECRET, env().SESSION_TTL_HOURS * 3600);
 }
 
 export async function verifySessionToken(token: string): Promise<SessionUser | null> {
-  try {
-    const { payload } = await jwtVerify(token, key());
-    if (typeof payload["userId"] !== "string") return null;
-    return { userId: payload["userId"] };
-  } catch {
-    return null;
-  }
+  return verifySessionTokenWith(token, env().AUTH_SECRET);
 }
 
-export async function setSessionCookie(userId: string): Promise<void> {
-  const token = await createSessionToken(userId);
+export async function setSessionCookie(claims: SessionClaims): Promise<void> {
+  const token = await createSessionToken(claims);
   const store = await cookies();
   store.set(COOKIE_NAME, token, {
     httpOnly: true,

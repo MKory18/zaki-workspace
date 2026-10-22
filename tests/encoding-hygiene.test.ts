@@ -48,7 +48,24 @@ describe("chat reaction palette", () => {
 });
 
 describe("translations", () => {
-  const ar = JSON.parse(readFileSync(path.join(SRC, "lib/i18n/ar.json"), "utf8")) as Record<string, string>;
+  // ar.json plus the per-feature fragments (ar.accounts.json, ar.members.json, ...): the app merges them.
+  const i18nDir = path.join(SRC, "lib/i18n");
+  const parts = readdirSync(i18nDir)
+    .filter((f) => /^ar(\.[a-z]+)?\.json$/.test(f))
+    .map((f) => ({ file: f, data: JSON.parse(readFileSync(path.join(i18nDir, f), "utf8")) as Record<string, string> }));
+  const ar: Record<string, string> = Object.assign({}, ...parts.map((p) => p.data));
+
+  it("no key is defined in two translation files (a later one would silently win)", () => {
+    const seen = new Map<string, string>();
+    const duplicates: string[] = [];
+    for (const { file, data } of parts) {
+      for (const key of Object.keys(data)) {
+        if (seen.has(key)) duplicates.push(`${key} (${seen.get(key)} and ${file})`);
+        else seen.set(key, file);
+      }
+    }
+    expect(duplicates).toEqual([]);
+  });
 
   it("every CRM opportunity stage has a label (it used to render the raw key)", () => {
     for (const stage of Object.values(OpportunityStage)) {

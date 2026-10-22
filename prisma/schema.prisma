@@ -14,9 +14,21 @@ datasource db {
 
 model User {
   id           String   @id @default(cuid())
-  email        String   @unique
+  // An account is created by the owner with a username + password; an e-mail address is optional
+  // (moderators and warehouse staff may have none). Both are stored lower-case and are unique.
+  email        String?  @unique
+  username     String?  @unique
   name         String
   passwordHash String
+  // Bumped to end every session of this user at once (suspend, offboard, password reset, "log out
+  // everywhere"). The session token carries the value it was issued with; a mismatch is a sign-out.
+  tokenVersion Int      @default(0)
+  // True while the password is a temporary one chosen by the owner: the user must change it first.
+  mustChangePassword Boolean @default(false)
+  // The version of the "work chats are archived and visible to the owner" notice this user accepted.
+  transparencyVersion    Int?
+  transparencyAcceptedAt DateTime?
+  lastLoginAt  DateTime?
   locale       String   @default("ar") // ar | fr (en reserved)
   theme        String   @default("system") // light | dark | system
   avatarUrl    String?
@@ -25,7 +37,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships     OrganizationMember[]
+  memberships     OrganizationMember[] @relation("MemberUser")
+  managedMembers  OrganizationMember[] @relation("MemberManager")
   workspaceLinks  WorkspaceMember[]
   createdTasks    Task[]               @relation("TaskCreator")
   assignedTasks   Task[]               @relation("TaskAssignee")
@@ -357,7 +370,11 @@ model Organization {
   name      String
   slug      String   @unique
   keyPrefix String   @unique // used for task keys, e.g. ZW -> ZW-42
-  joinCode  String   @unique // self-serve join invitation code (regenerated; org-scoped)
+  joinCode  String   @unique // legacy self-serve join code: no longer honoured (accounts are created by the owner)
+  // The company's clock: "today", overdue and quiet hours are computed in this zone, not the server's.
+  timezone  String   @default("Asia/Damascus")
+  // Validated per key in code (src/server/policy/org-settings.ts): transparency notice version, etc.
+  settings  Json     @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -384,22 +401,45 @@ model Organization {
 }
 
 model OrganizationMember {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   userId         String
-  role           OrgRole  @default(MEMBER)
-  createdAt      DateTime @default(now())
+  role           OrgRole      @default(MEMBER)
+  // Only ACTIVE members can use the app. A suspended or offboarded member keeps the row (history,
+  // authorship) but every guard treats them as absent.
+  status         MemberStatus @default(ACTIVE)
+  // Capabilities on top of / taken away from what the rank grants (src/server/policy/capabilities.ts).
+  capabilities        String[] @default([])
+  revokedCapabilities String[] @default([])
+  // Who escalations go to (the person's manager); null = the owner.
+  managerId      String?
+  // The same person's reference in the OMS (staff, penalties, cash custody), for later integration.
+  omsStaffRef    String?
+  statusChangedAt   DateTime?
+  statusChangedById String?
+  createdAt      DateTime     @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User         @relation("MemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  manager      User?        @relation("MemberManager", fields: [managerId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, userId])
+  @@unique([organizationId, omsStaffRef])
   @@index([userId])
+  @@index([organizationId, status])
+}
+
+enum MemberStatus {
+  ACTIVE
+  SUSPENDED
+  OFFBOARDED
 }
 
 enum OrgRole {
   OWNER
   ADMIN
+  // Team lead (manager-lite): hands out work to the people under them and receives escalations.
+  LEAD
   MEMBER
   GUEST
 }

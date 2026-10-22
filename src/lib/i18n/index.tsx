@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import ar from "./ar.json";
+import { AR as ar } from "./dict";
 
 const DICTS = { ar } as const;
 export type Locale = keyof typeof DICTS;

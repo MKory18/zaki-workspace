@@ -136,6 +136,7 @@
   "profile.wrongCurrent": "كلمة المرور الحالية غير صحيحة",
   "role.owner": "مالك",
   "role.admin": "مشرف",
+  "role.lead": "قائد فريق",
   "role.member": "عضو",
   "role.guest": "زائر",
   "teams.title": "الأعضاء",

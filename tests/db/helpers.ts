@@ -23,9 +23,14 @@ function jar(): Map<string, string> {
   return j;
 }
 
-/** Sign in as this user for every following route/service call. */
-export async function loginAs(userId: string): Promise<void> {
-  jar().set(COOKIE_NAME, await createSessionToken(userId));
+/**
+ * Sign in as this user for every following route/service call, with a token carrying their
+ * CURRENT session version (so a later suspend/offboard/reset makes it stop working, as in production).
+ * `claims` lets a test pretend the token still says "must change password" / "notice pending".
+ */
+export async function loginAs(userId: string, claims: { mcp?: boolean; tp?: boolean } = {}): Promise<void> {
+  const { tokenVersion } = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { tokenVersion: true } });
+  jar().set(COOKIE_NAME, await createSessionToken({ userId, tv: tokenVersion, ...claims }));
 }
 
 /** Drop the session cookie (anonymous caller). */
@@ -47,17 +52,22 @@ export async function makeOrg(opts: { name?: string } = {}) {
   });
 }
 
-export async function makeUser(opts: { orgId?: string; role?: OrgRole; name?: string; email?: string } = {}) {
+export async function makeUser(opts: { orgId?: string; role?: OrgRole; name?: string; email?: string; username?: string } = {}) {
   const id = uid();
   const user = await db.user.create({
     data: {
       email: opts.email ?? `u-${id}@test.local`,
+      ...(opts.username ? { username: opts.username } : {}),
       name: opts.name ?? `User ${id}`,
       passwordHash: PASSWORD_HASH,
+      // fixture users are fully onboarded: nothing to change, notice accepted
+      transparencyVersion: 1,
+      transparencyAcceptedAt: new Date(),
       ...(opts.orgId ? { memberships: { create: { organizationId: opts.orgId, role: opts.role ?? "MEMBER" } } } : {}),
     },
   });
-  return user;
+  // fixtures always have an e-mail, so tests can use it as a plain string
+  return { ...user, email: user.email as string };
 }
 
 /** An org with one user per org role: owner, admin, member, guest. */

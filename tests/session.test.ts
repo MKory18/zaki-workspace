@@ -1,16 +1,24 @@
+import { SignJWT } from "jose";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { verifySessionToken, createSessionToken } from "@/server/session";
 import { env } from "@/server/env";
 
 describe("session tokens", () => {
-  it("round-trips a userId", async () => {
-    const token = await createSessionToken("user_123");
-    const session = await verifySessionToken(token);
-    expect(session).toEqual({ userId: "user_123" });
+  it("round-trips the user and the session version", async () => {
+    const token = await createSessionToken({ userId: "user_123", tv: 4 });
+    expect(await verifySessionToken(token)).toEqual({ userId: "user_123", tv: 4 });
+  });
+
+  it("carries the onboarding flags the Edge middleware reads", async () => {
+    const token = await createSessionToken({ userId: "u", tv: 0, mcp: true, tp: true });
+    expect(await verifySessionToken(token)).toEqual({ userId: "u", tv: 0, mcp: true, tp: true });
+    const plain = await createSessionToken({ userId: "u", tv: 0 });
+    expect(await verifySessionToken(plain)).toEqual({ userId: "u", tv: 0 });
   });
 
   it("rejects tampered tokens", async () => {
-    const token = await createSessionToken("user_123");
+    const token = await createSessionToken({ userId: "user_123", tv: 0 });
     // Flip a character in the MIDDLE of the signature. (The last base64url char of a
     // 32-byte signature carries only 4 real bits, so swapping it can decode to the
     // same bytes and the token would still verify — that made this test flaky.)
@@ -22,6 +30,28 @@ describe("session tokens", () => {
 
   it("rejects empty strings", async () => {
     expect(await verifySessionToken("")).toBeNull();
+  });
+
+  it("refuses a token without a session version (every token issued before this existed: one sign-in after the release)", async () => {
+    const key = createHash("sha256").update(env().AUTH_SECRET).digest();
+    const legacy = await new SignJWT({ userId: "user_123" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(key);
+    expect(await verifySessionToken(legacy)).toBeNull();
+  });
+
+  it("refuses a non-integer or negative session version", async () => {
+    const key = createHash("sha256").update(env().AUTH_SECRET).digest();
+    for (const tv of ["3", 1.5, -1, null]) {
+      const t = await new SignJWT({ userId: "u", tv: tv as never })
+        .setProtectedHeader({ alg: "HS256" })
+        .setIssuedAt()
+        .setExpirationTime("1h")
+        .sign(key);
+      expect(await verifySessionToken(t), String(tv)).toBeNull();
+    }
   });
 
   it("validates env at startup", () => {

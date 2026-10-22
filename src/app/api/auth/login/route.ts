@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { audit, setSessionCookie, verifyPassword } from "@/server/auth";
+import { audit, startSession, verifyPassword } from "@/server/auth";
 import { apiError, withApi } from "@/server/api";
 import { clientIp } from "@/server/rate-limit";
 import { LoginGuard } from "@/server/login-guard";
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
         return apiError("auth.required", "invalid_credentials");
       }
       attempt.success();
-      await setSessionCookie(user.id);
+      await startSession(user.id);
       await audit("auth.login", { actorId: user.id });
       return NextResponse.json({ ok: true });
     } finally {
