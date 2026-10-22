@@ -4,6 +4,7 @@ import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { activeOrgCtx, assertOrgManager } from "@/server/services/integrations";
 import { connectBot, disconnect, listChats } from "@/server/services/telegram";
+import { assertNotGuest } from "@/server/services/guest-guard";
 
 const connectSchema = z.object({
   token: z
@@ -12,10 +13,16 @@ const connectSchema = z.object({
     .regex(/^\d+:[A-Za-z0-9_-]{30,}$/, "telegram.token_shape"),
 });
 
-/** GET: bot identity + chat list (members read; guests included). */
+/**
+ * Telegram carries customer conversations (names, phone numbers), so it is closed to org
+ * GUESTs: every handler below answers them 403 `guest.no_access` before doing anything.
+ */
+
+/** GET: bot identity + chat list (org members; never guests). */
 export async function GET() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
+    assertNotGuest(ctx);
     const chats = await listChats(ctx.orgId);
     const botUsername = (chats?.config as { botUsername?: string })?.botUsername ?? null;
     return NextResponse.json({ chats, botUsername });
@@ -25,8 +32,9 @@ export async function GET() {
 /** POST: connect a bot by token — verified against Telegram before storage. */
 export async function POST(req: Request) {
   return withApi(async () => {
-    const input = await parseJson(connectSchema, req);
     const ctx = await activeOrgCtx();
+    assertNotGuest(ctx);
+    const input = await parseJson(connectSchema, req);
     await assertOrgManager(ctx.orgId);
     const result = await connectBot(ctx.orgId, input.token);
     if ("error" in result) {
@@ -40,6 +48,7 @@ export async function POST(req: Request) {
 export async function DELETE() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
+    assertNotGuest(ctx);
     await assertOrgManager(ctx.orgId);
     await disconnect(ctx.orgId);
     return NextResponse.json({ ok: true });

@@ -1,6 +1,7 @@
 import * as crypto from "node:crypto";
 import { db } from "@/server/db";
 import { requireUser } from "@/server/auth";
+import { workspaceRoleOf } from "@/server/workspace-role";
 
 export interface CreateWorkspaceInput {
   organizationId: string;
@@ -58,7 +59,14 @@ export async function listWorkspaceMembers(workspaceId: string, viewerId?: strin
       where: { workspaceId },
       select: {
         role: true,
-        user: { select: { id: true, name: true, email: true } },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            memberships: { where: { organizationId: ws.organizationId }, select: { role: true } },
+          },
+        },
       },
       orderBy: { createdAt: "asc" },
     }),
@@ -75,7 +83,13 @@ export async function listWorkspaceMembers(workspaceId: string, viewerId?: strin
   if (!org) return [];
   const byId = new Map<string, { id: string; name: string; email: string; role: string }>();
   for (const m of wsMembers) {
-    byId.set(m.user.id, { ...m.user, role: m.role });
+    // shown as the role they really have: an org GUEST is a GUEST whatever their row says
+    byId.set(m.user.id, {
+      id: m.user.id,
+      name: m.user.name,
+      email: m.user.email,
+      role: workspaceRoleOf(m.user.memberships[0]?.role, m.role),
+    });
   }
   for (const m of org.organization.members) {
     if (!byId.has(m.user.id)) byId.set(m.user.id, { ...m.user, role: `org:${m.role}` });

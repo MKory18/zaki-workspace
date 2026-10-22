@@ -92,7 +92,7 @@ interface OrgsResponse {
 }
 
 /** Areas the server refuses to org GUESTs (external partners): not offered in the menu either. */
-const GUEST_HIDDEN = new Set(["/crm", "/departments"]);
+const GUEST_HIDDEN = new Set(["/crm", "/departments", "/telegram", "/files"]);
 
 export function AppShell({
   user,

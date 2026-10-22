@@ -2,6 +2,7 @@ import { Prisma, type TaskPriority } from "@prisma/client";
 import { db } from "@/server/db";
 import { TASK_INCLUDE } from "@/server/services/tasks";
 import { accessibleWorkspaceIds } from "@/server/services/access";
+import { canWriteInWorkspace, workspaceRoleOf } from "@/server/workspace-role";
 
 // ---------- workspace access resolution for RSC pages ----------
 
@@ -14,8 +15,9 @@ export interface WorkspaceViewCtx {
   orgId: string;
   /** The user's role in that org (not the workspace role): what decides guest-only limits. */
   orgRole: string;
-  /** Effective role (workspace member role wins over org role). */
+  /** Effective role (workspace member role wins over org role; an org GUEST is a GUEST everywhere). */
   role: string;
+  /** Can this person change things here? Same verdict as the write routes (see workspace-role.ts). */
   editable: boolean;
   /**
    * Kept for the pages that still read it. Always false now: a workspace the
@@ -67,7 +69,8 @@ export async function resolveWorkspaceView(
   ]);
   // accessible ⇒ org member of the workspace's org; "GUEST" is only a safe floor
   const orgRole = orgMember?.role ?? "GUEST";
-  const role = wsMember?.role ?? orgRole;
+  // an org GUEST is a guest in every workspace, whatever their workspace row says
+  const role: string = wsMember ? workspaceRoleOf(orgMember?.role, wsMember.role) : orgRole;
   return {
     ctx: {
       userId: user.id,
@@ -76,7 +79,7 @@ export async function resolveWorkspaceView(
       orgId: chosen.organizationId,
       orgRole,
       role,
-      editable: role !== "GUEST",
+      editable: canWriteInWorkspace(orgMember?.role, wsMember?.role),
       denied: false,
       workspaces,
     },
@@ -206,6 +209,7 @@ export interface ViewTask {
   columnId: string;
   columnName: string;
   columnDone: boolean;
+  workspaceId: string;
   projectId: string;
   projectName: string;
   assigneeId: string | null;
@@ -271,6 +275,7 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
     columnId: t.column.id,
     columnName: t.column.name,
     columnDone: t.column.done,
+    workspaceId: t.workspaceId,
     projectId: t.project.id,
     projectName: t.project.name,
     assigneeId: t.assigneeId,

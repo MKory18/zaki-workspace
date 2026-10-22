@@ -14,7 +14,7 @@ import { assertCanWrite } from "@/server/services/guest-guard";
  * - department members and the department lead: create, assign within the
  *   department, transition status
  * - the assignee: works the ticket through its whole lifecycle
- * - the creator: may edit it while it is still OPEN (see canEditTicket)
+ * - the creator: may edit or delete it while it is still OPEN (see canEditTicket)
  * - everybody else: org-wide visibility is intentional for support desks and any
  *   (non-guest) org member may open a ticket or comment, but may NOT edit or
  *   close somebody else's ticket.
@@ -87,6 +87,22 @@ async function departmentContext(ctx: OrgAccessContext, departmentId: string) {
   const isLead = dept.leadId === ctx.userId;
   const isAdmin = ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
   return { dept, isMember, isLead, isAdmin };
+}
+
+/** The facts `canEditTicket` needs for this actor and this ticket. Editing and deleting share them. */
+async function ticketEditFacts(
+  ctx: OrgAccessContext,
+  ticket: Awaited<ReturnType<typeof loadTicketForOrg>>,
+): Promise<TicketEditFacts> {
+  const { isMember, isLead, isAdmin } = await departmentContext(ctx, ticket.departmentId);
+  return {
+    isAdmin,
+    isDeptMember: isMember,
+    isDeptLead: isLead,
+    isCreator: ticket.creatorId === ctx.userId,
+    isAssignee: ticket.assigneeId === ctx.userId,
+    status: ticket.status,
+  };
 }
 
 export async function listDepartmentTickets(departmentId: string) {
@@ -285,16 +301,7 @@ export async function updateTicket(
 ) {
   assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
-  const { isMember, isLead, isAdmin } = await departmentContext(ctx, ticket.departmentId);
-  const allowed = canEditTicket({
-    isAdmin,
-    isDeptMember: isMember,
-    isDeptLead: isLead,
-    isCreator: ticket.creatorId === ctx.userId,
-    isAssignee: ticket.assigneeId === ctx.userId,
-    status: ticket.status,
-  });
-  if (!allowed) throw new ForbiddenError("ticket.admin_only");
+  if (!canEditTicket(await ticketEditFacts(ctx, ticket))) throw new ForbiddenError("ticket.admin_only");
   if (input.assigneeId) {
     const dept = await db.department.findFirst({
       where: { id: ticket.departmentId },
@@ -364,10 +371,10 @@ export async function updateTicket(
   return updated;
 }
 
+/** Deleting follows the same rule as editing (canEditTicket): the creator only while the ticket is OPEN. */
 export async function deleteTicket(ctx: OrgAccessContext, ticketId: string): Promise<void> {
   assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
-  const { isMember, isAdmin } = await departmentContext(ctx, ticket.departmentId);
-  if (!isAdmin && !isMember && ticket.creatorId !== ctx.userId) throw new ForbiddenError("ticket.admin_only");
+  if (!canEditTicket(await ticketEditFacts(ctx, ticket))) throw new ForbiddenError("ticket.admin_only");
   await db.ticket.delete({ where: { id: ticket.id } });
 }

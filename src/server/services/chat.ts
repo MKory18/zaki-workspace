@@ -42,7 +42,11 @@ export async function logChat(orgId: string, type: string, payload?: Record<stri
   await logEvent(orgId, { direction: "IN", type, payload: payload as Prisma.InputJsonValue });
 }
 
-/** Guests are read-only across the workspace — chat included. */
+/**
+ * Chat is closed to org GUESTs, for reading as much as for writing: every function below that a
+ * route can reach starts with this check, so a member who is demoted to guest loses every thread
+ * they were in (their conversation rows stay, but nothing serves them).
+ */
 export async function assertChatAllowed(orgRole: string): Promise<void> {
   if (orgRole === "GUEST") throw new ForbiddenError("chat.guest_forbidden");
 }
@@ -156,6 +160,7 @@ export async function manageGroup(
   conversationId: string,
   input: z.infer<typeof manageGroupSchema>,
 ): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
   const me = await requireConversationMember(conversationId, ctx.userId);
   if (me.conversation.kind !== "GROUP") throw new ForbiddenError("chat.dm_immutable");
   if (me.role !== "admin") throw new ForbiddenError("chat.group_admin_only");
@@ -239,6 +244,7 @@ export async function sendMessage(
 }
 
 export async function editMessage(ctx: OrgAccessContext, messageId: string, body: string): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
   const msg = await db.chatMessage.findUnique({
     where: { id: messageId },
     select: { id: true, authorId: true, deletedAt: true, conversation: { select: { kind: true, members: { select: { userId: true, role: true } } } } },
@@ -255,6 +261,7 @@ export async function editMessage(ctx: OrgAccessContext, messageId: string, body
 }
 
 export async function deleteMessage(ctx: OrgAccessContext, messageId: string): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
   const msg = await db.chatMessage.findUnique({
     where: { id: messageId },
     select: { id: true, authorId: true, conversation: { select: { kind: true, members: { select: { userId: true, role: true } } } } },
@@ -291,6 +298,7 @@ export async function toggleReact(ctx: OrgAccessContext, messageId: string, emoj
 }
 
 export async function togglePin(ctx: OrgAccessContext, messageId: string): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
   const msg = await db.chatMessage.findUnique({
     where: { id: messageId },
     select: { id: true, pinned: true, conversation: { select: { kind: true, members: { select: { userId: true, role: true } } } } },
@@ -319,7 +327,9 @@ export interface ConversationSummary {
   otherMembers: { id: string; name: string }[];
 }
 
-export async function listConversations(userId: string, orgId: string): Promise<ConversationSummary[]> {
+export async function listConversations(ctx: OrgAccessContext): Promise<ConversationSummary[]> {
+  await assertChatAllowed(ctx.orgRole);
+  const { userId, orgId } = ctx;
   const rows = await db.conversation.findMany({
     where: { orgId, members: { some: { userId } } },
     orderBy: { updatedAt: "desc" },
@@ -384,7 +394,26 @@ export async function markRead(userId: string, conversationId: string): Promise<
   });
 }
 
-export async function conversationDetail(conversationId: string, userId: string) {
+/** A member opened the thread: mark it read. (`markRead` itself is for callers that already passed the guard.) */
+export async function markConversationRead(ctx: OrgAccessContext, conversationId: string): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
+  await requireConversationMember(conversationId, ctx.userId);
+  await markRead(ctx.userId, conversationId);
+}
+
+/** Leave a group (DMs are immutable). */
+export async function leaveConversation(ctx: OrgAccessContext, conversationId: string): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
+  const member = await requireConversationMember(conversationId, ctx.userId);
+  if (member.conversation.kind !== "GROUP") throw new ForbiddenError("chat.dm_immutable");
+  await db.conversationMember.delete({
+    where: { conversationId_userId: { conversationId, userId: ctx.userId } },
+  });
+}
+
+export async function conversationDetail(ctx: OrgAccessContext, conversationId: string) {
+  await assertChatAllowed(ctx.orgRole);
+  const userId = ctx.userId;
   const member = await requireConversationMember(conversationId, userId);
   const conv = await db.conversation.findUnique({
     where: { id: conversationId },

@@ -4,6 +4,7 @@ import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { activeOrgCtx, assertOrgManager } from "@/server/services/integrations";
 import { configureN8n, disconnectN8n, getN8nStatus, recentEvents } from "@/server/services/n8n";
+import { assertNotGuest } from "@/server/services/guest-guard";
 
 const configSchema = z.object({
   // Shape only. Which URLs are acceptable (https, no credentials, public hosts) is decided by
@@ -13,11 +14,15 @@ const configSchema = z.object({
   rotateSecret: z.boolean().optional(),
 });
 
-/** GET: status + recent outbound/inbound event log (members, guests included). */
+/**
+ * GET: status + recent outbound/inbound event log. Guests get 403. OWNER/ADMIN get the whole
+ * status; a plain member only learns whether n8n is connected (no webhook URL, no event filter).
+ */
 export async function GET() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
-    const [status, events] = await Promise.all([getN8nStatus(ctx.orgId), recentEvents(ctx.orgId)]);
+    assertNotGuest(ctx);
+    const [status, events] = await Promise.all([getN8nStatus(ctx.orgId, ctx.orgRole), recentEvents(ctx.orgId)]);
     return NextResponse.json({ status, events });
   });
 }

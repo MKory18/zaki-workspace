@@ -237,3 +237,53 @@ describe("tickets: who may edit or close a ticket", () => {
     expect(await db.notification.count({ where: { userId: w.assignee.id, type: "ticket_comment" } })).toBe(1);
   });
 });
+
+describe("tickets: deleting follows the same rule as editing", () => {
+  const del = (id: string) => call(ticketRoute.DELETE, { method: "DELETE", params: { id } });
+
+  it("the creator (outside the department) can delete an OPEN ticket but not one that is being worked on", async () => {
+    const w = await ticketWorld();
+    const open = await w.openTicket();
+    const busy = await w.openTicket({ status: "IN_PROGRESS" });
+    await loginAs(w.creator.id);
+
+    const refused = await del(busy.id);
+    expect(refused.status).toBe(403);
+    expect(refused.json?.["message"]).toBe("ticket.admin_only");
+    expect(await db.ticket.findUnique({ where: { id: busy.id } })).not.toBeNull();
+
+    expect((await del(open.id)).status).toBe(200);
+    expect(await db.ticket.findUnique({ where: { id: open.id } })).toBeNull();
+  });
+
+  const mayAlways = [
+    ["the assignee (outside the department)", (w: Awaited<ReturnType<typeof ticketWorld>>) => w.assignee],
+    ["a department member", (w: Awaited<ReturnType<typeof ticketWorld>>) => w.deptMember],
+    ["the department lead", (w: Awaited<ReturnType<typeof ticketWorld>>) => w.lead],
+    ["an ADMIN", (w: Awaited<ReturnType<typeof ticketWorld>>) => w.admin],
+    ["the OWNER", (w: Awaited<ReturnType<typeof ticketWorld>>) => w.owner],
+  ] as const;
+
+  for (const [label, pick] of mayAlways) {
+    it(`${label} can delete a ticket at any status`, async () => {
+      const w = await ticketWorld();
+      await loginAs(pick(w).id);
+      for (const status of ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] as const) {
+        const ticket = await w.openTicket({ status });
+        const res = await del(ticket.id);
+        expect(res.status, status).toBe(200);
+        expect(await db.ticket.findUnique({ where: { id: ticket.id } }), status).toBeNull();
+      }
+    });
+  }
+
+  it("an unrelated MEMBER and a GUEST still cannot delete, whatever the status", async () => {
+    const w = await ticketWorld();
+    const ticket = await w.openTicket();
+    for (const user of [w.stranger, w.guest]) {
+      await loginAs(user.id);
+      expect((await del(ticket.id)).status).toBe(403);
+    }
+    expect(await db.ticket.findUnique({ where: { id: ticket.id } })).not.toBeNull();
+  });
+});

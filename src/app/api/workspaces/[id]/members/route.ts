@@ -80,21 +80,29 @@ async function manage(
   const orgId = (
     await db.workspace.findUnique({ where: { id: workspaceId }, select: { organizationId: true } })
   )?.organizationId;
-  const orgUsers = new Set(
+  const orgRoles = new Map(
     (
       await db.organizationMember.findMany({
         where: { organizationId: orgId ?? "" },
-        select: { userId: true },
+        select: { userId: true, role: true },
       })
-    ).map((m) => m.userId),
+    ).map((m) => [m.userId, m.role] as const),
   );
-  const add = (input.addUserIds ?? []).filter((id) => orgUsers.has(id));
+  const isOrgGuest = (userId: string) => orgRoles.get(userId) === "GUEST";
+  // An org GUEST (an external partner) is read-only everywhere: they are added as a workspace
+  // GUEST, kept as one, and can never be promoted. Refused up front, so nothing else in the
+  // same request is applied either.
+  if ((input.promoteUserIds ?? []).some(isOrgGuest)) throw new ForbiddenError("guest.readonly");
+  const add = (input.addUserIds ?? []).filter((id) => orgRoles.has(id));
+  const demote = input.demoteUserIds ?? [];
   await db.$transaction(async (tx) => {
     for (const userId of add) {
+      const guest = isOrgGuest(userId);
       await tx.workspaceMember.upsert({
         where: { workspaceId_userId: { workspaceId, userId } },
-        create: { workspaceId, userId, role: "MEMBER" },
-        update: {},
+        create: { workspaceId, userId, role: guest ? "GUEST" : "MEMBER" },
+        // adding a guest again repairs a row that older data stored as MEMBER/ADMIN
+        update: guest ? { role: "GUEST" } : {},
       });
     }
     if (input.promoteUserIds?.length) {
@@ -103,10 +111,15 @@ async function manage(
         data: { role: "ADMIN" },
       });
     }
-    if (input.demoteUserIds?.length) {
+    if (demote.length) {
       await tx.workspaceMember.updateMany({
-        where: { workspaceId, userId: { in: input.demoteUserIds }, role: "ADMIN" },
+        where: { workspaceId, userId: { in: demote.filter((id) => !isOrgGuest(id)) }, role: "ADMIN" },
         data: { role: "MEMBER" },
+      });
+      // a guest that older data stored as MEMBER/ADMIN lands on GUEST, not on MEMBER
+      await tx.workspaceMember.updateMany({
+        where: { workspaceId, userId: { in: demote.filter(isOrgGuest) }, role: { not: "GUEST" } },
+        data: { role: "GUEST" },
       });
     }
     if (input.removeUserIds?.length) {

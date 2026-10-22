@@ -8,6 +8,7 @@ import {
   type ViewQuery,
   type ViewTask,
 } from "@/server/services/views";
+import { canWriteInWorkspace } from "@/server/workspace-role";
 
 /**
  * "My Work": the signed-in user's own tasks, in the workspaces they can open.
@@ -17,7 +18,9 @@ import {
  *  - created                                       → tasks CREATED by the user
  *  - always limited to `accessibleWorkspaceIds` — work in a workspace the user
  *    cannot open never shows, even if it is assigned to / created by them
- *  - org GUESTs keep read-only rows (`editable: false`), judged per task's org
+ *  - `editable` is judged per task's workspace with the same rule as the write routes and the
+ *    List/Calendar pages (workspace-role.ts): an org GUEST is read-only everywhere, whatever
+ *    their workspace row says, and a workspace GUEST row is read-only too
  */
 export const MY_WORK_TABS = ["today", "upcoming", "overdue", "completed", "mine", "created"] as const;
 export type MyWorkTab = (typeof MY_WORK_TABS)[number];
@@ -65,10 +68,18 @@ export async function getMyWork(userId: string): Promise<MyWorkData> {
   if (memberships.length === 0 || accessible.length === 0) return results;
 
   // group the accessible workspaces by organization (every query stays org-scoped)
-  const workspaces = await db.workspace.findMany({
-    where: { id: { in: accessible } },
-    select: { id: true, organizationId: true },
-  });
+  const [workspaces, wsRows] = await Promise.all([
+    db.workspace.findMany({
+      where: { id: { in: accessible } },
+      select: { id: true, organizationId: true },
+    }),
+    // the user's own row in each of them (none for the workspaces an org OWNER/ADMIN inherits)
+    db.workspaceMember.findMany({
+      where: { userId, workspaceId: { in: accessible } },
+      select: { workspaceId: true, role: true },
+    }),
+  ]);
+  const wsRoleById = new Map(wsRows.map((r) => [r.workspaceId, r.role] as const));
   const idsByOrg = new Map<string, string[]>();
   for (const ws of workspaces) {
     const list = idsByOrg.get(ws.organizationId) ?? [];
@@ -82,7 +93,6 @@ export async function getMyWork(userId: string): Promise<MyWorkData> {
     memberships.map(async (m) => {
       const workspaceIds = idsByOrg.get(m.organizationId);
       if (!workspaceIds || workspaceIds.length === 0) return [];
-      const editable = m.role !== "GUEST";
       return Promise.all(
         MY_WORK_TABS.map(async (tab) => {
           const found = await queryTasksForView({
@@ -90,7 +100,12 @@ export async function getMyWork(userId: string): Promise<MyWorkData> {
             orgId: m.organizationId,
             workspaceIds,
           });
-          return { tab, rows: found.map((task): MyWorkRow => ({ task, editable })) };
+          return {
+            tab,
+            rows: found.map(
+              (task): MyWorkRow => ({ task, editable: canWriteInWorkspace(m.role, wsRoleById.get(task.workspaceId)) }),
+            ),
+          };
         }),
       );
     }),

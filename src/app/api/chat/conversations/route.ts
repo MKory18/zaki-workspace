@@ -13,11 +13,11 @@ import {
 
 const bodySchema = z.discriminatedUnion("kind", [createDmSchema, createGroupSchema]);
 
-/** GET: my conversations (+ unread counts + last message preview). */
+/** GET: my conversations (+ unread counts + last message preview). Guests get 403 (service). */
 export async function GET() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
-    return NextResponse.json({ conversations: await listConversations(ctx.userId, ctx.orgId) });
+    return NextResponse.json({ conversations: await listConversations(ctx) });
   });
 }
 

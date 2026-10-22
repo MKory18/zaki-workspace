@@ -90,14 +90,21 @@ async function readSharedSecret(orgId: string): Promise<string | null> {
   return decryptSecrets<{ sharedSecret: string }>(row.secretEnc)?.sharedSecret ?? null;
 }
 
-export async function getN8nStatus(orgId: string): Promise<N8nStatus> {
+/**
+ * The connection state. The webhook URL (its path can act as a secret) and the event filter are
+ * the org managers' business: when `viewerRole` is given and is not OWNER/ADMIN, only the
+ * connected flag and the stored-secret marker are returned. Leave `viewerRole` out only when the
+ * caller already knows it is a manager (configureN8n answering the manager who just saved).
+ */
+export async function getN8nStatus(orgId: string, viewerRole?: string): Promise<N8nStatus> {
   const row = await getIntegration(orgId, "N8N");
   if (!row) return { connected: false, webhookUrl: null, events: [], sharedSecret: null };
   const meta = (row.config ?? {}) as { webhookUrl?: string; events?: string[] };
+  const manager = viewerRole === undefined || viewerRole === "OWNER" || viewerRole === "ADMIN";
   return {
     connected: row.connected && Boolean(meta.webhookUrl),
-    webhookUrl: meta.webhookUrl ?? null,
-    events: meta.events ?? [],
+    webhookUrl: manager ? meta.webhookUrl ?? null : null,
+    events: manager ? meta.events ?? [] : [],
     sharedSecret: row.secretEnc ? "__stored__" : null,
   };
 }

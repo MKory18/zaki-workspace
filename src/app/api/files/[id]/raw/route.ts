@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
 import { activeOrgCtx } from "@/server/services/integrations";
+import { assertNotGuest } from "@/server/services/guest-guard";
 import { readStored } from "@/server/services/files";
 import { parseByteRange } from "@/server/files/range";
 
 /**
  * ?download=1 → attachment; otherwise inline (preview) with strict sniffed type.
  * Honours a single `Range: bytes=…` request (206) so video/audio can be seeked.
+ * Org GUESTs get 403 `guest.no_access` instead of the bytes.
  */
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
+    assertNotGuest(ctx);
     const { buffer, mimeType, name } = await readStored(ctx.orgId, params.id);
     const wantsDownload = new URL(req.url).searchParams.get("download") === "1";
     const base: Record<string, string> = {

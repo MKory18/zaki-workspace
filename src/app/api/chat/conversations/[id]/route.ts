@@ -1,32 +1,29 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
-import { db } from "@/server/db";
-import { ForbiddenError } from "@/server/auth";
 import { parseJson } from "@/server/validation";
 import { activeOrgCtx } from "@/server/services/integrations";
 import {
   conversationDetail,
+  leaveConversation,
   manageGroup as manageGroupService,
   manageGroupSchema,
-  markRead,
-  requireConversationMember,
+  markConversationRead,
 } from "@/server/services/chat";
 
-/** GET: conversation header + members + recent messages (ascending). */
+/** GET: conversation header + members + recent messages (ascending). Guests get 403 (service). */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
-    const detail = await conversationDetail(params.id, ctx.userId);
+    const detail = await conversationDetail(ctx, params.id);
     return NextResponse.json(detail);
   });
 }
 
-/** POST: mark the conversation as read (called when the thread is opened). */
+/** POST: mark the conversation as read (called when the thread is opened). Guests get 403 (service). */
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
-    await requireConversationMember(params.id, ctx.userId);
-    await markRead(ctx.userId, params.id);
+    await markConversationRead(ctx, params.id);
     return NextResponse.json({ ok: true });
   });
 }
@@ -45,11 +42,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
-    const member = await requireConversationMember(params.id, ctx.userId);
-    if (member.conversation.kind !== "GROUP") throw new ForbiddenError("chat.dm_immutable");
-    await db.conversationMember.delete({
-      where: { conversationId_userId: { conversationId: params.id, userId: ctx.userId } },
-    });
+    await leaveConversation(ctx, params.id);
     return NextResponse.json({ ok: true });
   });
 }

@@ -5,6 +5,7 @@ import { log } from "./log";
 import { getSessionUser, clearSessionCookie, setSessionCookie } from "./session";
 import type { OrgRole, WorkspaceRole } from "@prisma/client";
 import { Prisma } from "@prisma/client";
+import { workspaceRoleOf } from "./workspace-role";
 
 export { clearSessionCookie, setSessionCookie };
 
@@ -114,24 +115,25 @@ export async function requireWorkspace(
     select: { id: true, organizationId: true },
   });
   if (!workspace) throw new NotFoundError("workspace.not_found");
-  const wsMember = await db.workspaceMember.findUnique({
-    where: { workspaceId_userId: { workspaceId, userId: user.id } },
-    select: { role: true },
-  });
+  const [wsMember, orgMember] = await Promise.all([
+    db.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId: user.id } },
+      select: { role: true },
+    }),
+    db.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: workspace.organizationId, userId: user.id } },
+      select: { role: true },
+    }),
+  ]);
   if (wsMember) {
-    if (roles.includes(wsMember.role)) {
-      const orgMember = await db.organizationMember.findUnique({
-        where: { organizationId_userId: { organizationId: workspace.organizationId, userId: user.id } },
-        select: { role: true },
-      });
+    // An org GUEST is a guest in every workspace, whatever their workspace row says
+    // (the row may say MEMBER or ADMIN: older data stored it that way).
+    const effective = workspaceRoleOf(orgMember?.role, wsMember.role);
+    if (roles.includes(effective)) {
       return { orgId: workspace.organizationId, orgRole: orgMember?.role ?? "GUEST", userId: user.id };
     }
     // Required higher role: org OWNER/ADMIN outrank any lower workspace row
     // (never GUEST — the org-level restriction still applies).
-    const orgMember = await db.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: workspace.organizationId, userId: user.id } },
-      select: { role: true },
-    });
     const orgCanPromote = orgMember && (orgMember.role === "OWNER" || orgMember.role === "ADMIN") && roles.includes("ADMIN");
     if (orgCanPromote) {
       return { orgId: workspace.organizationId, orgRole: orgMember!.role, userId: user.id };
@@ -139,10 +141,6 @@ export async function requireWorkspace(
     throw new ForbiddenError("insufficient_role");
   }
   // org-level ADMIN/OWNER inherit workspace access; GUEST does not inherit.
-  const orgMember = await db.organizationMember.findUnique({
-    where: { organizationId_userId: { organizationId: workspace.organizationId, userId: user.id } },
-    select: { role: true },
-  });
   if (orgMember && orgMember.role !== "GUEST") {
     return { orgId: workspace.organizationId, orgRole: orgMember.role, userId: user.id };
   }

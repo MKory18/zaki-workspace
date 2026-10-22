@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
-import { ForbiddenError } from "@/server/auth";
 import { activeOrgCtx } from "@/server/services/integrations";
+import { assertNotGuest } from "@/server/services/guest-guard";
 import { syncUpdates } from "@/server/services/telegram";
 
-/** POST: pull new Telegram updates for the active org (guests read-only). */
+/** POST: pull new Telegram updates for the active org (org members, never guests). */
 export async function POST() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
-    if (ctx.orgRole === "GUEST") throw new ForbiddenError("guest.readonly");
+    assertNotGuest(ctx);
     const result = await syncUpdates(ctx.orgId);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 400 });

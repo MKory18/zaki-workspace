@@ -17,6 +17,12 @@ export default async function FilesPage() {
   });
   if (!membership) throw new ForbiddenError("not_org_member");
 
+  // The library is org-wide (price sheets, specifications...): the API refuses guests, so they
+  // get a notice rather than a view whose every request fails.
+  if (membership.role === "GUEST") {
+    return <div className="mx-auto max-w-2xl p-10 text-center text-sm text-muted">{t("guest.no_access")}</div>;
+  }
+
   return <FilesView me={{ id: user.id, role: membership.role }} />;
 }
 

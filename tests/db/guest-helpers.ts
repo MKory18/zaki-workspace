@@ -149,3 +149,47 @@ export async function makeRoutineLog(routineId: string, day: string, completedBy
 export async function setProfile(userId: string, data: { jobTitle?: string; bio?: string }) {
   return db.user.update({ where: { id: userId }, data });
 }
+
+/** What a customer chat holds: the phone number a guest must never read. */
+export const CUSTOMER_PHONE = "+961 70 123 456";
+export const CUSTOMER_CHAT_TITLE = "Customer group - Ali";
+
+/**
+ * A connected Telegram bot with one customer chat and one message in it. No secret is stored
+ * (reads never need it), so the fixture does not depend on how secrets are encrypted.
+ */
+export async function seedTelegram(orgId: string) {
+  const integration = await db.integration.create({
+    data: { orgId, type: "TELEGRAM", connected: true, config: { botUsername: "zaki_test_bot" } },
+  });
+  const chatId = "777001";
+  await db.telegramChat.create({
+    data: { orgId, integrationId: integration.id, chatId, title: CUSTOMER_CHAT_TITLE, type: "group" },
+  });
+  await db.telegramMessage.create({
+    data: {
+      orgId,
+      integrationId: integration.id,
+      chatId,
+      messageId: 1,
+      fromName: "Customer Ali",
+      text: `please call me on ${CUSTOMER_PHONE}`,
+      sentAt: new Date("2026-10-01T09:00:00.000Z"),
+    },
+  });
+  return { integration, chatId };
+}
+
+export const N8N_HOOK = "https://hooks.example.com/webhook/s3cr3t-path-9f8e7d";
+
+/** A connected n8n integration row (webhook URL + event filter; no secret needed for reading the status). */
+export async function seedN8n(orgId: string, opts: { url?: string; events?: string[] } = {}) {
+  return db.integration.create({
+    data: {
+      orgId,
+      type: "N8N",
+      connected: true,
+      config: { webhookUrl: opts.url ?? N8N_HOOK, events: opts.events ?? ["task.created", "task.moved"] },
+    },
+  });
+}

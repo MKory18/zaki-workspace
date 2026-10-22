@@ -2,6 +2,7 @@ import { currentUser, ForbiddenError, NotFoundError } from "@/server/auth";
 import { db } from "@/server/db";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { TASK_INCLUDE } from "@/server/services/tasks";
+import { canWriteInWorkspace } from "@/server/workspace-role";
 import { BoardView, type TaskCardData } from "@/components/board-view";
 
 export default async function BoardPage({ params }: { params: { id: string } }) {
@@ -28,6 +29,10 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     select: { role: true },
   });
   if (!member) throw new ForbiddenError("not_org_member");
+  const wsRow = await db.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: board.project.workspace.id, userId: user.id } },
+    select: { role: true },
+  });
 
   const [columns, tasks, org] = await Promise.all([
     db.boardColumn.findMany({
@@ -70,7 +75,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
       }}
       columns={columns}
       tasks={taskData}
-      canEdit={member.role !== "GUEST"}
+      canEdit={canWriteInWorkspace(member.role, wsRow?.role)}
     />
   );
 }
