@@ -1,11 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { originAllowed } from "@/lib/origin-guard";
 
 /**
- * Cheap cookie check only — full JWT verification runs in server code.
- * Protects app pages; API routes enforce auth themselves.
+ * 1. Writes to the JSON API must come from this app's own pages (see origin-guard.ts).
+ *    Machine-to-machine endpoints are exempt: they authenticate with their own
+ *    token/signature and are not called from a browser.
+ * 2. Cheap cookie check for app pages — full JWT verification runs in server code.
+ *    API routes enforce auth themselves.
  */
+const MACHINE_PATHS = ["/api/integrations/n8n/inbound", "/api/v1/", "/api/health"];
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  if (pathname.startsWith("/api/") && !MACHINE_PATHS.some((p) => pathname === p || pathname.startsWith(p))) {
+    const allowed = originAllowed({
+      method: req.method,
+      origin: req.headers.get("origin"),
+      host: req.headers.get("host"),
+      forwardedHost: req.headers.get("x-forwarded-host"),
+      secFetchSite: req.headers.get("sec-fetch-site"),
+      appUrl: process.env["APP_URL"],
+    });
+    if (!allowed) {
+      return NextResponse.json({ error: "forbidden", message: "origin.mismatch" }, { status: 403 });
+    }
+  }
+
   const publicPaths = ["/login", "/register", "/api/auth/login", "/api/auth/register"];
   if (publicPaths.some((p) => pathname === p || pathname.startsWith("/_next"))) {
     return NextResponse.next();

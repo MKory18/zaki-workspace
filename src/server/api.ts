@@ -7,6 +7,7 @@ import {
   ValidationError,
 } from "./auth";
 import { log } from "./log";
+import { RateLimitedError } from "./rate-limit";
 
 export type ApiErrorCode =
   | "auth.required"
@@ -14,6 +15,7 @@ export type ApiErrorCode =
   | "not_found"
   | "validation.failed"
   | "conflict"
+  | "rate_limited"
   | "internal";
 
 const STATUS: Record<ApiErrorCode, number> = {
@@ -22,6 +24,7 @@ const STATUS: Record<ApiErrorCode, number> = {
   not_found: 404,
   "validation.failed": 422,
   conflict: 409,
+  rate_limited: 429,
   internal: 500,
 };
 
@@ -29,16 +32,20 @@ export function apiError(
   code: ApiErrorCode,
   message?: string,
   details?: unknown,
+  headers?: Record<string, string>,
 ): NextResponse {
   return NextResponse.json(
     { error: code, message, details },
-    { status: STATUS[code] },
+    { status: STATUS[code], ...(headers ? { headers } : {}) },
   );
 }
 
 /** Central handler: consistent shapes, no stack traces in prod responses. */
 export function withApi(fn: () => Promise<NextResponse>): Promise<NextResponse> {
   return fn().catch((err) => {
+    if (err instanceof RateLimitedError) {
+      return apiError("rate_limited", err.message, undefined, { "retry-after": String(err.retryAfterSec) });
+    }
     if (err instanceof UnauthorizedError) return apiError("auth.required", err.message);
     if (err instanceof ForbiddenError) return apiError("forbidden", err.message);
     if (err instanceof NotFoundError) return apiError("not_found", err.message);
