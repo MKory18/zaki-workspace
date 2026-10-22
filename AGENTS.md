@@ -39,8 +39,10 @@ claim more than the code does: do not rely on them.
 - **Never accept a database reset.** If `prisma migrate dev` or any tool offers to reset,
   drop or wipe a database: answer no, stop, and report.
 - **Written deliverables for the owner are Word (.docx) plus a PDF** he can read on a phone.
-- **Phases are approved one at a time.** Do not start the next phase before the owner has
-  approved the previous one on the live site.
+- **Phases run back to back.** The owner's instruction (2026-10-22): move from one phase to the
+  next without waiting for approval. A phase still ends only when every gate is green and an
+  independent review has been answered, and it is committed in small commits. Pushing, merging and
+  deploying stay the owner's decision: nothing leaves the machine until he says so.
 
 ## How work is done
 
@@ -185,6 +187,52 @@ by a *later* migration failed on a fresh database, and a folder was renamed to r
   documented. 🔧 Before any new migration, the owner runs the read-only status check
   (`npx prisma migrate status` from the app container) and sends the output.
 
+## Access model — who may do what (Phase 1)
+
+One model, in `src/server/policy/` and `src/server/auth.ts`. A route that decides access any
+other way is a bug.
+
+- **Ranks** `OWNER > ADMIN > LEAD > MEMBER > GUEST` (`rank.ts`; the order of the database enum
+  means nothing). There is exactly one OWNER. A GUEST is an external partner: no prices, no
+  staff directory, never writes.
+- **Capabilities** are per-person switches on top of the rank (`capabilities.ts`: `spaces.create`,
+  `users.manage`, `directory.view`, `crm.view`, `crm.edit`, `prices.view`, `integrations.manage`,
+  `announce.send`, `escalation.configure`, `cash.view`, `penalties.view`, `archive.view`). The rank
+  gives the defaults, the owner switches single ones on or off (`OrganizationMember.capabilities`
+  / `revokedCapabilities`). A guest holds none; `archive.view` is the owner's alone. Check with
+  `requireActor()` + `assertCan(actor, "…")`, never by comparing a role name.
+- **A request is only as good as the database says it is.** Rank, status and capabilities are read
+  on every request, never from the cookie. The cookie carries `tv` (the user's `tokenVersion`):
+  suspending, offboarding, resetting a password, changing one's own password and "log out
+  everywhere" bump it, which kills every older cookie at once. `currentUser()` returns null for a
+  cookie whose `tv` is stale or for somebody with no ACTIVE membership.
+- **People are ACTIVE, SUSPENDED or OFFBOARDED** (`OrganizationMember.status`). Nothing is ever
+  deleted: offboarding removes the person from every space and hands their open work to someone
+  else, their old messages stay. Every query that lists, validates or counts the people of an
+  organization filters `status: "ACTIVE"` — `tests/active-membership-guard.test.ts` fails on one
+  that does not (a deliberate exception carries `// all-statuses: <reason>` on its line).
+- **A space is visible only to the people in it, and to the OWNER.** `requireWorkspace` and
+  `accessibleWorkspaceIds` need a `WorkspaceMember` row (an ADMIN inherits nothing; the owner needs
+  no row, and reading as the owner leaves no trace: no membership, no "seen", no notification).
+- **Accounts are created by the owner**, or by anybody holding `users.manage`, from the People
+  screen (`/api/organizations/[id]/members`): username, optional e-mail, a temporary password the
+  person must change at the first sign-in, and the transparency notice they must accept once
+  (`/onboarding`; bump `Organization.settings.transparencyVersion` to ask everybody again).
+  `/register` only works for the very first company on an empty database. Everybody manages only
+  people STRICTLY BELOW their own rank (`member-rules.ts`); only the owner manages admins.
+  ⚠️ A person holding `users.manage` can reset the password of anybody below them, which means they
+  can sign in as them. 🔧 Give the switch only to somebody the owner trusts; every reset is audited.
+- **A pending person** (temporary password or notice not accepted) gets 403
+  `auth.onboarding_required` from every route except the few that ARE the onboarding (`/api/me`,
+  `/api/me/password`, `/api/me/transparency`, sign-out). A server-rendered PAGE must get its user
+  from `pageUser()` / `pageActor()`, never from `currentUser()`: in the App Router a page still
+  runs when its layout redirects, so each page refuses for itself.
+- **Re-issuing a cookie** (`startSession`) signs the session version the request was authenticated
+  with (`CurrentUser.tv`, or the one a password change just wrote), never a fresh read: a revocation
+  that lands while a request is in flight must not be undone by that request.
+- **The middleware decides on the canonical path** (percent-escapes decoded, dot segments resolved):
+  Next's router resolves `/%61pi/...` to `/api/...`, so the Origin guard must too.
+
 ## Security — this repository is public
 
 - **No secret in the repository, ever.** `.env` is ignored; `.env.example` holds names and
@@ -226,8 +274,12 @@ by a *later* migration failed on a fresh database, and a folder was renamed to r
 - `src/app/api/**/route.ts` handlers are thin: parse with zod, call a service in
   `src/server/services/`, wrap in `withApi` (`src/server/api.ts`). Server-only code stays out
   of client components.
-- The interface is Arabic and right-to-left: strings live in `src/lib/i18n/ar.json` and are
-  read through `t()`; there is no English text on screen.
+- The interface is Arabic and right-to-left: strings live in `src/lib/i18n/ar.json` plus one
+  small fragment per feature (`ar.<feature>.json`, merged by `dict.ts`, so people can add strings
+  at the same time without editing one 700-line file) and are read through `t()`. No key may exist
+  in two files and every `t("key")` literal must exist (`tests/encoding-hygiene.test.ts`). Errors
+  travel as machine keys (`new ForbiddenError("orgm.role_denied")`) and the screen shows
+  `t(key)`, so every new error key needs its Arabic string. There is no English text on screen.
 - Environment is read through `src/server/env.ts` (zod). A missing or malformed value fails
   at boot, loudly, with the key name and never the value.
 - Read the Next.js 14 documentation for what you use; do not assume Next 15/16 behaviour
