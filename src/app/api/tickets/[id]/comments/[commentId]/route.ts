@@ -11,8 +11,8 @@ import {
 /** PATCH: edit a comment (author or org admin). */
 export async function PATCH(req: Request, { params }: { params: { id: string; commentId: string } }) {
   return withApi(async () => {
-    const input = await parseJson(ticketCommentSchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(ticketCommentSchema, req);
     const comment = await editTicketComment(ctx, params.id, params.commentId, input.body);
     return NextResponse.json({ comment });
   });

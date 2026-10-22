@@ -12,8 +12,8 @@ import { useToast } from "@/components/ui/toast";
 interface MemberRow {
   id: string;
   name: string;
-  email: string;
-  role: string; // ADMIN | MEMBER | GUEST | org:OWNER | org:ADMIN
+  email?: string; // absent for an external partner (guest) viewer
+  role?: string; // ADMIN | MEMBER | GUEST | org:OWNER | org:ADMIN — absent for a guest viewer
 }
 interface DirectoryPerson {
   userId: string;
@@ -54,8 +54,10 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
     onError: (err) => toast(errText(err, t), "error"),
   });
 
-  const real = (members.data?.members ?? []).filter((m) => !m.role.startsWith("org:"));
-  const inherited = (members.data?.members ?? []).filter((m) => m.role.startsWith("org:"));
+  // A guest viewer gets rows without a role (names only): treat that as "no role", never crash.
+  const rows = (members.data?.members ?? []).map((m) => ({ ...m, role: m.role ?? "" }));
+  const real = rows.filter((m) => !m.role.startsWith("org:"));
+  const inherited = rows.filter((m) => m.role.startsWith("org:"));
   const memberIds = new Set([...real.map((m) => m.id), ...inherited.map((m) => m.id)]);
   const addable = (directory.data?.people ?? []).filter((p) => !memberIds.has(p.userId));
 
@@ -80,11 +82,11 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
                         <ShieldCheck className="size-3" />
                         {t("ws.inherited")}
                       </span>
-                    ) : (
+                    ) : m.role ? (
                       <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-fg-muted">
                         {t(roleKey === "ADMIN" ? "ws.role_admin" : roleKey === "GUEST" ? "ws.role_guest" : "ws.role_member")}
                       </span>
-                    )}
+                    ) : null}
                     {!isInherited && m.role === "MEMBER" ? (
                       <Button
                         size="sm"

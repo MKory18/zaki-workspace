@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { activeOrgCtx } from "@/server/services/integrations";
+import { withApi } from "@/server/api";
+import { ForbiddenError } from "@/server/auth";
+import { activeOrgCtx, assertOrgManager } from "@/server/services/integrations";
 import { exchangeCode, connectGoogle, verifyState } from "@/server/services/google";
 
 /** GET: Google consent redirect lands here — exchanges the code, stores tokens. */
@@ -14,18 +16,27 @@ export async function GET(req: Request) {
   const parsed = verifyState(state);
   if (!parsed) return back("/automation?google=error&reason=bad_state");
 
-  // The signed state is org+user bound; still verify membership defensively.
+  let ctx;
   try {
-    await activeOrgCtx();
+    ctx = await activeOrgCtx();
   } catch {
     return back("/login?next=" + encodeURIComponent("/automation"));
   }
+  const sessionUserId = ctx.userId;
 
-  const tokens = await exchangeCode(code);
-  if (!tokens.ok) {
-    const reason = encodeURIComponent(tokens.error.slice(0, 100));
-    return back(`/automation?google=error&reason=${reason}`);
-  }
-  await connectGoogle(parsed.orgId, parsed.userId, tokens);
-  return back("/automation?google=connected");
+  return withApi(async () => {
+    // Connecting Drive is an org-level decision: the caller must be an OWNER/ADMIN of the
+    // org the state names, and the state must have been issued to the very person who is
+    // finishing the flow (a state is signed, not secret — it must not be replayable by others).
+    await assertOrgManager(parsed.orgId);
+    if (parsed.userId !== sessionUserId) throw new ForbiddenError("forbidden");
+
+    const tokens = await exchangeCode(code);
+    if (!tokens.ok) {
+      const reason = encodeURIComponent(tokens.error.slice(0, 100));
+      return back(`/automation?google=error&reason=${reason}`);
+    }
+    await connectGoogle(parsed.orgId, parsed.userId, tokens);
+    return back("/automation?google=connected");
+  });
 }

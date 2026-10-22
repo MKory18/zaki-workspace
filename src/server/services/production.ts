@@ -2,6 +2,13 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, audit } from "@/server/auth";
 import { canManageOrg } from "@/server/services/orgs";
+import { assertCanWrite } from "@/server/services/guest-guard";
+
+/**
+ * Daily production. Reading the checklist and the routine list stays open to every
+ * org member; every write (tick a routine off, create/edit/delete one) is refused to
+ * org GUESTs with `guest.readonly`, and managing routines is OWNER/ADMIN only.
+ */
 
 /** Local calendar day string "YYYY-MM-DD" (the whole app runs on one machine). */
 export function dayIso(d: Date): string {
@@ -133,7 +140,7 @@ async function assertRoutineOrg(orgId: string, routineId: string) {
 }
 
 export async function createRoutine(ctx: { orgId: string; userId: string }, input: z.infer<typeof routineSchema>) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	await assertCanManageRoutines(ctx);
 	const routine = await db.routine.create({
 		data: {
 			orgId: ctx.orgId,
@@ -151,7 +158,7 @@ export async function createRoutine(ctx: { orgId: string; userId: string }, inpu
 }
 
 export async function updateRoutine(ctx: { orgId: string; userId: string }, id: string, input: z.infer<typeof routineSchema>) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	await assertCanManageRoutines(ctx);
 	await assertRoutineOrg(ctx.orgId, id);
 	await db.routine.update({
 		where: { id },
@@ -168,19 +175,30 @@ export async function updateRoutine(ctx: { orgId: string; userId: string }, id: 
 }
 
 export async function deleteRoutine(ctx: { orgId: string; userId: string }, id: string) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	await assertCanManageRoutines(ctx);
 	await assertRoutineOrg(ctx.orgId, id);
 	await db.routine.delete({ where: { id } });
 	await audit("routine.deleted", { actorId: ctx.userId, orgId: ctx.orgId, target: id });
 }
 
-/** Toggle (or force) one routine's completion for one day. Any org member may check off. */
+/**
+ * Managing routines (create, edit, delete) is OWNER/ADMIN only. A guest is told it is
+ * read-only (`guest.readonly`), a plain member that their role is not enough.
+ */
+async function assertCanManageRoutines(ctx: { orgId: string; userId: string }): Promise<void> {
+	const role = await orgRoleOf(ctx.orgId, ctx.userId);
+	assertCanWrite({ orgRole: role });
+	if (!canManageOrg(role)) throw new ForbiddenError("orgm.role_denied");
+}
+
+/** Toggle (or force) one routine's completion for one day. Any org member except a guest may check off. */
 export async function setRoutineDone(
 	ctx: { orgId: string; userId: string },
 	routineId: string,
 	day: string,
 	done: boolean,
 ): Promise<void> {
+	assertCanWrite({ orgRole: await orgRoleOf(ctx.orgId, ctx.userId) });
 	const routine = await db.routine.findFirst({ where: { id: routineId, orgId: ctx.orgId }, select: { id: true } });
 	if (!routine) throw new NotFoundError("routine.not_found");
 	if (done) {

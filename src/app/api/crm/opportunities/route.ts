@@ -8,11 +8,11 @@ import {
   listOpportunities,
 } from "@/server/services/crm";
 
-/** GET: opportunities of the caller's org. */
+/** GET: opportunities of the caller's org (prices: staff only, guests get 403 from the service). */
 export async function GET() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
-    const opportunities = await listOpportunities(ctx.orgId);
+    const opportunities = await listOpportunities(ctx);
     return NextResponse.json({ opportunities });
   });
 }
@@ -20,8 +20,8 @@ export async function GET() {
 /** POST: create an opportunity linked to an existing customer. */
 export async function POST(req: Request) {
   return withApi(async () => {
-    const input = await parseJson(createOpportunitySchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(createOpportunitySchema, req);
     const opportunity = await createOpportunity(ctx, input);
     return NextResponse.json({ opportunity }, { status: 201 });
   });

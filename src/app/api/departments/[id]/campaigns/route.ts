@@ -24,11 +24,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   });
 }
 
-/** POST: create a campaign in this department. */
+/** POST: create a campaign in this department (org member, not a guest). */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(createCampaignSchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(createCampaignSchema, req);
     const campaign = await createCampaign(ctx, params.id, input);
     return NextResponse.json({ campaign }, { status: 201 });
   });

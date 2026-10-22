@@ -8,12 +8,17 @@ const querySchema = z.object({
   files: z.coerce.boolean().optional(),
 });
 
-/** GET: connection status; `?files=1` appends read-only Drive file list. */
+/**
+ * GET: connection status (any org member); `?files=1` appends the read-only Drive
+ * file list, which is org OWNER/ADMIN only (guests and plain members get 403,
+ * whether or not Drive is connected).
+ */
 export async function GET(req: Request) {
   return withApi(async () => {
     const url = new URL(req.url);
     const q = querySchema.parse(Object.fromEntries(url.searchParams.entries()));
     const ctx = await activeOrgCtx();
+    if (q.files) await assertOrgManager(ctx.orgId);
     const state = await getGoogleStatus(ctx.orgId);
     let files: DriveFile[] = [];
     let filesError: string | null = null;

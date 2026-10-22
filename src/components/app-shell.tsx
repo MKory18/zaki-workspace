@@ -91,7 +91,18 @@ interface OrgsResponse {
   }[];
 }
 
-export function AppShell({ user, children }: { user: CurrentUser; children: React.ReactNode }) {
+/** Areas the server refuses to org GUESTs (external partners): not offered in the menu either. */
+const GUEST_HIDDEN = new Set(["/crm", "/departments"]);
+
+export function AppShell({
+  user,
+  isGuest = false,
+  children,
+}: {
+  user: CurrentUser;
+  isGuest?: boolean;
+  children: React.ReactNode;
+}) {
   const { t, locale, setLocale } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const [wsModal, setWsModal] = useState(false);
@@ -175,7 +186,9 @@ export function AppShell({ user, children }: { user: CurrentUser; children: Reac
             </p>
           ) : null}
           <ul className="space-y-px">
-            {section.items.map((item) => {
+            {section.items
+              .filter((item) => !(isGuest && item.href && GUEST_HIDDEN.has(item.href)))
+              .map((item) => {
               const active = pathname === item.href;
               return (
                 <li key={item.href}>

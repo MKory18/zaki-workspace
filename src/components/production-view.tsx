@@ -74,7 +74,8 @@ function dayLabel(day: string, locale: string): string {
 }
 
 /** الإنتاج اليومي — recurring daily-production checklist with per-day completion. */
-export function ProductionView({ canManage }: { canManage: boolean }) {
+/** `readOnly`: an external partner (guest) sees the checklist but cannot tick anything (the server refuses too). */
+export function ProductionView({ canManage, readOnly = false }: { canManage: boolean; readOnly?: boolean }) {
 	const { t, locale } = useI18n();
 	const { toast } = useToast();
 	const qc = useQueryClient();
@@ -161,7 +162,7 @@ export function ProductionView({ canManage }: { canManage: boolean }) {
 						>
 							<button
 								aria-label={done ? t("prod.uncheck") : t("prod.check")}
-								disabled={toggle.isPending}
+								disabled={toggle.isPending || readOnly}
 								onClick={() => toggle.mutate({ routineId: item.id, done: !done })}
 								className="shrink-0"
 							>

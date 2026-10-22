@@ -3,11 +3,14 @@ import type { CampaignStatus } from "@prisma/client";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { nextTaskNumber, type Tx } from "@/server/services/tasks";
+import { assertCanWrite } from "@/server/services/guest-guard";
 
 /**
  * Campaigns live inside a department (marketing calendars).
  * Policy mirrors tickets: any org member reads/creates; dept members and org
- * admins manage (edit, transition, items).
+ * admins manage (edit, transition, items). Org GUESTs may read but never
+ * write: every mutation below starts with assertCanWrite, so a guest who is
+ * also a department member or the owner of an old campaign is still refused.
  */
 
 export const CAMPAIGN_STATUSES: CampaignStatus[] = ["DRAFT", "SCHEDULED", "RUNNING", "DONE", "CANCELLED"];
@@ -82,6 +85,7 @@ export async function createCampaign(
   departmentId: string,
   input: z.infer<typeof createCampaignSchema>,
 ) {
+  assertCanWrite(ctx);
   const { dept } = await deptContext(ctx, departmentId);
   return db.$transaction(async (tx: Tx) => {
     const number = await nextTaskNumber(ctx.orgId, tx);
@@ -109,6 +113,7 @@ export async function updateCampaign(
   campaignId: string,
   input: z.infer<typeof updateCampaignSchema>,
 ) {
+  assertCanWrite(ctx);
   const c = await loadCampaign(ctx, campaignId);
   const { isMember } = await deptContext(ctx, c.departmentId);
   if (!canManage(ctx, isMember)) throw new ForbiddenError("campaign.admin_only");
@@ -130,6 +135,7 @@ export async function updateCampaign(
 }
 
 export async function deleteCampaign(ctx: OrgAccessContext, campaignId: string) {
+  assertCanWrite(ctx);
   const c = await loadCampaign(ctx, campaignId);
   const { isMember } = await deptContext(ctx, c.departmentId);
   if (!canManage(ctx, isMember)) throw new ForbiddenError("campaign.admin_only");
@@ -156,6 +162,7 @@ export async function addCampaignItem(
   campaignId: string,
   input: z.infer<typeof campaignItemSchema>,
 ) {
+  assertCanWrite(ctx);
   const c = await loadCampaign(ctx, campaignId);
   const { isMember } = await deptContext(ctx, c.departmentId);
   if (!canManage(ctx, isMember)) throw new ForbiddenError("campaign.admin_only");
@@ -170,6 +177,7 @@ export async function addCampaignItem(
 }
 
 export async function toggleCampaignItem(ctx: OrgAccessContext, itemId: string) {
+  assertCanWrite(ctx);
   const item = await db.campaignItem.findUnique({
     where: { id: itemId },
     select: { id: true, doneAt: true, campaign: { select: { orgId: true, departmentId: true } } },
@@ -184,6 +192,7 @@ export async function toggleCampaignItem(ctx: OrgAccessContext, itemId: string) 
 }
 
 export async function deleteCampaignItem(ctx: OrgAccessContext, itemId: string) {
+  assertCanWrite(ctx);
   const item = await db.campaignItem.findUnique({
     where: { id: itemId },
     select: { id: true, campaign: { select: { orgId: true, departmentId: true } } },

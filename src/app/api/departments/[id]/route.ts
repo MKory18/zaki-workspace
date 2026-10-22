@@ -9,17 +9,18 @@ import {
   updateDepartmentSchema,
 } from "@/server/services/departments";
 
+/** GET: one department with its members and projects (guests get 403 from the service). */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
-    return NextResponse.json(await getDepartment(ctx.orgId, params.id));
+    return NextResponse.json(await getDepartment(ctx, params.id));
   });
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(updateDepartmentSchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(updateDepartmentSchema, req);
     await updateDepartment(ctx, params.id, input);
     return NextResponse.json({ ok: true });
   });

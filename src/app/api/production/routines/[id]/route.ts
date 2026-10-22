@@ -14,11 +14,11 @@ async function orgOf(userId: string) {
 	return membership?.organizationId ?? null;
 }
 
-/** PATCH: edit a routine (OWNER/ADMIN). */
+/** PATCH: edit a routine (OWNER/ADMIN; guests get 403 `guest.readonly`). */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
 	return withApi(async () => {
-		const input = await parseJson(routineSchema, req);
 		const user = await requireUser();
+		const input = await parseJson(routineSchema, req);
 		const orgId = await orgOf(user.id);
 		if (!orgId) return NextResponse.json({ error: "auth.required" }, { status: 401 });
 		await updateRoutine({ orgId, userId: user.id }, params.id, input);
@@ -26,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 	});
 }
 
-/** DELETE: remove a routine (OWNER/ADMIN). */
+/** DELETE: remove a routine (OWNER/ADMIN; guests get 403 `guest.readonly`). */
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
 	return withApi(async () => {
 		const user = await requireUser();

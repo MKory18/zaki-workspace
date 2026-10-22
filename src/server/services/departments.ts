@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
+import { assertNotGuest } from "@/server/services/guest-guard";
+
+/**
+ * The departments area is the company's staff directory (who works where, with
+ * which job title), so org GUESTs get 403 on every function here, read or write.
+ * Every exported function below takes the caller's context for that.
+ */
 
 /** Department mutations are office-level decisions: OWNER/ADMIN only. */
 export function canManageDepartments(orgRole: string): boolean {
@@ -36,6 +43,7 @@ async function assertOrgUsers(orgId: string, userIds: string[]) {
 }
 
 export async function createDepartment(ctx: OrgAccessContext, input: z.infer<typeof createDepartmentSchema>) {
+  assertNotGuest(ctx);
   if (!canManageDepartments(ctx.orgRole)) throw new ForbiddenError("dept.admin_only");
   if (input.leadId) {
     const ok = await assertOrgUsers(ctx.orgId, [input.leadId]);
@@ -57,9 +65,10 @@ export async function createDepartment(ctx: OrgAccessContext, input: z.infer<typ
   return dept;
 }
 
-export async function listDepartments(orgId: string) {
+export async function listDepartments(ctx: OrgAccessContext) {
+  assertNotGuest(ctx);
   const rows = await db.department.findMany({
-    where: { orgId },
+    where: { orgId: ctx.orgId },
     orderBy: { createdAt: "asc" },
     include: {
       memberships: { select: { user: { select: { id: true, name: true, jobTitle: true } }, role: true } },
@@ -86,8 +95,9 @@ export async function listDepartments(orgId: string) {
   });
 }
 
-export async function getDepartment(orgId: string, id: string) {
-  const d = await db.department.findFirst({ where: { id, orgId } });
+export async function getDepartment(ctx: OrgAccessContext, id: string) {
+  assertNotGuest(ctx);
+  const d = await db.department.findFirst({ where: { id, orgId: ctx.orgId } });
   if (!d) throw new NotFoundError("dept.not_found");
   const members = await db.departmentMember.findMany({
     where: { departmentId: d.id },
@@ -129,6 +139,7 @@ export async function getDepartment(orgId: string, id: string) {
 }
 
 export async function updateDepartment(ctx: OrgAccessContext, id: string, input: z.infer<typeof updateDepartmentSchema>) {
+  assertNotGuest(ctx);
   if (!canManageDepartments(ctx.orgRole)) throw new ForbiddenError("dept.admin_only");
   const d = await db.department.findFirst({ where: { id, orgId: ctx.orgId } });
   if (!d) throw new NotFoundError("dept.not_found");
@@ -148,6 +159,7 @@ export async function updateDepartment(ctx: OrgAccessContext, id: string, input:
 }
 
 export async function deleteDepartment(ctx: OrgAccessContext, id: string): Promise<void> {
+  assertNotGuest(ctx);
   if (!canManageDepartments(ctx.orgRole)) throw new ForbiddenError("dept.admin_only");
   const d = await db.department.findFirst({ where: { id, orgId: ctx.orgId }, select: { id: true } });
   if (!d) throw new NotFoundError("dept.not_found");
@@ -156,6 +168,7 @@ export async function deleteDepartment(ctx: OrgAccessContext, id: string): Promi
 }
 
 export async function setMembers(ctx: OrgAccessContext, id: string, input: z.infer<typeof membersSchema>) {
+  assertNotGuest(ctx);
   if (!canManageDepartments(ctx.orgRole)) throw new ForbiddenError("dept.admin_only");
   const d = await db.department.findFirst({ where: { id, orgId: ctx.orgId }, select: { id: true } });
   if (!d) throw new NotFoundError("dept.not_found");

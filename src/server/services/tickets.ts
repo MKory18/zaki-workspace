@@ -4,14 +4,20 @@ import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { nextTaskNumber, type Tx } from "@/server/services/tasks";
 import { pushNotificationToMany } from "@/server/notify";
+import { assertCanWrite } from "@/server/services/guest-guard";
 
 /**
  * IT tickets live inside a department. Access policy:
+ * - org GUESTs: read-only. They cannot create, edit, comment, change a status or
+ *   delete anything (assertCanWrite), whatever their ticket/department links are.
  * - org OWNER/ADMIN: full manage
- * - department members: create, assign within the department, transition status
- * - other org members: read-only inside their org? NO — org-wide visibility is
- *   intentional for support desks: any org member may create a ticket; only
- *   dept members/org admins may assign or close.
+ * - department members and the department lead: create, assign within the
+ *   department, transition status
+ * - the assignee: works the ticket through its whole lifecycle
+ * - the creator: may edit it while it is still OPEN (see canEditTicket)
+ * - everybody else: org-wide visibility is intentional for support desks and any
+ *   (non-guest) org member may open a ticket or comment, but may NOT edit or
+ *   close somebody else's ticket.
  */
 
 export const TICKET_STATUSES: TicketStatus[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
@@ -50,15 +56,37 @@ export async function nextTicketNumber(orgId: string, tx: Tx): Promise<number> {
   return nextTaskNumber(orgId, tx);
 }
 
+export interface TicketEditFacts {
+  isAdmin: boolean; // org OWNER / ADMIN
+  isDeptMember: boolean; // has a DepartmentMember row for the ticket's department
+  isDeptLead: boolean; // is Department.leadId
+  isCreator: boolean;
+  isAssignee: boolean;
+  status: TicketStatus;
+}
+
+/**
+ * Who may edit a ticket or change its status (the status path itself is still
+ * limited by canTransition). Admins, department members, the department lead and
+ * the assignee may at every status. A creator who is none of those keeps the old
+ * limit: only while the ticket is still OPEN. Anyone else may not touch it.
+ * (Guests are refused before this is asked, by assertCanWrite.)
+ */
+export function canEditTicket(f: TicketEditFacts): boolean {
+  if (f.isAdmin || f.isDeptMember || f.isDeptLead || f.isAssignee) return true;
+  return f.isCreator && f.status === "OPEN";
+}
+
 async function departmentContext(ctx: OrgAccessContext, departmentId: string) {
   const dept = await db.department.findFirst({
     where: { id: departmentId, orgId: ctx.orgId },
-    select: { id: true, name: true, memberships: { select: { userId: true } } },
+    select: { id: true, name: true, leadId: true, memberships: { select: { userId: true } } },
   });
   if (!dept) throw new NotFoundError("dept.not_found");
   const isMember = dept.memberships.some((m) => m.userId === ctx.userId);
+  const isLead = dept.leadId === ctx.userId;
   const isAdmin = ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
-  return { dept, isMember, isAdmin };
+  return { dept, isMember, isLead, isAdmin };
 }
 
 export async function listDepartmentTickets(departmentId: string) {
@@ -85,6 +113,7 @@ export async function createTicket(
   departmentId: string,
   input: z.infer<typeof createTicketSchema>,
 ) {
+  assertCanWrite(ctx);
   const { dept } = await departmentContext(ctx, departmentId);
   if (input.assigneeId) {
     const ok = dept.memberships.some((m) => m.userId === input.assigneeId) || ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
@@ -166,8 +195,9 @@ export async function ticketDetail(ctx: OrgAccessContext, ticketId: string) {
   return ticket;
 }
 
-/** Comments: any org member may comment; author or org admin may edit/delete. */
+/** Comments: any org member except a guest may comment; author or org admin may edit/delete. */
 export async function addTicketComment(ctx: OrgAccessContext, ticketId: string, body: string) {
+  assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   const comment = await db.$transaction(async (tx) => {
     const c = await tx.ticketComment.create({
@@ -213,6 +243,7 @@ export async function listTicketActivity(ticketId: string) {
 }
 
 export async function editTicketComment(ctx: OrgAccessContext, ticketId: string, commentId: string, body: string) {
+  assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   const comment = await db.ticketComment.findFirst({ where: { id: commentId, ticketId: ticket.id }, select: { id: true, authorId: true } });
   if (!comment) throw new NotFoundError("comment.not_found");
@@ -223,6 +254,7 @@ export async function editTicketComment(ctx: OrgAccessContext, ticketId: string,
 }
 
 export async function deleteTicketComment(ctx: OrgAccessContext, ticketId: string, commentId: string) {
+  assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   const comment = await db.ticketComment.findFirst({ where: { id: commentId, ticketId: ticket.id }, select: { id: true, authorId: true } });
   if (!comment) throw new NotFoundError("comment.not_found");
@@ -251,13 +283,18 @@ export async function updateTicket(
   ticketId: string,
   input: z.infer<typeof updateTicketSchema>,
 ) {
+  assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
-  const { isMember, isAdmin } = await departmentContext(ctx, ticket.departmentId);
-  const canWrite = isMember || isAdmin;
-  if (!canWrite) {
-    // plain org members may only edit what they created while still OPEN
-    if (ticket.status !== "OPEN") throw new ForbiddenError("ticket.admin_only");
-  }
+  const { isMember, isLead, isAdmin } = await departmentContext(ctx, ticket.departmentId);
+  const allowed = canEditTicket({
+    isAdmin,
+    isDeptMember: isMember,
+    isDeptLead: isLead,
+    isCreator: ticket.creatorId === ctx.userId,
+    isAssignee: ticket.assigneeId === ctx.userId,
+    status: ticket.status,
+  });
+  if (!allowed) throw new ForbiddenError("ticket.admin_only");
   if (input.assigneeId) {
     const dept = await db.department.findFirst({
       where: { id: ticket.departmentId },
@@ -328,6 +365,7 @@ export async function updateTicket(
 }
 
 export async function deleteTicket(ctx: OrgAccessContext, ticketId: string): Promise<void> {
+  assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   const { isMember, isAdmin } = await departmentContext(ctx, ticket.departmentId);
   if (!isAdmin && !isMember && ticket.creatorId !== ctx.userId) throw new ForbiddenError("ticket.admin_only");

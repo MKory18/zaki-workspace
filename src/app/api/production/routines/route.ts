@@ -20,11 +20,11 @@ export async function GET() {
 	});
 }
 
-/** POST: create a recurring daily-production routine (OWNER/ADMIN). */
+/** POST: create a recurring daily-production routine (OWNER/ADMIN; guests get 403 `guest.readonly`). */
 export async function POST(req: Request) {
 	return withApi(async () => {
-		const input = await parseJson(routineSchema, req);
 		const user = await requireUser();
+		const input = await parseJson(routineSchema, req);
 		const membership = await db.organizationMember.findFirst({
 			where: { userId: user.id },
 			orderBy: { createdAt: "asc" },

@@ -117,8 +117,14 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
     onError: (err) => toast(errText(err, t), "error"),
   });
 
-  const google = useQuery({ queryKey: ["google"], queryFn: () => apiGet<GoogleStatus>("/api/integrations/google") });
   const [showFiles, setShowFiles] = useState(false);
+  // The Drive file list is for org managers only (the server answers 403 otherwise) and is only
+  // fetched when it is actually being shown (`?files=1`); the status itself is open to every member.
+  const wantFiles = showFiles && canManage;
+  const google = useQuery({
+    queryKey: ["google", wantFiles],
+    queryFn: () => apiGet<GoogleStatus>(`/api/integrations/google${wantFiles ? "?files=1" : ""}`),
+  });
 
   const disconnectGoogle = useMutation({
     mutationFn: () => apiDelete("/api/integrations/google"),
@@ -309,10 +315,12 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
         ) : google.data.connected ? (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setShowFiles((s) => !s)}>
-                <FileText className="size-4" />
-                {showFiles ? t("google.hideFiles") : t("google.viewFiles")}
-              </Button>
+              {canManage && (
+                <Button variant="secondary" size="sm" onClick={() => setShowFiles((s) => !s)}>
+                  <FileText className="size-4" />
+                  {showFiles ? t("google.hideFiles") : t("google.viewFiles")}
+                </Button>
+              )}
               {canManage && (
                 <Button variant="danger" size="sm" onClick={() => disconnectGoogle.mutate()} disabled={disconnectGoogle.isPending}>
                   {t("google.disconnect")}
@@ -320,7 +328,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
               )}
             </div>
             {google.data.filesError && <p className="text-xs text-red-500">{t(google.data.filesError)}</p>}
-            {showFiles && (
+            {showFiles && canManage && (
               <ul className="divide-y divide-border rounded-lg border border-border">
                 {google.data.files?.length ? (
                   google.data.files.map((f) => (
@@ -341,12 +349,14 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <Link href="/api/integrations/google/start">
-              <Button size="sm">
-                <Plug className="size-4" />
-                {t("google.connect")}
-              </Button>
-            </Link>
+            {canManage ? (
+              <Link href="/api/integrations/google/start">
+                <Button size="sm">
+                  <Plug className="size-4" />
+                  {t("google.connect")}
+                </Button>
+              </Link>
+            ) : null}
             <p className="text-[10px] text-muted">{t("google.readonlyNote")}</p>
           </div>
         )}

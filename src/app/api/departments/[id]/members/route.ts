@@ -6,11 +6,11 @@ import { membersSchema, setMembers } from "@/server/services/departments";
 import { db } from "@/server/db";
 import { notifyMembership } from "@/server/notify";
 
-/** POST: add/remove members. OWNER/ADMIN only (service-enforced). */
+/** POST: add/remove members. OWNER/ADMIN only; guests get 403 `guest.no_access` (service-enforced). */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(membersSchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(membersSchema, req);
     await setMembers(ctx, params.id, input);
     if (input.addUserIds?.length) {
       const dept = await db.department.findUnique({

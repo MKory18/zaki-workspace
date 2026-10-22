@@ -1,5 +1,6 @@
 import * as crypto from "node:crypto";
 import { db } from "@/server/db";
+import { requireUser } from "@/server/auth";
 
 export interface CreateWorkspaceInput {
   organizationId: string;
@@ -27,8 +28,31 @@ export async function createWorkspace(userId: string, input: CreateWorkspaceInpu
   });
 }
 
-/** People assignable within a workspace (members + org admins/owners). */
-export async function listWorkspaceMembers(workspaceId: string) {
+/**
+ * People assignable within a workspace (members + org admins/owners).
+ *
+ * The viewer is the signed-in user unless `viewerId` is given. An org GUEST gets
+ * names only (`{ id, name }`, never an email or a role) and only the people who
+ * are members of this workspace; everyone else gets the full rows.
+ */
+export async function listWorkspaceMembers(workspaceId: string, viewerId?: string) {
+  const ws = await db.workspace.findUnique({ where: { id: workspaceId }, select: { organizationId: true } });
+  if (!ws) return [];
+  const viewer = viewerId ?? (await requireUser()).id;
+  const viewerRow = await db.organizationMember.findUnique({
+    where: { organizationId_userId: { organizationId: ws.organizationId, userId: viewer } },
+    select: { role: true },
+  });
+  if (!viewerRow || viewerRow.role === "GUEST") {
+    // fail closed: somebody with no org membership is treated like a guest
+    const rows = await db.workspaceMember.findMany({
+      where: { workspaceId, user: { memberships: { some: { organizationId: ws.organizationId } } } },
+      select: { user: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((r) => ({ id: r.user.id, name: r.user.name }));
+  }
+
   const [wsMembers, org] = await Promise.all([
     db.workspaceMember.findMany({
       where: { workspaceId },

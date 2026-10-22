@@ -21,8 +21,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 /** PATCH: update opportunity stage/value/etc. */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(updateOpportunitySchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(updateOpportunitySchema, req);
     const opportunity = await updateOpportunity(ctx, params.id, input);
     return NextResponse.json({ opportunity });
   });

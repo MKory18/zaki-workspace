@@ -12,11 +12,11 @@ const toggleSchema = z.object({
 	done: z.boolean(),
 });
 
-/** POST: check/uncheck a routine for one day. Any org member may check off. */
+/** POST: check/uncheck a routine for one day. Any org member may check off; guests get 403 (service). */
 export async function POST(req: Request) {
 	return withApi(async () => {
-		const input = await parseJson(toggleSchema, req);
 		const user = await requireUser();
+		const input = await parseJson(toggleSchema, req);
 		const membership = await db.organizationMember.findFirst({
 			where: { userId: user.id },
 			orderBy: { createdAt: "asc" },

@@ -21,8 +21,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 /** PATCH: edit / transition the campaign (dept members & org admins). */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(updateCampaignSchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(updateCampaignSchema, req);
     const campaign = await updateCampaign(ctx, params.id, input);
     return NextResponse.json({ campaign });
   });

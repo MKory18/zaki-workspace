@@ -14,7 +14,7 @@ export default async function ProductionPage() {
 	});
 	if (!membership) redirect("/login");
 	const canManage = membership.role === "OWNER" || membership.role === "ADMIN";
-	return <ProductionView canManage={canManage} />;
+	return <ProductionView canManage={canManage} readOnly={membership.role === "GUEST"} />;
 }
 
 export const dynamic = "force-dynamic";

@@ -21,8 +21,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 /** PATCH: update customer fields. */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(updateCustomerSchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(updateCustomerSchema, req);
     const customer = await updateCustomer(ctx, params.id, input);
     return NextResponse.json({ customer });
   });

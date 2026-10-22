@@ -4,11 +4,15 @@ import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { deleteTicket, updateTicket, updateTicketSchema } from "@/server/services/tickets";
 
-/** PATCH: edit / transition / assign a ticket (dept members & org admins). */
+/**
+ * PATCH: edit / transition / assign a ticket. Allowed: org admins, department
+ * members and lead, the assignee, and the creator while the ticket is OPEN.
+ * Guests never (the service answers 403).
+ */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(updateTicketSchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(updateTicketSchema, req);
     const ticket = await updateTicket(ctx, params.id, input);
     return NextResponse.json({ ticket });
   });

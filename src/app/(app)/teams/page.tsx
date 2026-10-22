@@ -32,24 +32,38 @@ export default async function TeamsPage() {
             ) : null}
           </div>
           <ul className="divide-y divide-border/60 rounded-xl border border-border bg-surface">
-            {org.members.map((m) => (
-              <li key={m.userId}>
-                <a
-                  href={`/u/${m.userId}`}
-                  className="flex items-center gap-3 px-3 py-2.5 hover:bg-surface-2"
-                >
+            {org.members.map((m) => {
+              // An external partner (guest) sees names only: no title, role, e-mail, or profile link.
+              const rowClass = "flex items-center gap-3 px-3 py-2.5";
+              const content = (
+                <>
                   <Avatar name={m.name} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-fg">{m.name}</p>
-                    <p className="truncate text-xs text-fg-muted">{m.jobTitle ?? t("teams.noTitle")}</p>
+                    {org.restricted ? null : (
+                      <p className="truncate text-xs text-fg-muted">{m.jobTitle ?? t("teams.noTitle")}</p>
+                    )}
                   </div>
                   {m.email ? <p className="hidden truncate text-[10px] text-muted md:block">{m.email}</p> : null}
-                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-fg-muted">
-                    {t(ROLE_KEYS[m.role] ?? "role.member")}
-                  </span>
-                </a>
-              </li>
-            ))}
+                  {org.restricted ? null : (
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-fg-muted">
+                      {t(ROLE_KEYS[m.role] ?? "role.member")}
+                    </span>
+                  )}
+                </>
+              );
+              return (
+                <li key={m.userId}>
+                  {org.restricted ? (
+                    <div className={rowClass}>{content}</div>
+                  ) : (
+                    <a href={`/u/${m.userId}`} className={`${rowClass} hover:bg-surface-2`}>
+                      {content}
+                    </a>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       ))}
