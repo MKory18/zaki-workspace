@@ -101,7 +101,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
   const testN8n = useMutation({
     mutationFn: () => apiPost<{ delivered: boolean; detail?: string }>("/api/integrations/n8n/test"),
     onSuccess: (res) => {
-      toast(res.delivered ? t("n8n.testOk") : `${t("n8n.testFail")}${res.detail ? ` — ${res.detail}` : ""}`, res.delivered ? "success" : "error");
+      toast(res.delivered ? t("n8n.testOk") : `${t("n8n.testFail")}${res.detail ? ` — ${detailText(res.detail, t)}` : ""}`, res.delivered ? "success" : "error");
       qc.invalidateQueries({ queryKey: ["n8n"] });
     },
     onError: (err) => toast(errText(err, t), "error"),
@@ -225,9 +225,13 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
                   {generatedSecret}
                 </code>
                 <p className="mt-2 text-[10px] leading-5 text-muted">{t("n8n.inboundHelp")}</p>
-                <code dir="ltr" className="mt-1 block break-all font-mono text-[10px] text-muted">
-                  POST {"{"}APP_URL{"}"}/api/integrations/n8n/inbound — x-zaki-org: {"{orgId}"} — x-zaki-token: {"{secret}"}
+                <code dir="ltr" className="mt-1 block whitespace-pre-wrap break-all font-mono text-[10px] text-muted">
+                  {`POST {APP_URL}/api/integrations/n8n/inbound
+x-zaki-org: {orgId}
+x-zaki-timestamp: {unix seconds}
+x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
                 </code>
+                <p className="mt-1 text-[10px] leading-5 text-muted">{t("n8n.inboundLegacy")}</p>
               </div>
             ) : n8n.data?.status.connected ? (
               <p className="text-[10px] text-muted">{t("n8n.secretStored")}</p>
@@ -266,8 +270,8 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
                   </td>
                   <td className="px-2 py-1.5 font-mono">{ev.type}</td>
                   <td className={cn("px-2 py-1.5", ev.status === "OK" ? "text-emerald-600" : "text-red-600")}>{ev.status}</td>
-                  <td className="max-w-[16rem] truncate px-2 py-1.5 text-muted" title={ev.detail ?? undefined}>
-                    {ev.detail ?? "—"}
+                  <td className="max-w-[16rem] truncate px-2 py-1.5 text-muted" title={ev.detail ? detailText(ev.detail, t) : undefined}>
+                    {ev.detail ? detailText(ev.detail, t) : "—"}
                   </td>
                   <td className="px-2 py-1.5 text-muted">{fmtDateTime(ev.createdAt, locale)}</td>
                 </tr>
@@ -365,10 +369,30 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
   );
 }
 
-function errText(err: unknown, t: (key: string, vars?: Record<string, string | number>) => string): string {
-  if (err instanceof ApiError && err.code) {
-    const translated = t(err.code);
-    return translated !== err.code ? translated : t("common.error");
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
+
+/** A stored/returned detail may be a translation key (e.g. `n8n.url_private`): show it in Arabic, else as is. */
+function detailText(detail: string, t: TFn): string {
+  const translated = t(detail);
+  return translated !== detail ? translated : detail;
+}
+
+function errText(err: unknown, t: TFn): string {
+  if (err instanceof ApiError) {
+    // A validation error names the exact problem (e.g. the webhook URL rules): show that, not a generic text.
+    if (err.code === "validation.failed" && Array.isArray(err.details) && err.details.length > 0) {
+      const first = (err.details[0] as { message?: string }).message;
+      const mapped = first ? t(first) : "";
+      if (mapped && mapped !== first) return mapped;
+    }
+    if (err.messageKey) {
+      const mapped = t(err.messageKey);
+      if (mapped !== err.messageKey) return mapped;
+    }
+    if (err.code) {
+      const translated = t(err.code);
+      if (translated !== err.code) return translated;
+    }
   }
   return t("common.error");
 }

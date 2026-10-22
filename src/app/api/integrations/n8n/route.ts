@@ -6,12 +6,9 @@ import { activeOrgCtx, assertOrgManager } from "@/server/services/integrations";
 import { configureN8n, disconnectN8n, getN8nStatus, recentEvents } from "@/server/services/n8n";
 
 const configSchema = z.object({
-  webhookUrl: z
-    .string()
-    .trim()
-    .url("n8n.url_invalid")
-    .max(500)
-    .refine((u) => u.startsWith("http://") || u.startsWith("https://"), "n8n.url_invalid"),
+  // Shape only. Which URLs are acceptable (https, no credentials, public hosts) is decided by
+  // configureN8n -> assertPublicHttpsUrl, which answers with a specific n8n.url_* key.
+  webhookUrl: z.string().trim().url("n8n.url_invalid").max(500),
   events: z.array(z.string()).max(20).default([]),
   rotateSecret: z.boolean().optional(),
 });
