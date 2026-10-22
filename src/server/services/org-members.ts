@@ -125,6 +125,10 @@ export async function updateOrgMember(
   input: z.infer<typeof memberUpdateSchema>,
 ): Promise<void> {
   const targetRole = await assertTarget(ctx.orgId, userId);
+  // Whoever the caller may not administrate cannot be changed in ANY way: the
+  // password reset is as much a takeover as a role change (an ADMIN must not be
+  // able to log in as the OWNER). Own password has its own endpoint (/api/me/password).
+  if (!canAdministrateTarget(ctx.orgRole, targetRole)) throw new ForbiddenError("orgm.role_denied");
   if (input.role) {
     if (!canChangeRole(ctx.orgRole, targetRole, input.role)) throw new ForbiddenError("orgm.role_denied");
     if (targetRole !== input.role) {
