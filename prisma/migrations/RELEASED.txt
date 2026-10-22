@@ -1,0 +1,24 @@
+# Migration folders that have been applied to a shared database (production).
+# One folder name per line; blank lines and # comments are ignored.
+#
+# NEVER rename, edit or delete a folder listed here. The database remembers each
+# migration by name and checksum: a renamed folder is a migration that "was never
+# applied", and `prisma migrate deploy` stops with P3009 (the 2026-10-19 incident,
+# docs/DEPLOYMENT-INCIDENT-2026-10-19.md).
+#
+# Add a line when a migration has been deployed - not before: until then it may
+# still be fixed in place. A folder that is not listed must have a timestamp LATER
+# than the last one that is. scripts/lint-migrations.mjs enforces all of this
+# (npm test and CI).
+20261016192059_init
+20261017080000_accounts_ideas_profiles
+20261017090000_integrations
+20261017100000_event_optional_link
+20261017113000_internal_chat
+20261017121500_file_library
+20261017123000_departments
+20261017123500_it_tickets
+20261017130000_production_goals
+20261019120000_crm_models
+20261019190000_ticket_comments_activity
+20261019200000_campaign_calendar

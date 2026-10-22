@@ -1,23 +1,40 @@
 import * as crypto from "node:crypto";
 import { db } from "@/server/db";
 import { hashPassword } from "@/server/auth";
+import { assertSeedAllowed, resolveOwnerEmail, resolveOwnerPassword } from "./seed-guard";
 
 /**
  * Seed: demo organization with owner + workspace + project + default board.
  * Safe to run repeatedly — idempotent by email/slug lookup.
+ *
+ * The repository is public, so no password is written here:
+ *  - the owner gets a random password, printed ONCE when the account is created
+ *    (or the one in SEED_OWNER_PASSWORD, which is never echoed);
+ *  - it refuses to run when NODE_ENV=production, or when DATABASE_URL points at
+ *    a host that is not this machine, unless ALLOW_PROD_SEED=1 (prisma/seed-guard.ts).
  */
 async function main(): Promise<void> {
-  const email = "owner@zaki.local";
+  assertSeedAllowed();
+
+  const email = resolveOwnerEmail();
   let user = await db.user.findUnique({ where: { email } });
   if (!user) {
+    const { password, generated } = resolveOwnerPassword();
     user = await db.user.create({
       data: {
         email,
         name: "Zaki Owner",
-        passwordHash: await hashPassword("owner1234"),
+        passwordHash: await hashPassword(password),
       },
     });
     console.log("created user", user.email);
+    console.log(
+      generated
+        ? `password (random, shown once, not stored anywhere): ${password}`
+        : "password: the value of SEED_OWNER_PASSWORD",
+    );
+  } else {
+    console.log("owner already exists - password left unchanged:", user.email);
   }
 
   let org = await db.organization.findUnique({ where: { slug: "zaki-demo" } });
@@ -79,7 +96,6 @@ async function main(): Promise<void> {
   });
 
   console.log(`seeded org=${org.slug} workspace=${ws.name}`);
-  console.log(`login: ${email} / owner1234 (dev only)`);
 }
 
 main()

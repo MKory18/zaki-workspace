@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 
+// Evaluated on every request. Without this Next prerenders the handler at BUILD time (it uses no
+// request API), so the answer - including "database: fail" from the build machine - would be
+// frozen forever and the container health check could never notice a real database outage.
+export const dynamic = "force-dynamic";
+
 /**
  * Liveness/readiness. Reports component status without leaking secrets.
  * Used by Docker HEALTHCHECK and reverse proxies.

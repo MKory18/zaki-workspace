@@ -7,7 +7,7 @@ import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/a
 import { logEvent } from "@/server/services/integrations";
 import { MAX_FILE_BYTES, canManageFile, checksumHex, safeStoredName, sniffMimeType } from "@/server/files/sniff";
 
-export const fileLibrary = join(process.cwd(), ".data", "uploads");
+export const fileLibrary = process.env.UPLOAD_DIR || join(process.cwd(), ".data", "uploads");
 
 export const PREVIEWABLE = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm", "audio/mpeg", "audio/wav", "audio/ogg", "application/pdf"]);
 export const INLINE_TEXT = new Set(["text/plain", "application/zip"]);

@@ -1,3 +1,5 @@
+> ⚠️ Written before the 2026-10-22 audit; some claims do not match the code. The verified state is in [docs/PHASE0-AUDIT.md](PHASE0-AUDIT.md).
+
 # Zakai.io — Security Audit (Phase 2)
 
 Scope: Chat AuthN/AuthZ, CRM Mass Assignment, `activeOrgCtx()`. Findings from actual code inspection, with file/line references.

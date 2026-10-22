@@ -1,3 +1,5 @@
+> ⚠️ Written before the 2026-10-22 audit; some claims do not match the code. The verified state is in [docs/PHASE0-AUDIT.md](PHASE0-AUDIT.md).
+
 # Engineering Progress Log — Zakai.io
 
 ## 2026-10-17
