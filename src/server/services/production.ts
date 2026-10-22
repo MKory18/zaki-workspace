@@ -4,6 +4,7 @@ import { ForbiddenError, NotFoundError, audit } from "@/server/auth";
 import { canManageOrg } from "@/server/services/orgs";
 import { assertCanWrite } from "@/server/services/guest-guard";
 import { assertActiveAssignee } from "@/server/services/active-people";
+import { resolveTimeZone, zonedParts, zonedWallTime } from "@/lib/zoned-time";
 
 /**
  * Daily production. Reading the checklist and the routine list stays open to every
@@ -14,21 +15,32 @@ import { assertActiveAssignee } from "@/server/services/active-people";
  */
 
 /** Local calendar day string "YYYY-MM-DD" (the whole app runs on one machine). */
-export function dayIso(d: Date): string {
-	const y = d.getFullYear();
-	const m = d.getMonth() + 1;
-	const day = d.getDate();
-	const mm = m < 10 ? "0" + m : String(m);
-	const dd = day < 10 ? "0" + day : String(day);
-	return y + "-" + mm + "-" + dd;
+export function dayIso(d: Date, timeZone?: string): string {
+  if (timeZone) {
+    // the company's day: the zone's calendar date, whatever the machine says
+    const p = zonedParts(d, resolveTimeZone(timeZone));
+    const m = p.month;
+    const day = p.day;
+    return p.year + "-" + (m < 10 ? "0" + m : String(m)) + "-" + (day < 10 ? "0" + day : String(day));
+  }
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const mm = m < 10 ? "0" + m : String(m);
+  const dd = day < 10 ? "0" + day : String(day);
+  return y + "-" + mm + "-" + dd;
 }
 
-export function parseDayIso(s: string): Date {
-	const parts = s.split("-");
-	const y = Number(parts[0]);
-	const m = Number(parts[1]);
-	const d = Number(parts[2]);
-	return new Date(y, m - 1, d, 12, 0, 0, 0);
+/** Noon (in `timeZone`, or the machine's zone without one) of the "YYYY-MM-DD" day `s`. */
+export function parseDayIso(s: string, timeZone?: string): Date {
+  const parts = s.split("-");
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (timeZone) {
+    return zonedWallTime({ year: y, month: m, day: d, hour: 12 }, resolveTimeZone(timeZone));
+  }
+  return new Date(y, m - 1, d, 12, 0, 0, 0);
 }
 
 export function shiftDay(s: string, delta: number): string {
@@ -78,16 +90,16 @@ export async function listRoutines(orgId: string): Promise<RoutineRow[]> {
 	}));
 }
 
-/** Does a routine run on the given day? Empty weekdays = every day. */
-export function runsOnDay(weekdays: string, day: string): boolean {
+/** Does a routine run on the given day? Empty weekdays = every day. The weekday is `timeZone`'s (or the machine's). */
+export function runsOnDay(weekdays: string, day: string, timeZone?: string): boolean {
 	if (!weekdays || weekdays === "") return true;
 	const parts = weekdays.split(",");
-	const weekday = String(parseDayIso(day).getDay());
+	const weekday = String(parseDayIso(day, timeZone).getDay());
 	return parts.indexOf(weekday) !== -1;
 }
 
 /** Checklist for one day: active routines scheduled that day + today's completion state. */
-export async function dayChecklist(orgId: string, day: string) {
+export async function dayChecklist(orgId: string, day: string, timeZone?: string) {
 	const routines = await db.routine.findMany({
 		where: { orgId, active: true },
 		orderBy: { createdAt: "asc" },
@@ -102,7 +114,7 @@ export async function dayChecklist(orgId: string, day: string) {
 			weekdays: true,
 		},
 	});
-	const due = routines.filter((r) => runsOnDay(r.weekdays, day));
+	const due = routines.filter((r) => runsOnDay(r.weekdays, day, timeZone));
 	const logs = await db.routineLog.findMany({
 		where: { routineId: { in: due.map((r) => r.id) }, day },
 		select: { routineId: true, completedAt: true, completedById: true },

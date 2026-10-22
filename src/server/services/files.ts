@@ -43,13 +43,13 @@ export async function listFiles(orgId: string): Promise<
   }>
 > {
   const heads = await db.storedFile.findMany({
-    where: { orgId, isLatest: true, deletedAt: null, ...STORED },
+    where: { orgId, isLatest: true, deletedAt: null, purpose: "LIBRARY", ...STORED },
     orderBy: { createdAt: "desc" },
     include: { uploader: { select: { name: true } } },
   });
   const counts = await db.storedFile.groupBy({
     by: ["familyId"],
-    where: { orgId, ...STORED },
+    where: { orgId, ...STORED, purpose: "LIBRARY" },
     _count: { familyId: true },
   });
   const versionCount = new Map(counts.map((c) => [c.familyId, c._count.familyId]));
@@ -130,6 +130,8 @@ export async function ingest(
   ctx: OrgAccessContext,
   input: IngestFile,
   familyOf?: { familyId: string; latestVersion: number },
+  purpose: "LIBRARY" | "CHAT" | "VOICE" = "LIBRARY",
+  meta?: Record<string, unknown>,
 ): Promise<{ id: string; version: number; mimeType: string }> {
   if (ctx.orgRole === "GUEST") throw new ForbiddenError("chat.guest_forbidden");
   if (input.bytes.length === 0) throw new ForbiddenError("files.empty");
@@ -153,9 +155,15 @@ export async function ingest(
       mimeType: mime,
       size: input.bytes.length,
       version,
+      purpose,
     },
     select: { id: true },
   });
+  if (meta && Object.keys(meta).length > 0) {
+    // Parameterised raw SQL until the generated client knows the column
+    // (migration 20261024093000_stored_file_meta; the coordinator regenerates between waves).
+    await db.$executeRaw`UPDATE "StoredFile" SET meta = ${JSON.stringify(meta)}::jsonb WHERE id = ${created.id}`;
+  }
 
   const finalFamilyId = familyId || created.id;
   const path = join(ctx.orgId, `${created.id}_v${version}_${display}`);

@@ -5,10 +5,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarRange, ChevronLeft, ChevronRight, Pencil, Plus, Target, Trash2 } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
+import { fmtShort, monthName } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 function errText(err: unknown, t: (k: string) => string): string {
@@ -32,10 +35,6 @@ interface GoalRow {
 	creatorName: string;
 }
 
-const MONTHS_AR = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
-const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-const MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
 function shiftPeriod(period: "WEEKLY" | "MONTHLY", iso: string, delta: number): string {
 	const p = iso.split("-").map(Number);
 	const d = new Date(p[0]!, p[1]! - 1, p[2]!, 12);
@@ -55,22 +54,20 @@ function inPeriod(goal: GoalRow, iso: string): boolean {
 	return day >= new Date(goal.periodStart).getTime() && day <= new Date(goal.periodEnd).getTime();
 }
 
-function periodLabel(period: "WEEKLY" | "MONTHLY", iso: string, locale: string): string {
+function periodLabel(period: "WEEKLY" | "MONTHLY", iso: string): string {
 	const p = iso.split("-").map(Number);
 	const d = new Date(p[0]!, p[1]! - 1, p[2]!, 12);
-	const months = locale === "fr" ? MONTHS_FR : locale === "en" ? MONTHS_EN : MONTHS_AR;
 	if (period === "MONTHLY") {
-		return (months[d.getMonth()] ?? "") + " " + d.getFullYear();
+		return monthName(d.getMonth()) + " " + d.getFullYear();
 	}
 	const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay(), 12);
 	const end = new Date(start.getTime() + 6 * 24 * 3600 * 1000);
-	const fmt = (x: Date) => `${x.getDate()} ${(months[x.getMonth()] ?? "").slice(0, locale === "ar" ? 99 : 3)}`;
-	return fmt(start) + " — " + fmt(end);
+	return fmtShort(start) + " — " + fmtShort(end);
 }
 
-/** الأهداف الشهرية والاسبوعية — period goals with live progress. */
+/** الأهداف الأسبوعية والشهرية — period goals with live progress. */
 export function GoalsView({ canManage }: { canManage: boolean }) {
-	const { t, locale } = useI18n();
+	const { t } = useI18n();
 	const { toast } = useToast();
 	const qc = useQueryClient();
 	const [period, setPeriod] = useState<"WEEKLY" | "MONTHLY">("WEEKLY");
@@ -147,7 +144,7 @@ export function GoalsView({ canManage }: { canManage: boolean }) {
 					</Button>
 					<span className="flex items-center gap-1.5 text-sm font-semibold text-fg">
 						<CalendarRange className="size-4 text-accent" />
-						{periodLabel(period, anchor, locale)}
+						{periodLabel(period, anchor)}
 					</span>
 					<Button size="sm" variant="ghost" aria-label={t("goal.next")} onClick={() => setAnchor(shiftPeriod(period, anchor, 1))}>
 						<ChevronLeft className="size-4 rtl:rotate-0 ltr:rotate-180" />
@@ -167,18 +164,18 @@ export function GoalsView({ canManage }: { canManage: boolean }) {
 							<li key={g.id} className="rounded-xl border border-border bg-surface p-4 shadow-card">
 								<div className="flex flex-wrap items-start justify-between gap-2">
 									<div className="min-w-0 flex-1">
-										<p className={cn("text-sm font-semibold", achieved ? "text-emerald-600 dark:text-emerald-400" : "text-fg")}>
+										<p className={cn("text-sm font-semibold", achieved ? "text-ok" : "text-fg")}>
 											{g.title}
 										</p>
-										{g.description ? <p className="mt-0.5 text-[11px] text-muted">{g.description}</p> : null}
-										<p className="mt-0.5 text-[10px] text-muted">
+										{g.description ? <p className="mt-0.5 text-xs text-muted">{g.description}</p> : null}
+										<p className="mt-0.5 text-xs text-muted">
 											{g.departmentName ? g.departmentName + " · " : ""}
-											{periodLabel(g.period, g.periodStart.slice(0, 10), locale)}
+											{periodLabel(g.period, g.periodStart.slice(0, 10))}
 										</p>
 									</div>
 									<div className="flex shrink-0 items-center gap-1">
 										{achieved ? (
-											<span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+											<span className="rounded-full bg-ok/10 px-2 py-0.5 text-xs font-semibold text-ok">
 												{t("goal.achieved")}
 											</span>
 										) : null}
@@ -191,7 +188,7 @@ export function GoalsView({ canManage }: { canManage: boolean }) {
 													size="sm"
 													variant="ghost"
 													aria-label={t("goal.remove")}
-													className="text-red-500"
+													className="text-danger"
 													onClick={() => {
 														if (confirm(t("goal.removeConfirm", { title: g.title }))) remove.mutate(g.id);
 													}}
@@ -205,7 +202,7 @@ export function GoalsView({ canManage }: { canManage: boolean }) {
 								<div className="mt-2 flex items-center gap-3">
 									<div className="h-2.5 flex-1 overflow-hidden rounded-full bg-surface-2">
 										<div
-											className={cn("h-2.5 rounded-full transition-all", achieved ? "bg-emerald-500" : "bg-accent")}
+											className={cn("h-2.5 rounded-full transition-all", achieved ? "bg-ok" : "bg-accent")}
 											style={{ width: `${g.progress}%` }}
 										/>
 									</div>

@@ -7,12 +7,31 @@ import { canWriteInWorkspace, workspaceRoleOf } from "@/server/workspace-role";
 // ---------- workspace access resolution for RSC pages ----------
 
 import { pageUser } from "@/server/auth";
+import { log } from "@/server/log";
+import {
+  DEFAULT_TIME_ZONE,
+  isValidTimeZone,
+  nextZonedDayStart,
+  resolveTimeZone,
+  zonedDayStart,
+  zonedParts,
+  zonedWallTime,
+} from "@/lib/zoned-time";
+
+/** Zones already warned about, per organization, so a bad stored zone is logged once and not on every request. */
+const warnedZones = new Set<string>();
+/** For tests: forget the warnings already logged (the set is module state that outlives one test). */
+export function resetInvalidZoneWarningsForTests(): void {
+  warnedZones.clear();
+}
 
 export interface WorkspaceViewCtx {
   userId: string;
   workspaceId: string;
   workspaceName: string;
   orgId: string;
+  /** The company's zone (Organization.timezone, resolved): every day boundary of the page is cut there. */
+  timeZone: string;
   /** The user's role in that org (not the workspace role): what decides guest-only limits. */
   orgRole: string;
   /** Effective role (workspace member role wins over org role; an org GUEST is a GUEST everywhere). */
@@ -71,13 +90,27 @@ export async function resolveWorkspaceView(
   if (!orgMember || orgMember.status !== "ACTIVE") return { none: true };
   const orgRole: string = orgMember.role;
   // an org GUEST is a guest in every workspace, whatever their workspace row says
-  const role: string = wsMember ? workspaceRoleOf(orgMember.role, wsMember.role) : orgRole;
+  const role: string = wsMember ? workspaceRoleOf(orgMember.role, wsMember?.role) : orgRole;
+  // the company's clock: resolve the stored zone (a wrong name falls back to the default) and say so once per org+zone
+  const stored = (
+    await db.organization.findUnique({ where: { id: chosen.organizationId }, select: { timezone: true } })
+  )?.timezone;
+  const invalid = typeof stored === "string" && stored.trim() !== "" && stored !== DEFAULT_TIME_ZONE && !isValidTimeZone(stored);
+  if (invalid) {
+    const onceKey = `${chosen.organizationId}:${stored}`;
+    if (!warnedZones.has(onceKey)) {
+      warnedZones.add(onceKey);
+      log.warn("org.timezone.invalid", { orgId: chosen.organizationId, timezone: stored, using: DEFAULT_TIME_ZONE });
+    }
+  }
+  const timeZone = resolveTimeZone(stored);
   return {
     ctx: {
       userId: user.id,
       workspaceId: chosen.id,
       workspaceName: chosen.name,
       orgId: chosen.organizationId,
+      timeZone,
       orgRole,
       role,
       editable: canWriteInWorkspace(orgMember.role, wsMember?.role),
@@ -122,8 +155,18 @@ export interface DateWindow {
   to: Date;
 }
 
-/** Local-day window [00:00:00.000, 23:59:59.999] for the given date. */
-export function dayWindow(d: Date = new Date()): DateWindow {
+/**
+ * The day [00:00:00.000, 23:59:59.999] that contains `d`. With a `timeZone` (an organization's
+ * `timezone`) it is the COMPANY's day, so "today" means the same on a server that runs on UTC; without
+ * one it is the server's local day (the calendar page still uses that).
+ */
+export function dayWindow(d: Date = new Date(), timeZone?: string): DateWindow {
+  if (timeZone) {
+    // a mistyped zone must never throw: resolve it to the company default (resolveTimeZone never throws)
+    const zone = resolveTimeZone(timeZone);
+    const from = zonedDayStart(d, zone);
+    return { from, to: new Date(nextZonedDayStart(d, zone).getTime() - 1) };
+  }
   const from = new Date(d);
   from.setHours(0, 0, 0, 0);
   const to = new Date(d);
@@ -131,15 +174,27 @@ export function dayWindow(d: Date = new Date()): DateWindow {
   return { from, to };
 }
 
-/** Calendar month window from "YYYY-MM" (UTC bounds). Invalid input → current month. */
-export function monthWindow(ym?: string): DateWindow {
+/** Calendar month window. With a `timeZone` (an organization's `timezone`) the month starts and ends at the COMPANY's midnight; without one it is the UTC month. Invalid `ym` → the month containing `d` (or now). */
+export function monthWindow(ym?: string, timeZone?: string, d: Date = new Date()): DateWindow {
   const match = /^(\d{4})-(\d{2})$/.exec(ym ?? "");
   if (!match || Number(match[2]) < 1 || Number(match[2]) > 12) {
-    ym = new Date().toISOString().slice(0, 7);
-    return monthWindow(ym);
+    // the month containing `d`: in the company's zone when one was given, otherwise the machine's month
+    const ymFallback = timeZone
+      ? (() => {
+          const p = zonedParts(d, resolveTimeZone(timeZone));
+          return p.year.toString().padStart(4, "0") + "-" + p.month.toString().padStart(2, "0");
+        })()
+      : d.toISOString().slice(0, 7);
+    return monthWindow(ymFallback, timeZone, d);
   }
   const year = Number(match[1]);
   const month = Number(match[2]);
+  if (timeZone) {
+    const zone = resolveTimeZone(timeZone);
+    const from = zonedWallTime({ year, month, day: 1 }, zone);
+    const to = new Date(zonedWallTime({ year, month: month + 1, day: 1 }, zone).getTime() - 1);
+    return { from, to };
+  }
   const from = new Date(Date.UTC(year, month - 1, 1));
   const to = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
   return { from, to };
@@ -196,6 +251,12 @@ export interface ViewQuery {
   dueFrom?: Date;
   dueTo?: Date;
   overdueOnly?: boolean;
+  /**
+   * With `overdueOnly`: the line before which an open task is overdue. My Work gives the START of the company's
+   * today, the same line as the Today page and the reports (a task due today at 09:00 is "today" at 15:00, never
+   * "overdue"). Without it the line is this very moment.
+   */
+  overdueBefore?: Date;
   openOnly?: boolean;
   completedOnly?: boolean;
   search?: string;
@@ -247,7 +308,7 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
     };
   }
   if (q.overdueOnly) {
-    where.dueDate = { lt: new Date() };
+    where.dueDate = { lt: q.overdueBefore ?? new Date() };
     where.completedAt = null;
   }
   if (q.openOnly) where.completedAt = null;

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 import { weekdayName } from "@/lib/format";
+import { zonedParts } from "@/lib/zoned-time";
 
 export interface CalTask {
   id: string;
@@ -21,19 +22,34 @@ function toLocalNoonISO(dayIso: string): string {
   return new Date(y, m - 1, d, 12).toISOString();
 }
 
+/** The calendar day "YYYY-MM-DD" of `timeZone` that an instant falls in (the grid's bucket key). */
+function bucketIso(dueIso: string, timeZone: string): string {
+  const p = zonedParts(new Date(dueIso), timeZone);
+  return (
+    p.year.toString().padStart(4, "0") +
+    "-" +
+    p.month.toString().padStart(2, "0") +
+    "-" +
+    p.day.toString().padStart(2, "0")
+  );
+}
+
 /** Month grid with drag-to-reschedule. Drops persist via PATCH /api/tasks/[id]. */
 export function CalendarGrid({
   month,
   tasks,
   todayIso,
   editable,
+  timeZone,
 }: {
   month: string; // YYYY-MM
   tasks: CalTask[];
   todayIso: string;
   editable: boolean;
+  /** The company's zone: tasks land in the day it says, not the browser's. */
+  timeZone: string;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const router = useRouter();
   const { toast } = useToast();
   const [dragId, setDragId] = useState<string | null>(null);
@@ -53,13 +69,14 @@ export function CalendarGrid({
 
   const byDay = new Map<string, CalTask[]>();
   for (const task of tasks) {
-    const key = task.dueDate.slice(0, 10);
+    // the company's day for this instant (the server already cut the month there too)
+    const key = bucketIso(task.dueDate, timeZone);
     const arr = byDay.get(key) ?? [];
     arr.push(task);
     byDay.set(key, arr);
   }
 
-  const weekdayLabels = Array.from({ length: 7 }, (_, i) => weekdayName(i, locale));
+  const weekdayLabels = Array.from({ length: 7 }, (_, i) => weekdayName(i));
 
   async function handleDrop(taskId: string, dayIso: string) {
     setDragId(null);
@@ -89,7 +106,7 @@ export function CalendarGrid({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="grid grid-cols-7 border-b border-border bg-surface px-1 text-center text-[10px] text-muted">
+      <div className="grid grid-cols-7 border-b border-border bg-surface px-1 text-center text-xs text-muted">
         {weekdayLabels.map((lbl) => (
           <div key={lbl} className="py-1.5">
             {lbl}
@@ -118,7 +135,7 @@ export function CalendarGrid({
                 overKey === cell.iso && "bg-surface-2",
               )}
             >
-              <span className={cn("px-1 text-[10px] text-muted", isToday && "font-bold text-accent")}>
+              <span className={cn("px-1 text-xs text-muted", isToday && "font-bold text-accent")}>
                 {cell.day}
               </span>
               <div className="flex-1 space-y-0.5">
@@ -130,7 +147,7 @@ export function CalendarGrid({
                     onDragEnd={() => setDragId(null)}
                     title={task.title}
                     className={cn(
-                      "cursor-default truncate rounded bg-surface-2 px-1 py-0.5 text-[10px] text-fg",
+                      "cursor-default truncate rounded bg-surface-2 px-1 py-0.5 text-xs text-fg",
                       editable && "cursor-grab active:cursor-grabbing",
                       dragId === task.id && "opacity-40",
                     )}
@@ -139,7 +156,7 @@ export function CalendarGrid({
                   </div>
                 ))}
                 {dayTasks.length > 3 ? (
-                  <p className="px-1 text-[10px] text-muted">+{dayTasks.length - 3}</p>
+                  <p className="px-1 text-xs text-muted">+{dayTasks.length - 3}</p>
                 ) : null}
               </div>
             </div>

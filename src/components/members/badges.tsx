@@ -23,7 +23,7 @@ export function StatusBadge({ status }: { status: MemberStatusName }) {
 export function PendingPasswordBadge() {
   const { t } = useI18n();
   return (
-    <span className={cn(PILL, "bg-amber-500/10 text-amber-700 dark:text-amber-400")}>
+    <span className={cn(PILL, "bg-warn/10 text-warn")}>
       <KeyRound className="size-3" aria-hidden="true" />
       {t("members.pw_pending")}
     </span>

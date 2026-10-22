@@ -1,6 +1,7 @@
 import { Prisma, type Task } from "@prisma/client";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
+import { AR } from "@/lib/i18n/dict";
 
 export interface ActorContext {
   userId: string;
@@ -37,6 +38,26 @@ export const TASK_INCLUDE = {
 export type TaskDTO = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;
 
 export type Tx = Prisma.TransactionClient;
+
+export interface DefaultBoardColumn {
+  name: string;
+  color: string;
+  done: boolean;
+}
+
+/**
+ * The workflow a new board starts with. The names are Arabic (no English reaches a screen): the same
+ * words `columnLabel` shows for the English defaults boards were given before, so an old board and a
+ * new one read alike. Boards that already exist keep their names; only what is shown is translated.
+ * (A column's colour is user data, stored as a hex value.)
+ */
+export const DEFAULT_BOARD_COLUMNS: readonly DefaultBoardColumn[] = [
+  { name: AR["column.backlog"]!, color: "#6b7280", done: false },
+  { name: AR["column.todo"]!, color: "#3b82f6", done: false },
+  { name: AR["column.in_progress"]!, color: "#f59e0b", done: false },
+  { name: AR["column.review"]!, color: "#a855f7", done: false },
+  { name: AR["column.done"]!, color: "#10b981", done: true },
+];
 
 /**
  * Per-org sequential number (task key = `${prefix}-${number}`).

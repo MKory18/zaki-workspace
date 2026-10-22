@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { Input, Label } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { apiPost, apiPatch, ApiError } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
@@ -108,9 +109,9 @@ export function ProfileForm({ me }: { me: MeData }) {
             <Input name="currentPassword" type="password" required autoComplete="current-password" />
           </div>
           <div>
-            <Label>{t("auth.password")}</Label>
+            <Label>{t("onboarding.new_password")}</Label>
             <Input name="newPassword" type="password" required minLength={8} autoComplete="new-password" />
-            <p className="mt-1 text-[10px] text-muted">{t("auth.passwordRule")}</p>
+            <p className="mt-1 text-xs text-muted">{t("auth.passwordRule")}</p>
           </div>
           <Button type="submit" disabled={pending}>
             {t("profile.changePassword")}

@@ -8,6 +8,7 @@ import {
   type ViewQuery,
   type ViewTask,
 } from "@/server/services/views";
+import { resolveTimeZone } from "@/lib/zoned-time";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 
 /**
@@ -33,13 +34,15 @@ export interface MyWorkRow {
 export type MyWorkData = Record<MyWorkTab, MyWorkRow[]>;
 
 /** Per-tab filters, before the org and the workspace allow-list are applied. */
-function tabFilters(userId: string): Record<MyWorkTab, Omit<ViewQuery, "orgId" | "workspaceIds">> {
-  const day = dayWindow();
+function tabFilters(userId: string, timeZone: string, now: Date): Record<MyWorkTab, Omit<ViewQuery, "orgId" | "workspaceIds">> {
+  // "today" is the company's day (Organization.timezone), not the server's
+  const day = dayWindow(now, timeZone);
   const dayAfter = new Date(day.to.getTime() + 1);
   return {
     today: { assigneeId: userId, dueFrom: day.from, dueTo: day.to, openOnly: true },
     upcoming: { assigneeId: userId, dueFrom: dayAfter, openOnly: true },
-    overdue: { assigneeId: userId, overdueOnly: true },
+    // overdue = due before the START of the company's today: a task due earlier today is in "today" only
+    overdue: { assigneeId: userId, overdueOnly: true, overdueBefore: day.from },
     completed: { assigneeId: userId, completedOnly: true, limit: 100 },
     mine: { assigneeId: userId, openOnly: true },
     created: { creatorId: userId, openOnly: true },
@@ -54,11 +57,12 @@ function sortRows(rows: MyWorkRow[], by: "due" | "completed"): MyWorkRow[] {
   return sorted.map((task) => ({ task, editable: editableById.get(task.id) ?? false }));
 }
 
-export async function getMyWork(userId: string): Promise<MyWorkData> {
+export async function getMyWork(userId: string, now: Date = new Date()): Promise<MyWorkData> {
   const results = {} as MyWorkData;
   for (const tab of MY_WORK_TABS) results[tab] = [];
 
   const [memberships, accessible] = await Promise.all([
+    // (the organizations' clocks are read after the memberships, below)
     // only organizations where the person is ACTIVE: a suspended or offboarded membership shows nothing
     db.organizationMember.findMany({
       where: { userId, status: "ACTIVE" },
@@ -88,12 +92,17 @@ export async function getMyWork(userId: string): Promise<MyWorkData> {
     idsByOrg.set(ws.organizationId, list);
   }
 
-  const filters = tabFilters(userId);
+  const clocks = await db.organization.findMany({
+    where: { id: { in: memberships.map((m) => m.organizationId) } },
+    select: { id: true, timezone: true },
+  });
+  const zoneByOrg = new Map(clocks.map((o) => [o.id, resolveTimeZone(o.timezone)] as const));
   // one batch of tab queries per org, run in parallel but merged in membership order
   const perOrg = await Promise.all(
     memberships.map(async (m) => {
       const workspaceIds = idsByOrg.get(m.organizationId);
       if (!workspaceIds || workspaceIds.length === 0) return [];
+      const filters = tabFilters(userId, zoneByOrg.get(m.organizationId) ?? resolveTimeZone(null), now);
       return Promise.all(
         MY_WORK_TABS.map(async (tab) => {
           const found = await queryTasksForView({

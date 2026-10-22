@@ -60,7 +60,7 @@ function SecretRow({ label, value, copyLabel, large = false }: { label: string; 
         aria-label={copyLabel}
         className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-fg transition-colors hover:bg-surface-2"
       >
-        {copied ? <Check className="size-4 text-emerald-600" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
+        {copied ? <Check className="size-4 text-ok" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
         <span className="hidden sm:inline">{copied ? t("members.copied") : t("members.copy")}</span>
       </button>
       {/* outside the button, so it does not become part of the button's name */}
@@ -122,7 +122,7 @@ export function CredentialsCard({
   return (
     <section ref={ref} tabIndex={-1} aria-labelledby={headingId} className="space-y-4 outline-none">
       <div className="flex items-center gap-2">
-        <CheckCircle2 className="size-6 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+        <CheckCircle2 className="size-6 shrink-0 text-ok" aria-hidden="true" />
         <h3 id={headingId} className="text-base font-semibold text-fg">
           {heading}
         </h3>
@@ -147,14 +147,14 @@ export function CredentialsCard({
           <span role="status" className="sr-only">
             {all.copied ? t("members.copied_all") : ""}
           </span>
-          <div role="note" className="space-y-1 rounded-lg bg-amber-500/10 p-3 text-xs leading-6 text-amber-800 dark:text-amber-300">
+          <div role="note" className="space-y-1 rounded-lg bg-warn/10 p-3 text-xs leading-6 text-warn">
             <p className="font-semibold">{t("members.once_warning")}</p>
             <p>{t("members.once_fix")}</p>
             <p>{t("members.must_change")}</p>
           </div>
         </>
       ) : (
-        <p role="note" className="rounded-lg bg-amber-500/10 p-3 text-xs leading-6 text-amber-800 dark:text-amber-300">
+        <p role="note" className="rounded-lg bg-warn/10 p-3 text-xs leading-6 text-warn">
           {t("members.no_password_returned")}
         </p>
       )}

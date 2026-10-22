@@ -112,7 +112,7 @@ export function Sheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 md:items-stretch md:justify-end"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-scrim/50 md:items-stretch md:justify-end"
       onMouseDown={(e) => {
         if (dismissOnBackdrop && e.target === e.currentTarget) closeRef.current();
       }}

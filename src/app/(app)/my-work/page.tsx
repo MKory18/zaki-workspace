@@ -48,7 +48,7 @@ export default async function MyWorkPage({ searchParams }: { searchParams: { tab
             )}
           >
             {t(TAB_KEYS[k])}
-            <span className="rounded-full bg-surface-2 px-1.5 text-[10px] text-fg-muted">
+            <span className="rounded-full bg-surface-2 px-1.5 text-xs text-fg-muted">
               {data[k].length}
             </span>
           </a>

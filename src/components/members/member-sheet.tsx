@@ -5,7 +5,8 @@ import Link from "next/link";
 import { KeyRound, Loader2, LogOut, PauseCircle, RotateCcw, UserMinus } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 import { ROLE_KEYS } from "@/lib/i18n/roles";
@@ -348,7 +349,7 @@ export function MemberSheet({
         {member.status === "OFFBOARDED" ? <Note>{t("members.offboarded_note")}</Note> : null}
 
         {member.mustChangePassword && member.status === "ACTIVE" ? (
-          <div role="note" className="space-y-1 rounded-lg bg-amber-500/10 p-3 text-xs leading-6 text-amber-800 dark:text-amber-300">
+          <div role="note" className="space-y-1 rounded-lg bg-warn/10 p-3 text-xs leading-6 text-warn">
             <p className="font-semibold">{t("members.pw_pending_warning")}</p>
             <p>{t("members.pw_pending_fix")}</p>
           </div>
@@ -429,7 +430,7 @@ export function MemberSheet({
                 </Field>
               ) : null}
               {infoError ? (
-                <p role="alert" className="rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
+                <p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm text-danger">
                   {infoError}
                 </p>
               ) : null}
@@ -636,7 +637,7 @@ function ActionButton({
         "flex min-h-14 w-full items-start gap-3 rounded-xl border bg-surface px-3 py-3 text-start transition-colors",
         waiting && "cursor-not-allowed opacity-60",
         tone === "danger"
-          ? "border-red-500/30 text-red-700 hover:bg-red-500/5 dark:text-red-400"
+          ? "border-danger/30 text-danger hover:bg-danger/5"
           : "border-border text-fg hover:bg-surface-2",
       )}
     >
@@ -689,13 +690,13 @@ function ConfirmBlock({
       <h3 id={id} className="text-base font-semibold text-fg">
         {title}
       </h3>
-      <div role="note" className="space-y-1 rounded-lg bg-amber-500/10 p-3 text-sm leading-6 text-amber-900 dark:text-amber-200">
+      <div role="note" className="space-y-1 rounded-lg bg-warn/10 p-3 text-sm leading-6 text-warn">
         <p>{body}</p>
         <p>{fix}</p>
       </div>
       {children}
       {error ? (
-        <p role="alert" className="rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
+        <p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm text-danger">
           {error}
         </p>
       ) : null}

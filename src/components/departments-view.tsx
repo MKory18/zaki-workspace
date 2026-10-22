@@ -38,12 +38,12 @@ interface Person {
 
 const COLORS = ["sky", "emerald", "amber", "fuchsia", "indigo", "rose"] as const;
 const CHIP: Record<string, string> = {
-  sky: "bg-sky-500/15 text-sky-500",
-  emerald: "bg-emerald-500/15 text-emerald-500",
-  amber: "bg-amber-500/15 text-amber-500",
-  fuchsia: "bg-fuchsia-500/15 text-fuchsia-500",
-  indigo: "bg-indigo-500/15 text-indigo-500",
-  rose: "bg-rose-500/15 text-rose-500",
+  sky: "bg-info/10 text-info",
+  emerald: "bg-ok/10 text-ok",
+  amber: "bg-warn/10 text-warn",
+  fuchsia: "bg-cat-2/10 text-cat-2",
+  indigo: "bg-info/10 text-info",
+  rose: "bg-cat-3/10 text-cat-3",
 };
 const EMOJIS = ["🎨", "💻", "🖥️", "💼", "📣", "⚙️", "👔", "🚀"];
 
@@ -94,7 +94,7 @@ export function DepartmentsView({ me }: { me: { role: string; id: string } }) {
 
       {rows.length === 0 ? (
         <p className="rounded-xl border border-border bg-surface-1 px-4 py-6 text-center text-sm text-muted">
-          {t("dept.noProjects")}
+          {t("dept.noDepartments")}
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
@@ -109,26 +109,26 @@ export function DepartmentsView({ me }: { me: { role: string; id: string } }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h2 className="truncate text-sm font-semibold">{d.name}</h2>
-                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", CHIP[color])}>
-                        {d.members.length} {t("dept.members")}
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", CHIP[color])}>
+                        {t("dept.stat.members", { n: d.members.length })}
                       </span>
                     </div>
-                    <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted">
-                      <span>{d.projectsCount} {t("dept.projects")}</span>
-                      <span>{d.openTasks} {t("dept.open")}</span>
-                      {d.overdueTasks > 0 && <span className="text-red-500">{d.overdueTasks} {t("dept.overdue")}</span>}
-                      {d.openTickets > 0 && <span className="text-rose-500">{d.openTickets} {t("dept.ticketsOpen")}</span>}
+                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted">
+                      <span>{t("dept.stat.projects", { n: d.projectsCount })}</span>
+                      <span>{t("dept.stat.open", { n: d.openTasks })}</span>
+                      {d.overdueTasks > 0 && <span className="text-danger">{t("dept.stat.overdue", { n: d.overdueTasks })}</span>}
+                      {d.openTickets > 0 && <span className="text-cat-3">{t("dept.stat.tickets", { n: d.openTickets })}</span>}
                     </div>
                     <div className="mt-2 flex -space-x-1.5" title={d.members.map((m) => m.name).join(", ")}>
                       {d.members.slice(0, 6).map((m) => (
                         <span
                           key={m.id}
-                          className="grid size-6 place-items-center rounded-full border border-surface-1 bg-surface-2 text-[9px] font-semibold"
+                          className="grid size-6 place-items-center rounded-full border border-surface-1 bg-surface-2 text-xs font-semibold"
                         >
                           {m.name.slice(0, 1)}
                         </span>
                       ))}
-                      {d.members.length > 6 && <span className="text-[10px] text-muted">+{d.members.length - 6}</span>}
+                      {d.members.length > 6 && <span className="text-xs text-muted">+{d.members.length - 6}</span>}
                     </div>
                     <div className="mt-3">
                       <DepartmentTickets
@@ -206,7 +206,7 @@ function DeleteDepRefetcher({ d: _d, onOpen, label }: { d: DeptRow; onOpen: () =
         if (confirm(t("dept.deleteAsk"))) onOpen();
       }}
     >
-      <Trash2 className="size-4 text-red-500" />
+      <Trash2 className="size-4 text-danger" />
     </Button>
   );
 }
@@ -271,8 +271,9 @@ function DeptModal({
                 key={c}
                 type="button"
                 onClick={() => setColor(c)}
-                className={cn("size-6 rounded-full", CHIP[c]?.split(" ")[0] ?? "bg-indigo-500/15", color === c && "ring-2 ring-accent")}
-                aria-label={c}
+                className={cn("size-6 rounded-full", CHIP[c]?.split(" ")[0] ?? "bg-info/10", color === c && "ring-2 ring-accent")}
+                aria-label={t(`dept.color.${c}`)}
+                aria-pressed={color === c}
               />
             ))}
           </div>
@@ -344,11 +345,11 @@ function DeptMembersModal({
           {(detail.data?.members ?? []).map((m) => (
             <li key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm">
               <span className="min-w-0 flex-1 truncate">{m.name}</span>
-              <span className="text-[10px] text-muted">{m.jobTitle ?? ""}</span>
+              <span className="text-xs text-muted">{m.jobTitle ?? ""}</span>
               {canManage && (
                 <button
                   type="button"
-                  className="p-1 text-red-500 disabled:opacity-40"
+                  className="p-1 text-danger disabled:opacity-40"
                   disabled={change.isPending}
                   onClick={() => change.mutate({ removeUserIds: [m.id] })}
                   aria-label={t("dept.removeMember")}
@@ -368,15 +369,15 @@ function DeptMembersModal({
               <li key={p.userId} className="flex items-center gap-2 px-3 py-1.5">
                 <button
                   type="button"
-                  className="shrink-0 text-[11px] font-medium text-accent hover:underline"
+                  className="shrink-0 text-xs font-medium text-accent hover:underline"
                   onClick={() => change.mutate({ addUserIds: [p.userId] })}
                 >
                   {t("dept.addMembers")}
                 </button>
-                <span className="truncate text-[10px] text-muted">{p.user.name}</span>
+                <span className="truncate text-xs text-muted">{p.user.name}</span>
               </li>
             ))}
-            {addable.length === 0 && <li className="px-3 py-2 text-[10px] text-muted">{t("dept.everyoneIn")}</li>}
+            {addable.length === 0 && <li className="px-3 py-2 text-xs text-muted">{t("dept.everyoneIn")}</li>}
           </ul>
         )}
         <div className="flex justify-end">

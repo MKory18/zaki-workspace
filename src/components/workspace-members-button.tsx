@@ -86,7 +86,7 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
                 <li key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm">
                   <span className="min-w-0 flex-1 truncate text-fg">{m.name}</span>
                   {m.role ? (
-                    <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-fg-muted">
+                    <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-fg-muted">
                       {t(m.role === "ADMIN" ? "ws.role_admin" : m.role === "GUEST" ? "ws.role_guest" : "ws.role_member")}
                     </span>
                   ) : null}
@@ -98,7 +98,7 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
                       disabled={manage.isPending}
                       onClick={() => manage.mutate({ promoteUserIds: [m.id] })}
                     >
-                      <Crown className="size-3.5 text-amber-500" />
+                      <Crown className="size-3.5 text-warn" />
                     </Button>
                   ) : null}
                   {canManage && m.role === "ADMIN" ? (
@@ -109,7 +109,7 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
                       disabled={manage.isPending}
                       onClick={() => manage.mutate({ demoteUserIds: [m.id] })}
                     >
-                      <Crown className="size-3.5 text-slate-400" />
+                      <Crown className="size-3.5 text-muted" />
                     </Button>
                   ) : null}
                   {canManage ? (
@@ -117,7 +117,7 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
                       size="sm"
                       variant="ghost"
                       aria-label={t("ws.removeMember")}
-                      className="text-red-500"
+                      className="text-danger"
                       disabled={manage.isPending}
                       onClick={() => manage.mutate({ removeUserIds: [m.id] })}
                     >
@@ -139,17 +139,17 @@ export function WorkspaceMembersButton({ workspaceId }: { workspaceId: string })
                     <li key={p.userId} className="flex items-center gap-2 px-3 py-1.5">
                       <button
                         type="button"
-                        className="text-[11px] font-medium text-accent hover:underline disabled:opacity-40"
+                        className="text-xs font-medium text-accent hover:underline disabled:opacity-40"
                         disabled={manage.isPending}
                         onClick={() => manage.mutate({ addUserIds: [p.userId] })}
                       >
                         + {t("ws.add")}
                       </button>
-                      <span className="truncate text-[10px] text-muted">{p.user.name}</span>
+                      <span className="truncate text-xs text-muted">{p.user.name}</span>
                     </li>
                   ))}
                   {directory.data && addable.length === 0 ? (
-                    <li className="px-3 py-2 text-[10px] text-muted">{t("ws.everyoneIn")}</li>
+                    <li className="px-3 py-2 text-xs text-muted">{t("ws.everyoneIn")}</li>
                   ) : null}
                 </ul>
               </div>

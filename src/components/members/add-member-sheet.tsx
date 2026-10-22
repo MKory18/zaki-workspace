@@ -3,7 +3,8 @@
 import { useId, useState } from "react";
 import { ChevronDown, Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { ROLE_KEYS } from "@/lib/i18n/roles";
@@ -277,7 +278,7 @@ export function AddMemberSheet({
           </div>
 
           {error ? (
-            <p role="alert" className="rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
+            <p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm text-danger">
               {error}
             </p>
           ) : null}

@@ -147,7 +147,7 @@ export function ChatView({ ctx }: { ctx: { orgId: string; orgRole: string } }) {
   if (thread.isError) {
     return (
       <div className="mx-auto max-w-5xl p-6">
-        <p className="text-sm text-red-500">{t("common.error")}</p>
+        <p className="text-sm text-danger">{t("common.error")}</p>
       </div>
     );
   }
@@ -187,12 +187,12 @@ export function ChatView({ ctx }: { ctx: { orgId: string; orgRole: string } }) {
                     <span className="flex items-center justify-between gap-1">
                       <span className="truncate text-sm font-medium">{c.title}</span>
                       {c.unread > 0 && (
-                        <span className="rounded-full bg-accent px-1.5 text-[10px] font-semibold text-accent-fg">
+                        <span className="rounded-full bg-accent px-1.5 text-xs font-semibold text-accent-fg">
                           {c.unread}
                         </span>
                       )}
                     </span>
-                    <span className="block truncate text-[10px] text-muted">
+                    <span className="block truncate text-xs text-muted">
                       {c.lastMessage ? (c.lastMessage.body === null ? `— ${t("chat.deleted")}` : c.lastMessage.body || t("chat.emptySo")) : t("chat.emptySo")}
                     </span>
                   </span>
@@ -213,7 +213,7 @@ export function ChatView({ ctx }: { ctx: { orgId: string; orgRole: string } }) {
                   <span className="block truncate text-sm font-semibold">
                     {detail.emoji ? `${detail.emoji} ` : ""}{detail.title}
                   </span>
-                  <span className="text-[10px] text-muted">
+                  <span className="text-xs text-muted">
                     {detail.kind === "GROUP"
                       ? t("chat.membersCount", { n: detail.members.length })
                       : t("chat.direct")}
@@ -227,10 +227,10 @@ export function ChatView({ ctx }: { ctx: { orgId: string; orgRole: string } }) {
               </header>
 
               {pinnedMsgs.length > 0 && (
-                <div className="border-b border-border bg-amber-500/5 px-4 py-1.5">
+                <div className="border-b border-border bg-warn/5 px-4 py-1.5">
                   {pinnedMsgs.map((m) => (
-                    <div key={m.id} className="flex items-center gap-1.5 text-[11px] text-muted">
-                      <Pin className="size-3 text-amber-500" />
+                    <div key={m.id} className="flex items-center gap-1.5 text-xs text-muted">
+                      <Pin className="size-3 text-warn" />
                       <span className="font-medium">{m.authorName}:</span>
                       <span className="truncate">{m.body}</span>
                     </div>
@@ -268,7 +268,7 @@ export function ChatView({ ctx }: { ctx: { orgId: string; orgRole: string } }) {
               {canWrite && (
                 <footer className="border-t border-border p-3">
                   {(replyTo || editing) && (
-                    <div className="mb-2 flex items-center justify-between rounded-lg bg-surface-2 px-2 py-1 text-[11px] text-muted">
+                    <div className="mb-2 flex items-center justify-between rounded-lg bg-surface-2 px-2 py-1 text-xs text-muted">
                       <span className="truncate">
                         {editing ? t("chat.editing") : `${t("chat.replying")}: ${replyTo!.authorName} — ${replyTo!.body}`}
                       </span>
@@ -379,9 +379,9 @@ function MessageRow({
         setShowPalette(false);
       }}
     >
-      {!m.mine && <div className="mb-0.5 text-[10px] font-medium text-muted">{m.authorName}</div>}
+      {!m.mine && <div className="mb-0.5 text-xs font-medium text-muted">{m.authorName}</div>}
       {m.replyPreview && (
-        <div className="mb-1 rounded-lg border-r-2 border-accent bg-surface-1 px-2 py-1 text-[10px] text-muted">
+        <div className="mb-1 rounded-lg border-r-2 border-accent bg-surface-1 px-2 py-1 text-xs text-muted">
           <div className="font-medium">{m.replyPreview.authorName}</div>
           <div className="truncate">{m.replyPreview.body}</div>
         </div>
@@ -391,8 +391,8 @@ function MessageRow({
       ) : (
         <p className="whitespace-pre-wrap break-words">{m.body}</p>
       )}
-      <div className="mt-0.5 flex items-center gap-2 text-[9px] text-muted">
-        {m.pinned && <Pin className="size-2.5 text-amber-500" />}
+      <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
+        {m.pinned && <Pin className="size-2.5 text-warn" />}
         {m.edited && <span>{t("chat.edited")}</span>}
         <span>{fmtTime(m.createdAt)}</span>
       </div>
@@ -406,7 +406,7 @@ function MessageRow({
               disabled={disabled}
               onClick={() => reactTo(m.id, r.emoji)}
               className={cn(
-                "rounded-full border border-border bg-surface-1 px-1.5 py-0.5 text-[10px] transition-colors",
+                "rounded-full border border-border bg-surface-1 px-1.5 py-0.5 text-xs transition-colors",
                 r.mine && "border-accent text-accent",
               )}
             >
@@ -425,7 +425,7 @@ function MessageRow({
           )}
         >
           <button type="button" className="p-0.5" aria-label={t("chat.react")} onClick={() => setShowPalette((s) => !s)}>
-            <span className="text-[11px]">😊</span>
+            <span className="text-xs">😊</span>
           </button>
           <button type="button" className="p-0.5" aria-label={t("chat.reply")} onClick={onReply}>
             <Reply className="size-3" />
@@ -441,7 +441,7 @@ function MessageRow({
             </button>
           )}
           {canEdit && (
-            <button type="button" className="p-0.5 text-red-500" aria-label={t("chat.delete")} onClick={onDelete}>
+            <button type="button" className="p-0.5 text-danger" aria-label={t("chat.delete")} onClick={onDelete}>
               <Trash2 className="size-3" />
             </button>
           )}
@@ -548,7 +548,7 @@ function NewChatModal({ onClose, onOpen }: { onClose: () => void; onOpen: (conve
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{p.user.name}</span>
-                  <span className="block truncate text-[10px] text-muted">{p.user.jobTitle ?? ""}</span>
+                  <span className="block truncate text-xs text-muted">{p.user.jobTitle ?? ""}</span>
                 </span>
               </button>
             </li>
@@ -609,12 +609,12 @@ function MembersModal({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{m.name}</span>
-                <span className="text-[10px] text-muted">{m.role === "admin" ? t("chat.adminRole") : ""}</span>
+                <span className="text-xs text-muted">{m.role === "admin" ? t("chat.adminRole") : ""}</span>
               </span>
               {isAdmin && (
                 <button
                   type="button"
-                  className="p-1 text-red-500 disabled:opacity-40"
+                  className="p-1 text-danger disabled:opacity-40"
                   disabled={detail.members.filter((x) => x.role === "admin").length <= 1 && m.role === "admin"}
                   onClick={() => manage.mutate({ removeUserIds: [m.id] })}
                   aria-label={t("chat.removeMember")}
@@ -632,15 +632,15 @@ function MembersModal({
                 <li key={p.userId} className="flex items-center gap-1 px-2 py-1.5">
                   <button
                     type="button"
-                    className="shrink-0 text-[11px] font-medium text-accent hover:underline"
+                    className="shrink-0 text-xs font-medium text-accent hover:underline"
                     onClick={() => manage.mutate({ addUserIds: [p.userId] })}
                   >
                     {t("chat.addMember")}
                   </button>
-                  <span className="truncate text-[10px] text-muted">{p.user.name}</span>
+                  <span className="truncate text-xs text-muted">{p.user.name}</span>
                 </li>
               ))}
-              {addable.length === 0 && <li className="px-2 py-2 text-[10px] text-muted">{t("chat.everyoneIn")}</li>}
+              {addable.length === 0 && <li className="px-2 py-2 text-xs text-muted">{t("chat.everyoneIn")}</li>}
             </ul>
           </div>
         )}

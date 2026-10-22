@@ -105,7 +105,7 @@ export function CapabilityPanel({
 function rowTag(row: CapabilityRow, t: TFn): ReactNode {
   if (!row.customized) return <span className="text-muted">{t("members.caps_default")}</span>;
   return (
-    <span className="font-medium text-amber-700 dark:text-amber-400">
+    <span className="font-medium text-warn">
       {row.on ? t("members.caps_added") : t("members.caps_removed")}
     </span>
   );
@@ -115,7 +115,7 @@ function rowTag(row: CapabilityRow, t: TFn): ReactNode {
 function rowNote(row: CapabilityRow, t: TFn): ReactNode {
   if (row.locked === "actor_lacks") return <span className="text-muted">{t("members.caps_locked_actor")}</span>;
   if (row.sensitive && row.on && !row.rankDefault) {
-    return <span className="text-amber-700 dark:text-amber-400">{t("members.caps_sensitive")}</span>;
+    return <span className="text-warn">{t("members.caps_sensitive")}</span>;
   }
   return null;
 }

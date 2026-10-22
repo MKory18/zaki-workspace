@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { resolveTimeZone, zonedDayStart } from "@/lib/zoned-time";
 
 /**
  * Numbers behind the analytics page.
@@ -11,10 +12,13 @@ import { db } from "@/server/db";
  *    workspace, and every member can read them, so no workspace limit applies.
  *  - the per-person workload counts ACTIVE people only: the open tasks of somebody who is suspended
  *    or offboarded stay in every total, but they are not a bar of their own.
+ *  - "overdue" is due before the START of the company's today (Organization.timezone), the same line as My Work
+ *    and the Today page: a task due today at 09:00 is not overdue at 15:00, it is due within the coming week.
  * Nothing is ever counted across organizations.
  */
-export async function loadAnalytics(orgId: string, wsIds: string[]) {
-  const now = new Date();
+export async function loadAnalytics(orgId: string, wsIds: string[], now: Date = new Date()) {
+  const org = await db.organization.findUnique({ where: { id: orgId }, select: { timezone: true } });
+  const todayStart = zonedDayStart(now, resolveTimeZone(org?.timezone));
   const since30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
   const in7 = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
   const scope = { archived: false, orgId, workspaceId: { in: wsIds } };
@@ -23,10 +27,10 @@ export async function loadAnalytics(orgId: string, wsIds: string[]) {
       db.task.count({ where: scope }),
       db.task.count({ where: { ...scope, completedAt: null } }),
       db.task.count({ where: { ...scope, completedAt: { not: null } } }),
-      db.task.count({ where: { ...scope, completedAt: null, dueDate: { lt: now } } }),
+      db.task.count({ where: { ...scope, completedAt: null, dueDate: { lt: todayStart } } }),
       db.task.count({ where: { ...scope, createdAt: { gte: since30 } } }),
       db.task.count({ where: { ...scope, completedAt: { gte: since30 } } }),
-      db.task.count({ where: { ...scope, completedAt: null, dueDate: { gte: now, lte: in7 } } }),
+      db.task.count({ where: { ...scope, completedAt: null, dueDate: { gte: todayStart, lte: in7 } } }),
       db.task.groupBy({ by: ["priority"], where: { ...scope, completedAt: null }, _count: { _all: true } }),
       db.idea.groupBy({ by: ["status"], where: { orgId }, _count: { _all: true } }),
       db.task.groupBy({

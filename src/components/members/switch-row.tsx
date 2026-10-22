@@ -77,7 +77,7 @@ export function SwitchRow({
       >
         <span
           className={cn(
-            "absolute start-0.5 top-0.5 grid size-5 place-items-center rounded-full bg-white shadow transition-transform",
+            "absolute start-0.5 top-0.5 grid size-5 place-items-center rounded-full bg-surface-1 shadow transition-transform",
             checked && "translate-x-5 rtl:-translate-x-5",
           )}
         >

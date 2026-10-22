@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { enumOptions } from "@/lib/i18n/enums";
 
 export interface FilterWorkspace {
   id: string;
@@ -40,7 +41,7 @@ export function ListFilters({
   }
 
   const selectCls =
-    "h-8 rounded-lg border border-border bg-surface-1 px-2 text-xs text-fg";
+    "min-h-11 md:h-8 rounded-lg border border-muted bg-surface-1 px-2 text-base md:text-xs text-fg";
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-4 py-2">
@@ -71,15 +72,15 @@ export function ListFilters({
       </select>
 
       <select
-        aria-label={labels.priority}
+        aria-label={labels.priorityField}
         className={selectCls}
         value={priority}
         onChange={(e) => push({ priority: e.target.value })}
       >
         <option value="">{labels.priorityAny}</option>
-        {["URGENT", "HIGH", "NORMAL", "LOW", "NONE"].map((p) => (
-          <option key={p} value={p}>
-            {p}
+        {enumOptions("TaskPriority").map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
           </option>
         ))}
       </select>
@@ -113,7 +114,7 @@ export function ListFilters({
           defaultValue={q}
           aria-label={labels.search}
           placeholder={labels.search}
-          className="h-8 w-52 rounded-lg border border-border bg-surface-1 px-2 text-xs text-fg placeholder:text-muted focus:outline-none focus:border-ring"
+          className="min-h-11 md:h-8 w-52 md:w-52 rounded-lg border border-muted bg-surface-1 px-2 text-base md:text-xs text-fg placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-inset"
         />
       </form>
     </div>

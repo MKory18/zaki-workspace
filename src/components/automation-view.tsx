@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { CircleDot, ExternalLink, FileText, Globe, Plug, Webhook } from "lucide-react";
 import { apiDelete, apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { fmtDateTime } from "@/lib/format";
+import { enumLabel, eventDetailLabel, eventLabel } from "@/lib/i18n/enums";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n";
@@ -51,7 +52,7 @@ interface DriveFile {
 }
 
 export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { toast } = useToast();
   const qc = useQueryClient();
   const params = useSearchParams();
@@ -101,7 +102,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
   const testN8n = useMutation({
     mutationFn: () => apiPost<{ delivered: boolean; detail?: string }>("/api/integrations/n8n/test"),
     onSuccess: (res) => {
-      toast(res.delivered ? t("n8n.testOk") : `${t("n8n.testFail")}${res.detail ? ` — ${detailText(res.detail, t)}` : ""}`, res.delivered ? "success" : "error");
+      toast(res.delivered ? t("n8n.testOk") : `${t("n8n.testFail")}${res.detail ? ` — ${eventDetailLabel(res.detail)}` : ""}`, res.delivered ? "success" : "error");
       qc.invalidateQueries({ queryKey: ["n8n"] });
     },
     onError: (err) => toast(errText(err, t), "error"),
@@ -146,19 +147,19 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
       <section className="space-y-4 rounded-xl border border-border bg-surface-1 p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="grid size-9 place-items-center rounded-lg bg-fuchsia-500/15 text-fuchsia-500">
+            <span className="grid size-9 place-items-center rounded-lg bg-cat-2/10 text-cat-2">
               <Webhook className="size-5" />
             </span>
             <div>
-              <h2 className="text-sm font-semibold">n8n</h2>
+              <h2 className="text-sm font-semibold">{enumLabel("IntegrationType", "N8N")}</h2>
               <p className="text-xs text-muted">{t("n8n.subtitle")}</p>
             </div>
           </div>
           {n8n.data && (
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                n8n.data.status.connected ? "bg-emerald-500/15 text-emerald-600" : "bg-surface-2 text-muted",
+                "rounded-full px-2 py-0.5 text-xs font-medium",
+                n8n.data.status.connected ? "bg-ok/10 text-ok" : "bg-surface-2 text-muted",
               )}
             >
               {n8n.data.status.connected ? t("n8n.connected") : t("n8n.notConnected")}
@@ -175,7 +176,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}
                 className="flex-1 font-mono text-sm"
-                aria-label="n8n webhook URL"
+                aria-label={t("automation.webhookLabel")}
               />
               <Button onClick={() => saveN8n.mutate(false)} disabled={saveN8n.isPending || !webhookUrl.trim()}>
                 {t("n8n.save")}
@@ -192,12 +193,13 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
                     onClick={() =>
                       setSelectedEvents((prev) => (on ? prev.filter((x) => x !== e) : [...prev, e]))
                     }
+                    aria-pressed={on}
                     className={cn(
-                      "rounded-lg border px-2 py-1 font-mono text-[10px] transition-colors",
+                      "rounded-lg border px-2 py-1 text-xs transition-colors",
                       on ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:bg-surface-2",
                     )}
                   >
-                    {e}
+                    {eventLabel(e)}
                   </button>
                 );
               })}
@@ -220,21 +222,21 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
 
             {generatedSecret ? (
               <div className="rounded-lg border border-dashed border-border bg-surface-2 p-3">
-                <p className="mb-1 text-[10px] text-muted">{t("n8n.secretOnce")}</p>
+                <p className="mb-1 text-xs text-muted">{t("n8n.secretOnce")}</p>
                 <code dir="ltr" className="block break-all font-mono text-xs">
                   {generatedSecret}
                 </code>
-                <p className="mt-2 text-[10px] leading-5 text-muted">{t("n8n.inboundHelp")}</p>
-                <code dir="ltr" className="mt-1 block whitespace-pre-wrap break-all font-mono text-[10px] text-muted">
+                <p className="mt-2 text-xs leading-5 text-muted">{t("n8n.inboundHelp")}</p>
+                <code dir="ltr" className="mt-1 block whitespace-pre-wrap break-all font-mono text-xs text-muted">
                   {`POST {APP_URL}/api/integrations/n8n/inbound
 x-zaki-org: {orgId}
 x-zaki-timestamp: {unix seconds}
 x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
                 </code>
-                <p className="mt-1 text-[10px] leading-5 text-muted">{t("n8n.inboundLegacy")}</p>
+                <p className="mt-1 text-xs leading-5 text-muted">{t("n8n.inboundLegacy")}</p>
               </div>
             ) : n8n.data?.status.connected ? (
-              <p className="text-[10px] text-muted">{t("n8n.secretStored")}</p>
+              <p className="text-xs text-muted">{t("n8n.secretStored")}</p>
             ) : null}
           </div>
         ) : ctx.orgRole === "GUEST" ? (
@@ -245,7 +247,7 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
 
         {/* event log — every attempt, success or failure */}
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-right text-[11px]">
+          <table className="w-full text-right text-xs">
             <thead className="bg-surface-2 text-muted">
               <tr>
                 <th className="px-2 py-1.5 font-medium">{t("log.direction")}</th>
@@ -261,19 +263,19 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
                   <td className="px-2 py-1.5">
                     <span
                       className={cn(
-                        "rounded px-1.5 py-0.5 font-mono text-[10px]",
-                        ev.direction === "OUT" ? "bg-fuchsia-500/10 text-fuchsia-600" : "bg-sky-500/10 text-sky-600",
+                        "rounded px-1.5 py-0.5 text-xs",
+                        ev.direction === "OUT" ? "bg-cat-2/10 text-cat-2" : "bg-info/10 text-info",
                       )}
                     >
-                      {ev.direction}
+                      {enumLabel("IntegrationDirection", ev.direction)}
                     </span>
                   </td>
-                  <td className="px-2 py-1.5 font-mono">{ev.type}</td>
-                  <td className={cn("px-2 py-1.5", ev.status === "OK" ? "text-emerald-600" : "text-red-600")}>{ev.status}</td>
-                  <td className="max-w-[16rem] truncate px-2 py-1.5 text-muted" title={ev.detail ? detailText(ev.detail, t) : undefined}>
-                    {ev.detail ? detailText(ev.detail, t) : "—"}
+                  <td className="px-2 py-1.5">{eventLabel(ev.type)}</td>
+                  <td className={cn("px-2 py-1.5", ev.status === "OK" ? "text-ok" : "text-danger")}>{enumLabel("IntegrationEventStatus", ev.status)}</td>
+                  <td className="max-w-[16rem] truncate px-2 py-1.5 text-muted" dir="auto" title={ev.detail ? eventDetailLabel(ev.detail) : undefined}>
+                    {ev.detail ? eventDetailLabel(ev.detail) : "—"}
                   </td>
-                  <td className="px-2 py-1.5 text-muted">{fmtDateTime(ev.createdAt, locale)}</td>
+                  <td className="px-2 py-1.5 text-muted">{fmtDateTime(ev.createdAt)}</td>
                 </tr>
               ))}
               {(n8n.data?.events.length ?? 0) === 0 && (
@@ -292,22 +294,22 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
       <section className="space-y-4 rounded-xl border border-border bg-surface-1 p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="grid size-9 place-items-center rounded-lg bg-amber-500/15 text-amber-500">
+            <span className="grid size-9 place-items-center rounded-lg bg-warn/10 text-warn">
               <Globe className="size-5" />
             </span>
             <div>
-              <h2 className="text-sm font-semibold">Google Drive</h2>
+              <h2 className="text-sm font-semibold">{enumLabel("IntegrationType", "GOOGLE_DRIVE")}</h2>
               <p className="text-xs text-muted">{t("google.subtitle")}</p>
             </div>
           </div>
           <span
             className={cn(
-              "rounded-full px-2 py-0.5 text-[10px] font-medium",
+              "rounded-full px-2 py-0.5 text-xs font-medium",
               google.data?.connected
-                ? "bg-emerald-500/15 text-emerald-600"
+                ? "bg-ok/10 text-ok"
                 : google.data?.configured
                   ? "bg-surface-2 text-muted"
-                  : "bg-amber-500/15 text-amber-600",
+                  : "bg-warn/10 text-warn",
             )}
           >
             {google.data?.connected ? t("google.connected") : google.data?.configured ? t("google.notConnected") : t("google.needsEnv")}
@@ -331,7 +333,7 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
                 </Button>
               )}
             </div>
-            {google.data.filesError && <p className="text-xs text-red-500">{t(google.data.filesError)}</p>}
+            {google.data.filesError && <p className="text-xs text-danger">{t(google.data.filesError)}</p>}
             {showFiles && canManage && (
               <ul className="divide-y divide-border rounded-lg border border-border">
                 {google.data.files?.length ? (
@@ -339,7 +341,7 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
                     <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2">
                       <span className="line-clamp-1 text-xs">{f.name}</span>
                       {f.link && (
-                        <a href={f.link} target="_blank" rel="noreferrer" className="text-[10px] text-accent hover:underline">
+                        <a href={f.link} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
                           <ExternalLink className="inline size-3" /> {t("google.open")}
                         </a>
                       )}
@@ -361,7 +363,7 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
                 </Button>
               </Link>
             ) : null}
-            <p className="text-[10px] text-muted">{t("google.readonlyNote")}</p>
+            <p className="text-xs text-muted">{t("google.readonlyNote")}</p>
           </div>
         )}
       </section>
@@ -370,12 +372,6 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
 }
 
 type TFn = (key: string, vars?: Record<string, string | number>) => string;
-
-/** A stored/returned detail may be a translation key (e.g. `n8n.url_private`): show it in Arabic, else as is. */
-function detailText(detail: string, t: TFn): string {
-  const translated = t(detail);
-  return translated !== detail ? translated : detail;
-}
 
 function errText(err: unknown, t: TFn): string {
   if (err instanceof ApiError) {

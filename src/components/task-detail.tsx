@@ -7,9 +7,12 @@ import { CalendarDays, Pencil, Trash2, User, Flag, Type as TypeIcon, Send } from
 import { cn } from "@/lib/utils";
 import { apiDelete, apiPost, apiPatch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardBody, CardHeader, Badge } from "@/components/ui/card";
-import { PRIORITY_STYLES, formatDate } from "@/lib/format";
+import { fmtDMY, fmtDateTime } from "@/lib/format";
+import { columnLabel, enumLabel, enumOptions } from "@/lib/i18n/enums";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 
@@ -21,6 +24,7 @@ export interface TaskDetailData {
   description: string | null;
   priority: string;
   type: string;
+  /** The name of the board column the task is in (a column's name is whatever the board was given). */
   status: string;
   boardId: string;
   boardName: string;
@@ -40,6 +44,7 @@ export function TaskDetail({
   labels,
 }: {
   task: TaskDetailData;
+  /** Whether the API would let this person change the task (see canWriteInWorkspace). */
   canEdit: boolean;
   currentUserId: string;
   members: { id: string; name: string }[];
@@ -123,10 +128,10 @@ export function TaskDetail({
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
       <header className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-xs text-muted">{task.key}</span>
-        <Badge>{task.status}</Badge>
-        <span className="text-xs text-fg-muted">in {task.boardName}</span>
-        {canEdit ? null : <span className="ms-auto text-[11px] text-muted">read-only</span>}
+        <span dir="ltr" className="font-mono text-xs text-muted">{task.key}</span>
+        <Badge>{columnLabel(task.status)}</Badge>
+        <span className="text-xs text-fg-muted">{t("task.inBoard", { name: task.boardName })}</span>
+        {canEdit ? null : <span className="ms-auto text-xs text-muted">{t("task.readOnly")}</span>}
       </header>
 
       <Card>
@@ -138,7 +143,7 @@ export function TaskDetail({
               onBlur={saveIfChanged}
               className="w-full border-0 bg-transparent text-lg font-semibold text-fg focus:outline-none"
               maxLength={280}
-              aria-label="Task title"
+              aria-label={t("task.title")}
             />
           ) : (
             <h1 className="text-lg font-semibold text-fg">{task.title}</h1>
@@ -147,7 +152,7 @@ export function TaskDetail({
           <div className="grid gap-3 md:grid-cols-2">
             <div>
               <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
-                <User className="h-3 w-3" /> Assignee
+                <User className="h-3 w-3" /> {t("task.assignee")}
               </span>
               {canEdit ? (
                 <Select
@@ -158,7 +163,7 @@ export function TaskDetail({
                   }}
                   className="h-8"
                 >
-                  <option value="">Unassigned</option>
+                  <option value="">{t("list.unassigned")}</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name}
@@ -166,12 +171,12 @@ export function TaskDetail({
                   ))}
                 </Select>
               ) : (
-                <p className="text-sm text-fg">{task.assigneeName ?? "Unassigned"}</p>
+                <p className="text-sm text-fg">{task.assigneeName ?? t("list.unassigned")}</p>
               )}
             </div>
             <div>
               <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
-                <Flag className="h-3 w-3" /> Priority
+                <Flag className="h-3 w-3" /> {t("task.priority")}
               </span>
               {canEdit ? (
                 <Select
@@ -182,19 +187,19 @@ export function TaskDetail({
                   }}
                   className="h-8"
                 >
-                  {Object.entries(PRIORITY_STYLES).map(([key, v]) => (
-                    <option key={key} value={key}>
-                      {v.label}
+                  {enumOptions("TaskPriority").map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
                     </option>
                   ))}
                 </Select>
               ) : (
-                <p className="text-sm text-fg">{PRIORITY_STYLES[task.priority]?.label}</p>
+                <p className="text-sm text-fg">{enumLabel("TaskPriority", task.priority)}</p>
               )}
             </div>
             <div>
               <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
-                <CalendarDays className="h-3 w-3" /> Due date
+                <CalendarDays className="h-3 w-3" /> {t("task.due")}
               </span>
               {canEdit ? (
                 <Input
@@ -205,11 +210,11 @@ export function TaskDetail({
                   className="h-8"
                 />
               ) : (
-                <p className="text-sm text-fg">{formatDate(task.dueDate, "en")}</p>
+                <p className="text-sm text-fg">{task.dueDate ? fmtDMY(task.dueDate) : "—"}</p>
               )}
             </div>
             <div>
-              <span className="mb-1 block text-xs text-fg-muted">Labels</span>
+              <span className="mb-1 block text-xs text-fg-muted">{t("task.labels")}</span>
               {canEdit ? (
                 <div className="flex flex-wrap gap-1">
                   {labels.map((l) => {
@@ -226,7 +231,7 @@ export function TaskDetail({
                           save.mutate({ labelIds: next });
                         }}
                         className={cn(
-                          "rounded-md border px-1.5 py-0.5 text-[11px] transition-colors",
+                          "rounded-md border px-1.5 py-0.5 text-xs transition-colors",
                           active
                             ? "border-accent/60 bg-accent/10 text-fg"
                             : "border-border text-fg-muted hover:border-accent/40",
@@ -242,7 +247,7 @@ export function TaskDetail({
                     );
                   })}
                   {labels.length === 0 ? (
-                    <p className="text-[11px] text-muted">No labels in this organization yet.</p>
+                    <p className="text-xs text-muted">{t("task.noLabels")}</p>
                   ) : null}
                 </div>
               ) : (
@@ -261,7 +266,7 @@ export function TaskDetail({
 
           <div>
             <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
-              <TypeIcon className="h-3 w-3" /> Description
+              <TypeIcon className="h-3 w-3" /> {t("task.description")}
             </span>
             {canEdit ? (
               <Textarea
@@ -269,21 +274,21 @@ export function TaskDetail({
                 onChange={(e) => setDescription(e.target.value)}
                 onBlur={saveIfChanged}
                 rows={4}
-                placeholder="Add a description…"
+                placeholder={t("task.descriptionPlaceholder")}
               />
             ) : (
               <p className="whitespace-pre-wrap text-sm text-fg">{description}</p>
             )}
           </div>
 
-          {error ? <p className="text-xs text-red-500">{error}</p> : null}
-          {save.isPending ? <p className="text-[11px] text-muted">Saving…</p> : null}
+          {error ? <p className="text-xs text-danger">{t(error)}</p> : null}
+          {save.isPending ? <p className="text-xs text-muted">{t("common.saving")}</p> : null}
         </CardBody>
       </Card>
 
       <Card>
         <CardHeader>
-          <p className="text-sm font-semibold text-fg">Comments ({task.comments.length})</p>
+          <p className="text-sm font-semibold text-fg">{t("task.commentsCount", { n: task.comments.length })}</p>
         </CardHeader>
         <CardBody className="space-y-3">
           {task.comments.map((c) => {
@@ -293,8 +298,8 @@ export function TaskDetail({
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-medium text-fg">{c.author}</p>
                   <div className="flex items-center gap-1">
-                    <p className="text-[10px] text-muted">{formatDate(c.createdAt, "en")}</p>
-                    {mine ? (
+                    <p className="text-xs text-muted">{fmtDateTime(c.createdAt)}</p>
+                    {mine && canEdit ? (
                       <>
                         <button
                           type="button"
@@ -313,7 +318,7 @@ export function TaskDetail({
                           onClick={() => {
                             if (confirm(t("comment.deleteConfirm"))) commentDelete.mutate(c.id);
                           }}
-                          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-red-500"
+                          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-danger"
                         >
                           <Trash2 className="size-3" />
                         </button>
@@ -345,26 +350,28 @@ export function TaskDetail({
             );
           })}
           {task.comments.length === 0 ? (
-            <p className="text-xs text-muted">No comments yet.</p>
+            <p className="text-xs text-muted">{t("tkAct.noComments")}</p>
           ) : null}
 
-          <form
-            className="flex items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (commentBody.trim()) comment.mutate(commentBody.trim());
-            }}
-          >
-            <Textarea
-              value={commentBody}
-              onChange={(e) => setCommentBody(e.target.value)}
-              rows={2}
-              placeholder="Write a comment…"
-            />
-            <Button type="submit" size="icon" aria-label="Send comment" disabled={!commentBody.trim()}>
-              <Send className="h-4 w-4" />
-            </Button>
-          </form>
+          {canEdit ? (
+            <form
+              className="flex items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (commentBody.trim()) comment.mutate(commentBody.trim());
+              }}
+            >
+              <Textarea
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.target.value)}
+                rows={2}
+                placeholder={t("comment.placeholder")}
+              />
+              <Button type="submit" size="icon" aria-label={t("comment.submit")} disabled={!commentBody.trim()}>
+                <Send className="h-4 w-4 rtl:-scale-x-100" />
+              </Button>
+            </form>
+          ) : null}
         </CardBody>
       </Card>
     </div>

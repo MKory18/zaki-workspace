@@ -5,7 +5,7 @@ import { ForbiddenError, NotFoundError, requireUser } from "@/server/auth";
 import type { OrgAccessContext } from "@/server/auth";
 import { canManageOrg } from "@/server/services/orgs";
 import { accessibleWorkspaceIds } from "@/server/services/access";
-import { assertCanWrite } from "@/server/services/guest-guard";
+import { assertCanWrite, assertNotGuest } from "@/server/services/guest-guard";
 import type { ActorContext } from "@/server/services/tasks";
 import { createTask } from "@/server/services/tasks";
 import type { DbClient } from "@/server/db";
@@ -13,7 +13,9 @@ import type { DbClient } from "@/server/db";
 /**
  * Membership context resolved from the idea's own org (shared by API routes). Only an ACTIVE member
  * of that org gets one: somebody suspended or offboarded there is "not a member", even when they
- * are active in another organization of theirs.
+ * are active in another organization of theirs. Ideas are the team's own, so an external partner
+ * (guest) is refused with `guest.no_access` too, including for an idea they wrote before they were
+ * made a guest - the door every per-idea route goes through (edit, delete, vote, convert).
  */
 export async function ideaAccessCtx(ideaId: string): Promise<OrgAccessContext> {
   const user = await requireUser();
@@ -27,6 +29,7 @@ export async function ideaAccessCtx(ideaId: string): Promise<OrgAccessContext> {
     select: { role: true, status: true },
   });
   if (!membership || membership.status !== "ACTIVE") throw new ForbiddenError("not_org_member");
+  assertNotGuest({ orgRole: membership.role });
   return { orgId: idea.orgId, orgRole: membership.role, userId: user.id };
 }
 
@@ -107,11 +110,14 @@ export interface ListIdeasFilters {
   status?: IdeaStatus;
   mine?: boolean;
   viewerId: string;
-  /** The viewer is an external partner (org GUEST): no staff details in the list. */
+  /** The viewer is an external partner (org GUEST): the list is not shared with them at all (`guest.no_access`). */
   external?: boolean;
 }
 
 export async function listIdeas(orgId: string, filters: ListIdeasFilters): Promise<IdeaDTO[]> {
+  // The route and the page refuse a guest first; this is the same rule held where the data is, so a
+  // new caller that forgets it still hands a partner nothing (every idea names its author).
+  if (filters.external === true) throw new ForbiddenError("guest.no_access");
   const where: Prisma.IdeaWhereInput = { orgId };
   if (filters.status) where.status = filters.status;
   if (filters.mine) where.creatorId = filters.viewerId;

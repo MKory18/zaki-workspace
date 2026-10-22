@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Plug, RefreshCw, Send, Trash2 } from "lucide-react";
 import { apiDelete, apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { fmtDateTime } from "@/lib/format";
+import { enumLabel } from "@/lib/i18n/enums";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n";
@@ -43,7 +44,7 @@ export function TelegramView({
   ctx: { orgRole: string };
   initial: { chats: { chats: TgChatItem[]; lastSyncAt: string | null } | null; botUsername: string | null };
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -120,7 +121,7 @@ export function TelegramView({
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-xl bg-sky-500/15 text-sky-500">
+          <span className="grid size-10 place-items-center rounded-xl bg-info/10 text-info">
             <Bot className="size-5" />
           </span>
           <div>
@@ -215,7 +216,7 @@ export function TelegramView({
                       )}
                     >
                       <span className="line-clamp-1 text-sm font-medium">{c.title}</span>
-                      <span className="text-[10px] text-muted">{t(`telegram.type.${c.type}`)}</span>
+                      <span className="text-xs text-muted">{enumLabel("TelegramChatType", c.type)}</span>
                     </button>
                   </li>
                 ))}
@@ -230,7 +231,7 @@ export function TelegramView({
               <>
                 <div className="flex items-center justify-between border-b border-border px-4 py-2">
                   <span className="text-sm font-medium">{activeChat.title}</span>
-                  <span className="text-[10px] text-muted">{t(`telegram.type.${activeChat.type}`)}</span>
+                  <span className="text-xs text-muted">{enumLabel("TelegramChatType", activeChat.type)}</span>
                 </div>
                 <div className="flex flex-1 flex-col-reverse gap-2 overflow-y-auto p-4">
                   {messages.isLoading && <span className="text-xs text-muted">{t("common.loading")}</span>}
@@ -240,12 +241,12 @@ export function TelegramView({
                         key={m.id}
                         className={cn(
                           "max-w-[85%] rounded-2xl px-3 py-2 text-sm",
-                          m.fromId === null ? "mr-auto bg-sky-500/10" : "ml-auto bg-surface-2",
+                          m.fromId === null ? "mr-auto bg-info/10" : "ml-auto bg-surface-2",
                         )}
                       >
                         <div className="mb-0.5 flex items-baseline gap-2">
-                          <span className={cn("text-[10px] font-medium", m.isCommand && "text-sky-600")}>{m.fromName}</span>
-                          <span className="text-[9px] text-muted">{fmtDateTime(m.sentAt, locale)}</span>
+                          <span className={cn("text-xs font-medium", m.isCommand && "text-info")}>{m.fromName}</span>
+                          <span className="text-xs text-muted">{fmtDateTime(m.sentAt)}</span>
                         </div>
                         <p className="whitespace-pre-wrap break-words">{m.text ?? "…"}</p>
                       </div>
