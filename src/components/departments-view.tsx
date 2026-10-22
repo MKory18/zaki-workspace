@@ -45,7 +45,7 @@ const CHIP: Record<string, string> = {
   indigo: "bg-indigo-500/15 text-indigo-500",
   rose: "bg-rose-500/15 text-rose-500",
 };
-const EMOJIS = ["ًںژ¨", "ًں’»", "ًں–¥ï¸ڈ", "ًں’¼", "ًں“£", "âڑ™ï¸ڈ", "ًں‘”", "ًںڑ€"];
+const EMOJIS = ["🎨", "💻", "🖥️", "💼", "📣", "⚙️", "👔", "🚀"];
 
 export function DepartmentsView({ me }: { me: { role: string; id: string } }) {
   const { t } = useI18n();
@@ -104,7 +104,7 @@ export function DepartmentsView({ me }: { me: { role: string; id: string } }) {
               <li key={d.id} className="rounded-xl border border-border bg-surface-1 p-4">
                 <div className="flex items-start gap-3">
                   <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl text-lg", CHIP[color])}>
-                    {d.emoji ?? "ًںڈ¢"}
+                    {d.emoji ?? "🏢"}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -223,7 +223,7 @@ function DeptModal({
   const { t } = useI18n();
   const { toast } = useToast();
   const [name, setName] = useState(value?.name ?? "");
-  const [emoji, setEmoji] = useState(value?.emoji ?? "ًںژ¨");
+  const [emoji, setEmoji] = useState(value?.emoji ?? "🎨");
   const [color, setColor] = useState<string>(value?.color ?? "indigo");
   const [leadId, setLeadId] = useState<string>(value?.leadId ?? "");
 
@@ -338,7 +338,7 @@ function DeptMembersModal({
   const addable = (allMembers.data?.people ?? []).filter((p) => !inDept.has(p.userId));
 
   return (
-    <Modal open onClose={onClose} title={`${dept.emoji ?? "ًںڈ¢"} ${dept.name} â€” ${t("dept.members")}`}>
+    <Modal open onClose={onClose} title={`${dept.emoji ?? "🏢"} ${dept.name} — ${t("dept.members")}`}>
       <div className="space-y-3">
         <ul className="max-h-48 divide-y divide-border overflow-y-auto rounded-lg border border-border">
           {(detail.data?.members ?? []).map((m) => (

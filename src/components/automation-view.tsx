@@ -57,7 +57,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
   const params = useSearchParams();
   const canManage = ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
 
-  // Google OAuth redirects back with ?google=â€¦ â€” surface exactly one verdict.
+  // Google OAuth redirects back with ?google=… — surface exactly one verdict.
   const googleResult = params.get("google");
   useEffect(() => {
     if (!googleResult) return;
@@ -101,7 +101,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
   const testN8n = useMutation({
     mutationFn: () => apiPost<{ delivered: boolean; detail?: string }>("/api/integrations/n8n/test"),
     onSuccess: (res) => {
-      toast(res.delivered ? t("n8n.testOk") : `${t("n8n.testFail")}${res.detail ? ` â€” ${res.detail}` : ""}`, res.delivered ? "success" : "error");
+      toast(res.delivered ? t("n8n.testOk") : `${t("n8n.testFail")}${res.detail ? ` — ${res.detail}` : ""}`, res.delivered ? "success" : "error");
       qc.invalidateQueries({ queryKey: ["n8n"] });
     },
     onError: (err) => toast(errText(err, t), "error"),
@@ -220,7 +220,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
                 </code>
                 <p className="mt-2 text-[10px] leading-5 text-muted">{t("n8n.inboundHelp")}</p>
                 <code dir="ltr" className="mt-1 block break-all font-mono text-[10px] text-muted">
-                  POST {"{"}APP_URL{"}"}/api/integrations/n8n/inbound â€” x-zaki-org: {"{orgId}"} â€” x-zaki-token: {"{secret}"}
+                  POST {"{"}APP_URL{"}"}/api/integrations/n8n/inbound — x-zaki-org: {"{orgId}"} — x-zaki-token: {"{secret}"}
                 </code>
               </div>
             ) : n8n.data?.status.connected ? (
@@ -233,7 +233,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
           <p className="text-xs text-muted">{t("n8n.managerOnly")}</p>
         )}
 
-        {/* event log â€” every attempt, success or failure */}
+        {/* event log — every attempt, success or failure */}
         <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-right text-[11px]">
             <thead className="bg-surface-2 text-muted">
@@ -261,7 +261,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
                   <td className="px-2 py-1.5 font-mono">{ev.type}</td>
                   <td className={cn("px-2 py-1.5", ev.status === "OK" ? "text-emerald-600" : "text-red-600")}>{ev.status}</td>
                   <td className="max-w-[16rem] truncate px-2 py-1.5 text-muted" title={ev.detail ?? undefined}>
-                    {ev.detail ?? "â€”"}
+                    {ev.detail ?? "—"}
                   </td>
                   <td className="px-2 py-1.5 text-muted">{fmtDateTime(ev.createdAt, locale)}</td>
                 </tr>

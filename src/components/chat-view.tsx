@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { avatarHue, fmtTime } from "@/lib/format";
+import { CHAT_REACTIONS } from "@/lib/chat-reactions";
 import { cn } from "@/lib/utils";
 
 const POLL_LIST = 10_000;
@@ -57,7 +58,7 @@ interface DirectoryEntry {
   user: { id: string; name: string; jobTitle: string | null };
 }
 
-const REACTIONS = ["ًں‘چ", "â‌¤ï¸ڈ", "ًںک‚", "ًںژ‰", "ًں”¥", "ًں‘€"];
+const REACTIONS = CHAT_REACTIONS;
 
 export function ChatView({ ctx }: { ctx: { orgId: string; orgRole: string } }) {
   const { t } = useI18n();
@@ -180,7 +181,7 @@ export function ChatView({ ctx }: { ctx: { orgId: string; orgRole: string } }) {
                     className="grid size-9 shrink-0 place-items-center rounded-lg text-sm"
                     style={{ background: `hsla(${avatarHue(c.title)}, 60%, 50%, 0.15)` }}
                   >
-                    {c.kind === "GROUP" ? c.emoji ?? "ًں’¬" : c.title.slice(0, 1)}
+                    {c.kind === "GROUP" ? c.emoji ?? "💬" : c.title.slice(0, 1)}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-1">
@@ -192,7 +193,7 @@ export function ChatView({ ctx }: { ctx: { orgId: string; orgRole: string } }) {
                       )}
                     </span>
                     <span className="block truncate text-[10px] text-muted">
-                      {c.lastMessage ? (c.lastMessage.body === null ? `â€” ${t("chat.deleted")}` : c.lastMessage.body || t("chat.emptySo")) : t("chat.emptySo")}
+                      {c.lastMessage ? (c.lastMessage.body === null ? `— ${t("chat.deleted")}` : c.lastMessage.body || t("chat.emptySo")) : t("chat.emptySo")}
                     </span>
                   </span>
                 </button>
@@ -269,7 +270,7 @@ export function ChatView({ ctx }: { ctx: { orgId: string; orgRole: string } }) {
                   {(replyTo || editing) && (
                     <div className="mb-2 flex items-center justify-between rounded-lg bg-surface-2 px-2 py-1 text-[11px] text-muted">
                       <span className="truncate">
-                        {editing ? t("chat.editing") : `${t("chat.replying")}: ${replyTo!.authorName} â€” ${replyTo!.body}`}
+                        {editing ? t("chat.editing") : `${t("chat.replying")}: ${replyTo!.authorName} — ${replyTo!.body}`}
                       </span>
                       <button
                         type="button"
@@ -424,7 +425,7 @@ function MessageRow({
           )}
         >
           <button type="button" className="p-0.5" aria-label={t("chat.react")} onClick={() => setShowPalette((s) => !s)}>
-            <span className="text-[11px]">ًںکٹ</span>
+            <span className="text-[11px]">😊</span>
           </button>
           <button type="button" className="p-0.5" aria-label={t("chat.reply")} onClick={onReply}>
             <Reply className="size-3" />
@@ -480,7 +481,7 @@ function NewChatModal({ onClose, onOpen }: { onClose: () => void; onOpen: (conve
   const { toast } = useToast();
   const [mode, setMode] = useState<"DM" | "GROUP">("DM");
   const [title, setTitle] = useState("");
-  const [emoji, setEmoji] = useState("ًں’¬");
+  const [emoji, setEmoji] = useState("💬");
   const [picked, setPicked] = useState<string[]>([]);
 
   const dir = useQuery({ queryKey: ["chat", "directory"], queryFn: () => apiGet<{ people: DirectoryEntry[] }>("/api/chat/directory") });
@@ -520,7 +521,7 @@ function NewChatModal({ onClose, onOpen }: { onClose: () => void; onOpen: (conve
               className="w-14 rounded-lg border border-border bg-surface-1 px-1 text-center text-sm"
               aria-label={t("chat.groupEmoji")}
             >
-              {["ًں’¬", "ًںژ¨", "ًں’»", "ًں–¥ï¸ڈ", "ًں’¼", "ًں“£", "âڑ™ï¸ڈ", "ًں‘”", "ًںڑ€"].map((e) => (
+              {["💬", "🎨", "💻", "🖥️", "💼", "📣", "⚙️", "👔", "🚀"].map((e) => (
                 <option key={e}>{e}</option>
               ))}
             </select>
