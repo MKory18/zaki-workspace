@@ -11,10 +11,16 @@ import guide from "./ar.guide.json";
 import enums from "./ar.enums.json";
 import shell from "./ar.shell.json";
 import today from "./ar.today.json";
+import errors from "./ar.errors.json";
+import chatErrors from "./ar.chat-errors.json";
+import chatFiles from "./ar.chat-files.json";
+import chatConversation from "./ar.chat-conversation.json";
+import chatHome from "./ar.chat-home.json";
+import archive from "./ar.archive.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
- * members, spaces, access, theme, ui, guide, enums, shell, today, ...). Fragments exist so that
+ * members, spaces, access, theme, ui, guide, enums, shell, today, errors, ...). Fragments exist so that
  * several people can add strings at the same time without editing the same 700-line file; a later
  * fragment wins on a duplicate key (tests/encoding-hygiene fails on duplicates across files, so
  * none are expected).
@@ -33,4 +39,10 @@ export const AR: Record<string, string> = {
   ...enums,
   ...shell,
   ...today,
+  ...errors,
+  ...chatErrors,
+  ...chatFiles,
+  ...chatConversation,
+  ...chatHome,
+  ...archive,
 };

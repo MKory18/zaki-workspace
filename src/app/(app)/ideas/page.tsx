@@ -1,10 +1,14 @@
 import { pageActor } from "@/app/(app)/_access";
+import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { listIdeas } from "@/server/services/ideas";
 import { IdeasView, type IdeaItem } from "@/components/ideas-view";
 
 export default async function IdeasPage() {
   // Active org = oldest ACTIVE membership (same resolution as the ideas API).
   const { user, actor } = await pageActor();
+  // The ideas are the team's own (every idea carries its author's name): the tab is for staff and
+  // /api/ideas refuses an external partner, so the list is never read for them.
+  if (refusedToGuest(actor, "ideas")) return <GuestNotice />;
 
   const ideas = await listIdeas(actor.orgId, { viewerId: user.id, external: actor.isExternal });
   const initial: IdeaItem[] = ideas.map((i) => ({

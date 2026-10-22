@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Globe, KeyRound, Lock, Users } from "lucide-react";
 import { pageActor } from "@/app/(app)/_access";
+import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { fmtDMY } from "@/lib/format";
 import { db } from "@/server/db";
 import { actorCan } from "@/server/policy/actor";
@@ -15,6 +16,8 @@ import { IntegrationBadge } from "@/components/integration-badge";
 export default async function SettingsPage() {
   const { t } = getServerT();
   const { actor } = await pageActor();
+  // The company's headcount and which integrations are connected: not for an external partner.
+  if (refusedToGuest(actor, "settings")) return <GuestNotice />;
 
   const org = await db.organization.findUnique({
     where: { id: actor.orgId },
@@ -79,18 +82,18 @@ export default async function SettingsPage() {
       {/* security & personal */}
       <section className="grid gap-3 md:grid-cols-2">
         <Link href="/profile" className="group rounded-xl border border-border bg-surface-1 p-4 transition-colors hover:border-accent/50">
-          <span className="mb-2 grid size-9 place-items-center rounded-lg bg-sky-500/15 text-sky-500">
+          <span className="mb-2 grid size-9 place-items-center rounded-lg bg-info/10 text-info">
             <Lock className="size-5" />
           </span>
           <h3 className="text-sm font-semibold group-hover:text-accent">{t("settings.profileLink")}</h3>
-          <p className="mt-1 text-[10px] text-muted">{t("settings.profileLinkHint")}</p>
+          <p className="mt-1 text-xs text-muted">{t("settings.profileLinkHint")}</p>
         </Link>
         <Link href="/profile" className="group rounded-xl border border-border bg-surface-1 p-4 transition-colors hover:border-accent/50">
-          <span className="mb-2 grid size-9 place-items-center rounded-lg bg-amber-500/15 text-amber-500">
+          <span className="mb-2 grid size-9 place-items-center rounded-lg bg-warn/10 text-warn">
             <KeyRound className="size-5" />
           </span>
           <h3 className="text-sm font-semibold group-hover:text-accent">{t("settings.passwordLink")}</h3>
-          <p className="mt-1 text-[10px] text-muted">{t("settings.passwordLinkHint")}</p>
+          <p className="mt-1 text-xs text-muted">{t("settings.passwordLinkHint")}</p>
         </Link>
       </section>
     </div>

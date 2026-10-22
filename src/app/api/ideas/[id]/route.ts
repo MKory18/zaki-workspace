@@ -15,10 +15,13 @@ const patchSchema = z.object({
   status: z.enum(ideaStatuses).optional(),
 });
 
+// `ideaAccessCtx` is the door: an external partner (guest) gets 403 `guest.no_access` from it, before
+// the body is looked at (ideas are the team's own).
+
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(patchSchema, req);
     const ctx = await ideaAccessCtx(params.id);
+    const input = await parseJson(patchSchema, req);
     const idea = await updateIdea(ctx.orgId, ctx, ctx.orgRole, params.id, input);
     if (input.status && idea.status === input.status) {
       const event = input.status === "ACCEPTED" ? "idea.accepted" : input.status === "REJECTED" ? "idea.rejected" : null;

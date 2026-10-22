@@ -10,11 +10,11 @@ const convertSchema = z.object({
   boardId: z.string().min(1),
 });
 
-/** Idea → task through the single task service. Creator or org admins. */
+/** Idea → task through the single task service. Creator or org admins; an external partner gets 403 `guest.no_access` from `ideaAccessCtx`. */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(convertSchema, req);
     const ctx = await ideaAccessCtx(params.id);
+    const input = await parseJson(convertSchema, req);
     const res = await convertIdeaToTask(ctx.orgId, ctx, ctx.orgRole, params.id, input);
     return NextResponse.json(res);
   });

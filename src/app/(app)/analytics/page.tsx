@@ -1,13 +1,19 @@
 import { pageActor } from "@/app/(app)/_access";
+import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { getServerT } from "@/lib/i18n/server";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { loadAnalytics } from "@/server/services/analytics";
 import { fmtNumber } from "@/lib/format";
+import { enumLabel } from "@/lib/i18n/enums";
 import type { TaskPriority, IdeaStatus } from "@prisma/client";
 
 export default async function AnalyticsPage() {
   const { t } = getServerT();
   const { user, actor } = await pageActor();
+  // Company numbers: the idea funnel, the staff names with their workload. Not for an external partner,
+  // whatever their tab shows (the reports tab is offered from LEAD up; the page itself serves every
+  // member of the team over the spaces they can open).
+  if (refusedToGuest(actor, "reports")) return <GuestNotice />;
   // numbers for the active org (oldest ACTIVE membership), over the workspaces the user can open
   const wsScope = await accessibleWorkspaceIds(user.id);
   const data = await loadAnalytics(actor.orgId, wsScope);
@@ -50,7 +56,7 @@ const ideaStatuses: IdeaStatus[] = ["NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED
         <div className="space-y-2">
           {priorities.map((p) => {
             const count = byPriority.get(p) ?? 0;
-            return <BarRow key={p} label={t(`priority.${p as TaskPriority}`)} count={count} pct={(count / maxPriority) * 100} barClass="bg-accent" />;
+            return <BarRow key={p} label={enumLabel("TaskPriority", p)} count={count} pct={(count / maxPriority) * 100} barClass="bg-accent" />;
           })}
           {data.open === 0 ? <p className="text-xs text-muted">{t("analytics.noOpen")}</p> : null}
         </div>
@@ -65,7 +71,7 @@ const ideaStatuses: IdeaStatus[] = ["NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED
               label={data.nameOf.get(a.assigneeId!) ?? "—"}
               count={a._count._all}
               pct={(a._count._all / maxWorkload) * 100}
-              barClass="bg-emerald-500"
+              barClass="bg-ok"
             />
           ))}
           {data.assignees.length === 0 ? <p className="text-xs text-muted">{t("analytics.noWorkload")}</p> : null}
@@ -75,7 +81,7 @@ const ideaStatuses: IdeaStatus[] = ["NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED
       <section className="rounded-xl border border-border bg-surface-1 p-5">
         <h2 className="mb-3 text-sm font-semibold">
           {t("analytics.ideasFunnel")}
-          <span className="ml-2 text-[10px] font-normal text-muted">{t("analytics.ideasTotal", { total: data.ideas })}</span>
+          <span className="ms-2 text-xs font-normal text-muted">{t("analytics.ideasTotal", { total: data.ideas })}</span>
         </h2>
         <div className="grid grid-cols-4 gap-2">
           {ideaStatuses.map((status) => {
@@ -83,9 +89,9 @@ const ideaStatuses: IdeaStatus[] = ["NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED
             return (
               <div key={status} className="rounded-lg border border-border p-2 text-center">
                 <div className="text-lg font-semibold">{count}</div>
-                <div className="text-[10px] text-muted">{t(`ideas.status.${status as IdeaStatus}`)}</div>
+                <div className="text-xs text-muted">{enumLabel("IdeaStatus", status)}</div>
                 <div className="mt-1 h-1 rounded bg-surface-2">
-                  <div className="h-1 rounded bg-sky-500" style={{ width: `${(count / maxIdea) * 100}%` }} />
+                  <div className="h-1 rounded bg-info" style={{ width: `${(count / maxIdea) * 100}%` }} />
                 </div>
               </div>
             );
@@ -94,7 +100,7 @@ const ideaStatuses: IdeaStatus[] = ["NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED
         </div>
       </section>
 
-      <footer className="flex flex-wrap gap-4 text-[11px] text-muted">
+      <footer className="flex flex-wrap gap-4 text-xs text-muted">
         <span>{t("analytics.statWorkspaces", { n: data.workspaces })}</span>
         <span>{t("analytics.statProjects", { n: data.projects })}</span>
         <span>{t("analytics.formulaNote")}</span>
@@ -106,11 +112,11 @@ const ideaStatuses: IdeaStatus[] = ["NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED
 function StatCard({ label, value, hint, tone }: { label: string; value: number; hint?: string; tone?: "warn" | "good" }) {
   return (
     <div className="rounded-xl border border-border bg-surface-1 p-4">
-      <div className="text-[11px] text-muted">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${tone === "warn" ? "text-red-500" : tone === "good" ? "text-emerald-600" : ""}`}>
+      <div className="text-xs text-muted">{label}</div>
+      <div className={`mt-1 text-2xl font-semibold ${tone === "warn" ? "text-danger" : tone === "good" ? "text-ok" : ""}`}>
         {fmtNumber(value)}
       </div>
-      {hint ? <div className="mt-0.5 text-[10px] text-muted">{hint}</div> : null}
+      {hint ? <div className="mt-0.5 text-xs text-muted">{hint}</div> : null}
     </div>
   );
 }
@@ -124,7 +130,7 @@ function BarRow({ label, count, pct, barClass }: { label: string; count: number;
           <div className={`h-2 rounded ${barClass}`} style={{ width: `${pct}%` }} />
         </div>
       </div>
-      <span className="w-8 text-right text-xs font-medium">{count}</span>
+      <span className="w-8 text-end text-xs font-medium">{count}</span>
     </div>
   );
 }

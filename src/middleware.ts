@@ -59,9 +59,19 @@ function isMachinePath(pathname: string): boolean {
   return MACHINE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
-/** Files the browser fetches on its own (the app icon, robots.txt, ...): never redirected. */
+/**
+ * Files the browser fetches on its own (the app icon, the manifest, the fonts and pictures of public/): never
+ * redirected. ONLY those: a page address that merely ENDS like a file (`/tasks/abc.png` = the task page with the id
+ * "abc.png") is a page and goes through the sign-in and onboarding rules below. A dot segment never counts as a
+ * public folder. Add `/sw.js` here when the service worker ships (Phase 5).
+ */
+const STATIC_DIRS = ["/icons/", "/brand/", "/fonts/"];
+const STATIC_ROOT_FILES = new Set(["/icon.svg", "/apple-icon.png", "/manifest.webmanifest", "/favicon.ico", "/robots.txt"]);
+const STATIC_EXT = /\.(?:svg|png|jpe?g|gif|webp|avif|ico|txt|xml|webmanifest|woff2?|css|js|map)$/i;
 function isStaticFile(pathname: string): boolean {
-  return /\.(?:svg|png|jpe?g|gif|webp|avif|ico|txt|xml|webmanifest|woff2?|css|js|map)$/i.test(pathname);
+  if (STATIC_ROOT_FILES.has(pathname)) return true;
+  if (/(^|\/)\.\.?(\/|$)/.test(pathname)) return false;
+  return STATIC_DIRS.some((dir) => pathname.startsWith(dir)) && STATIC_EXT.test(pathname);
 }
 
 /** The page that was asked for, as a `?next=` value ("" for the home page). */

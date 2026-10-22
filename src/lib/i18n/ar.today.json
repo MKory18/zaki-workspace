@@ -1,1 +1,45 @@
-{}
+{
+  "today.title": "اليوم",
+  "today.greeting.morning": "صباح الخير يا {name}",
+  "today.greeting.evening": "مساء الخير يا {name}",
+
+  "today.tasks.title": "مهامي اليوم",
+  "today.tasks.later": "لاحقًا",
+  "today.tasks.nothing_today": "ما في شي مستحق اليوم.",
+  "today.tasks.see_all": "عرض كل مهامي",
+  "today.tasks.show_rest": "عرض الباقي ({n})",
+  "today.done_aria": "إنجاز المهمة: {title}",
+  "today.done_toast": "تمّت المهمة",
+  "today.done_failed": "تعذّر إنجاز المهمة، جرّب من جديد.",
+  "today.done_no_column": "ما قدرنا ننجز المهمة: لوحتها بلا عمود للمنجز.",
+
+  "today.empty.title": "ما عندك مهام اليوم",
+  "today.empty.hint": "يومك رايق. افتح مهامي إذا بدك تشوف اللي جاي.",
+  "today.empty.action": "افتح مهامي",
+  "today.empty.no_space_title": "لسا ما انضفت لأي مساحة عمل",
+  "today.empty.no_space_hint": "لما يضيفك مدير المساحة أو المالك لمساحة، بتظهر مهامك ومشاريعك هون.",
+  "today.empty.no_space_action": "اقرأ عن المساحات",
+  "today.empty.create_space_title": "ما عندك مساحة عمل بعد",
+  "today.empty.create_space_hint": "المساحة هي مكان مشاريعك وفريقك. افتح أول مساحة، أو انتظر لحد ما يضيفك مدير المساحة أو المالك لوحدة.",
+  "today.empty.create_space_action": "افتح المشاريع",
+
+  "today.quick_add": "إضافة سريعة",
+  "today.quick.title_placeholder": "مثال: اتصل بالمورّد",
+  "today.quick.assigned_hint": "بتنضاف لك، وبتظهر بين مهامك.",
+  "today.quick.no_date": "بدون موعد",
+  "today.quick.submit": "أضف المهمة",
+  "today.quick.no_target_title": "ما عندك مشروع فيه لوحة لتضيف عليها المهمة",
+  "today.quick.no_target_hint": "من صفحة المشاريع أنشئ مشروع ولوحة، وبعدها بتضيف مهامك من هون بضغطة وحدة.",
+  "today.quick.open_projects": "افتح المشاريع",
+
+  "today.pulse.title": "نبض الفريق",
+  "today.pulse.scope": "المهام في المساحات المتاحة لك",
+  "today.pulse.open": "مفتوحة",
+  "today.pulse.worst": "الأكثر تأخرًا",
+
+  "today.projects.title": "مشاريعي النشطة",
+  "today.projects.open": "المهام المفتوحة: {n}",
+  "today.projects.open_mine": "مهامك المفتوحة: {n}",
+  "today.projects.empty": "ما في مشاريع نشطة حاليًا.",
+  "today.projects.all": "كل المشاريع"
+}
