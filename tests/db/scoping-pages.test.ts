@@ -43,18 +43,29 @@ describe("My Work page: renders only what getMyWork returns", () => {
     await mk("mine-visible", f.wsIn.id, { assigneeId: f.member.id });
     await mk("theirs-visible", f.wsIn.id, { assigneeId: f.admin.id });
     await mk("mine-hidden", f.wsOut.id, { assigneeId: f.member.id });
+    await mk("owner-anywhere", f.wsOut.id, { assigneeId: f.owner.id });
 
     await loginAs(f.member.id);
     const page = await html(MyWorkPage({ searchParams: { tab: "mine" } }));
     expect(page).toContain(`${f.token} task mine-visible`);
     expect(page).not.toContain(`${f.token} task theirs-visible`);
     expect(page).not.toContain(`${f.token} task mine-hidden`);
-    // the same page for the admin (who can open every workspace) still only lists the admin's own work
+
+    // an ADMIN is not in the workspace by rank: work assigned to them there stays hidden until they are put in it
     await loginAs(f.admin.id);
+    expect(await html(MyWorkPage({ searchParams: { tab: "mine" } }))).not.toContain(`${f.token} task theirs-visible`);
+    await joinWorkspace(f.admin.id, f.wsIn.id);
     const adminPage = await html(MyWorkPage({ searchParams: { tab: "mine" } }));
     expect(adminPage).toContain(`${f.token} task theirs-visible`);
     expect(adminPage).not.toContain(`${f.token} task mine-visible`);
     expect(adminPage).not.toContain(`${f.token} task mine-hidden`);
+
+    // the OWNER sees every workspace without a row, and still only their own work
+    await loginAs(f.owner.id);
+    const ownerPage = await html(MyWorkPage({ searchParams: { tab: "mine" } }));
+    expect(ownerPage).toContain(`${f.token} task owner-anywhere`);
+    expect(ownerPage).not.toContain(`${f.token} task mine-hidden`);
+    expect(ownerPage).not.toContain(`${f.token} task theirs-visible`);
   });
 
   it("an unknown tab falls back to today, and the empty state shows when there is nothing", async () => {
@@ -83,14 +94,29 @@ describe("List page: only workspaces the user can open", () => {
     expect(page).not.toContain(f.wsOut.name);
   });
 
-  it("an ADMIN can open any workspace of the org", async () => {
+  it("the OWNER can open any workspace of the org, without being in it", async () => {
     const f = await makeScopedOrg();
-    await loginAs(f.admin.id);
+    await loginAs(f.owner.id);
     const page = await html(ListPage({ searchParams: { workspace: f.wsOut.id } }));
     expect(page).toContain(`${f.token} task out`);
     expect(page).not.toContain(`${f.token} task in`);
     expect(page).toContain(f.wsIn.name);
     expect(page).toContain(f.wsOut.name);
+  });
+
+  it("an ADMIN opens only the workspaces they are in: none by rank, then just the one they were put in", async () => {
+    const f = await makeScopedOrg();
+    await loginAs(f.admin.id);
+    const none = await html(ListPage({ searchParams: { workspace: f.wsOut.id } }));
+    expect(none).toContain(t("list.noWorkspace"));
+    expect(none).not.toContain(f.token);
+
+    await joinWorkspace(f.admin.id, f.wsIn.id);
+    const page = await html(ListPage({ searchParams: { workspace: f.wsOut.id } })); // asks for the one they are not in
+    expect(page).toContain(`${f.token} task in`);
+    expect(page).not.toContain(`${f.token} task out`);
+    expect(page).toContain(f.wsIn.name);
+    expect(page).not.toContain(f.wsOut.name);
   });
 
   it("a member of no workspace gets the 'no workspace' state, not someone else's tasks", async () => {
@@ -128,10 +154,19 @@ describe("Calendar page: only workspaces the user can open", () => {
     expect(page).toContain(`${f.token} task cal-in`);
     expect(page).not.toContain(`${f.token} task cal-out`);
 
+    // the OWNER can open every workspace without a row
+    await loginAs(f.owner.id);
+    const ownerPage = await html(CalendarPage({ searchParams: { workspace: f.wsOut.id, month } }));
+    expect(ownerPage).toContain(`${f.token} task cal-out`);
+    expect(ownerPage).not.toContain(`${f.token} task cal-in`);
+
+    // an ADMIN gets no workspace by rank: nothing until put in one, and then asking for another one falls back
     await loginAs(f.admin.id);
+    expect(await html(CalendarPage({ searchParams: { workspace: f.wsOut.id, month } }))).toContain(t("list.noWorkspace"));
+    await joinWorkspace(f.admin.id, f.wsIn.id);
     const adminPage = await html(CalendarPage({ searchParams: { workspace: f.wsOut.id, month } }));
-    expect(adminPage).toContain(`${f.token} task cal-out`);
-    expect(adminPage).not.toContain(`${f.token} task cal-in`);
+    expect(adminPage).toContain(`${f.token} task cal-in`);
+    expect(adminPage).not.toContain(`${f.token} task cal-out`);
   });
 
   it("a member of no workspace sees the 'no workspace' state", async () => {
@@ -156,9 +191,18 @@ describe("Analytics page: this organization and the workspaces the user can open
     expect(page).toContain(t("analytics.ideasTotal", { total: 2 }));
     expect(page).not.toContain(t("analytics.ideasTotal", { total: 5 }));
 
+    // the OWNER counts every workspace of the org
+    await loginAs(f.owner.id);
+    const ownerPage = await html(AnalyticsPage());
+    expect(ownerPage).toContain(t("analytics.statWorkspaces", { n: 2 }));
+    expect(ownerPage).toContain(t("analytics.ideasTotal", { total: 2 }));
+
+    // an ADMIN counts only the spaces they are in (none yet); the org's ideas are still theirs to see
     await loginAs(f.admin.id);
     const adminPage = await html(AnalyticsPage());
-    expect(adminPage).toContain(t("analytics.statWorkspaces", { n: 2 }));
+    expect(adminPage).toContain(t("analytics.statWorkspaces", { n: 0 }));
     expect(adminPage).toContain(t("analytics.ideasTotal", { total: 2 }));
+    await joinWorkspace(f.admin.id, f.wsOut.id);
+    expect(await html(AnalyticsPage())).toContain(t("analytics.statWorkspaces", { n: 1 }));
   });
 });

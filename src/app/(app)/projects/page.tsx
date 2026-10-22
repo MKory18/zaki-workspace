@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/server/db";
-import { currentUser } from "@/server/auth";
+import { pageUser } from "@/server/auth";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { Card, CardBody, Badge, EmptyState } from "@/components/ui/card";
 import { ProjectsToolbar } from "@/components/projects-toolbar";
@@ -14,7 +14,7 @@ export default async function ProjectsPage({
 }: {
   searchParams: { workspace?: string };
 }) {
-  const user = await currentUser();
+  const user = await pageUser();
   if (!user) redirect("/login");
   const accessible = await accessibleWorkspaceIds(user.id);
   if (accessible.length === 0) {

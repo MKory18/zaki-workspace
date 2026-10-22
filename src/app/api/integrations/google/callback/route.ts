@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
-import { ForbiddenError } from "@/server/auth";
+import { ForbiddenError, UnauthorizedError } from "@/server/auth";
 import { appUrl } from "@/server/env";
 import { activeOrgCtx, assertOrgManager } from "@/server/services/integrations";
 import { exchangeCode, connectGoogle, verifyState } from "@/server/services/google";
@@ -22,16 +22,19 @@ export async function GET(req: Request) {
   const parsed = verifyState(state);
   if (!parsed) return back("/automation?google=error&reason=bad_state");
 
-  let ctx;
-  try {
-    ctx = await activeOrgCtx();
-  } catch {
-    return back("/login?next=" + encodeURIComponent("/automation"));
-  }
-  const sessionUserId = ctx.userId;
-
   return withApi(async () => {
-    // Connecting Drive is an org-level decision: the caller must be an OWNER/ADMIN of the
+    // Only "nobody is signed in" goes to the login screen; every other refusal (a person who has not
+    // finished onboarding, for instance) is answered as the error it is (403 + its message key).
+    let ctx;
+    try {
+      ctx = await activeOrgCtx();
+    } catch (err) {
+      if (err instanceof UnauthorizedError) return back("/login?next=" + encodeURIComponent("/automation"));
+      throw err;
+    }
+    const sessionUserId = ctx.userId;
+
+    // Connecting Drive is an org-level decision: the caller must hold `integrations.manage` in the
     // org the state names, and the state must have been issued to the very person who is
     // finishing the flow (a state is signed, not secret — it must not be replayable by others).
     await assertOrgManager(parsed.orgId);

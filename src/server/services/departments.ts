@@ -2,11 +2,22 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { assertNotGuest } from "@/server/services/guest-guard";
+import { accessibleWorkspaceIds } from "@/server/services/access";
+import { assertCapability } from "@/server/services/active-people";
 
 /**
  * The departments area is the company's staff directory (who works where, with
  * which job title), so org GUESTs get 403 on every function here, read or write.
  * Every exported function below takes the caller's context for that.
+ *
+ * Reading it (the list and one department) is the `directory.view` capability, like the directory
+ * itself: a MEMBER who lost it gets 403 `insufficient_role` (the guest's own message stays
+ * `guest.no_access`). The routes check it as well; this is the same rule, held where the data is.
+ *
+ * Two more rules hold for what it shows: only ACTIVE people are listed (a suspended or offboarded
+ * person's old roster row stays, unlisted), and the projects of a department - with the task
+ * numbers built from them - come only from the spaces the viewer can open (`accessibleWorkspaceIds`:
+ * the OWNER sees them all, everybody else, an ADMIN included, the spaces they were put in).
  */
 
 /** Department mutations are office-level decisions: OWNER/ADMIN only. */
@@ -33,13 +44,19 @@ export const membersSchema = z
   })
   .refine((v) => Boolean(v.addUserIds?.length || v.removeUserIds?.length), { message: "dept.no_change" });
 
+/** Of these ids, the people who are ACTIVE members of the organization (a suspended or offboarded person cannot lead or join). */
 async function assertOrgUsers(orgId: string, userIds: string[]) {
   if (userIds.length === 0) return [];
   const rows = await db.organizationMember.findMany({
-    where: { organizationId: orgId, userId: { in: userIds } },
+    where: { organizationId: orgId, userId: { in: userIds }, status: "ACTIVE" },
     select: { userId: true },
   });
   return rows.map((r) => r.userId);
+}
+
+/** Only roster rows of people who are still ACTIVE in the organization are shown (the old rows of the others stay, unlisted). */
+function activeRoster(orgId: string) {
+  return { user: { memberships: { some: { organizationId: orgId, status: "ACTIVE" as const } } } };
 }
 
 export async function createDepartment(ctx: OrgAccessContext, input: z.infer<typeof createDepartmentSchema>) {
@@ -67,12 +84,20 @@ export async function createDepartment(ctx: OrgAccessContext, input: z.infer<typ
 
 export async function listDepartments(ctx: OrgAccessContext) {
   assertNotGuest(ctx);
+  await assertCapability(ctx, "directory.view");
+  const wsIds = await accessibleWorkspaceIds(ctx.userId);
   const rows = await db.department.findMany({
     where: { orgId: ctx.orgId },
     orderBy: { createdAt: "asc" },
     include: {
-      memberships: { select: { user: { select: { id: true, name: true, jobTitle: true } }, role: true } },
-      projects: { select: { id: true, tasks: { select: { completedAt: true, dueDate: true } } } },
+      memberships: {
+        where: activeRoster(ctx.orgId),
+        select: { user: { select: { id: true, name: true, jobTitle: true } }, role: true },
+      },
+      projects: {
+        where: { workspaceId: { in: wsIds } },
+        select: { id: true, tasks: { select: { completedAt: true, dueDate: true } } },
+      },
       tickets: { where: { status: { in: ["OPEN", "IN_PROGRESS"] } }, select: { id: true } },
     },
   });
@@ -97,14 +122,18 @@ export async function listDepartments(ctx: OrgAccessContext) {
 
 export async function getDepartment(ctx: OrgAccessContext, id: string) {
   assertNotGuest(ctx);
+  await assertCapability(ctx, "directory.view");
   const d = await db.department.findFirst({ where: { id, orgId: ctx.orgId } });
   if (!d) throw new NotFoundError("dept.not_found");
   const members = await db.departmentMember.findMany({
-    where: { departmentId: d.id },
+    where: { departmentId: d.id, ...activeRoster(ctx.orgId) },
     include: { user: { select: { id: true, name: true, jobTitle: true } } },
   });
+  // only the spaces this person can open: a department's projects live in spaces, and a space is
+  // visible to the people in it (and the OWNER), not to a rank
+  const wsIds = await accessibleWorkspaceIds(ctx.userId);
   const projects = await db.project.findMany({
-    where: { departmentId: d.id },
+    where: { departmentId: d.id, workspaceId: { in: wsIds } },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,

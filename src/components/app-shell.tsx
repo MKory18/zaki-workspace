@@ -87,6 +87,8 @@ interface OrgsResponse {
     name: string;
     keyPrefix: string;
     role: string;
+    /** The `spaces.create` capability in this organization (the server decides, the menu follows). */
+    canCreateSpaces: boolean;
     workspaces: { id: string; name: string; slug: string }[];
   }[];
 }
@@ -171,7 +173,7 @@ export function AppShell({
               organizations={(orgsQuery.data?.organizations ?? []).map((o) => ({
                 id: o.id,
                 name: o.name,
-                canAdmin: o.role === "OWNER" || o.role === "ADMIN",
+                canAdmin: o.canCreateSpaces,
               }))}
             />
           </div>
@@ -225,7 +227,7 @@ export function AppShell({
             {!collapsed ? (
               <a href="/profile" className="min-w-0 flex-1 hover:opacity-90">
                 <p className="truncate text-xs font-medium text-fg">{user.name}</p>
-                <p className="truncate text-[10px] text-muted">{user.email}</p>
+                <p className="truncate text-[10px] text-muted">{user.username ?? user.email}</p>
               </a>
             ) : null}
             <button

@@ -4,6 +4,7 @@ import { db } from "@/server/db";
 import { NotFoundError, audit, type OrgAccessContext } from "@/server/auth";
 import { nextTaskNumber, type Tx } from "@/server/services/tasks";
 import { assertNotGuest } from "@/server/services/guest-guard";
+import { assertCapability } from "@/server/services/active-people";
 
 export const OPPORTUNITY_STAGES = [
   "LEAD",
@@ -50,13 +51,20 @@ export type CustomerInput = z.infer<typeof createCustomerSchema>;
 export type OpportunityInput = z.infer<typeof createOpportunitySchema>;
 
 /**
- * CRM is staff-only: opportunity `value` is price data and customers are the
- * company's client list, so org GUESTs get 403 on every function here, read or
- * write. Every exported function below takes the caller's context for that.
+ * CRM is staff-only and runs on two capabilities: `crm.view` for every read, `crm.edit` for every
+ * create, update and delete. Members, team leads and admins hold both by default (the owner can
+ * switch either off for one person: 403 `insufficient_role`); org GUESTs hold neither and keep the
+ * message they always got (`guest.no_access`). Opportunity `value` is price data, but hiding it
+ * from staff is `prices.view`'s job, which is wired later - not here.
+ * Every exported function below takes the caller's context for that.
  */
+async function assertCrm(ctx: OrgAccessContext, capability: "crm.view" | "crm.edit"): Promise<void> {
+  assertNotGuest(ctx);
+  await assertCapability(ctx, capability);
+}
 
 export async function listCustomers(ctx: OrgAccessContext) {
-  assertNotGuest(ctx);
+  await assertCrm(ctx, "crm.view");
   return db.customer.findMany({
     where: { orgId: ctx.orgId },
     orderBy: { createdAt: "desc" },
@@ -65,7 +73,7 @@ export async function listCustomers(ctx: OrgAccessContext) {
 }
 
 export async function getCustomer(ctx: OrgAccessContext, id: string) {
-  assertNotGuest(ctx);
+  await assertCrm(ctx, "crm.view");
   const customer = await db.customer.findFirst({
     where: { id, orgId: ctx.orgId },
     include: {
@@ -78,7 +86,7 @@ export async function getCustomer(ctx: OrgAccessContext, id: string) {
 }
 
 export async function createCustomer(ctx: OrgAccessContext, input: CustomerInput) {
-  assertNotGuest(ctx);
+  await assertCrm(ctx, "crm.edit");
   const customer = await db.customer.create({
     data: {
       orgId: ctx.orgId,
@@ -95,7 +103,7 @@ export async function createCustomer(ctx: OrgAccessContext, input: CustomerInput
 }
 
 export async function updateCustomer(ctx: OrgAccessContext, id: string, input: Partial<CustomerInput>) {
-  assertNotGuest(ctx);
+  await assertCrm(ctx, "crm.edit");
   const customer = await db.customer.findFirst({ where: { id, orgId: ctx.orgId } });
   if (!customer) throw new NotFoundError("crm.not_found");
   const updated = await db.customer.update({ where: { id: customer.id }, data: input });
@@ -104,7 +112,7 @@ export async function updateCustomer(ctx: OrgAccessContext, id: string, input: P
 }
 
 export async function deleteCustomer(ctx: OrgAccessContext, id: string) {
-  assertNotGuest(ctx);
+  await assertCrm(ctx, "crm.edit");
   const customer = await db.customer.findFirst({ where: { id, orgId: ctx.orgId } });
   if (!customer) throw new NotFoundError("crm.not_found");
   await db.customer.delete({ where: { id: customer.id } });
@@ -112,7 +120,7 @@ export async function deleteCustomer(ctx: OrgAccessContext, id: string) {
 }
 
 export async function listOpportunities(ctx: OrgAccessContext) {
-  assertNotGuest(ctx);
+  await assertCrm(ctx, "crm.view");
   return db.opportunity.findMany({
     where: { orgId: ctx.orgId },
     orderBy: { createdAt: "desc" },
@@ -124,7 +132,7 @@ export async function listOpportunities(ctx: OrgAccessContext) {
 }
 
 export async function getOpportunity(ctx: OrgAccessContext, id: string) {
-  assertNotGuest(ctx);
+  await assertCrm(ctx, "crm.view");
   const opportunity = await db.opportunity.findFirst({
     where: { id, orgId: ctx.orgId },
     include: {
@@ -137,13 +145,13 @@ export async function getOpportunity(ctx: OrgAccessContext, id: string) {
 }
 
 export async function createOpportunity(ctx: OrgAccessContext, input: OpportunityInput) {
-  assertNotGuest(ctx);
+  await assertCrm(ctx, "crm.edit");
   const customer = await db.customer.findFirst({ where: { id: input.customerId, orgId: ctx.orgId } });
   if (!customer) throw new NotFoundError("crm.not_found");
 
   const opportunity = await db.$transaction(async (tx: Tx) => {
     const num = await nextTaskNumber(ctx.orgId, tx);
-    return db.opportunity.create({
+    return tx.opportunity.create({
       data: {
         orgId: ctx.orgId,
         number: num,
@@ -167,7 +175,7 @@ export async function updateOpportunity(
   id: string,
   input: Partial<OpportunityInput>,
 ) {
-  assertNotGuest(ctx);
+  await assertCrm(ctx, "crm.edit");
   const opportunity = await db.opportunity.findFirst({ where: { id, orgId: ctx.orgId } });
   if (!opportunity) throw new NotFoundError("crm.not_found");
 
@@ -183,7 +191,7 @@ export async function updateOpportunity(
 }
 
 export async function deleteOpportunity(ctx: OrgAccessContext, id: string) {
-  assertNotGuest(ctx);
+  await assertCrm(ctx, "crm.edit");
   const opportunity = await db.opportunity.findFirst({ where: { id, orgId: ctx.orgId } });
   if (!opportunity) throw new NotFoundError("crm.not_found");
   await db.opportunity.delete({ where: { id: opportunity.id } });

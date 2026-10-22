@@ -29,7 +29,8 @@ export async function POST(
       },
     });
     if (!task) throw new NotFoundError("task.not_found");
-    const ctx = await requireWorkspace(task.workspaceId);
+    // writing needs a member of the space: an external partner (GUEST) only reads
+    const ctx = await requireWorkspace(task.workspaceId, ["ADMIN", "MEMBER"]);
     const comment = await db.taskComment.create({
       data: { taskId: task.id, authorId: ctx.userId, body: input.body },
       include: { author: { select: { id: true, name: true } } },

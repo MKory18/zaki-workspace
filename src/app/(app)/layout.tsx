@@ -6,9 +6,12 @@ import { AppShell } from "@/components/app-shell";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
   if (!user) redirect("/login");
+  // Behind the middleware, which only sees the cookie: the owner may have raised the notice
+  // version (or reset the password) after the cookie was issued. The database decides.
+  if (user.mustChangePassword || user.transparencyPending) redirect("/onboarding");
   // An external partner (org GUEST) is not offered the areas that are closed to guests.
   const membership = await db.organizationMember.findFirst({
-    where: { userId: user.id },
+    where: { userId: user.id, status: "ACTIVE" },
     orderBy: { createdAt: "asc" },
     select: { role: true },
   });

@@ -1,24 +1,99 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { originAllowed } from "@/lib/origin-guard";
+import { verifySessionTokenWith } from "@/lib/session-token";
+import { safeNextPath } from "@/lib/safe-next";
 
 /**
- * 1. Writes to the JSON API must come from this app's own pages (see origin-guard.ts).
- *    Machine-to-machine endpoints are exempt: they authenticate with their own
- *    token/signature and are not called from a browser.
- * 2. Cheap cookie check for app pages — full JWT verification runs in server code.
- *    API routes enforce auth themselves.
+ * Runs in the Edge runtime: nothing here may import Prisma or a Node-only module
+ * (tests/middleware-onboarding.test.ts pins the imports).
+ *
+ * 1. Writes to the JSON API must come from this app's own pages (see origin-guard.ts). A request
+ *    is an API call when its raw OR its canonical path says so (see canonicalPath).
+ *    Machine-to-machine endpoints are exempt — only when BOTH spellings are one: they
+ *    authenticate with their own token/signature and are not called from a browser.
+ * 2. Pages: the session cookie is VERIFIED (signature and expiry, with AUTH_SECRET). No valid
+ *    token -> /login?next=<page>. A valid token that still owes a password change or the
+ *    transparency notice (`mcp` / `tp`) -> /onboarding?next=<page>. Whether the session is still
+ *    honoured (suspended, password reset, ...) needs the database: server code decides that.
+ * 3. API routes enforce auth themselves (`requireUser` answers 403 auth.onboarding_required for
+ *    somebody who has not finished the onboarding).
  */
 const MACHINE_PATHS = ["/api/integrations/n8n/inbound", "/api/v1", "/api/health"];
+const PUBLIC_PATHS = ["/login", "/register", "/api/auth/login", "/api/auth/register"];
+const COOKIE = "zaki_session";
+
+/**
+ * The path the way Next's ROUTER reads it. The router resolves a static route from the DECODED
+ * path as well (`/%61pi/me/transparency` and `/api%2Fme/transparency` reach /api/me/transparency),
+ * so every decision here is taken on the canonical spelling, never on the raw one: percent-escapes
+ * decoded (up to three layers: a double-encoded spelling must not slip through), backslashes read
+ * as slashes, empty and dot segments resolved. `malformed` = an escape that cannot be decoded: the
+ * caller treats such a request as a possible API call.
+ */
+export function canonicalPath(pathname: string): { path: string; malformed: boolean } {
+  let p = pathname;
+  let malformed = false;
+  for (let i = 0; i < 3; i++) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(p);
+    } catch {
+      malformed = true;
+      break;
+    }
+    if (decoded === p) break;
+    p = decoded;
+  }
+  p = p.replace(/\\/g, "/");
+  const out: string[] = [];
+  for (const segment of p.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") out.pop();
+    else out.push(segment);
+  }
+  return { path: "/" + out.join("/"), malformed };
+}
 
 /** Exact path or a sub-path ("/api/v1/ideas"); a look-alike such as "/api/healthx" is NOT a machine endpoint. */
 function isMachinePath(pathname: string): boolean {
   return MACHINE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
-export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+/** Files the browser fetches on its own (the app icon, robots.txt, ...): never redirected. */
+function isStaticFile(pathname: string): boolean {
+  return /\.(?:svg|png|jpe?g|gif|webp|avif|ico|txt|xml|webmanifest|woff2?|css|js|map)$/i.test(pathname);
+}
 
-  if (pathname.startsWith("/api/") && !isMachinePath(pathname)) {
+/** The page that was asked for, as a `?next=` value ("" for the home page). */
+function nextOf(req: NextRequest): string {
+  const params = new URLSearchParams(req.nextUrl.search);
+  params.delete("_rsc"); // the router's cache-busting parameter, not part of the page
+  const query = params.toString();
+  const target = safeNextPath(`${req.nextUrl.pathname}${query ? `?${query}` : ""}`);
+  return target === "/" ? "" : target;
+}
+
+function redirectTo(req: NextRequest, pathname: string): NextResponse {
+  const url = req.nextUrl.clone();
+  url.pathname = pathname;
+  url.search = "";
+  const next = nextOf(req);
+  if (next) url.searchParams.set("next", next);
+  return NextResponse.redirect(url);
+}
+
+export async function middleware(req: NextRequest) {
+  const raw = req.nextUrl.pathname;
+  const { path: pathname, malformed } = canonicalPath(raw);
+  // Next resolves a STATIC route from the decoded path and matches a DYNAMIC route on the raw one
+  // ("/api/tasks/..%2F..%2Flogin" is /api/tasks/[id] with id "../../login", although it reads as
+  // "/login"): a request is an API call when EITHER spelling says so.
+  const isApi = raw.startsWith("/api/") || pathname.startsWith("/api/");
+  // ...and a machine endpoint only when BOTH spellings are one
+  const isMachine = isMachinePath(raw) && isMachinePath(pathname);
+
+  // a spelling that cannot be decoded might still be routed: guard it like an API call
+  if ((isApi || malformed) && !isMachine) {
     const allowed = originAllowed({
       method: req.method,
       origin: req.headers.get("origin"),
@@ -32,17 +107,18 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  const publicPaths = ["/login", "/register", "/api/auth/login", "/api/auth/register"];
-  if (publicPaths.some((p) => pathname === p || pathname.startsWith("/_next"))) {
+  if (PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/_next")) {
     return NextResponse.next();
   }
-  const hasSession = req.cookies.has("zaki_session");
-  if (!hasSession && !pathname.startsWith("/api/")) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+  if (isApi || isStaticFile(pathname)) {
+    return NextResponse.next();
   }
+
+  const token = req.cookies.get(COOKIE)?.value;
+  const secret = process.env["AUTH_SECRET"];
+  const session = token && secret ? await verifySessionTokenWith(token, secret) : null;
+  if (!session) return redirectTo(req, "/login");
+  if ((session.mcp || session.tp) && pathname !== "/onboarding") return redirectTo(req, "/onboarding");
   return NextResponse.next();
 }
 

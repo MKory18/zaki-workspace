@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ProjectStatus } from "@prisma/client";
 import { z } from "zod";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
@@ -38,7 +39,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (input.startDate !== undefined) data.startDate = input.startDate ?? null;
     if (input.targetDate !== undefined) data.targetDate = input.targetDate ?? null;
     if (input.departmentId !== undefined) data.departmentId = input.departmentId ? input.departmentId : null;
-    if (input.status && ["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELED"].includes(input.status)) {
+    // every real status; a value that is not one is ignored (it used to whitelist a status that does not exist)
+    if (input.status && (Object.values(ProjectStatus) as string[]).includes(input.status)) {
       data.status = input.status;
     }
     if (input.priority && ["URGENT", "HIGH", "NORMAL", "LOW", "NONE"].includes(input.priority)) {

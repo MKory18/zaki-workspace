@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { db } from "@/server/db";
-import type { Prisma } from "@prisma/client";
+import type { OrgRole, Prisma } from "@prisma/client";
 import { ValidationError } from "@/server/auth";
+import { can } from "@/server/policy/capabilities";
+import { activeMember } from "@/server/services/active-people";
 import { decryptSecrets, generateSharedSecret, safeEqual } from "@/server/crypto";
 import { assertPublicHttpsUrl, UnsafeUrlError } from "@/server/net-guard";
 import { verifyZakiSignature } from "@/server/webhook-signing";
@@ -51,7 +53,7 @@ export async function assertWebhookUrl(url: string): Promise<void> {
   }
 }
 
-/** OWNER/ADMIN config save: webhook URL + event filter; generates the secret once. */
+/** Config save (for whoever holds `integrations.manage`; the route checks): webhook URL + event filter; generates the secret once. */
 export async function configureN8n(
   orgId: string,
   input: { webhookUrl: string; events: string[]; rotateSecret?: boolean },
@@ -91,16 +93,31 @@ async function readSharedSecret(orgId: string): Promise<string | null> {
 }
 
 /**
- * The connection state. The webhook URL (its path can act as a secret) and the event filter are
- * the org managers' business: when `viewerRole` is given and is not OWNER/ADMIN, only the
- * connected flag and the stored-secret marker are returned. Leave `viewerRole` out only when the
- * caller already knows it is a manager (configureN8n answering the manager who just saved).
+ * Does `viewer` hold `integrations.manage` in this org? `viewer` is the person asking:
+ *  - `{ userId }` (the route's context has one): judged by their own switches, as an ACTIVE member;
+ *  - a bare role such as "MEMBER": only what the rank gives by default (the OWNER and ADMIN hold it);
+ *  - omitted: the caller already knows it is a manager.
  */
-export async function getN8nStatus(orgId: string, viewerRole?: string): Promise<N8nStatus> {
+async function viewerManagesIntegrations(orgId: string, viewer: string | { userId: string } | undefined): Promise<boolean> {
+  if (viewer === undefined) return true;
+  // an unknown role string holds nothing (the default set of a role that does not exist is empty)
+  if (typeof viewer === "string") return can({ role: viewer as OrgRole }, "integrations.manage");
+  const member = await activeMember(orgId, viewer.userId);
+  return member !== null && can(member, "integrations.manage");
+}
+
+/**
+ * The connection state. The webhook URL (its path can act as a secret) and the event filter are
+ * the business of whoever holds the `integrations.manage` capability (see `viewerManagesIntegrations`
+ * for how `viewer` is read): everybody else gets only the connected flag and the stored-secret
+ * marker. Leave `viewer` out only when the caller already knows it is a manager (configureN8n
+ * answering the manager who just saved).
+ */
+export async function getN8nStatus(orgId: string, viewer?: string | { userId: string }): Promise<N8nStatus> {
   const row = await getIntegration(orgId, "N8N");
   if (!row) return { connected: false, webhookUrl: null, events: [], sharedSecret: null };
   const meta = (row.config ?? {}) as { webhookUrl?: string; events?: string[] };
-  const manager = viewerRole === undefined || viewerRole === "OWNER" || viewerRole === "ADMIN";
+  const manager = await viewerManagesIntegrations(orgId, viewer);
   return {
     connected: row.connected && Boolean(meta.webhookUrl),
     webhookUrl: manager ? meta.webhookUrl ?? null : null,
@@ -222,9 +239,10 @@ export async function handleInbound(
     return { ok: false, status: 400, body: { ok: false, error: "n8n.create_task_requires_fields" } };
   }
 
-  // The webhook has no human actor — the org OWNER acts on its behalf.
+  // The webhook has no human actor — the (oldest) ACTIVE org OWNER acts on its behalf. A suspended or
+  // offboarded owner does not: with none active left the webhook refuses (n8n.no_owner).
   const owner = await db.organizationMember.findFirst({
-    where: { organizationId: orgId, role: "OWNER" },
+    where: { organizationId: orgId, role: "OWNER", status: "ACTIVE" },
     select: { userId: true },
     orderBy: { createdAt: "asc" },
   });

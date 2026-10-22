@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/server/db";
-import { currentUser } from "@/server/auth";
+import { pageUser } from "@/server/auth";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { Card, CardBody, CardHeader, Badge } from "@/components/ui/card";
 import { BoardCreateButton } from "@/components/board-create-button";
@@ -9,7 +9,7 @@ import { formatDate } from "@/lib/format";
 import { TimelineBadgeButton } from "@/components/timeline-badge-button";
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
-  const user = await currentUser();
+  const user = await pageUser();
   if (!user) return null;
   const accessible = await accessibleWorkspaceIds(user.id);
   const project = await db.project.findFirst({

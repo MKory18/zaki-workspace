@@ -19,6 +19,19 @@ export interface MeData {
   hue: number;
 }
 
+/**
+ * The Arabic text for a failed password change: the current password was wrong, the new one breaks
+ * a rule (the server sends the rule's key in `details`), or there were too many tries.
+ */
+export function passwordErrorText(err: unknown, t: (key: string) => string): string {
+  if (!(err instanceof ApiError)) return t("common.error");
+  if (err.messageKey === "password.wrong_current") return t("profile.wrongCurrent");
+  if (err.code === "rate_limited") return t("auth.too_many_attempts");
+  const details = Array.isArray(err.details) ? (err.details as { message?: unknown }[]) : [];
+  const rule = details.map((d) => d.message).find((m): m is string => typeof m === "string" && t(m) !== m);
+  return rule ? t(rule) : t("common.error");
+}
+
 /** Self-service account form: identity + job title + bio + password change. */
 export function ProfileForm({ me }: { me: MeData }) {
   const { t } = useI18n();
@@ -58,8 +71,7 @@ export function ProfileForm({ me }: { me: MeData }) {
       form.reset();
       toast(t("profile.passwordChanged"), "success");
     } catch (err) {
-      const code = err instanceof ApiError ? err.code : "internal";
-      toast(code === "password.wrong_current" ? t("profile.wrongCurrent") : t("common.error"), "error");
+      toast(passwordErrorText(err, t), "error");
     } finally {
       setPending(false);
     }

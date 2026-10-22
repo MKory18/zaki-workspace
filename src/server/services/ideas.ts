@@ -5,11 +5,16 @@ import { ForbiddenError, NotFoundError, requireUser } from "@/server/auth";
 import type { OrgAccessContext } from "@/server/auth";
 import { canManageOrg } from "@/server/services/orgs";
 import { accessibleWorkspaceIds } from "@/server/services/access";
+import { assertCanWrite } from "@/server/services/guest-guard";
 import type { ActorContext } from "@/server/services/tasks";
 import { createTask } from "@/server/services/tasks";
 import type { DbClient } from "@/server/db";
 
-/** Membership context resolved from the idea's own org (shared by API routes). */
+/**
+ * Membership context resolved from the idea's own org (shared by API routes). Only an ACTIVE member
+ * of that org gets one: somebody suspended or offboarded there is "not a member", even when they
+ * are active in another organization of theirs.
+ */
 export async function ideaAccessCtx(ideaId: string): Promise<OrgAccessContext> {
   const user = await requireUser();
   const idea = await db.idea.findUnique({
@@ -19,9 +24,9 @@ export async function ideaAccessCtx(ideaId: string): Promise<OrgAccessContext> {
   if (!idea) throw new ForbiddenError("idea.not_found");
   const membership = await db.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId: idea.orgId, userId: user.id } },
-    select: { role: true },
+    select: { role: true, status: true },
   });
-  if (!membership) throw new ForbiddenError("not_org_member");
+  if (!membership || membership.status !== "ACTIVE") throw new ForbiddenError("not_org_member");
   return { orgId: idea.orgId, orgRole: membership.role, userId: user.id };
 }
 
@@ -79,7 +84,7 @@ interface Row {
   organization: { keyPrefix: string };
 }
 
-function toDTO(row: Row, viewerId: string): IdeaDTO {
+function toDTO(row: Row, viewerId: string, external = false): IdeaDTO {
   return {
     id: row.id,
     title: row.title,
@@ -90,7 +95,8 @@ function toDTO(row: Row, viewerId: string): IdeaDTO {
     updatedAt: row.updatedAt,
     creatorId: row.creator.id,
     creatorName: row.creator.name,
-    creatorJobTitle: row.creator.jobTitle,
+    // the staff directory is closed to external partners: no job titles for them
+    creatorJobTitle: external ? null : row.creator.jobTitle,
     voteCount: row.votes.length,
     votedByMe: row.votes.some((v) => v.userId === viewerId),
     orgKeyPrefix: row.organization.keyPrefix,
@@ -101,6 +107,8 @@ export interface ListIdeasFilters {
   status?: IdeaStatus;
   mine?: boolean;
   viewerId: string;
+  /** The viewer is an external partner (org GUEST): no staff details in the list. */
+  external?: boolean;
 }
 
 export async function listIdeas(orgId: string, filters: ListIdeasFilters): Promise<IdeaDTO[]> {
@@ -116,7 +124,7 @@ export async function listIdeas(orgId: string, filters: ListIdeasFilters): Promi
       organization: { select: { keyPrefix: true } },
     },
   });
-  return rows.map((row) => toDTO(row, filters.viewerId));
+  return rows.map((row) => toDTO(row, filters.viewerId, filters.external === true));
 }
 
 export interface CreateIdeaInput {
@@ -155,6 +163,8 @@ export async function updateIdea(
   ideaId: string,
   data: { title?: string; description?: string | null; status?: IdeaStatus },
 ): Promise<IdeaDTO> {
+  // an external partner never writes, not even on an idea they wrote before they were made a guest
+  assertCanWrite({ orgRole });
   return db.$transaction(async (tx) => {
     const idea = await assertIdeaScope(ideaId, orgId, tx);
     const updateData: Prisma.IdeaUpdateInput = {};
@@ -195,6 +205,7 @@ export async function deleteIdea(
   orgRole: OrgRole,
   ideaId: string,
 ): Promise<void> {
+  assertCanWrite({ orgRole });
   const idea = await assertIdeaScope(ideaId, orgId, db);
   if (idea.creatorId !== actor.userId && !canManageOrg(orgRole)) {
     throw new ForbiddenError("idea.not_owner");
@@ -241,6 +252,7 @@ export async function convertIdeaToTask(
   ideaId: string,
   target: { workspaceId: string; projectId: string; boardId: string },
 ): Promise<{ idea: IdeaDTO; taskId: string }> {
+  assertCanWrite({ orgRole });
   const idea = await assertIdeaScope(ideaId, orgId, db);
   if (idea.taskId) throw new ForbiddenError("idea.already_converted");
   if (!canManageOrg(orgRole) && idea.creatorId !== actor.userId) {

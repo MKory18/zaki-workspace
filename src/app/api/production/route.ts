@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/server/auth";
+import { requireActor } from "@/server/policy/actor";
 import { withApi } from "@/server/api";
-import { db } from "@/server/db";
 import { dayChecklist, dayIso } from "@/server/services/production";
 
 /**
@@ -10,17 +9,11 @@ import { dayChecklist, dayIso } from "@/server/services/production";
  */
 export async function GET(req: Request) {
 	return withApi(async () => {
-		const user = await requireUser();
+		const actor = await requireActor();
 		const url = new URL(req.url);
 		const raw = url.searchParams.get("day");
 		const day = raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : dayIso(new Date());
-		const membership = await db.organizationMember.findFirst({
-			where: { userId: user.id },
-			orderBy: { createdAt: "asc" },
-			select: { organizationId: true },
-		});
-		if (!membership) return NextResponse.json({ day, items: [] });
-		const data = await dayChecklist(membership.organizationId, day);
+		const data = await dayChecklist(actor.orgId, day);
 		return NextResponse.json(data);
 	});
 }

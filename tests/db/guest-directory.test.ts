@@ -59,18 +59,33 @@ describe("workspace members: what a GUEST gets", () => {
     expect(members.map((m) => m["name"]).sort()).toEqual(["Guest", "Member", "Workspace mate"]);
   });
 
-  it("is unchanged for a MEMBER: emails, roles, and the org admins who inherit the workspace", async () => {
+  it("is unchanged for a MEMBER: emails and roles - for the people IN the space; the owner and the admins are on the list only with a row", async () => {
     const w = await directoryWorld();
     await loginAs(w.member.id);
-    const res = await call(workspaceMembersRoute.GET, { params: { id: w.shared.id } });
-    expect(res.status).toBe(200);
-    const members = res.json?.["members"] as { id: string; name: string; email: string; role: string }[];
-    const byName = new Map(members.map((m) => [m.name, m]));
+    const list = async () => {
+      const res = await call(workspaceMembersRoute.GET, { params: { id: w.shared.id } });
+      expect(res.status).toBe(200);
+      const members = res.json?.["members"] as { id: string; name: string; email: string; role: string }[];
+      return new Map(members.map((m) => [m.name, m]));
+    };
+
+    const byName = await list();
     expect(byName.get("Workspace mate")?.email).toBe(w.mate.email);
     expect(byName.get("Workspace mate")?.role).toBe("MEMBER");
     expect(byName.get("Guest")?.role).toBe("GUEST");
-    expect(byName.get("Owner")?.role).toBe("org:OWNER");
-    expect(byName.get("Admin")?.role).toBe("org:ADMIN");
+    // a space is visible only to the people in it (and to the owner, silently): the owner and the admin
+    // are not in `shared`, so they are not on its list - the old "org:OWNER / org:ADMIN" inherited rows are gone
+    expect(byName.has("Owner")).toBe(false);
+    expect(byName.has("Admin")).toBe(false);
+    expect([...byName.keys()].sort()).toEqual(["Guest", "Member", "Workspace mate"]);
+
+    // once they are really put in the space they are listed like anybody else, with the role of their row
+    await db.workspaceMember.create({ data: { workspaceId: w.shared.id, userId: w.admin.id, role: "MEMBER" } });
+    await db.workspaceMember.create({ data: { workspaceId: w.shared.id, userId: w.owner.id, role: "MEMBER" } });
+    const withRows = await list();
+    expect(withRows.get("Admin")?.role).toBe("MEMBER");
+    expect(withRows.get("Owner")?.role).toBe("MEMBER");
+    expect(withRows.get("Admin")?.email).toBe(w.admin.email);
   });
 
   it("a GUEST outside the workspace still cannot open the list at all", async () => {
@@ -172,7 +187,6 @@ describe("member directory (the /teams page)", () => {
     const org = result[0]!;
     expect(org.organizationId).toBe(w.org.id);
     expect(org.canManage).toBe(false);
-    expect(org.joinCode).toBeNull();
     expect(org.members.map((m) => m.name).sort()).toEqual(["Guest", "Member", "Workspace mate"]);
     for (const m of org.members) {
       expect(m.email).toBeNull();
@@ -192,14 +206,13 @@ describe("member directory (the /teams page)", () => {
     );
     expect(org.members.find((m) => m.name === "Workspace mate")?.jobTitle).toBe("Factory liaison");
     expect(org.members.every((m) => m.email === null)).toBe(true);
-    expect(org.joinCode).toBeNull();
   });
 
-  it("an ADMIN still sees emails and the join code", async () => {
+  it("an ADMIN still sees emails, and nobody gets the retired join code", async () => {
     const w = await directoryWorld();
     const org = (await memberDirectory(w.admin.id))[0]!;
     expect(org.canManage).toBe(true);
-    expect(org.joinCode).toBe(w.org.joinCode);
+    expect(JSON.stringify(org)).not.toContain(w.org.joinCode);
     expect(org.members.find((m) => m.name === "Workspace mate")?.email).toBe(w.mate.email);
   });
 });

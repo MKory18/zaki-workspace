@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
+import { redirect } from "next/navigation";
 import { db } from "./db";
 import { log } from "./log";
 import { getSessionUser, clearSessionCookie, setSessionCookie } from "./session";
@@ -29,6 +30,13 @@ export interface CurrentUser {
   mustChangePassword: boolean;
   /** The transparency notice (work chats are archived and visible to the owner) is not accepted yet. */
   transparencyPending: boolean;
+  /**
+   * The session version this request was authenticated with (it equals the cookie's `tv` and was
+   * equal to the database value when the request began). A route that re-issues the cookie signs
+   * THIS value, never a fresh read: a revocation that lands while the request is in flight must
+   * not be laundered into a brand-new cookie.
+   */
+  tv: number;
 }
 
 /**
@@ -67,8 +75,22 @@ export async function currentUser(): Promise<CurrentUser | null> {
     username: user.username,
     name: user.name,
     locale: user.locale,
+    tv: user.tokenVersion,
     ...onboardingStateOf(user, active.organization.settings),
   };
+}
+
+/**
+ * For server-rendered pages: the person looking at the page, or null when nobody is signed in
+ * (the page decides, usually `redirect("/login")`). Somebody who still owes the onboarding
+ * (temporary password, transparency notice) never gets a page: they are sent to /onboarding BEFORE
+ * anything is read. The (app) layout redirects them too, but in the App Router a page runs (and
+ * its output is streamed) even when its layout redirects, so every page must refuse for itself.
+ */
+export async function pageUser(): Promise<CurrentUser | null> {
+  const user = await currentUser();
+  if (user && (user.mustChangePassword || user.transparencyPending)) redirect("/onboarding");
+  return user;
 }
 
 /**
@@ -88,10 +110,16 @@ export async function requireUser(opts: { allowPending?: boolean } = {}): Promis
 }
 
 /**
- * Signs `userId` in: a cookie carrying their CURRENT session version and whatever onboarding
- * they still owe. Used after login, password change and accepting the notice.
+ * Signs `userId` in: a cookie carrying a session version and whatever onboarding they still owe.
+ * Used after login, password change and accepting the notice.
+ *
+ * `opts.tv` is the version to sign. A sign-in (nobody is authenticated yet) leaves it out and gets
+ * the CURRENT version. A request that is already authenticated passes the version it was
+ * authenticated with (`CurrentUser.tv`, or the new version a password change just wrote): if the
+ * session was revoked in the meantime that cookie is simply already stale, instead of the
+ * revocation being undone by a fresh read.
  */
-export async function startSession(userId: string): Promise<void> {
+export async function startSession(userId: string, opts: { tv?: number } = {}): Promise<void> {
   const user = await db.user.findUniqueOrThrow({
     where: { id: userId },
     select: {
@@ -109,7 +137,7 @@ export async function startSession(userId: string): Promise<void> {
   const onboarding = onboardingStateOf(user, user.memberships[0]?.organization.settings ?? {});
   await setSessionCookie({
     userId,
-    tv: user.tokenVersion,
+    tv: opts.tv ?? user.tokenVersion,
     ...(onboarding.mustChangePassword ? { mcp: true } : {}),
     ...(onboarding.transparencyPending ? { tp: true } : {}),
   });

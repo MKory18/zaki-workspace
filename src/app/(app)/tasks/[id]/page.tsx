@@ -1,11 +1,11 @@
 import { notFound, redirect } from "next/navigation";
-import { currentUser } from "@/server/auth";
+import { pageUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { TaskDetail } from "@/components/task-detail";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
-  const user = await currentUser();
+  const user = await pageUser();
   if (!user) redirect("/login");
 
   // Workspace membership gates task access (writes go through API role checks).
@@ -31,9 +31,9 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   });
   if (!task) notFound();
 
-  // editable: creator/assignee, or any non-guest member
+  // editable: creator/assignee, or any non-guest member (an ACTIVE one: a leftover row grants nothing)
   const membership = await db.organizationMember.findFirst({
-    where: { userId: user.id, organizationId: task.orgId },
+    where: { userId: user.id, organizationId: task.orgId, status: "ACTIVE" },
     select: { role: true },
   });
   const canEdit =
@@ -42,8 +42,14 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
     user.id === task.creatorId;
 
   const [members, labels] = await Promise.all([
+    // the people who can be assigned: the space's members who are still ACTIVE in the company (a
+    // suspended person keeps their space row so that reactivating them restores everything, but
+    // they must not be offered)
     db.workspaceMember.findMany({
-      where: { workspaceId: task.workspaceId },
+      where: {
+        workspaceId: task.workspaceId,
+        user: { memberships: { some: { organizationId: task.orgId, status: "ACTIVE" } } },
+      },
       select: { user: { select: { id: true, name: true } } },
       orderBy: { createdAt: "asc" },
     }),

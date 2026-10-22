@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { activeOrgCtx } from "@/server/services/integrations";
+import { directoryContext } from "@/app/api/_access";
 import {
   deleteDepartment,
   getDepartment,
@@ -9,10 +10,10 @@ import {
   updateDepartmentSchema,
 } from "@/server/services/departments";
 
-/** GET: one department with its members and projects (guests get 403 from the service). */
+/** GET: one department with its members and projects (`directory.view`; guests get 403 `guest.no_access`). */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const ctx = await activeOrgCtx();
+    const ctx = await directoryContext();
     return NextResponse.json(await getDepartment(ctx, params.id));
   });
 }

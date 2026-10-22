@@ -74,6 +74,18 @@ export class FixedWindowLimiter {
     this.buckets.delete(key);
   }
 
+  /**
+   * Take back one counted event of this key: something counted BEFORE it was known whether it
+   * would count (a sign-in attempt, before the password was checked) turned out not to. Never goes
+   * below zero; the window is not extended.
+   */
+  refund(key: string): void {
+    const b = this.live(key);
+    if (!b) return;
+    b.count -= 1;
+    if (b.count <= 0) this.buckets.delete(key);
+  }
+
   private prune(): void {
     const t = this.now();
     for (const [key, b] of this.buckets) if (b.resetAt <= t) this.buckets.delete(key);
@@ -91,21 +103,36 @@ export class FixedWindowLimiter {
 /** The limits themselves, in one place so tests and docs can read them. */
 export const LOGIN_LIMITS = {
   /**
-   * Failed attempts for ONE account from ONE address. This is the lock that stops a person
-   * guessing; it follows the pair, so someone hammering an account from their own address
-   * cannot lock the real user out when that user signs in from somewhere else.
+   * Failed attempts for ONE typed name (username or e-mail, as typed) from ONE address. This is
+   * the lock that stops a person guessing; it follows the pair, so someone hammering an account
+   * from their own address cannot lock the real user out when that user signs in from somewhere
+   * else, and it is keyed by the TYPED text, so locking a username says nothing about which
+   * e-mail address belongs to the same person.
    */
   perAccountAndIp: { limit: 8, windowMs: 10 * 60_000 },
-  /** Failed attempts for one account from ALL addresses together: caps guessing spread over many addresses. */
+  /**
+   * Failed attempts for one ACCOUNT (whichever of its names was typed) from all addresses
+   * together: caps guessing spread over many addresses. Addresses the person signed in from before
+   * are not held by it (LOGIN_KNOWN_ADDRESSES), so it cannot lock them out of their usual places.
+   */
   perAccount: { limit: 30, windowMs: 10 * 60_000 },
-  /** All attempts from one address. Generous: an office shares one address. */
+  /** FAILED attempts from one address (a correct password is given back). An office shares one address. */
   perIp: { limit: 30, windowMs: 10 * 60_000 },
-  /** A short burst from one address (a password check costs ~0.3 s of CPU). */
+  /** EVERY attempt from one address in a short burst (a password check costs ~0.3 s of CPU). */
   perIpBurst: { limit: 6, windowMs: 10_000 },
 } as const;
 
 /** Password checks running at the same time. bcrypt is CPU-bound; more only starves the server. */
 export const LOGIN_MAX_CONCURRENT_CHECKS = 3;
+
+/**
+ * Addresses remembered as "this person signed in from here before", in memory: the most recent
+ * `perAccount` addresses of each account, for the `accounts` most recently active accounts.
+ */
+export const LOGIN_KNOWN_ADDRESSES = { perAccount: 20, accounts: 10_000 } as const;
+
+/** Own-password checks (POST /api/me/password) running at the same time, in the whole process. */
+export const PASSWORD_CHANGE_MAX_CONCURRENT_CHECKS = 2;
 
 /** A counting gate: at most `max` holders at once; `tryAcquire` never waits. */
 export class ConcurrencyGate {

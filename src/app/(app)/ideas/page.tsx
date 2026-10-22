@@ -1,22 +1,12 @@
-import { redirect } from "next/navigation";
-import { currentUser, ForbiddenError } from "@/server/auth";
-import { db } from "@/server/db";
+import { pageActor } from "@/app/(app)/_access";
 import { listIdeas } from "@/server/services/ideas";
 import { IdeasView, type IdeaItem } from "@/components/ideas-view";
 
 export default async function IdeasPage() {
-  const user = await currentUser();
-  if (!user) redirect("/login");
+  // Active org = oldest ACTIVE membership (same resolution as the ideas API).
+  const { user, actor } = await pageActor();
 
-  // Active org = oldest membership (same resolution as the ideas API).
-  const membership = await db.organizationMember.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: { organizationId: true, role: true },
-  });
-  if (!membership) throw new ForbiddenError("not_org_member");
-
-  const ideas = await listIdeas(membership.organizationId, { viewerId: user.id });
+  const ideas = await listIdeas(actor.orgId, { viewerId: user.id, external: actor.isExternal });
   const initial: IdeaItem[] = ideas.map((i) => ({
     id: i.id,
     title: i.title,
@@ -35,8 +25,8 @@ export default async function IdeasPage() {
       initial={initial}
       ctx={{
         userId: user.id,
-        orgRole: membership.role,
-        canManage: membership.role === "OWNER" || membership.role === "ADMIN",
+        orgRole: actor.role,
+        canManage: actor.role === "OWNER" || actor.role === "ADMIN",
       }}
     />
   );

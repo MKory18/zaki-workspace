@@ -6,7 +6,7 @@ import { canWriteInWorkspace, workspaceRoleOf } from "@/server/workspace-role";
 
 // ---------- workspace access resolution for RSC pages ----------
 
-import { currentUser } from "@/server/auth";
+import { pageUser } from "@/server/auth";
 
 export interface WorkspaceViewCtx {
   userId: string;
@@ -31,17 +31,17 @@ export interface WorkspaceViewCtx {
 /**
  * Resolves the workspace a page (List, Calendar) should show.
  *
- * Access is the one rule used everywhere (`accessibleWorkspaceIds`): org
- * OWNER/ADMIN inherit every workspace of their org, everyone else — GUESTs
- * included — only the workspaces they were put in. The selector list and the
- * chosen/fallback workspace come from that list only; a requested workspace
- * outside it silently falls back to the first accessible one, and a user with
- * none gets `{ none: true }`.
+ * Access is the one rule used everywhere (`accessibleWorkspaceIds`): the org
+ * OWNER sees every workspace of their org, everyone else — ADMINs and GUESTs
+ * included — only the workspaces they were put in, and only while they are
+ * ACTIVE members. The selector list and the chosen/fallback workspace come from
+ * that list only; a requested workspace outside it silently falls back to the
+ * first accessible one, and a user with none gets `{ none: true }`.
  */
 export async function resolveWorkspaceView(
   wantedId?: string,
 ): Promise<{ ctx: WorkspaceViewCtx } | { none: true } | { pageRedirect: true }> {
-  const user = await currentUser();
+  const user = await pageUser();
   if (!user) return { pageRedirect: true };
 
   const accessibleIds = await accessibleWorkspaceIds(user.id);
@@ -60,17 +60,18 @@ export async function resolveWorkspaceView(
   const [orgMember, wsMember] = await Promise.all([
     db.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: chosen.organizationId, userId: user.id } },
-      select: { role: true },
+      select: { role: true, status: true },
     }),
     db.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId: chosen.id, userId: user.id } },
       select: { role: true },
     }),
   ]);
-  // accessible ⇒ org member of the workspace's org; "GUEST" is only a safe floor
-  const orgRole = orgMember?.role ?? "GUEST";
+  // accessible ⇒ ACTIVE member of the workspace's org; if that does not hold, there is no space for them
+  if (!orgMember || orgMember.status !== "ACTIVE") return { none: true };
+  const orgRole: string = orgMember.role;
   // an org GUEST is a guest in every workspace, whatever their workspace row says
-  const role: string = wsMember ? workspaceRoleOf(orgMember?.role, wsMember.role) : orgRole;
+  const role: string = wsMember ? workspaceRoleOf(orgMember.role, wsMember.role) : orgRole;
   return {
     ctx: {
       userId: user.id,
@@ -79,7 +80,7 @@ export async function resolveWorkspaceView(
       orgId: chosen.organizationId,
       orgRole,
       role,
-      editable: canWriteInWorkspace(orgMember?.role, wsMember?.role),
+      editable: canWriteInWorkspace(orgMember.role, wsMember?.role),
       denied: false,
       workspaces,
     },
@@ -90,7 +91,8 @@ export async function resolveWorkspaceView(
  * People offered in the List page's assignee filter for the chosen workspace
  * (names only, never an email). Org members get the organization's people; an
  * org GUEST (an external partner) only gets the people who share the workspace
- * with them, never the wider staff.
+ * with them, never the wider staff. Only ACTIVE people are offered: a suspended
+ * or offboarded person is not somebody work can be filtered to or handed to.
  */
 export async function listWorkspacePeople(
   ctx: Pick<WorkspaceViewCtx, "orgId" | "workspaceId" | "orgRole">,
@@ -98,6 +100,7 @@ export async function listWorkspacePeople(
   const rows = await db.organizationMember.findMany({
     where: {
       organizationId: ctx.orgId,
+      status: "ACTIVE",
       ...(ctx.orgRole === "GUEST"
         ? { user: { workspaceLinks: { some: { workspaceId: ctx.workspaceId } } } }
         : {}),
@@ -109,7 +112,7 @@ export async function listWorkspacePeople(
 }
 
 export function redirectIfUnauthenticated(): Promise<string | null> {
-  return currentUser().then((u) => (u ? u.id : null));
+  return pageUser().then((u) => (u ? u.id : null));
 }
 
 // ---------- pure date windows (unit-tested) ----------

@@ -54,22 +54,34 @@ describe("resolveWorkspaceView: the selector and the chosen workspace are limite
     expect(ctx.editable).toBe(false);
   });
 
-  it("an ADMIN and the OWNER inherit every workspace of the org and can pick any of them", async () => {
+  it("the OWNER inherits every workspace of the org and can pick any of them, without a row", async () => {
     const f = await makeScopedOrg();
-    for (const user of [f.admin, f.owner]) {
-      const ctx = await ctxFor(user.id, f.wsOut.id);
-      expect(ctx.workspaces.map((w) => w.id).sort()).toEqual([f.wsIn.id, f.wsOut.id].sort());
-      expect(ctx.workspaceId).toBe(f.wsOut.id);
-      expect(ctx.orgId).toBe(f.org.id);
-      expect(ctx.editable).toBe(true);
-    }
+    const ctx = await ctxFor(f.owner.id, f.wsOut.id);
+    expect(ctx.workspaces.map((w) => w.id).sort()).toEqual([f.wsIn.id, f.wsOut.id].sort());
+    expect(ctx.workspaceId).toBe(f.wsOut.id);
+    expect(ctx.orgId).toBe(f.org.id);
+    expect(ctx.editable).toBe(true);
+  });
+
+  it("an ADMIN inherits nothing: none by rank, then only the workspaces they are put in (and they write there)", async () => {
+    const f = await makeScopedOrg();
+    await loginAs(f.admin.id);
+    expect(await resolveWorkspaceView()).toEqual({ none: true });
+    expect(await resolveWorkspaceView(f.wsOut.id)).toEqual({ none: true });
+
+    await joinWorkspace(f.admin.id, f.wsIn.id, "MEMBER");
+    const ctx = await ctxFor(f.admin.id, f.wsOut.id); // asks for the one they are not in
+    expect(ctx.workspaces.map((w) => w.id)).toEqual([f.wsIn.id]);
+    expect(ctx.workspaceId).toBe(f.wsIn.id);
+    expect(ctx.orgId).toBe(f.org.id);
+    expect(ctx.editable).toBe(true); // an ADMIN who is in the space outranks a MEMBER row
   });
 
   it("the selector is sorted by name", async () => {
     const f = await makeScopedOrg();
     const a = await makeWorkspace(f.org.id, [], "AAA first");
     const z = await makeWorkspace(f.org.id, [], "zzz last");
-    const ctx = await ctxFor(f.admin.id);
+    const ctx = await ctxFor(f.owner.id);
     expect(ctx.workspaces.map((w) => w.name)).toEqual(["AAA first", f.wsIn.name, f.wsOut.name, "zzz last"]);
     expect(ctx.workspaces[0]?.id).toBe(a.id);
     expect(ctx.workspaces.at(-1)?.id).toBe(z.id);
@@ -81,10 +93,12 @@ describe("resolveWorkspaceView: the selector and the chosen workspace are limite
     const b = await makeScopedOrg();
     const multi = await makeUser({ orgId: a.org.id, role: "MEMBER" });
     await joinWorkspace(multi.id, a.wsIn.id);
+    // an ADMIN of B takes the rows they were given (both B workspaces); MEMBER of A only has A's wsIn
     await joinOrg(multi.id, b.org.id, "ADMIN");
+    await joinWorkspace(multi.id, b.wsIn.id);
+    await joinWorkspace(multi.id, b.wsOut.id);
 
     const ctxB = await ctxFor(multi.id, b.wsOut.id);
-    // ADMIN of B inherits both B workspaces; MEMBER of A only has A's wsIn
     expect(ctxB.workspaces.map((w) => w.id).sort()).toEqual([a.wsIn.id, b.wsIn.id, b.wsOut.id].sort());
     expect(ctxB.workspaces.map((w) => w.id)).not.toContain(a.wsOut.id);
     expect(ctxB.workspaceId).toBe(b.wsOut.id);
@@ -168,9 +182,11 @@ describe("listWorkspacePeople: who the List page offers in its assignee filter",
     expect(Object.keys(people[0]!).sort()).toEqual(["id", "name"]); // names only, never an email
   });
 
-  it("an ADMIN gets the organization's people as well", async () => {
+  it("an ADMIN who is in the workspace gets the organization's people as well", async () => {
     const w = await world();
+    await joinWorkspace(w.admin.id, w.wsOut.id, "MEMBER"); // an ADMIN opens a workspace only by being in it
     const ctx = await ctxFor(w.admin.id, w.wsOut.id);
+    expect(ctx.workspaceId).toBe(w.wsOut.id);
     expect(names(await listWorkspacePeople(ctx))).toContain("Elsewhere");
     expect(names(await listWorkspacePeople(ctx))).toContain("Owner");
   });

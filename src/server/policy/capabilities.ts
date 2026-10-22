@@ -26,6 +26,21 @@ export function isCapability(value: string): value is Capability {
   return (CAPABILITIES as readonly string[]).includes(value);
 }
 
+/**
+ * The switches that change something TODAY. The rest are in the catalogue so that stored values and
+ * later phases stay valid, but a switch that does nothing is a lie on the people screen, so only
+ * these are offered there (each later phase adds its own: announcements, escalation, cash,
+ * penalties and prices come with the phases that use them).
+ */
+export const WIRED_CAPABILITIES: readonly Capability[] = [
+  "spaces.create",
+  "users.manage",
+  "directory.view",
+  "crm.view",
+  "crm.edit",
+  "integrations.manage",
+];
+
 /** What each rank can do without anyone switching anything on. The OWNER can do everything. */
 export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
   OWNER: CAPABILITIES,

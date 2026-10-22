@@ -1,15 +1,16 @@
-import { redirect } from "next/navigation";
-import { currentUser } from "@/server/auth";
+import { pageActor, SectionOffNotice } from "@/app/(app)/_access";
+import { actorCan } from "@/server/policy/actor";
 import { memberDirectory } from "@/server/services/users";
 import { Avatar } from "@/components/ui/avatar";
-import { JoinCodePanel } from "@/components/join-code-panel";
 import { getServerT } from "@/lib/i18n/server";
 import { ROLE_KEYS } from "@/lib/i18n/roles";
 
 export default async function TeamsPage() {
   const { t } = getServerT();
-  const user = await currentUser();
-  if (!user) redirect("/login");
+  const { user, actor } = await pageActor();
+  // the staff directory is a switch: a guest keeps the names-only list the service gives them,
+  // everybody else needs `directory.view`
+  if (!actor.isExternal && !actorCan(actor, "directory.view")) return <SectionOffNotice />;
 
   const orgs = await memberDirectory(user.id);
 
@@ -27,9 +28,6 @@ export default async function TeamsPage() {
             <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-fg-muted">
               {t("teams.yourRole")}: {t(ROLE_KEYS[org.orgRole] ?? "role.member")}
             </span>
-            {org.canManage && org.joinCode ? (
-              <JoinCodePanel organizationId={org.organizationId} initialCode={org.joinCode} />
-            ) : null}
           </div>
           <ul className="divide-y divide-border/60 rounded-xl border border-border bg-surface">
             {org.members.map((m) => {

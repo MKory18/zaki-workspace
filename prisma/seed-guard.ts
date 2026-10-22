@@ -15,6 +15,9 @@ export type Env = Readonly<Record<string, string | undefined>>;
 
 export const DEFAULT_SEED_OWNER_EMAIL = "owner@zaki.local";
 
+/** The demo owner's username (stored lower-case, like every username: sign-in lower-cases what is typed). */
+export const DEFAULT_SEED_OWNER_USERNAME = "owner";
+
 /** Same rule the application enforces for every account (src/server/validation.ts). */
 const PASSWORD_MIN = 8;
 

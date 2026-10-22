@@ -143,13 +143,15 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
       if (count !== uniqueIds.length) throw new ForbiddenError("label.invalid");
     }
 
-    // P1: never allow assigning a task to a user outside the actor's org
+    // P1: never allow assigning a task to a user outside the actor's org, nor to one who is no
+    // longer active in it (suspended or offboarded keep their row, but they do not count)
     if (input.assigneeId) {
       const member = await tx.organizationMember.findFirst({
         where: { organizationId: actor.orgId, userId: input.assigneeId },
-        select: { id: true },
+        select: { status: true },
       });
       if (!member) throw new ForbiddenError("assignee.not_member");
+      if (member.status !== "ACTIVE") throw new ForbiddenError("assignee.not_active");
     }
 
     const number = await nextTaskNumber(actor.orgId, tx);
@@ -250,14 +252,16 @@ export async function updateTask(
     if (data.priority !== undefined) updateData.priority = data.priority;
     if (data.type !== undefined) updateData.type = data.type;
     if (data.assigneeId !== undefined) {
-      // never assign to a user outside the actor's org (the same rule as on create);
-      // re-sending the current assignee changes nothing, so it is not re-checked
+      // never assign to a user outside the actor's org, or to one who is not active in it (the same
+      // rule as on create); re-sending the current assignee changes nothing, so it is not re-checked:
+      // work somebody already holds stays editable around them until it is moved
       if (data.assigneeId !== null && data.assigneeId !== before.assigneeId) {
         const member = await tx.organizationMember.findFirst({
           where: { organizationId: actor.orgId, userId: data.assigneeId },
-          select: { id: true },
+          select: { status: true },
         });
         if (!member) throw new ForbiddenError("assignee.not_member");
+        if (member.status !== "ACTIVE") throw new ForbiddenError("assignee.not_active");
       }
       updateData.assignee =
         data.assigneeId === null

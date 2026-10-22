@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withApi } from "@/server/api";
 import { parseJson, ideaStatuses } from "@/server/validation";
-import { requireUser, ForbiddenError, type OrgAccessContext } from "@/server/auth";
-import { db } from "@/server/db";
+import { ForbiddenError, type OrgAccessContext } from "@/server/auth";
+import { requireActor } from "@/server/policy/actor";
 import { createIdea, listIdeas } from "@/server/services/ideas";
 import { dispatchEvent } from "@/server/services/n8n";
 
@@ -18,18 +18,12 @@ const querySchema = z.object({
 });
 
 /**
- * The caller's active org = their oldest membership. Ideas have noWorkspace
- * nesting; they belong to the organization itself.
+ * The caller's active org = their oldest ACTIVE membership (a suspended or removed one never
+ * counts). Ideas have noWorkspace nesting; they belong to the organization itself.
  */
 async function ideasCtx(): Promise<OrgAccessContext> {
-  const user = await requireUser();
-  const membership = await db.organizationMember.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: { organizationId: true, role: true },
-  });
-  if (!membership) throw new ForbiddenError("not_org_member");
-  return { orgId: membership.organizationId, orgRole: membership.role, userId: user.id };
+  const actor = await requireActor();
+  return { orgId: actor.orgId, orgRole: actor.role, userId: actor.userId };
 }
 
 async function writerCtx(): Promise<OrgAccessContext> {
@@ -45,7 +39,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const q = querySchema.parse(Object.fromEntries(url.searchParams.entries()));
     const ctx = await ideasCtx();
-    const ideas = await listIdeas(ctx.orgId, { status: q.status, mine: q.mine, viewerId: ctx.userId });
+    const ideas = await listIdeas(ctx.orgId, { status: q.status, mine: q.mine, viewerId: ctx.userId, external: ctx.orgRole === "GUEST" });
     return NextResponse.json({ ideas });
   });
 }

@@ -47,7 +47,7 @@ describe("organization members: who may reset whose password", () => {
     expect(await hashOf(otherAdmin.id)).toBe(before);
   });
 
-  it("an ADMIN can still reset a plain member's password", async () => {
+  it("an ADMIN can still reset a plain member's password (a temporary one: it must be changed, old sessions end)", async () => {
     const { org, admin, member } = await makeTeam();
     const before = await hashOf(member.id);
     await loginAs(admin.id);
@@ -58,6 +58,8 @@ describe("organization members: who may reset whose password", () => {
     });
     expect(res.status).toBe(200);
     expect(await hashOf(member.id)).not.toBe(before);
+    const after = await db.user.findUniqueOrThrow({ where: { id: member.id }, select: { mustChangePassword: true, tokenVersion: true } });
+    expect(after).toEqual({ mustChangePassword: true, tokenVersion: 1 });
   });
 
   it("the OWNER can reset an ADMIN's password", async () => {
@@ -71,6 +73,19 @@ describe("organization members: who may reset whose password", () => {
     });
     expect(res.status).toBe(200);
     expect(await hashOf(admin.id)).not.toBe(before);
+  });
+
+  it("removing a member (DELETE) no longer deletes anything: the person is offboarded, account and membership stay", async () => {
+    const { org, owner, member } = await makeTeam();
+    await loginAs(owner.id);
+    const res = await call(memberRoute.DELETE, { method: "DELETE", params: { id: org.id, userId: member.id } });
+    expect(res.status).toBe(200);
+    const row = await db.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: org.id, userId: member.id } },
+      select: { status: true },
+    });
+    expect(row).toEqual({ status: "OFFBOARDED" });
+    expect(await db.user.count({ where: { id: member.id } })).toBe(1);
   });
 
   it("nobody can reset a password for a user of a different organization", async () => {

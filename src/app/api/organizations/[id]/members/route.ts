@@ -1,24 +1,22 @@
 import { NextResponse } from "next/server";
-import { requireOrgRole } from "@/server/auth";
-import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
-import { addMemberSchema, addOrgMember, listOrgMembers } from "@/server/services/org-members";
+import { createAccount, createAccountSchema, requireAccountsActor } from "@/server/services/accounts";
+import { listOrgMembers } from "@/server/services/org-members";
+import { withAccountsApi } from "./_http";
 
-/** GET: members roster — OWNER/ADMIN manage view. */
+/** GET: the roster (every status) for whoever holds `users.manage` in this organization. */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  return withApi(async () => {
-    const ctx = await requireOrgRole(params.id, ["OWNER", "ADMIN"]);
-    const members = await listOrgMembers(ctx.orgId);
-    return NextResponse.json({ members, actorRole: ctx.orgRole });
+  return withAccountsApi(async () => {
+    const actor = await requireAccountsActor(params.id);
+    return NextResponse.json(await listOrgMembers(actor));
   });
 }
 
-/** POST: admin directly creates an employee account with a role (no join code needed). */
+/** POST: create an account (username + temporary password); 201 `{ userId, username, temporaryPassword? }`. */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  return withApi(async () => {
-    const input = await parseJson(addMemberSchema, req);
-    const ctx = await requireOrgRole(params.id, ["OWNER", "ADMIN"]);
-    const created = await addOrgMember(ctx, input);
-    return NextResponse.json({ ...created }, { status: 201 });
+  return withAccountsApi(async () => {
+    const actor = await requireAccountsActor(params.id);
+    const input = await parseJson(createAccountSchema, req);
+    return NextResponse.json(await createAccount(actor, input), { status: 201 });
   });
 }

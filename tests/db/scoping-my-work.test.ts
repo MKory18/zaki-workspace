@@ -118,16 +118,16 @@ describe("My Work: only the caller's own tasks, only in workspaces they can acce
     expect(idsOf(after.created)).toContain(h5.task.id);
   });
 
-  it("an ADMIN inherits every workspace of the org but still sees only their own tasks", async () => {
+  it("the OWNER inherits every workspace of the org (no row needed, editable) but still sees only their own tasks", async () => {
     const f = await makeScopedOrg();
-    const admin = f.admin;
+    const owner = f.owner;
     const mineOut = await seedWork({
       orgId: f.org.id,
       workspaceId: f.wsOut.id,
       token: f.token,
-      label: "admin-mine",
-      creatorId: f.owner.id,
-      assigneeId: admin.id,
+      label: "owner-mine",
+      creatorId: f.admin.id,
+      assigneeId: owner.id,
       dueDate: todayNoon(),
     });
     const othersOut = await seedWork({
@@ -135,15 +135,51 @@ describe("My Work: only the caller's own tasks, only in workspaces they can acce
       workspaceId: f.wsOut.id,
       token: f.token,
       label: "others",
-      creatorId: f.owner.id,
+      creatorId: f.admin.id,
       assigneeId: f.member.id,
       dueDate: todayNoon(),
     });
 
-    const data = await getMyWork(admin.id);
-    expect(idsOf(data.mine)).toContain(mineOut.task.id); // wsOut, which the admin inherits
+    const data = await getMyWork(owner.id);
+    expect(idsOf(data.mine)).toContain(mineOut.task.id); // wsOut, which the owner sees without a row
     expect(idsOf(data.today)).toContain(mineOut.task.id);
     for (const tab of MY_WORK_TABS) expect(idsOf(data[tab])).not.toContain(othersOut.task.id);
+    expect(data.mine.find((r) => r.task.id === mineOut.task.id)!.editable).toBe(true);
+    expect(await db.workspaceMember.count({ where: { userId: owner.id } })).toBe(0);
+  });
+
+  it("an ADMIN sees their own tasks only in the spaces they are in: the rest stays hidden until they are put in", async () => {
+    const f = await makeScopedOrg();
+    const admin = f.admin;
+    const mk = (workspaceId: string, label: string) =>
+      seedWork({
+        orgId: f.org.id,
+        workspaceId,
+        token: f.token,
+        label,
+        creatorId: f.owner.id,
+        assigneeId: admin.id,
+        dueDate: todayNoon(),
+      });
+    const inWsIn = await mk(f.wsIn.id, "admin-in");
+    const inWsOut = await mk(f.wsOut.id, "admin-out");
+
+    // no row anywhere: an ADMIN's rank opens nothing, even work assigned to them
+    const none = await getMyWork(admin.id);
+    for (const tab of MY_WORK_TABS) {
+      expect(idsOf(none[tab]), tab).not.toContain(inWsIn.task.id);
+      expect(idsOf(none[tab]), tab).not.toContain(inWsOut.task.id);
+    }
+
+    await joinWorkspace(admin.id, f.wsIn.id);
+    const some = await getMyWork(admin.id);
+    expect(idsOf(some.mine)).toContain(inWsIn.task.id);
+    expect(idsOf(some.mine)).not.toContain(inWsOut.task.id);
+    // an ADMIN who is in the space writes there even with a plain MEMBER row
+    expect(some.mine.find((r) => r.task.id === inWsIn.task.id)!.editable).toBe(true);
+
+    await joinWorkspace(admin.id, f.wsOut.id);
+    expect(idsOf((await getMyWork(admin.id)).mine)).toEqual(expect.arrayContaining([inWsIn.task.id, inWsOut.task.id]));
   });
 
   it("GUESTs keep read-only rows; members get editable rows", async () => {

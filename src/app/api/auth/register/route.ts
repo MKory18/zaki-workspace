@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
-import { db } from "@/server/db";
 import { startSession } from "@/server/auth";
 import { apiError, withApi } from "@/server/api";
 import { registerSchema } from "@/server/validation";
-import { joinByCode, registerOrganization } from "@/server/services/orgs";
-import { dispatchEvent } from "@/server/services/n8n";
+import { registerOrganization, registrationOpen } from "@/server/services/orgs";
 import { FixedWindowLimiter, REGISTER_LIMIT, RateLimitedError, clientIp } from "@/server/rate-limit";
 
 const registerLimiter = new FixedWindowLimiter(REGISTER_LIMIT);
 
-/** Bootstrap (create org, OWNER) or self-serve join (invitation code, MEMBER). */
+/** 410: the endpoint (or the mode) is retired for good, not merely refused for this caller. */
+function gone(): NextResponse {
+  return NextResponse.json({ error: "gone", message: "auth.registration_closed" }, { status: 410 });
+}
+
+/**
+ * First-run bootstrap ONLY: while no organization exists at all, creates the company and its
+ * OWNER (fully onboarded) and signs them in. Once any organization exists the answer is
+ * 403 `auth.registration_closed` — accounts are created by the owner inside the app.
+ * Joining an organization with its invitation code is retired: 410, always.
+ */
 export async function POST(req: Request) {
   return withApi(async () => {
     const key = `ip:${clientIp(req)}`;
@@ -23,6 +31,9 @@ export async function POST(req: Request) {
     } catch {
       return apiError("validation.failed", "invalid JSON");
     }
+    if (typeof body === "object" && body !== null && "joinCode" in body) return gone();
+    if (!(await registrationOpen())) return apiError("forbidden", "auth.registration_closed");
+
     const parsed = registerSchema.safeParse(body);
     if (!parsed.success) {
       return apiError(
@@ -31,14 +42,10 @@ export async function POST(req: Request) {
         parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
       );
     }
-    const result =
-      parsed.data.mode === "join"
-        ? await joinByCode(parsed.data).then(async (join) => {
-            await dispatchEvent(join.orgId, "member.joined", { userId: join.userId });
-            return join;
-          })
-        : await registerOrganization(parsed.data);
+    if (parsed.data.mode === "join") return gone();
+    // registerOrganization re-checks under a lock: two simultaneous first runs make ONE company
+    const result = await registerOrganization(parsed.data);
     await startSession(result.userId);
-    return NextResponse.json({ ok: true }, { status: 201 });
+    return NextResponse.json({ ok: true, next: "/" }, { status: 201 });
   });
 }

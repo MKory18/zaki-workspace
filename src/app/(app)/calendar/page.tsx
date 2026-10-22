@@ -6,7 +6,7 @@ import {
   queryTasksForView,
   resolveWorkspaceView,
 } from "@/server/services/views";
-import { currentUser } from "@/server/auth";
+import { pageUser } from "@/server/auth";
 import { monthName } from "@/lib/format";
 import { CalendarGrid, type CalTask } from "@/components/calendar-grid";
 import { getServerT } from "@/lib/i18n/server";
@@ -32,7 +32,7 @@ export default async function CalendarPage({
   }
 
   const ctx = view.ctx;
-  const user = await currentUser();
+  const user = await pageUser();
   if (!user) redirect("/login");
 
   const month = /^\d{4}-\d{2}$/.test(searchParams.month ?? "") ? searchParams.month! : new Date().toISOString().slice(0, 7);

@@ -10,8 +10,8 @@ const querySchema = z.object({
 
 /**
  * GET: connection status (any org member); `?files=1` appends the read-only Drive
- * file list, which is org OWNER/ADMIN only (guests and plain members get 403,
- * whether or not Drive is connected).
+ * file list, which needs the `integrations.manage` capability (the owner, admins by default;
+ * guests and everybody without the switch get 403, whether or not Drive is connected).
  */
 export async function GET(req: Request) {
   return withApi(async () => {

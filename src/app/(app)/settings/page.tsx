@@ -1,40 +1,39 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Globe, KeyRound, Lock, Users } from "lucide-react";
-import { currentUser } from "@/server/auth";
+import { pageActor } from "@/app/(app)/_access";
 import { fmtDMY } from "@/lib/format";
 import { db } from "@/server/db";
+import { actorCan } from "@/server/policy/actor";
 import { getServerT } from "@/lib/i18n/server";
+import { ROLE_KEYS } from "@/lib/i18n/roles";
 import { getGoogleStatus } from "@/server/services/google";
 import { getIntegration } from "@/server/services/integrations";
-import { JoinCodePanel } from "@/components/join-code-panel";
 import { OrgNameForm } from "@/components/org-name-form";
 import { IntegrationBadge } from "@/components/integration-badge";
 
 export default async function SettingsPage() {
   const { t } = getServerT();
-  const user = await currentUser();
-  if (!user) redirect("/login");
+  const { actor } = await pageActor();
 
-  const org = await db.organizationMember.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: {
-      organizationId: true,
-      role: true,
-      organization: { select: { id: true, name: true, joinCode: true, createdAt: true } },
-    },
+  const org = await db.organization.findUnique({
+    where: { id: actor.orgId },
+    select: { id: true, name: true, createdAt: true },
   });
   if (!org) redirect("/login");
 
-  const [telegram, n8n, google] = await Promise.all([
-    getIntegration(org.organizationId, "TELEGRAM"),
-    getIntegration(org.organizationId, "N8N"),
-    getGoogleStatus(org.organizationId),
+  const [telegram, n8n, google, membersCount] = await Promise.all([
+    getIntegration(org.id, "TELEGRAM"),
+    getIntegration(org.id, "N8N"),
+    getGoogleStatus(org.id),
+    // only people who can still use the app: a suspended or offboarded person is not "a member" here
+    db.organizationMember.count({ where: { organizationId: org.id, status: "ACTIVE" } }),
   ]);
-  const membersCount = await db.organizationMember.count({ where: { organizationId: org.organizationId } });
 
-  const isManager = org.role === "OWNER" || org.role === "ADMIN";
+  // Renaming the organization is the OWNER's alone (the API refuses everybody else, so it is not offered).
+  const canRename = actor.isOwner;
+  // The team manager belongs to whoever holds the capability; everybody else gets the plain directory.
+  const manageTeam = actorCan(actor, "users.manage");
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
@@ -51,34 +50,21 @@ export default async function SettingsPage() {
           </span>
           <h2 className="text-sm font-semibold">{t("settings.org")}</h2>
         </div>
-        {isManager ? (
-          <OrgNameForm organizationId={org.organizationId} initialName={org.organization.name} />
-        ) : (
-          <p className="text-sm">{org.organization.name}</p>
-        )}
+        {canRename ? <OrgNameForm organizationId={org.id} initialName={org.name} /> : <p className="text-sm">{org.name}</p>}
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
-          <span>{t("settings.role")}: <b className="text-fg">{org.role}</b></span>
+          <span>
+            {t("settings.role")}: <b className="text-fg">{t(ROLE_KEYS[actor.role] ?? "role.member")}</b>
+          </span>
           <span aria-hidden>·</span>
-          <span>{t("settings.createdAt")}: {fmtDMY(org.organization.createdAt, "ar")}</span>
+          <span>
+            {t("settings.createdAt")}: {fmtDMY(org.createdAt, "ar")}
+          </span>
         </div>
-        {isManager && (
-          <div className="space-y-2">
-            <JoinCodePanel organizationId={org.organizationId} initialCode={org.organization.joinCode} />
-            <p className="text-[10px] text-muted">{t("settings.joinHint")}</p>
-          </div>
-        )}
         <div className="flex items-center gap-2 text-xs">
-          {isManager ? (
-            <Link href="/members" className="inline-flex items-center gap-1.5 text-accent hover:underline">
-              <Users className="size-3.5" />
-              {t("settings.membersLink", { n: membersCount })}
-            </Link>
-          ) : (
-            <Link href="/teams" className="inline-flex items-center gap-1.5 text-accent hover:underline">
-              <Users className="size-3.5" />
-              {t("settings.membersLink", { n: membersCount })}
-            </Link>
-          )}
+          <Link href={manageTeam ? "/members" : "/teams"} className="inline-flex items-center gap-1.5 text-accent hover:underline">
+            <Users className="size-3.5" />
+            {t("settings.membersLink", { n: membersCount })}
+          </Link>
         </div>
       </section>
 

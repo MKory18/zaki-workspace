@@ -89,9 +89,32 @@ export const profileSchema = z.object({
   locale: z.literal("ar").optional(),
 });
 
-export const passwordChangeSchema = z.object({
-  currentPassword: z.string().min(1),
-  newPassword: passwordShape,
-});
+/** Changing one's own password (the onboarding and the profile page): the new one must be new. */
+export const passwordChangeSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(200),
+    newPassword: passwordShape,
+  })
+  .refine((v) => v.newPassword !== v.currentPassword, { path: ["newPassword"], message: "onboarding.err_same" });
+
+/**
+ * Sign-in: `identifier` is a username OR an e-mail address (both are stored lower-case, so it is
+ * trimmed and lower-cased here). `{ email, password }`, the body every client sent before usernames
+ * existed, is still accepted and means the same thing.
+ */
+export const loginSchema = z
+  .object({
+    identifier: z.string().max(255).optional(),
+    email: z.string().max(255).optional(),
+    password: z.string().min(1).max(200),
+  })
+  .transform((v, ctx) => {
+    const identifier = (v.identifier ?? v.email ?? "").trim().toLowerCase();
+    if (!identifier) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["identifier"], message: "login.identifier_required" });
+      return z.NEVER;
+    }
+    return { identifier, password: v.password };
+  });
 
 export const ideaStatuses = ["NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED"] as const;

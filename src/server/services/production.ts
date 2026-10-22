@@ -3,11 +3,14 @@ import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, audit } from "@/server/auth";
 import { canManageOrg } from "@/server/services/orgs";
 import { assertCanWrite } from "@/server/services/guest-guard";
+import { assertActiveAssignee } from "@/server/services/active-people";
 
 /**
  * Daily production. Reading the checklist and the routine list stays open to every
  * org member; every write (tick a routine off, create/edit/delete one) is refused to
  * org GUESTs with `guest.readonly`, and managing routines is OWNER/ADMIN only.
+ * A routine is only ever handed to an ACTIVE member of the organization; one that somebody
+ * already holds stays readable (and editable around them) after they are suspended or leave.
  */
 
 /** Local calendar day string "YYYY-MM-DD" (the whole app runs on one machine). */
@@ -135,12 +138,14 @@ function weekdaysToCsv(days: number[] | undefined): string {
 }
 
 async function assertRoutineOrg(orgId: string, routineId: string) {
-	const r = await db.routine.findFirst({ where: { id: routineId, orgId }, select: { id: true } });
+	const r = await db.routine.findFirst({ where: { id: routineId, orgId }, select: { id: true, assigneeId: true } });
 	if (!r) throw new NotFoundError("routine.not_found");
+	return r;
 }
 
 export async function createRoutine(ctx: { orgId: string; userId: string }, input: z.infer<typeof routineSchema>) {
 	await assertCanManageRoutines(ctx);
+	if (input.assigneeId) await assertActiveAssignee(ctx.orgId, input.assigneeId);
 	const routine = await db.routine.create({
 		data: {
 			orgId: ctx.orgId,
@@ -159,7 +164,9 @@ export async function createRoutine(ctx: { orgId: string; userId: string }, inpu
 
 export async function updateRoutine(ctx: { orgId: string; userId: string }, id: string, input: z.infer<typeof routineSchema>) {
 	await assertCanManageRoutines(ctx);
-	await assertRoutineOrg(ctx.orgId, id);
+	const current = await assertRoutineOrg(ctx.orgId, id);
+	// a NEW assignee must be active; re-sending the current one (who may have left since) changes nothing
+	if (input.assigneeId && input.assigneeId !== current.assigneeId) await assertActiveAssignee(ctx.orgId, input.assigneeId);
 	await db.routine.update({
 		where: { id },
 		data: {
@@ -212,11 +219,12 @@ export async function setRoutineDone(
 	}
 }
 
+/** The person's role in the organization. A suspended or offboarded member has none: they are "not a member". */
 export async function orgRoleOf(orgId: string, userId: string) {
 	const m = await db.organizationMember.findUnique({
 		where: { organizationId_userId: { organizationId: orgId, userId } },
-		select: { role: true },
+		select: { role: true, status: true },
 	});
-	if (!m) throw new ForbiddenError("not_org_member");
+	if (!m || m.status !== "ACTIVE") throw new ForbiddenError("not_org_member");
 	return m.role;
 }

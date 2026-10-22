@@ -55,45 +55,55 @@ describe("middleware", () => {
   }
 
   it("rejects a cross-site write to the API with 403", async () => {
-    const res = middleware(req("/api/tasks", { method: "POST", headers: { origin: "https://evil.example" }, cookie: true }));
+    const res = await middleware(req("/api/tasks", { method: "POST", headers: { origin: "https://evil.example" }, cookie: true }));
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ error: "forbidden", message: "origin.mismatch" });
   });
 
-  it("rejects a cross-site LOGIN attempt too (login CSRF)", () => {
-    const res = middleware(req("/api/auth/login", { method: "POST", headers: { origin: "https://evil.example" } }));
+  it("rejects a cross-site LOGIN attempt too (login CSRF)", async () => {
+    const res = await middleware(req("/api/auth/login", { method: "POST", headers: { origin: "https://evil.example" } }));
     expect(res.status).toBe(403);
   });
 
-  it("lets same-origin writes through", () => {
-    const res = middleware(req("/api/tasks", { method: "POST", headers: { origin: "http://localhost:3000" }, cookie: true }));
+  it("lets same-origin writes through", async () => {
+    const res = await middleware(req("/api/tasks", { method: "POST", headers: { origin: "http://localhost:3000" }, cookie: true }));
     expect(res.status).toBe(200);
     expect(res.headers.get("x-middleware-next")).toBe("1");
   });
 
-  it("does not apply the browser origin rule to machine-to-machine endpoints", () => {
-    const inbound = middleware(req("/api/integrations/n8n/inbound", { method: "POST", headers: { origin: "https://n8n.example" } }));
+  it("does not apply the browser origin rule to machine-to-machine endpoints", async () => {
+    const inbound = await middleware(req("/api/integrations/n8n/inbound", { method: "POST", headers: { origin: "https://n8n.example" } }));
     expect(inbound.headers.get("x-middleware-next")).toBe("1");
-    const v1 = middleware(req("/api/v1/ideas", { method: "POST", headers: { origin: "https://other.example" } }));
+    const v1 = await middleware(req("/api/v1/ideas", { method: "POST", headers: { origin: "https://other.example" } }));
     expect(v1.headers.get("x-middleware-next")).toBe("1");
   });
 
   it("the machine-endpoint exemption has a path boundary (a look-alike path is not exempt)", async () => {
     const evil = { origin: "https://evil.example" };
     for (const path of ["/api/healthx", "/api/health-check", "/api/v1x/ideas", "/api/integrations/n8n/inbound-evil", "/api/integrations/n8n/inboundx"]) {
-      const res = middleware(req(path, { method: "POST", headers: evil, cookie: true }));
+      const res = await middleware(req(path, { method: "POST", headers: evil, cookie: true }));
       expect(res.status, path).toBe(403);
     }
     // the real ones, with or without a trailing slash or sub-path
     for (const path of ["/api/health", "/api/health/", "/api/integrations/n8n/inbound", "/api/integrations/n8n/inbound/", "/api/v1/ideas", "/api/v1"]) {
-      const res = middleware(req(path, { method: "POST", headers: evil }));
+      const res = await middleware(req(path, { method: "POST", headers: evil }));
       expect(res.headers.get("x-middleware-next"), path).toBe("1");
     }
   });
 
-  it("still redirects anonymous page requests to /login", () => {
-    const res = middleware(req("/projects"));
+  it("still redirects anonymous page requests to /login", async () => {
+    const res = await middleware(req("/projects"));
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/login?next=%2Fprojects");
+  });
+
+  it("the sign-in pages and their API stay public", async () => {
+    for (const path of ["/login", "/register"]) {
+      expect((await middleware(req(path))).headers.get("x-middleware-next"), path).toBe("1");
+    }
+    for (const path of ["/api/auth/login", "/api/auth/register"]) {
+      const res = await middleware(req(path, { method: "POST", headers: { origin: "http://localhost:3000" } }));
+      expect(res.headers.get("x-middleware-next"), path).toBe("1");
+    }
   });
 });

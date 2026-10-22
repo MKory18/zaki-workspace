@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation";
-import { currentUser, ForbiddenError } from "@/server/auth";
-import { db } from "@/server/db";
+import { pageActor } from "@/app/(app)/_access";
 import { getServerT } from "@/lib/i18n/server";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { loadAnalytics } from "@/server/services/analytics";
@@ -9,17 +7,10 @@ import type { TaskPriority, IdeaStatus } from "@prisma/client";
 
 export default async function AnalyticsPage() {
   const { t } = getServerT();
-  const user = await currentUser();
-  if (!user) redirect("/login");
-  const membership = await db.organizationMember.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: { organizationId: true, role: true },
-  });
-  if (!membership) throw new ForbiddenError("not_org_member");
-  // numbers for the active org (oldest membership), over the workspaces the user can open
+  const { user, actor } = await pageActor();
+  // numbers for the active org (oldest ACTIVE membership), over the workspaces the user can open
   const wsScope = await accessibleWorkspaceIds(user.id);
-  const data = await loadAnalytics(membership.organizationId, wsScope);
+  const data = await loadAnalytics(actor.orgId, wsScope);
   const byPriority = new Map(data.byPriority.map((row) => [row.priority, row._count._all]));
   const byStatus = new Map(data.byStatus30.map((row) => [row.status, row._count._all]));
   const maxWorkload = Math.max(1, ...data.assignees.map((a) => a._count._all));

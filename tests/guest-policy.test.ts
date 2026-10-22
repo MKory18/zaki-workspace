@@ -4,21 +4,24 @@ import { assertCanWrite, assertNotGuest, isGuest } from "@/server/services/guest
 import { canEditTicket } from "@/server/services/tickets";
 
 describe("guest guard", () => {
+  // every rank except the external partner (the LEAD rank is new in Phase 1)
+  const STAFF = ["OWNER", "ADMIN", "LEAD", "MEMBER"];
+
   it("only the GUEST role is a guest", () => {
     expect(isGuest({ orgRole: "GUEST" })).toBe(true);
-    for (const role of ["OWNER", "ADMIN", "MEMBER"]) expect(isGuest({ orgRole: role })).toBe(false);
+    for (const role of STAFF) expect(isGuest({ orgRole: role }), role).toBe(false);
   });
 
   it("assertCanWrite refuses guests with the read-only message and lets everyone else through", () => {
     expect(() => assertCanWrite({ orgRole: "GUEST" })).toThrowError(ForbiddenError);
     expect(() => assertCanWrite({ orgRole: "GUEST" })).toThrowError("guest.readonly");
-    for (const role of ["OWNER", "ADMIN", "MEMBER"]) expect(() => assertCanWrite({ orgRole: role })).not.toThrow();
+    for (const role of STAFF) expect(() => assertCanWrite({ orgRole: role }), role).not.toThrow();
   });
 
   it("assertNotGuest refuses guests, with a custom message when given", () => {
     expect(() => assertNotGuest({ orgRole: "GUEST" })).toThrowError("guest.no_access");
     expect(() => assertNotGuest({ orgRole: "GUEST" }, "chat.guest_forbidden")).toThrowError("chat.guest_forbidden");
-    for (const role of ["OWNER", "ADMIN", "MEMBER"]) expect(() => assertNotGuest({ orgRole: role })).not.toThrow();
+    for (const role of STAFF) expect(() => assertNotGuest({ orgRole: role }), role).not.toThrow();
   });
 });
 

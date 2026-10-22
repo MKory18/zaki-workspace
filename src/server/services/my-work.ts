@@ -59,8 +59,9 @@ export async function getMyWork(userId: string): Promise<MyWorkData> {
   for (const tab of MY_WORK_TABS) results[tab] = [];
 
   const [memberships, accessible] = await Promise.all([
+    // only organizations where the person is ACTIVE: a suspended or offboarded membership shows nothing
     db.organizationMember.findMany({
-      where: { userId },
+      where: { userId, status: "ACTIVE" },
       select: { organizationId: true, role: true },
     }),
     accessibleWorkspaceIds(userId),
@@ -73,7 +74,7 @@ export async function getMyWork(userId: string): Promise<MyWorkData> {
       where: { id: { in: accessible } },
       select: { id: true, organizationId: true },
     }),
-    // the user's own row in each of them (none for the workspaces an org OWNER/ADMIN inherits)
+    // the user's own row in each of them (none for a space the org OWNER sees without being put in it)
     db.workspaceMember.findMany({
       where: { userId, workspaceId: { in: accessible } },
       select: { workspaceId: true, role: true },

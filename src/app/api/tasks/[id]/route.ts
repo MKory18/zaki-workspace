@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { requireWorkspace, audit, NotFoundError, ForbiddenError } from "@/server/auth";
+import { requireWorkspace, audit, NotFoundError } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { parseJson, priorities, taskTypes } from "@/server/validation";
 import { updateTask, deleteTask } from "@/server/services/tasks";
+import { assertActiveAssignee } from "@/server/services/active-people";
 import { notifyAssignment } from "@/server/notify";
 
 /** Resolves a task id to its workspace for membership checks. */
@@ -62,18 +63,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const input = await parseJson(patchSchema, req);
     const wsId = await taskWorkspace(params.id);
     const ctx = await requireWorkspace(wsId, ["ADMIN", "MEMBER"]);
-    // assignee must belong to the org (never assign to strangers)
-    if (input.assigneeId) {
-      const member = await db.organizationMember.findFirst({
-        where: { organizationId: ctx.orgId, userId: input.assigneeId },
-        select: { id: true },
-      });
-      if (!member) throw new ForbiddenError("assignee.not_member");
-    }
     const prevAssignee = await db.task.findUnique({
       where: { id: params.id },
       select: { assigneeId: true, number: true, orgId: true },
     });
+    // Handing the task to somebody NEW: they must be an ACTIVE member of the org (never a stranger,
+    // never someone who was suspended or has left). Re-sending the current assignee, who may have
+    // been suspended since, changes nothing: work somebody holds stays editable until it is moved.
+    if (input.assigneeId && input.assigneeId !== prevAssignee?.assigneeId) {
+      await assertActiveAssignee(ctx.orgId, input.assigneeId);
+    }
     const task = await updateTask(ctx, params.id, {
       title: input.title,
       description: input.description ?? undefined,

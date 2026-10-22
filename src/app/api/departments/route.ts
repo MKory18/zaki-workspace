@@ -2,16 +2,17 @@ import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { activeOrgCtx } from "@/server/services/integrations";
+import { directoryContext } from "@/app/api/_access";
 import {
   createDepartment,
   createDepartmentSchema,
   listDepartments,
 } from "@/server/services/departments";
 
-/** GET: the departments with their members (a staff directory, so guests get 403 from the service). */
+/** GET: the departments with their members (a staff directory: `directory.view`, and guests get 403 `guest.no_access`). */
 export async function GET() {
   return withApi(async () => {
-    const ctx = await activeOrgCtx();
+    const ctx = await directoryContext();
     return NextResponse.json({ departments: await listDepartments(ctx) });
   });
 }

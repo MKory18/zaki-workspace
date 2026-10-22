@@ -1,5 +1,19 @@
 import { db } from "./db";
 
+/**
+ * Only people who are IN receive notifications. A suspended or offboarded person gets nothing new
+ * (a comment on their old task would otherwise land in their notifications with its text).
+ */
+async function activeRecipients(userIds: readonly string[]): Promise<string[]> {
+  if (userIds.length === 0) return [];
+  const rows = await db.organizationMember.findMany({
+    where: { userId: { in: [...userIds] }, status: "ACTIVE" },
+    select: { userId: true },
+  });
+  const active = new Set(rows.map((r) => r.userId));
+  return userIds.filter((id) => active.has(id));
+}
+
 /** Generic in-app notification writer (bell UI maps type → localized label). */
 export async function pushNotification(input: {
   userId: string;
@@ -9,6 +23,7 @@ export async function pushNotification(input: {
   taskId?: string | null;
   linkUrl?: string | null;
 }): Promise<void> {
+  if ((await activeRecipients([input.userId])).length === 0) return;
   await db.notification.create({
     data: {
       userId: input.userId,
@@ -32,7 +47,7 @@ export async function pushNotificationToMany(
     linkUrl?: string | null;
   },
 ): Promise<void> {
-  const unique = [...new Set(userIds)];
+  const unique = await activeRecipients([...new Set(userIds)]);
   if (unique.length === 0) return;
   await db.notification.createMany({
     data: unique.map((userId) => ({

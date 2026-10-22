@@ -6,12 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { apiPost, ApiError } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
+import { safeNextPath } from "@/lib/safe-next";
 
-export function AuthForm({ mode }: { mode: "login" | "register" }) {
+/**
+ * Sign-in (username or e-mail + password) and the first-run set-up (the very first company and its
+ * owner). Self-registration and joining with a code are closed: the owner creates every account.
+ */
+export function AuthForm({ mode, firstRun = false }: { mode: "login" | "register"; firstRun?: boolean }) {
   const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [joinMode, setJoinMode] = useState<null | "create" | "join">(null); // null → chooser
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -21,15 +25,26 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     const data = Object.fromEntries(form.entries());
     try {
       if (mode === "login") {
-        await apiPost("/api/auth/login", { email: data.email, password: data.password });
+        const res = await apiPost<{ ok: true; next?: string }>("/api/auth/login", {
+          identifier: data.identifier,
+          password: data.password,
+        });
+        // where the person wanted to go (a path on this site only), through the onboarding if it is owed
+        const wanted = safeNextPath(new URLSearchParams(window.location.search).get("next"));
+        window.location.href =
+          res.next === "/onboarding"
+            ? `/onboarding${wanted === "/" ? "" : `?next=${encodeURIComponent(wanted)}`}`
+            : wanted;
       } else {
-        const payload =
-          joinMode === "join"
-            ? { email: data.email, name: data.name, password: data.password, jobTitle: data.jobTitle, joinCode: data.joinCode }
-            : { email: data.email, name: data.name, password: data.password, jobTitle: data.jobTitle, orgName: data.orgName };
-        await apiPost("/api/auth/register", payload);
+        await apiPost("/api/auth/register", {
+          email: data.email,
+          name: data.name,
+          password: data.password,
+          jobTitle: data.jobTitle,
+          orgName: data.orgName,
+        });
+        window.location.href = "/";
       }
-      window.location.href = "/";
     } catch (err) {
       // show the server's known error keys in Arabic; unknown → generic message
       let msg = t("common.error");
@@ -49,120 +64,89 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-surface-1 px-4">
+    <div className="flex min-h-dvh items-center justify-center bg-surface-1 px-4 py-6">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-between">
           <Logo />
         </div>
 
-        <form
-          onSubmit={submit}
-          className="space-y-4 rounded-xl border border-border bg-surface p-6 shadow-sm"
-        >
-          {mode === "register" && joinMode === null ? (
+        <form onSubmit={submit} className="space-y-4 rounded-xl border border-border bg-surface p-6 shadow-sm">
+          {mode === "login" ? (
             <>
-              <p className="text-lg font-semibold text-fg">{t("auth.register")}</p>
-              <button
-                type="button"
-                onClick={() => setJoinMode("create")}
-                className="w-full rounded-lg border border-border bg-surface-1 px-3 py-3 text-start hover:border-accent"
-              >
-                <span className="block text-sm font-medium text-fg">{t("auth.createOrgTitle")}</span>
-                <span className="block text-xs text-muted">{t("auth.createOrgHint")}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setJoinMode("join")}
-                className="w-full rounded-lg border border-border bg-surface-1 px-3 py-3 text-start hover:border-accent"
-              >
-                <span className="block text-sm font-medium text-fg">{t("auth.joinOrgTitle")}</span>
-                <span className="block text-xs text-muted">{t("auth.joinOrgHint")}</span>
-              </button>
-          <p className="text-center text-xs text-fg-muted">
-            {t("auth.haveAccount")}
-            <a href="/login" className="ms-1 text-accent hover:underline">
-              {t("auth.login")}
-            </a>
-          </p>
-            </>
-          ) : null}
-
-          {mode === "login" || joinMode !== null ? (
-            <p className="text-lg font-semibold text-fg">
-              {mode === "login" ? t("auth.login") : joinMode === "join" ? t("auth.joinOrgTitle") : t("auth.createOrgTitle")}
-            </p>
-          ) : null}
-
-          {mode === "register" && joinMode !== null ? (
-            <>
-              <div>
-                <Label>{t("auth.name")}</Label>
-                <Input name="name" required maxLength={100} autoComplete="name" />
-              </div>
-              <div>
-                <Label>{t("auth.jobTitle")}</Label>
-                <Input name="jobTitle" maxLength={60} placeholder={t("auth.jobTitlePlaceholder")} />
-              </div>
-              {joinMode === "join" ? (
-                <div>
-                  <Label>{t("auth.joinCode")}</Label>
-                  <Input name="joinCode" required minLength={4} maxLength={12} className="uppercase" autoComplete="off" />
-                </div>
-              ) : (
-                <div>
-                  <Label>{t("auth.orgName")}</Label>
-                  <Input name="orgName" required maxLength={120} />
-                </div>
-              )}
-            </>
-          ) : null}
-
-          {mode === "login" || joinMode !== null ? (
-            <>
-              <div>
-                <Label>{t("auth.email")}</Label>
-                <Input name="email" type="email" required autoComplete="email" />
-              </div>
-              <div>
-                <Label>{t("auth.password")}</Label>
+              <p className="text-lg font-semibold text-fg">{t("auth.login")}</p>
+              <label className="block">
+                <Label>{t("login.identifier")}</Label>
                 <Input
-                  name="password"
-                  type="password"
+                  name="identifier"
                   required
-                  minLength={mode === "register" ? 8 : 1}
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  maxLength={255}
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  dir="ltr"
+                  className="h-11 text-base"
                 />
-                {mode === "register" ? (
-                  <p className="mt-1 text-[10px] text-muted">{t("auth.passwordRule")}</p>
-                ) : null}
-              </div>
+              </label>
+              <label className="block">
+                <Label>{t("auth.password")}</Label>
+                <Input name="password" type="password" required autoComplete="current-password" dir="ltr" className="h-11 text-base" />
+              </label>
             </>
-          ) : null}
+          ) : (
+            <>
+              <p className="text-lg font-semibold text-fg">{t("bootstrap.title")}</p>
+              <p className="text-xs leading-5 text-fg-muted">{t("bootstrap.hint")}</p>
+              <label className="block">
+                <Label>{t("auth.orgName")}</Label>
+                <Input name="orgName" required maxLength={120} className="h-11 text-base" />
+              </label>
+              <label className="block">
+                <Label>{t("auth.name")}</Label>
+                <Input name="name" required maxLength={100} autoComplete="name" className="h-11 text-base" />
+              </label>
+              <label className="block">
+                <Label>{t("auth.jobTitle")}</Label>
+                <Input name="jobTitle" maxLength={60} placeholder={t("auth.jobTitlePlaceholder")} className="h-11 text-base" />
+              </label>
+              <label className="block">
+                <Label>{t("auth.email")}</Label>
+                <Input name="email" type="email" required autoComplete="email" dir="ltr" className="h-11 text-base" />
+              </label>
+              <label className="block">
+                <Label>{t("auth.password")}</Label>
+                <Input name="password" type="password" required minLength={8} autoComplete="new-password" dir="ltr" className="h-11 text-base" />
+                <p className="mt-1 text-[10px] text-muted">{t("auth.passwordRule")}</p>
+              </label>
+            </>
+          )}
 
-          {error ? <p className="text-xs text-red-500">{error}</p> : null}
-
-          {mode === "login" || joinMode !== null ? (
-            <Button type="submit" disabled={pending} className="w-full">
-              {mode === "login" ? t("auth.submitLogin") : t("auth.submitRegister")}
-            </Button>
-          ) : null}
-
-          {mode === "register" && joinMode !== null ? (
-            <p className="text-center text-xs text-fg-muted">
-              <button type="button" onClick={() => setJoinMode(null)} className="text-accent hover:underline">
-                {t("auth.backToChoice")}
-              </button>
+          {error ? (
+            <p role="alert" className="text-sm text-red-500">
+              {error}
             </p>
           ) : null}
+
+          <Button type="submit" disabled={pending} className="h-11 w-full text-base">
+            {mode === "login" ? t("auth.submitLogin") : t("auth.submitRegister")}
+          </Button>
 
           {mode === "login" ? (
+            <p className="text-center text-xs leading-5 text-fg-muted">
+              {t("login.no_account")}
+              {firstRun ? (
+                <a href="/register" className="ms-1 block text-accent hover:underline">
+                  {t("login.first_run")}
+                </a>
+              ) : null}
+            </p>
+          ) : (
             <p className="text-center text-xs text-fg-muted">
-              {t("auth.needAccount")}
-              <a href="/register" className="ms-1 text-accent hover:underline">
-                {t("auth.register")}
+              <a href="/login" className="text-accent hover:underline">
+                {t("auth.haveAccount")}
               </a>
             </p>
-          ) : null}
+          )}
         </form>
       </div>
     </div>

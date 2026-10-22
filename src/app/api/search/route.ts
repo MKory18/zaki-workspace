@@ -13,8 +13,9 @@ function sanitize(q: string): string {
 /**
  * Search over the tasks/projects of the workspaces the caller can open.
  * Authorization is enforced in SQL by the same rule every other view uses
- * (`accessibleWorkspaceIds`: org OWNER/ADMIN inherit their org's workspaces,
- * everyone else only the workspaces they were put in) — never client-side.
+ * (`accessibleWorkspaceIds`: the org OWNER sees every workspace of the company, everyone
+ * else — an ADMIN included — only the workspaces they were put in, and only while they are
+ * an ACTIVE member) — never client-side.
  */
 export async function GET(req: Request) {
   return withApi(async () => {
@@ -24,7 +25,7 @@ export async function GET(req: Request) {
     if (q.length < 2) return NextResponse.json({ tasks: [], projects: [] });
 
     const memberships = await db.organizationMember.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, status: "ACTIVE" },
       select: { organizationId: true },
     });
     const orgIds = memberships.map((m) => m.organizationId);

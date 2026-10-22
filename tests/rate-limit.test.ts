@@ -32,6 +32,28 @@ describe("FixedWindowLimiter", () => {
     for (let i = 0; i < 10; i++) expect(l.check("k").ok).toBe(true);
   });
 
+  it("refund() takes back one counted event, never below zero, and keeps the window", () => {
+    let t = 1_000_000;
+    const l = new FixedWindowLimiter({ limit: 2, windowMs: 60_000 }, () => t);
+    const refund = (key: string) => (l as unknown as { refund: (k: string) => void }).refund(key);
+    l.hit("k");
+    l.hit("k");
+    expect(l.check("k").ok).toBe(false);
+    refund("k");
+    expect(l.check("k").ok).toBe(true);
+    l.hit("k");
+    expect(l.check("k").ok).toBe(false);
+    refund("k");
+    refund("k");
+    refund("k"); // more refunds than hits: harmless
+    refund("never-seen");
+    l.hit("k");
+    l.hit("k");
+    expect(l.check("k").ok).toBe(false);
+    t += 60_000;
+    expect(l.check("k").ok).toBe(true); // the window still ends on time
+  });
+
   it("stays bounded under an attack with unique keys", () => {
     const l = new FixedWindowLimiter({ limit: 5, windowMs: 60_000 });
     for (let i = 0; i < 25_000; i++) l.hit(`k${i}`);

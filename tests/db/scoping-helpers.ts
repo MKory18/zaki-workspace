@@ -69,7 +69,9 @@ export async function addTask(
 /**
  * One org (owner, admin, member, guest) with two workspaces:
  *  - `wsIn`  : the plain MEMBER belongs to it
- *  - `wsOut` : the plain MEMBER does NOT belong to it (nobody but org owner/admin can open it)
+ *  - `wsOut` : the plain MEMBER does NOT belong to it (a space is visible only to the people in it
+ *              and to the OWNER, so nobody but the owner can open it until they are put in it)
+ * The ADMIN and the GUEST are in neither: an ADMIN gets no space by rank, only by being put in one.
  * Each workspace holds a project and a task named after `token`.
  */
 export async function makeScopedOrg() {
@@ -97,7 +99,7 @@ export async function makeScopedOrg() {
 export type ScopedOrg = Awaited<ReturnType<typeof makeScopedOrg>>;
 
 /** Adds an existing user to an org with the given role. */
-export async function joinOrg(userId: string, orgId: string, role: "OWNER" | "ADMIN" | "MEMBER" | "GUEST") {
+export async function joinOrg(userId: string, orgId: string, role: "OWNER" | "ADMIN" | "LEAD" | "MEMBER" | "GUEST") {
   return db.organizationMember.create({ data: { organizationId: orgId, userId, role } });
 }
 

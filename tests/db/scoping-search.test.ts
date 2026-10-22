@@ -37,12 +37,16 @@ describe("search: only work in workspaces the caller can access", () => {
     expect(body).toEqual({ tasks: [], projects: [] });
   });
 
-  it("an ADMIN finds the work of every workspace in the org", async () => {
+  it("an ADMIN finds only the work of the spaces they are in: nothing by rank, then just that space", async () => {
     const f = await makeScopedOrg();
     await loginAs(f.admin.id);
+    expect((await search(f.token)).body).toEqual({ tasks: [], projects: [] });
+
+    await joinWorkspace(f.admin.id, f.wsOut.id, "MEMBER");
     const { body } = await search(f.token);
-    expect(body.tasks.map((t) => t.id).sort()).toEqual([f.inside.task.id, f.outside.task.id].sort());
-    expect(body.projects.map((p) => p.id).sort()).toEqual([f.inside.project.id, f.outside.project.id].sort());
+    expect(body.tasks.map((t) => t.id)).toEqual([f.outside.task.id]);
+    expect(body.projects.map((p) => p.id)).toEqual([f.outside.project.id]);
+    expect(JSON.stringify(body)).not.toContain(f.inside.task.id);
   });
 
   it("the OWNER finds the work of every workspace in the org", async () => {
@@ -119,14 +123,28 @@ describe("search: only work in workspaces the caller can access", () => {
     expect(project.workspaceName).toBe(f.wsIn.name);
   });
 
-  it("keeps its existing contract: 401 anonymous, 403 for someone in no org, empty for a one-letter query", async () => {
+  it("keeps its contract: 401 anonymous, 401 for someone with no ACTIVE membership (they are signed out), empty for a one-letter query", async () => {
     const f = await makeScopedOrg();
     logout();
     expect((await search(f.token)).status).toBe(401);
 
+    // someone in no organization has no ACTIVE membership: the session is not honoured (it used to be a 403)
     const stranger = await makeUser();
     await loginAs(stranger.id);
-    expect((await search(f.token)).status).toBe(403);
+    expect((await search(f.token)).status).toBe(401);
+
+    // a suspended person keeps their rows but is signed out at once: the same 401, and nothing is found
+    const suspended = await makeUser({ orgId: f.org.id, role: "MEMBER" });
+    await joinWorkspace(suspended.id, f.wsIn.id);
+    await loginAs(suspended.id);
+    expect((await search(f.token)).status).toBe(200);
+    await db.organizationMember.update({
+      where: { organizationId_userId: { organizationId: f.org.id, userId: suspended.id } },
+      data: { status: "SUSPENDED" },
+    });
+    const refused = await search(f.token);
+    expect(refused.status).toBe(401);
+    expect(JSON.stringify(refused.body)).not.toContain(f.inside.task.id);
 
     await loginAs(f.admin.id);
     const short = await search("a");

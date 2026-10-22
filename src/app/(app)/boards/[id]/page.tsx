@@ -1,4 +1,4 @@
-import { currentUser, ForbiddenError, NotFoundError } from "@/server/auth";
+import { pageUser, ForbiddenError, NotFoundError } from "@/server/auth";
 import { db } from "@/server/db";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { TASK_INCLUDE } from "@/server/services/tasks";
@@ -6,7 +6,7 @@ import { canWriteInWorkspace } from "@/server/workspace-role";
 import { BoardView, type TaskCardData } from "@/components/board-view";
 
 export default async function BoardPage({ params }: { params: { id: string } }) {
-  const user = await currentUser();
+  const user = await pageUser();
   if (!user) return null;
 
   const accessible = await accessibleWorkspaceIds(user.id);
@@ -25,7 +25,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
   if (!board) throw new NotFoundError("board.not_found");
 
   const member = await db.organizationMember.findFirst({
-    where: { organizationId: board.project.workspace.organizationId, userId: user.id },
+    where: { organizationId: board.project.workspace.organizationId, userId: user.id, status: "ACTIVE" },
     select: { role: true },
   });
   if (!member) throw new ForbiddenError("not_org_member");

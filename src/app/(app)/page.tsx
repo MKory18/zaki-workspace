@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   BarChart3,
   CalendarDays,
@@ -24,7 +23,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { db } from "@/server/db";
-import { currentUser } from "@/server/auth";
+import { pageActor } from "@/app/(app)/_access";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { PENDING_PATH } from "@/server/services/files";
 import { getServerT, type ServerT } from "@/lib/i18n/server";
@@ -65,16 +64,16 @@ const TILE: Record<string, { bg: string; text: string }> = {
 
 export default async function HomePage() {
   const { t, locale } = getServerT();
-  const user = await currentUser();
-  if (!user) redirect("/login");
+  const { user } = await pageActor();
 
   const now = new Date();
   const endOfDay = new Date(now);
   endOfDay.setHours(23, 59, 59, 999);
   const in7 = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
 
+  // only the companies the person is still an ACTIVE member of (a suspended one counts for nothing)
   const orgs = await db.organizationMember.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, status: "ACTIVE" },
     select: { organization: { select: { id: true, name: true } } },
   });
   const orgIds = orgs.map((o) => o.organization.id);
@@ -134,7 +133,8 @@ export default async function HomePage() {
     db.idea.count({ where: { organization: { id: { in: orgIds } } } }),
     db.storedFile.count({ where: { organization: { id: { in: orgIds } }, deletedAt: null, path: { not: PENDING_PATH } } }),
     db.department.count({ where: { orgId: { in: orgIds } } }),
-    db.team.count({ where: { workspace: { organizationId: { in: orgIds } } } }),
+    // teams live inside spaces: count only those of spaces the person can open
+    db.team.count({ where: { workspaceId: { in: wsScope } } }),
     wsIds.length,
     db.routine.count({ where: { orgId: { in: orgIds }, active: true } }),
   ]);

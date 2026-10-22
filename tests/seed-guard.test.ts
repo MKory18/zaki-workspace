@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as guard from "../prisma/seed-guard";
 import {
   DEFAULT_SEED_OWNER_EMAIL,
   assertSeedAllowed,
@@ -109,5 +110,13 @@ describe("the owner's email", () => {
 
   it("can be set, and is normalised the way logins are (trimmed, lower case)", () => {
     expect(resolveOwnerEmail({ SEED_OWNER_EMAIL: "  Boss@Example.ORG " })).toBe("boss@example.org");
+  });
+});
+
+describe("the owner's username", () => {
+  it("is a fixed, lower-case local demo name (sign-in lower-cases what is typed)", () => {
+    const username = (guard as Record<string, unknown>)["DEFAULT_SEED_OWNER_USERNAME"];
+    expect(typeof username).toBe("string");
+    expect(username).toMatch(/^[a-z0-9._-]{3,32}$/);
   });
 });

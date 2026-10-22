@@ -15,19 +15,25 @@ const configSchema = z.object({
 });
 
 /**
- * GET: status + recent outbound/inbound event log. Guests get 403. OWNER/ADMIN get the whole
- * status; a plain member only learns whether n8n is connected (no webhook URL, no event filter).
+ * GET: status + recent outbound/inbound event log. Guests get 403. Whoever holds the
+ * `integrations.manage` capability (the owner, admins by default, anybody the owner switched it on
+ * for) gets the whole status; everybody else only learns whether n8n is connected (no webhook
+ * URL, no event filter). The viewer is passed as a person (`{ userId }`), so the switches decide,
+ * not the rank.
  */
 export async function GET() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
     assertNotGuest(ctx);
-    const [status, events] = await Promise.all([getN8nStatus(ctx.orgId, ctx.orgRole), recentEvents(ctx.orgId)]);
+    const [status, events] = await Promise.all([
+      getN8nStatus(ctx.orgId, { userId: ctx.userId }),
+      recentEvents(ctx.orgId),
+    ]);
     return NextResponse.json({ status, events });
   });
 }
 
-/** POST: configure webhook URL + event filter (OWNER/ADMIN). */
+/** POST: configure webhook URL + event filter (`integrations.manage`). */
 export async function POST(req: Request) {
   return withApi(async () => {
     const input = await parseJson(configSchema, req);

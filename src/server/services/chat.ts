@@ -77,9 +77,10 @@ export const createDmSchema = z.object({
 export async function createDm(ctx: OrgAccessContext, otherUserId: string): Promise<string> {
   await assertChatAllowed(ctx.orgRole);
   if (otherUserId === ctx.userId) throw new ForbiddenError("chat.dm_self");
-  // the other person must be a non-GUEST member of the SAME org (guests cannot chat)
+  // the other person must be an ACTIVE, non-GUEST member of the SAME org (guests cannot chat; a
+  // suspended or offboarded colleague is not somebody you can start a conversation with)
   const other = await db.organizationMember.findFirst({
-    where: { organizationId: ctx.orgId, userId: otherUserId, role: { not: "GUEST" } },
+    where: { organizationId: ctx.orgId, userId: otherUserId, role: { not: "GUEST" }, status: "ACTIVE" },
     select: { userId: true },
   });
   if (!other) throw new NotFoundError("chat.not_org_member");
@@ -110,9 +111,9 @@ export async function createDm(ctx: OrgAccessContext, otherUserId: string): Prom
 export async function createGroup(ctx: OrgAccessContext, input: z.infer<typeof createGroupSchema>): Promise<string> {
   await assertChatAllowed(ctx.orgRole);
   const invited = Array.from(new Set(input.memberIds.filter((id) => id !== ctx.userId)));
-  // invitees must belong to the same org AND not be guests
+  // invitees must be ACTIVE members of the same org AND not be guests
   const valid = await db.organizationMember.findMany({
-    where: { organizationId: ctx.orgId, userId: { in: invited }, role: { not: "GUEST" } },
+    where: { organizationId: ctx.orgId, userId: { in: invited }, role: { not: "GUEST" }, status: "ACTIVE" },
     select: { userId: true },
   });
   if (valid.length === 0) throw new ForbiddenError("chat.group_needs_members");
@@ -133,10 +134,10 @@ export async function createGroup(ctx: OrgAccessContext, input: z.infer<typeof c
   return conv.id;
 }
 
-/** Org-level chat directory (recipients picker; guests excluded — they cannot chat). */
+/** Org-level chat directory (recipients picker; guests excluded — they cannot chat; only ACTIVE people are offered). */
 export async function chatDirectory(orgId: string) {
   return db.organizationMember.findMany({
-    where: { organizationId: orgId, role: { not: "GUEST" } },
+    where: { organizationId: orgId, role: { not: "GUEST" }, status: "ACTIVE" },
     select: {
       userId: true,
       role: true,
@@ -175,7 +176,7 @@ export async function manageGroup(
     }
     if (input.addUserIds?.length) {
       const valid = await tx.organizationMember.findMany({
-        where: { organizationId: ctx.orgId, userId: { in: input.addUserIds }, role: { not: "GUEST" } },
+        where: { organizationId: ctx.orgId, userId: { in: input.addUserIds }, role: { not: "GUEST" }, status: "ACTIVE" },
         select: { userId: true },
       });
       for (const v of valid) {
@@ -339,7 +340,9 @@ export async function listConversations(ctx: OrgAccessContext): Promise<Conversa
       title: true,
       emoji: true,
       updatedAt: true,
+      // only people who are in: a suspended person is not shown to the others (their rows stay for when they return)
       members: {
+        where: { user: { memberships: { some: { organizationId: orgId, status: "ACTIVE" } } } },
         select: { userId: true, lastReadAt: true, user: { select: { id: true, name: true } } },
       },
       messages: {
@@ -424,6 +427,7 @@ export async function conversationDetail(ctx: OrgAccessContext, conversationId: 
       emoji: true,
       createdAt: true,
       members: {
+        where: { user: { memberships: { some: { organizationId: ctx.orgId, status: "ACTIVE" } } } },
         select: {
           userId: true,
           role: true,

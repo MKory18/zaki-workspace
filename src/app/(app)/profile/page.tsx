@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { currentUser } from "@/server/auth";
+import { pageUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { avatarHue } from "@/lib/format";
 import { ProfileForm } from "@/components/profile-form";
 
 export default async function ProfilePage() {
-  const user = await currentUser();
+  const user = await pageUser();
   if (!user) redirect("/login");
   const me = await db.user.findUnique({
     where: { id: user.id },

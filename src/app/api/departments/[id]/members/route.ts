@@ -17,8 +17,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         where: { id: params.id },
         select: { name: true },
       });
+      // Only people who can really be added are told: ACTIVE members of this company. A suspended
+      // colleague or an id from another company would otherwise be sent the department's name.
+      const addable = await db.organizationMember.findMany({
+        where: { organizationId: ctx.orgId, status: "ACTIVE", userId: { in: input.addUserIds } },
+        select: { userId: true },
+      });
       await notifyMembership({
-        userIds: input.addUserIds,
+        userIds: addable.map((m) => m.userId),
         kind: "department",
         title: dept?.name ?? "",
         linkUrl: "/departments",

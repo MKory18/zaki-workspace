@@ -16,9 +16,11 @@ export async function assertOrgManager(orgId: string): Promise<OrgAccessContext>
   const ctx = await requireOrgMember(orgId);
   const member = await db.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId: orgId, userId: ctx.userId } },
-    select: { role: true, capabilities: true, revokedCapabilities: true },
+    select: { role: true, status: true, capabilities: true, revokedCapabilities: true },
   });
-  if (!member || !can(member, "integrations.manage")) throw new ForbiddenError("insufficient_role");
+  if (!member || member.status !== "ACTIVE" || !can(member, "integrations.manage")) {
+    throw new ForbiddenError("insufficient_role");
+  }
   return ctx;
 }
 

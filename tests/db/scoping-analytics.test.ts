@@ -58,17 +58,36 @@ describe("analytics: counted from the caller's organization and accessible works
     expect(data.overdue).toBe(1);
   });
 
-  it("an ADMIN's numbers cover every workspace of the org, still not other orgs'", async () => {
+  it("the OWNER's numbers cover every workspace of the org, still not other orgs'", async () => {
     const f = await makeAnalyticsOrg();
     const other = await makeAnalyticsOrg();
     expect(other.org.id).not.toBe(f.org.id);
 
-    const wsIds = await accessibleWorkspaceIds(f.admin.id);
+    const wsIds = await accessibleWorkspaceIds(f.owner.id);
     const data = await loadAnalytics(f.org.id, wsIds);
     expect(data.workspaces).toBe(2);
     expect(data.projects).toBe(2);
     expect(data.total).toBe(4);
     expect(data.ideas).toBe(3);
+  });
+
+  it("an ADMIN's numbers cover only the spaces they are in (none until put in one), the org's ideas stay visible", async () => {
+    const f = await makeAnalyticsOrg();
+
+    const before = await loadAnalytics(f.org.id, await accessibleWorkspaceIds(f.admin.id));
+    expect(before.workspaces).toBe(0);
+    expect(before.projects).toBe(0);
+    expect(before.total).toBe(0);
+    expect(before.ideas).toBe(3); // ideas belong to the org itself, not to a space
+
+    // put into wsOut only: exactly that space's work (1 open task), nothing from wsIn
+    await joinWorkspace(f.admin.id, f.wsOut.id, "MEMBER");
+    const after = await loadAnalytics(f.org.id, await accessibleWorkspaceIds(f.admin.id));
+    expect(after.workspaces).toBe(1);
+    expect(after.projects).toBe(1);
+    expect(after.total).toBe(1);
+    expect(after.open).toBe(1);
+    expect(after.ideas).toBe(3);
   });
 
   it("someone who belongs to two orgs gets the active org's numbers only, even though their access list spans both", async () => {
@@ -77,7 +96,10 @@ describe("analytics: counted from the caller's organization and accessible works
     await makeIdeas(b.org.id, b.owner.id, ["REJECTED"]);
     const multi = await makeUser({ orgId: a.org.id, role: "MEMBER" });
     await joinWorkspace(multi.id, a.wsIn.id);
+    // an ADMIN of B put into both of B's spaces (an ADMIN inherits nothing: it takes the rows)
     await joinOrg(multi.id, b.org.id, "ADMIN");
+    await joinWorkspace(multi.id, b.wsIn.id);
+    await joinWorkspace(multi.id, b.wsOut.id);
 
     const wsIds = await accessibleWorkspaceIds(multi.id);
     expect(wsIds).toEqual(expect.arrayContaining([a.wsIn.id, b.wsIn.id, b.wsOut.id]));
@@ -154,11 +176,13 @@ describe("analytics: counted from the caller's organization and accessible works
 
   it("an org's numbers do not move when another org adds ideas, workspaces, projects or tasks", async () => {
     const f = await makeAnalyticsOrg();
-    const before = await loadAnalytics(f.org.id, await accessibleWorkspaceIds(f.admin.id));
+    // the OWNER sees every space, so the numbers are real ones (an ADMIN with no rows would count 0 twice)
+    const before = await loadAnalytics(f.org.id, await accessibleWorkspaceIds(f.owner.id));
+    expect(before.total).toBe(4);
     const other = await makeAnalyticsOrg();
     await makeIdeas(other.org.id, other.owner.id, ["NEW", "NEW", "NEW", "UNDER_REVIEW"]);
     await seedWork({ orgId: other.org.id, workspaceId: other.wsIn.id, token: other.token, label: "extra", creatorId: other.owner.id });
-    const after = await loadAnalytics(f.org.id, await accessibleWorkspaceIds(f.admin.id));
+    const after = await loadAnalytics(f.org.id, await accessibleWorkspaceIds(f.owner.id));
     expect(after.ideas).toBe(before.ideas);
     expect(after.workspaces).toBe(before.workspaces);
     expect(after.projects).toBe(before.projects);

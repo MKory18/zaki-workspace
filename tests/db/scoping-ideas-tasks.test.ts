@@ -49,10 +49,38 @@ describe("idea → task: the caller must be able to open the target workspace", 
     expect(after.taskId).toBe(taskId);
   });
 
-  it("an ADMIN can convert someone else's idea into any workspace of the org (they inherit them all)", async () => {
+  it("the OWNER can convert someone else's idea into any workspace of the org (they inherit them all), without a row", async () => {
+    const f = await makeScopedOrg();
+    const idea = await makeIdea(f, f.member.id);
+    await loginAs(f.owner.id);
+    const res = await call(convertRoute.POST, {
+      params: { id: idea.id },
+      body: target(f.outside, f.wsOut.id),
+    });
+    expect(res.status).toBe(200);
+    const task = await db.task.findUniqueOrThrow({ where: { id: (res.json as { taskId: string }).taskId } });
+    expect(task.workspaceId).toBe(f.wsOut.id);
+    // the owner only looked and wrote: no row was made for them in that space
+    expect(await db.workspaceMember.count({ where: { workspaceId: f.wsOut.id, userId: f.owner.id } })).toBe(0);
+  });
+
+  it("an ADMIN converts someone else's idea only into a workspace they are in (not by rank), then can", async () => {
     const f = await makeScopedOrg();
     const idea = await makeIdea(f, f.member.id);
     await loginAs(f.admin.id);
+    // org admins run the ideas, but a space is open only to the people in it: wsOut is not open to this ADMIN
+    const denied = await call(convertRoute.POST, {
+      params: { id: idea.id },
+      body: target(f.outside, f.wsOut.id),
+    });
+    expect(denied.status).toBe(403);
+    expect(denied.json?.["message"]).toBe("not_workspace_member");
+    expect(await tasksIn(f.outside.project.id)).toBe(1); // only the fixture's own task
+    const untouched = await db.idea.findUniqueOrThrow({ where: { id: idea.id } });
+    expect(untouched.status).toBe("NEW");
+    expect(untouched.taskId).toBeNull();
+
+    await joinWorkspace(f.admin.id, f.wsOut.id, "MEMBER");
     const res = await call(convertRoute.POST, {
       params: { id: idea.id },
       body: target(f.outside, f.wsOut.id),
@@ -89,7 +117,8 @@ describe("idea → task: the caller must be able to open the target workspace", 
     const a = await makeScopedOrg();
     const b = await makeScopedOrg();
     const multi = await makeUser({ orgId: a.org.id, role: "MEMBER" });
-    await joinOrg(multi.id, b.org.id, "ADMIN"); // inherits all of org B's workspaces
+    await joinOrg(multi.id, b.org.id, "ADMIN");
+    await joinWorkspace(multi.id, b.wsIn.id); // B's workspace is open to them (an ADMIN takes the row, not the rank)
     const idea = await makeIdea(a, multi.id);
     await loginAs(multi.id);
     const res = await call(convertRoute.POST, {

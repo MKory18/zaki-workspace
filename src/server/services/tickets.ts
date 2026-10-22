@@ -5,6 +5,7 @@ import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/a
 import { nextTaskNumber, type Tx } from "@/server/services/tasks";
 import { pushNotificationToMany } from "@/server/notify";
 import { assertCanWrite } from "@/server/services/guest-guard";
+import { assertActiveAssignee } from "@/server/services/active-people";
 
 /**
  * IT tickets live inside a department. Access policy:
@@ -18,6 +19,9 @@ import { assertCanWrite } from "@/server/services/guest-guard";
  * - everybody else: org-wide visibility is intentional for support desks and any
  *   (non-guest) org member may open a ticket or comment, but may NOT edit or
  *   close somebody else's ticket.
+ * - a ticket is only ever handed to an ACTIVE member of the organization (not a suspended or an
+ *   offboarded person, not a stranger), whoever hands it; a ticket somebody already holds stays
+ *   readable and editable around them until it is moved.
  */
 
 export const TICKET_STATUSES: TicketStatus[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
@@ -134,6 +138,7 @@ export async function createTicket(
   if (input.assigneeId) {
     const ok = dept.memberships.some((m) => m.userId === input.assigneeId) || ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
     if (!ok) throw new ForbiddenError("ticket.assignee_not_member");
+    await assertActiveAssignee(ctx.orgId, input.assigneeId);
   }
   const ticket = await db.$transaction(async (tx) => {
     const number = await nextTicketNumber(ctx.orgId, tx);
@@ -312,6 +317,9 @@ export async function updateTicket(
       ctx.orgRole === "ADMIN" ||
       (dept?.memberships.some((m) => m.userId === input.assigneeId) ?? false);
     if (!ok) throw new ForbiddenError("ticket.assignee_not_member");
+    // handing it to somebody NEW: they must be active (re-sending the current assignee, who may have
+    // been suspended since, changes nothing and is not re-checked)
+    if (input.assigneeId !== ticket.assigneeId) await assertActiveAssignee(ctx.orgId, input.assigneeId);
   }
   if (input.status && !canTransition(ticket.status, input.status)) {
     throw new ForbiddenError("ticket.bad_transition");

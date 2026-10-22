@@ -1,22 +1,62 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { db } from "@/server/db";
 import { audit, startSession, verifyPassword } from "@/server/auth";
 import { apiError, withApi } from "@/server/api";
 import { clientIp } from "@/server/rate-limit";
 import { LoginGuard } from "@/server/login-guard";
+import { loginSchema } from "@/server/validation";
+import { onboardingStateOf } from "@/server/policy/org-settings";
 
-const credentialsSchema = z.object({
-  email: z.string().email().max(255),
-  password: z.string().min(1).max(200),
-});
-
-/** Brute-force guard (policy and reasoning live in login-guard.ts). */
+/**
+ * Brute-force guard (policy and reasoning live in login-guard.ts): the (typed text, address) pair,
+ * the account as a whole (by user id, except from addresses it signed in from before), the
+ * address's failures and its short burst.
+ */
 const guard = new LoginGuard();
 
-/** A real cost-12 bcrypt hash of a throw-away value: unknown e-mails cost the same time as known ones. */
+/** A real cost-12 bcrypt hash of a throw-away value: unknown identifiers cost the same time as known ones. */
 const DUMMY_HASH = "$2a$12$VeIDbFoPFwHKK1UpCnxtEuyhq/uLZ7Ik6NSvJ3XvcS7gwHexWMDJ2";
 
+/**
+ * The account an identifier names: a username or an e-mail address (both stored lower-case and
+ * unique). When the identifier could be either, the reading it looks like wins ("@" = e-mail).
+ */
+async function findAccount(identifier: string) {
+  const rows = await db.user.findMany({
+    where: { OR: [{ username: identifier }, { email: identifier }] },
+    take: 2,
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      passwordHash: true,
+      tokenVersion: true,
+      mustChangePassword: true,
+      transparencyVersion: true,
+      memberships: {
+        where: { status: "ACTIVE" },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        select: { organizationId: true, organization: { select: { settings: true } } },
+      },
+    },
+  });
+  const byEmail = rows.find((r) => r.email === identifier);
+  const byUsername = rows.find((r) => r.username === identifier);
+  return identifier.includes("@") ? (byEmail ?? byUsername) : (byUsername ?? byEmail);
+}
+
+/**
+ * Sign in with `{ identifier, password }` (a username or an e-mail; the old `{ email, password }`
+ * still works). 200 `{ ok, next }` tells the client where to go: "/onboarding" while a temporary
+ * password or the transparency notice is still owed, "/" otherwise.
+ *
+ * An unknown identifier and a wrong password are the same 401. Somebody who proves the password
+ * but is suspended or offboarded gets a clear 403 `auth.account_suspended` and no cookie.
+ * The audit trail never holds a password, nor what was typed into the identifier field for a
+ * failed attempt (people type their password there by mistake): a failure against a real account
+ * is recorded with that account's id.
+ */
 export async function POST(req: Request) {
   return withApi(async () => {
     const ip = clientIp(req);
@@ -28,26 +68,35 @@ export async function POST(req: Request) {
     } catch {
       return apiError("validation.failed", "invalid JSON");
     }
-    const parsed = credentialsSchema.safeParse(body);
+    const parsed = loginSchema.safeParse(body);
     if (!parsed.success) return apiError("auth.required", "invalid_credentials");
 
-    const { password } = parsed.data;
-    const email = parsed.data.email.toLowerCase();
-    const attempt = guard.beginAttempt(ip, email);
+    const { identifier, password } = parsed.data;
+    // The account-wide cap follows the ACCOUNT, whichever of its names was typed (a person with a
+    // username and an e-mail does not get twice the guesses); the (typed text, address) lock follows
+    // what was typed. The lookup is a plain read: the attempt is still counted before the password
+    // is checked.
+    const user = await findAccount(identifier);
+    const attempt = guard.beginAttempt(ip, { typed: identifier, userId: user?.id ?? null });
     try {
-      const user = await db.user.findUnique({
-        where: { email },
-        select: { id: true, passwordHash: true },
-      });
       const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
       if (!user || !passwordOk) {
-        await audit("auth.login_failed", { target: email });
+        await audit("auth.login_failed", { target: user?.id ?? null });
         return apiError("auth.required", "invalid_credentials");
       }
+      const active = user.memberships[0];
+      if (!active) {
+        await audit("auth.login_refused", { actorId: user.id, target: user.id, meta: { reason: "not_active" } });
+        return apiError("forbidden", "auth.account_suspended");
+      }
       attempt.success();
-      await startSession(user.id);
-      await audit("auth.login", { actorId: user.id });
-      return NextResponse.json({ ok: true });
+      await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+      // Sign the session version read BEFORE the password check: a reset or "log out everywhere"
+      // that landed during the check leaves this cookie already stale instead of being undone.
+      await startSession(user.id, { tv: user.tokenVersion });
+      await audit("auth.login", { actorId: user.id, orgId: active.organizationId });
+      const owed = onboardingStateOf(user, active.organization.settings);
+      return NextResponse.json({ ok: true, next: owed.mustChangePassword || owed.transparencyPending ? "/onboarding" : "/" });
     } finally {
       attempt.done();
     }

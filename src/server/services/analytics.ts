@@ -9,6 +9,8 @@ import { db } from "@/server/db";
  *    (an empty list counts nothing — it is never "no filter")
  *  - ideas → the org's ideas. They belong to the organization itself, not to a
  *    workspace, and every member can read them, so no workspace limit applies.
+ *  - the per-person workload counts ACTIVE people only: the open tasks of somebody who is suspended
+ *    or offboarded stay in every total, but they are not a bar of their own.
  * Nothing is ever counted across organizations.
  */
 export async function loadAnalytics(orgId: string, wsIds: string[]) {
@@ -29,7 +31,12 @@ export async function loadAnalytics(orgId: string, wsIds: string[]) {
       db.idea.groupBy({ by: ["status"], where: { orgId }, _count: { _all: true } }),
       db.task.groupBy({
         by: ["assigneeId"],
-        where: { ...scope, completedAt: null, assigneeId: { not: null } },
+        where: {
+          ...scope,
+          completedAt: null,
+          assigneeId: { not: null },
+          assignee: { memberships: { some: { organizationId: orgId, status: "ACTIVE" } } },
+        },
         _count: { _all: true },
         orderBy: { _count: { assigneeId: "desc" } },
         take: 8,

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { currentUser } from "@/server/auth";
+import { pageUser } from "@/server/auth";
 import { MY_WORK_TABS, getMyWork, type MyWorkTab } from "@/server/services/my-work";
 import { TaskRow } from "@/components/task-row";
 import { getServerT } from "@/lib/i18n/server";
@@ -16,7 +16,7 @@ const TAB_KEYS: Record<MyWorkTab, string> = {
 
 export default async function MyWorkPage({ searchParams }: { searchParams: { tab?: string } }) {
   const { t } = getServerT();
-  const user = await currentUser();
+  const user = await pageUser();
   if (!user) redirect("/login");
 
   const wanted = (searchParams.tab ?? "") as MyWorkTab;

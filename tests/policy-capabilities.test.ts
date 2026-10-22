@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CAPABILITIES,
   RANK_DEFAULTS,
+  WIRED_CAPABILITIES,
   can,
   effectiveCapabilities,
   grantProblem,
@@ -100,5 +101,15 @@ describe("onboarding state (the transparency notice)", () => {
     expect(transparencyVersionOf({ transparencyVersion: "two" })).toBe(DEFAULT_TRANSPARENCY_VERSION);
     expect(transparencyVersionOf(null)).toBe(DEFAULT_TRANSPARENCY_VERSION);
     expect(transparencyVersionOf({ transparencyVersion: 3, other: 1 })).toBe(3);
+  });
+});
+
+describe("wired capabilities (the switches the people screen offers)", () => {
+  it("are all real capabilities, never the owner-only archive, and each one is held by some rank by default", () => {
+    for (const c of WIRED_CAPABILITIES) {
+      expect(CAPABILITIES, c).toContain(c);
+      expect(c).not.toBe("archive.view");
+      expect(Object.values(RANK_DEFAULTS).some((list) => list.includes(c)), c).toBe(true);
+    }
   });
 });

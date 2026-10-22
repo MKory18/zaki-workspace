@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
-import { activeOrgCtx } from "@/server/services/integrations";
+import { directoryContext } from "@/app/api/_access";
 import { chatDirectory } from "@/server/services/chat";
-import { assertNotGuest } from "@/server/services/guest-guard";
 
-/** GET: chatable org members (recipients picker). The staff directory is closed to guests (403). */
+/**
+ * GET: chatable org members (recipients picker). It is the staff directory, so it follows the
+ * `directory.view` switch; a guest gets 403 `chat.guest_forbidden`.
+ */
 export async function GET() {
   return withApi(async () => {
-    const ctx = await activeOrgCtx();
-    assertNotGuest(ctx, "chat.guest_forbidden");
+    const ctx = await directoryContext("chat.guest_forbidden");
     const people = await chatDirectory(ctx.orgId);
     return NextResponse.json({
       people: people.filter((p) => p.userId !== ctx.userId),

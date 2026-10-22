@@ -67,6 +67,8 @@ export async function canManageWorkspaceMembers(
   ]);
   if (!om || om.status !== "ACTIVE") return false;
   if (om.role === "OWNER") return true;
+  // an external partner never manages anybody, whatever an old row of theirs says
+  if (om.role === "GUEST") return false;
   // anyone else must be IN the workspace; a workspace admin manages it, and so does an org ADMIN
   // (who outranks a lower row of their own)
   return !!wsMember && (wsMember.role === "ADMIN" || om.role === "ADMIN");
