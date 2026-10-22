@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { decryptSecrets, encryptSecrets, generateSharedSecret, hmacHex, safeEqual } from "../src/server/crypto";
 import { normalizeUpdate } from "../src/server/services/telegram";
@@ -292,17 +294,85 @@ describe("n8n", () => {
 });
 
 describe("google oauth state", () => {
-  it("signs and verifies org+user bound state", () => {
-    const state = signState("org-1", "user-2");
-    const parsed = verifyState(state);
-    expect(parsed).toEqual({ orgId: "org-1", userId: "user-2" });
+  const T0 = new Date("2026-10-22T10:00:00.000Z");
+  const at = (offsetSec: number) => new Date(T0.getTime() + offsetSec * 1000);
+  const parts = (state: string) => state.split(".");
+  const WHO = { orgId: "org-1", userId: "user-2" };
+
+  it("signs and verifies an org+user bound state", () => {
+    expect(verifyState(signState("org-1", "user-2"))).toEqual(WHO);
   });
 
-  it("rejects tampered ids and malformed states", () => {
-    const state = signState("org-1", "user-2");
-    expect(verifyState("org-2.user-2." + state.split(".").pop())).toBeNull();
-    expect(verifyState("nonsense")).toBeNull();
-    // prevent cross-org reuse: a modified payload breaks the signature
-    expect(verifyState("attacker.user-2." + state.split(".").pop())).toBeNull();
+  it("every state is different: a random nonce means the same pair never signs to the same string twice", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 20; i += 1) seen.add(signState("org-1", "user-2"));
+    expect(seen.size).toBe(20);
+  });
+
+  it("carries its issue time and a nonce, and the signature covers every field", () => {
+    const state = signState("org-1", "user-2", T0);
+    const [orgId, userId, iat, nonce, sig] = parts(state) as [string, string, string, string, string];
+    expect([orgId, userId]).toEqual(["org-1", "user-2"]);
+    expect(iat).toBe(String(T0.getTime() / 1000));
+    expect(nonce).toMatch(/^[0-9a-f]{32}$/);
+    expect(sig).toMatch(/^[0-9a-f]{64}$/);
+
+    const withField = (i: number, value: string) => {
+      const p = parts(state);
+      p[i] = value;
+      return p.join(".");
+    };
+    expect(verifyState(withField(0, "org-2"), at(1))).toBeNull(); // another org
+    expect(verifyState(withField(1, "user-9"), at(1))).toBeNull(); // another person
+    expect(verifyState(withField(2, String(Number(iat) + 1)), at(1))).toBeNull(); // re-dating a captured state
+    expect(verifyState(withField(3, "0".repeat(32)), at(1))).toBeNull();
+    expect(verifyState(withField(4, "0".repeat(64)), at(1))).toBeNull();
+    expect(verifyState(state, at(1))).toEqual(WHO);
+  });
+
+  it("rejects malformed states", () => {
+    const state = signState("org-1", "user-2", T0);
+    for (const bad of ["", "nonsense", "a.b.c", "a.b.c.d", `${state}.extra`, state.slice(0, -1), state.toUpperCase(), `.${state}`, "org-1.user-2..."]) {
+      expect(verifyState(bad, at(1)), bad).toBeNull();
+    }
+  });
+
+  it("does not accept the old deterministic format (orgId.userId.signature), which never expired", () => {
+    const legacy = `org-1.user-2.${hmacHex(process.env["AUTH_SECRET"] ?? "", "org-1.user-2")}`;
+    expect(verifyState(legacy, at(1))).toBeNull();
+  });
+
+  it("expires after ten minutes: accepted up to and including 600 s, refused after", () => {
+    const state = signState("org-1", "user-2", T0);
+    for (const ok of [0, 1, 599, 600]) expect(verifyState(state, at(ok)), `${ok}s`).toEqual(WHO);
+    for (const old of [601, 3600, 7 * 24 * 3600]) expect(verifyState(state, at(old)), `${old}s`).toBeNull();
+  });
+
+  it("refuses a state issued in the future, allowing only a few seconds of clock skew", () => {
+    expect(verifyState(signState("org-1", "user-2", at(300)), T0)).toBeNull();
+    expect(verifyState(signState("org-1", "user-2", at(120)), T0)).toBeNull();
+    expect(verifyState(signState("org-1", "user-2", at(3)), T0)).toEqual(WHO);
+  });
+
+  it("a state signed under another AUTH_SECRET is refused", () => {
+    const saved = process.env["AUTH_SECRET"];
+    const state = signState("org-1", "user-2", T0);
+    process.env["AUTH_SECRET"] = "another-auth-secret-0123456789";
+    try {
+      expect(verifyState(state, at(1))).toBeNull();
+    } finally {
+      if (saved === undefined) delete process.env["AUTH_SECRET"];
+      else process.env["AUTH_SECRET"] = saved;
+    }
+  });
+
+  it("compares the signature in constant time (source contract: safeEqual, no ===/!== on the signature)", () => {
+    const source = readFileSync(path.resolve(__dirname, "../src/server/services/google.ts"), "utf8");
+    const start = source.indexOf("export function verifyState");
+    expect(start).toBeGreaterThan(-1);
+    const next = source.indexOf("\nexport ", start + 1);
+    const body = source.slice(start, next === -1 ? undefined : next);
+    expect(body).toContain("safeEqual(");
+    expect(body).not.toMatch(/\b(?:sig|signature|mac|expected)\b\s*[!=]==|[!=]==\s*\b(?:sig|signature|mac|expected)\b/);
   });
 });

@@ -10,7 +10,7 @@
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   try {
-    const { env } = await import("./server/env");
+    const { env, bootWarnings } = await import("./server/env");
     const e = env();
     console.log(
       JSON.stringify({
@@ -19,6 +19,9 @@ export async function register(): Promise<void> {
         authSecretLen: e.AUTH_SECRET.length,
       }),
     );
+    for (const key of bootWarnings()) {
+      console.warn(JSON.stringify({ event: key, level: "warn" }));
+    }
   } catch (err) {
     console.error(
       JSON.stringify({

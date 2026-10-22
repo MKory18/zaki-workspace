@@ -13,6 +13,13 @@ import { handleInbound } from "@/server/services/n8n";
  * Unknown actions are acknowledged-but-ignored so workflows never hard-fail.
  *
  * The body is read as raw text: the signature covers its exact bytes.
+ *
+ * Known limits, kept on purpose and written down so nobody has to rediscover them:
+ *  - The legacy x-zaki-token path stays until every workflow signs its requests
+ *    (target: remove it in Phase 7).
+ *  - A signed request is not de-duplicated by X-Zaki-Delivery inside the 5-minute window:
+ *    replaying the very same request within those five minutes creates the task twice.
+ *    Closing that needs a stored delivery id, which is a schema change.
  */
 export async function POST(req: Request) {
   try {

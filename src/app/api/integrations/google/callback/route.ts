@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
 import { ForbiddenError } from "@/server/auth";
+import { appUrl } from "@/server/env";
 import { activeOrgCtx, assertOrgManager } from "@/server/services/integrations";
 import { exchangeCode, connectGoogle, verifyState } from "@/server/services/google";
 
-/** GET: Google consent redirect lands here — exchanges the code, stores tokens. */
+/**
+ * GET: Google consent redirect lands here — exchanges the code, stores tokens.
+ * Every redirect is built from APP_URL, the address the user really uses. `req.url` is NOT
+ * that address behind a reverse proxy (under `next start` it is the bind host,
+ * https://localhost:3000), so the user would land on a dead page.
+ */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const back = (query: string) => NextResponse.redirect(new URL(query, url.origin));
+  const back = (query: string) => NextResponse.redirect(new URL(`${appUrl()}${query}`));
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");

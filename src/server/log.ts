@@ -7,7 +7,9 @@ type Level = "debug" | "info" | "warn" | "error";
 const ORDER: Record<Level, number> = { debug: 0, info: 1, warn: 2, error: 3 };
 
 function level(): Level {
-  return (process.env["LOG_LEVEL"] as Level) || "info";
+  // Case-insensitive (boot validation accepts LOG_LEVEL=INFO); unknown values fall back to info.
+  const raw = (process.env["LOG_LEVEL"] ?? "").trim().toLowerCase();
+  return raw in ORDER ? (raw as Level) : "info";
 }
 
 function write(lv: Level, event: string, meta?: Record<string, unknown>) {

@@ -2,16 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as googleRoute from "@/app/api/integrations/google/route";
 import * as startRoute from "@/app/api/integrations/google/start/route";
 import * as callbackRoute from "@/app/api/integrations/google/callback/route";
+import { hmacHex } from "@/server/crypto";
 import { signState, verifyState } from "@/server/services/google";
 import { call, db, loginAs, logout, makeTeam } from "./helpers";
 
 const SECRET_FILE = "Secret price list.xlsx";
 
+/** The public address of the app. Every redirect must be built from it. */
+const APP = "https://workspace.example.com";
+/** What `next start` reports as the request address behind a reverse proxy: the bind host, not the public one. */
+const BIND_HOST = "http://localhost:3000";
+
 /** Stands in for Google: the token endpoint and the Drive file list. Never touches the network. */
 function stubGoogle(tokenResponse: Record<string, unknown> = { access_token: "access-1", refresh_token: "refresh-1" }) {
   const json = (body: unknown) =>
     new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
-  const fetchMock = vi.fn(async (input: unknown) => {
+  const fetchMock = vi.fn(async (input: unknown, _init?: RequestInit) => {
     const url = String(input);
     if (url.includes("oauth2.googleapis.com/token")) return json(tokenResponse);
     if (url.includes("googleapis.com/drive/v3/files")) {
@@ -34,6 +40,8 @@ const driveRow = (orgId: string) =>
 beforeEach(() => {
   vi.stubEnv("GOOGLE_CLIENT_ID", "test-client-id");
   vi.stubEnv("GOOGLE_CLIENT_SECRET", "test-client-secret");
+  // pinned: a developer's .env may set another APP_URL, and redirects now follow it
+  vi.stubEnv("APP_URL", APP);
 });
 
 afterEach(() => {
@@ -80,14 +88,14 @@ describe("Google Drive: starting the OAuth flow", () => {
     await loginAs(t.admin.id);
     const unconfigured = await call(startRoute.GET, { url: "http://localhost/api/integrations/google/start" });
     expect(unconfigured.status).toBe(307);
-    expect(unconfigured.headers.get("location")).toBe("http://localhost/automation?google=not_configured");
+    expect(unconfigured.headers.get("location")).toBe(`${APP}/automation?google=not_configured`);
 
     vi.stubEnv("GOOGLE_CLIENT_ID", "test-client-id");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "test-client-secret");
     logout();
     const signedOut = await call(startRoute.GET, { url: "http://localhost/api/integrations/google/start" });
     expect(signedOut.status).toBe(307);
-    expect(signedOut.headers.get("location") ?? "").toContain("/login");
+    expect(signedOut.headers.get("location")).toBe(`${APP}/login?next=%2Fautomation`);
   });
 });
 
@@ -110,7 +118,7 @@ describe("Google Drive: finishing the OAuth flow", () => {
     await loginAs(t.admin.id);
     const res = await call(callbackRoute.GET, { url: callbackUrl(signState(t.org.id, t.admin.id)) });
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost/automation?google=connected");
+    expect(res.headers.get("location")).toBe(`${APP}/automation?google=connected`);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const row = await driveRow(t.org.id);
     expect(row?.connected).toBe(true);
@@ -144,7 +152,7 @@ describe("Google Drive: finishing the OAuth flow", () => {
     await loginAs(t.admin.id);
     const res = await call(callbackRoute.GET, { url: callbackUrl(signState(t.org.id, t.admin.id)) });
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost/automation?google=error&reason=invalid_grant");
+    expect(res.headers.get("location")).toBe(`${APP}/automation?google=error&reason=invalid_grant`);
     expect(await driveRow(t.org.id)).toBeNull();
   });
 
@@ -164,7 +172,7 @@ describe("Google Drive: listing files", () => {
     stubGoogle();
     await loginAs(t.admin.id);
     const res = await call(callbackRoute.GET, { url: callbackUrl(signState(t.org.id, t.admin.id)) });
-    expect(res.headers.get("location")).toBe("http://localhost/automation?google=connected");
+    expect(res.headers.get("location")).toBe(`${APP}/automation?google=connected`);
     return t;
   }
 
@@ -220,5 +228,138 @@ describe("Google Drive: listing files", () => {
     await loginAs(t.admin.id);
     expect((await call(googleRoute.DELETE, { method: "DELETE" })).status).toBe(200);
     expect((await driveRow(t.org.id))?.connected ?? false).toBe(false);
+  });
+});
+
+describe("Google Drive: every redirect is built from APP_URL", () => {
+  /** A request as `next start` shows it behind a proxy: the bind host in the URL, hostile forwarding headers. */
+  const behindProxy = { host: "attacker.example", "x-forwarded-host": "evil.example", "x-forwarded-proto": "http" };
+  const START = `${BIND_HOST}/api/integrations/google/start`;
+
+  it("start: not configured and signed out both go to APP_URL, whatever address the request came in on", async () => {
+    vi.stubEnv("GOOGLE_CLIENT_ID", "");
+    vi.stubEnv("GOOGLE_CLIENT_SECRET", "");
+    const t = await makeTeam();
+    await loginAs(t.admin.id);
+    const unconfigured = await call(startRoute.GET, { url: START, headers: behindProxy });
+    expect(unconfigured.headers.get("location")).toBe(`${APP}/automation?google=not_configured`);
+
+    logout();
+    const signedOut = await call(startRoute.GET, { url: START, headers: behindProxy });
+    expect(signedOut.headers.get("location")).toBe(`${APP}/login?next=%2Fautomation`);
+  });
+
+  it("callback: every outcome goes to APP_URL, whatever address the request came in on", async () => {
+    const t = await makeTeam();
+    const go = (state?: string) =>
+      call(callbackRoute.GET, {
+        url: `${BIND_HOST}/api/integrations/google/callback${state === undefined ? "" : `?code=abc&state=${encodeURIComponent(state)}`}`,
+        headers: behindProxy,
+      });
+
+    logout();
+    expect((await go(signState(t.org.id, t.admin.id))).headers.get("location")).toBe(`${APP}/login?next=%2Fautomation`);
+
+    await loginAs(t.admin.id);
+    expect((await go()).headers.get("location")).toBe(`${APP}/automation?google=error&reason=missing_params`);
+    expect((await go("not-a-signed-state")).headers.get("location")).toBe(`${APP}/automation?google=error&reason=bad_state`);
+
+    stubGoogle({ error: "invalid_grant" });
+    expect((await go(signState(t.org.id, t.admin.id))).headers.get("location")).toBe(`${APP}/automation?google=error&reason=invalid_grant`);
+
+    vi.unstubAllGlobals();
+    stubGoogle();
+    expect((await go(signState(t.org.id, t.admin.id))).headers.get("location")).toBe(`${APP}/automation?google=connected`);
+  });
+
+  it("the redirect URI sent to Google is APP_URL's, not the request address (it is what Google has registered)", async () => {
+    vi.stubEnv("APP_URL", "https://other.example.org");
+    const t = await makeTeam();
+    await loginAs(t.owner.id);
+    const start = await call(startRoute.GET, { url: START, headers: behindProxy });
+    const google = new URL(start.headers.get("location") ?? "");
+    expect(google.searchParams.get("redirect_uri")).toBe("https://other.example.org/api/integrations/google/callback");
+  });
+
+  it("a trailing slash in APP_URL never doubles the slash: redirects, the redirect URI sent to Google and the one in the token exchange", async () => {
+    for (const configured of [`${APP}/`, `${APP}///`]) {
+      vi.stubEnv("APP_URL", configured);
+      const t = await makeTeam();
+      const fetchMock = stubGoogle();
+      await loginAs(t.admin.id);
+
+      const start = await call(startRoute.GET, { url: START });
+      const google = new URL(start.headers.get("location") ?? "");
+      expect(google.searchParams.get("redirect_uri"), configured).toBe(`${APP}/api/integrations/google/callback`);
+
+      const done = await call(callbackRoute.GET, { url: callbackUrl(signState(t.org.id, t.admin.id)) });
+      expect(done.headers.get("location"), configured).toBe(`${APP}/automation?google=connected`);
+      const exchange = new URLSearchParams(String(fetchMock.mock.calls[0]?.[1]?.body));
+      expect(exchange.get("redirect_uri"), configured).toBe(`${APP}/api/integrations/google/callback`);
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("Google Drive: the OAuth state expires", () => {
+  const MINUTE = 60_000;
+
+  it("each start issues a different state (it carries a random nonce)", async () => {
+    const t = await makeTeam();
+    await loginAs(t.admin.id);
+    const states = new Set<string>();
+    for (let i = 0; i < 3; i += 1) {
+      const res = await call(startRoute.GET, { url: "http://localhost/api/integrations/google/start" });
+      states.add(new URL(res.headers.get("location") ?? "").searchParams.get("state") ?? "");
+    }
+    expect(states.size).toBe(3);
+  });
+
+  it("a state older than ten minutes is refused at the callback: nothing is exchanged, nothing is stored", async () => {
+    const t = await makeTeam();
+    const fetchMock = stubGoogle();
+    await loginAs(t.admin.id);
+    const stale = signState(t.org.id, t.admin.id, new Date(Date.now() - 11 * MINUTE));
+    const res = await call(callbackRoute.GET, { url: callbackUrl(stale) });
+    expect(res.headers.get("location")).toBe(`${APP}/automation?google=error&reason=bad_state`);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await driveRow(t.org.id)).toBeNull();
+  });
+
+  it("a state dated in the future is refused too", async () => {
+    const t = await makeTeam();
+    const fetchMock = stubGoogle();
+    await loginAs(t.admin.id);
+    const future = signState(t.org.id, t.admin.id, new Date(Date.now() + 5 * MINUTE));
+    const res = await call(callbackRoute.GET, { url: callbackUrl(future) });
+    expect(res.headers.get("location")).toBe(`${APP}/automation?google=error&reason=bad_state`);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await driveRow(t.org.id)).toBeNull();
+  });
+
+  it("the old deterministic state (orgId.userId.signature), which never expired, is refused", async () => {
+    const t = await makeTeam();
+    const fetchMock = stubGoogle();
+    await loginAs(t.admin.id);
+    const legacy = `${t.org.id}.${t.admin.id}.${hmacHex(process.env["AUTH_SECRET"] ?? "", `${t.org.id}.${t.admin.id}`)}`;
+    const res = await call(callbackRoute.GET, { url: callbackUrl(legacy) });
+    expect(res.headers.get("location")).toBe(`${APP}/automation?google=error&reason=bad_state`);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("a state a few minutes old still completes the flow, and it stays bound to the person it was issued to", async () => {
+    const t = await makeTeam();
+    const fetchMock = stubGoogle();
+    await loginAs(t.admin.id);
+    const aged = signState(t.org.id, t.admin.id, new Date(Date.now() - 9 * MINUTE));
+    const ok = await call(callbackRoute.GET, { url: callbackUrl(aged) });
+    expect(ok.headers.get("location")).toBe(`${APP}/automation?google=connected`);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // fresh, but minted for the owner: an admin cannot finish the owner's flow
+    const other = await makeTeam();
+    await loginAs(other.admin.id);
+    const stolen = await call(callbackRoute.GET, { url: callbackUrl(signState(other.org.id, other.owner.id)) });
+    expect(stolen.status).toBe(403);
   });
 });
