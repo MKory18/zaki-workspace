@@ -3,11 +3,34 @@ import accounts from "./ar.accounts.json";
 import policy from "./ar.policy.json";
 import onboarding from "./ar.onboarding.json";
 import members from "./ar.members.json";
+import spaces from "./ar.spaces.json";
+import access from "./ar.access.json";
+import theme from "./ar.theme.json";
+import ui from "./ar.ui.json";
+import guide from "./ar.guide.json";
+import enums from "./ar.enums.json";
+import shell from "./ar.shell.json";
+import today from "./ar.today.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
- * members, ...). Fragments exist so that several people can add strings at the same time without
- * editing the same 700-line file; a later fragment wins on a duplicate key (tests/encoding-hygiene
- * fails on duplicates across files, so none are expected).
+ * members, spaces, access, theme, ui, guide, enums, shell, today, ...). Fragments exist so that
+ * several people can add strings at the same time without editing the same 700-line file; a later
+ * fragment wins on a duplicate key (tests/encoding-hygiene fails on duplicates across files, so
+ * none are expected).
  */
-export const AR: Record<string, string> = { ...base, ...accounts, ...policy, ...onboarding, ...members };
+export const AR: Record<string, string> = {
+  ...base,
+  ...accounts,
+  ...policy,
+  ...onboarding,
+  ...members,
+  ...spaces,
+  ...access,
+  ...theme,
+  ...ui,
+  ...guide,
+  ...enums,
+  ...shell,
+  ...today,
+};

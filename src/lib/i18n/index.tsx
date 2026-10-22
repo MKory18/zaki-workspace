@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { AR as ar } from "./dict";
+import { interpolate } from "./interpolate";
 
 const DICTS = { ar } as const;
 export type Locale = keyof typeof DICTS;
@@ -23,11 +24,7 @@ export function I18nProvider({ initial, children }: { initial: Locale; children:
   const t = useCallback(
     (key: string, vars?: Record<string, string | number>): string => {
       const dict = DICTS.ar as Dict;
-      let s = dict[key] ?? key;
-      if (vars) {
-        for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
-      }
-      return s;
+      return interpolate(dict[key] ?? key, vars);
     },
     [locale],
   );
