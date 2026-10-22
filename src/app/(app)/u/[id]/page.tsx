@@ -5,7 +5,7 @@ import { actorCan } from "@/server/policy/actor";
 import { getPublicProfile } from "@/server/services/users";
 import { Avatar } from "@/components/ui/avatar";
 import { getServerT } from "@/lib/i18n/server";
-import { ROLE_KEYS } from "@/lib/i18n/roles";
+import { enumLabel } from "@/lib/i18n/enums";
 
 export default async function PublicProfilePage({ params }: { params: { id: string } }) {
   const { t } = getServerT();
@@ -41,7 +41,7 @@ export default async function PublicProfilePage({ params }: { params: { id: stri
           <h1 className="truncate text-lg font-semibold text-fg">{profile.name}</h1>
           <p className="text-sm font-medium text-accent">{profile.jobTitle ?? t("teams.noTitle")}</p>
           <p className="text-xs text-muted">
-            {profile.organizationName} · {t(ROLE_KEYS[profile.organizationRole] ?? "role.member")}
+            {profile.organizationName} · {enumLabel("OrgRole", profile.organizationRole)}
           </p>
         </div>
       </header>
@@ -54,7 +54,7 @@ export default async function PublicProfilePage({ params }: { params: { id: stri
         {stats.map((s) => (
           <div key={s.label} className="rounded-xl border border-border bg-surface p-3 text-center">
             <p className="text-xl font-bold text-fg">{s.value}</p>
-            <p className="text-[10px] text-muted">{s.label}</p>
+            <p className="text-xs text-muted">{s.label}</p>
           </div>
         ))}
       </section>

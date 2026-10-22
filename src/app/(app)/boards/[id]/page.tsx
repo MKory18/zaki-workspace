@@ -1,10 +1,17 @@
-import { pageUser, ForbiddenError, NotFoundError } from "@/server/auth";
+import { notFound } from "next/navigation";
+import { pageUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { TASK_INCLUDE } from "@/server/services/tasks";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { BoardView, type TaskCardData } from "@/components/board-view";
 
+/**
+ * A board opens for whoever may open its space (`accessibleWorkspaceIds`: a row in the space, or the owner) and is
+ * an ACTIVE member of its company. Anybody else - and an old link to a board that is gone - gets the shell's «not
+ * found» page through `notFound()`: one answer for «not there» and «not yours», so it does not tell a stranger the
+ * board exists. A thrown domain error would reach the visitor as Next's bare «Application error» screen.
+ */
 export default async function BoardPage({ params }: { params: { id: string } }) {
   const user = await pageUser();
   if (!user) return null;
@@ -22,13 +29,13 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
       },
     },
   });
-  if (!board) throw new NotFoundError("board.not_found");
+  if (!board) notFound();
 
   const member = await db.organizationMember.findFirst({
     where: { organizationId: board.project.workspace.organizationId, userId: user.id, status: "ACTIVE" },
     select: { role: true },
   });
-  if (!member) throw new ForbiddenError("not_org_member");
+  if (!member) notFound();
   const wsRow = await db.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId: board.project.workspace.id, userId: user.id } },
     select: { role: true },

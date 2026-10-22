@@ -384,7 +384,7 @@ export function arabicPlural(n: number): "one" | "two" | "few" | "many" {
 
 /**
  * "قبل 3 ساعات" for a timestamp, "الآن" under a minute (or in the future: a clock that runs ahead),
- * and "لم يسجّل دخولاً بعد" when there is none. The sentences live in the dictionary
+ * and "لم يسجّل دخولًا بعد" when there is none. The sentences live in the dictionary
  * (`members.ago.<unit>.<form>`), because Arabic needs a different word for one, two and a few.
  */
 export function relativeTimeAr(iso: string | null | undefined, now: number, t: TFn): string {
@@ -417,7 +417,7 @@ export function relativeTimeAr(iso: string | null | undefined, now: number, t: T
   return t(`members.ago.${unit}.${arabicPlural(n)}`, { n });
 }
 
-/** "آخر دخول: قبل 3 ساعات", or "لم يسجّل دخولاً بعد" when there was none. */
+/** "آخر دخول: قبل 3 ساعات", or "لم يسجّل دخولًا بعد" when there was none. */
 export function lastLoginLine(iso: string | null | undefined, now: number, t: TFn): string {
   const when = relativeTimeAr(iso, now, t);
   return iso && !Number.isNaN(Date.parse(iso)) ? t("members.last_login", { when }) : when;
@@ -689,12 +689,8 @@ function isApiErrorLike(err: unknown): err is ApiErrorLike {
 export function memberErrorMessage(err: unknown, t: TFn): string {
   if (!isApiErrorLike(err)) return err instanceof TypeError ? t("members.err_network") : t("common.error");
 
-  const key = err.messageKey;
-  if (key) {
-    const text = t(key);
-    if (text !== key) return text;
-  }
-
+  // «validation.failed» carries the field's own message in its details; show that first when it
+  // translates, and the generic validation sentence only when it does not.
   if (Array.isArray(err.details)) {
     for (const detail of err.details as { message?: unknown }[]) {
       const message = typeof detail?.message === "string" ? detail.message : null;
@@ -702,6 +698,17 @@ export function memberErrorMessage(err: unknown, t: TFn): string {
       const text = t(message);
       if (text !== message) return text;
     }
+  }
+  const key = err.messageKey;
+  if (key) {
+    const text = t(key);
+    if (text !== key) return text;
+  }
+  // A code the namespaced dictionaries do not carry may still live in the flat one (the account
+  // service's codes are named after their fields there, e.g. «validation.failed», «auth.required»).
+  if (err.code && err.code !== key) {
+    const text = t(err.code);
+    if (text !== err.code) return text;
   }
 
   switch (err.status) {

@@ -7,13 +7,16 @@ import { Card, CardBody, Badge, EmptyState } from "@/components/ui/card";
 import { ProjectsToolbar } from "@/components/projects-toolbar";
 import { WorkspaceMembersButton } from "@/components/workspace-members-button";
 import { WorkspaceEditButton } from "@/components/workspace-edit-button";
-import { formatDate } from "@/lib/format";
+import { fmtDMY } from "@/lib/format";
+import { enumLabel } from "@/lib/i18n/enums";
+import { getServerT } from "@/lib/i18n/server";
 
 export default async function ProjectsPage({
   searchParams,
 }: {
   searchParams: { workspace?: string };
 }) {
+  const { t } = getServerT();
   const user = await pageUser();
   if (!user) redirect("/login");
   const accessible = await accessibleWorkspaceIds(user.id);
@@ -21,13 +24,10 @@ export default async function ProjectsPage({
     return (
       <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
         <header className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-fg">Projects</h1>
+          <h1 className="text-xl font-semibold text-fg">{t("nav.projects")}</h1>
           <ProjectsToolbar />
         </header>
-        <EmptyState
-          title="No accessible workspaces"
-          hint="You are not assigned to any workspace yet — ask an admin to add you."
-        />
+        <EmptyState title={t("proj.noWorkspaces")} hint={t("proj.noWorkspacesHint")} />
       </div>
     );
   }
@@ -60,7 +60,7 @@ export default async function ProjectsPage({
     <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-fg">
-          Projects
+          {t("nav.projects")}
           {wsName ? <span className="text-sm text-fg-muted"> · {wsName}</span> : null}
         </h1>
         <div className="flex items-center gap-2">
@@ -74,7 +74,7 @@ export default async function ProjectsPage({
         </div>
       </header>
       {projects.length === 0 ? (
-        <EmptyState title="No projects yet" hint="Create a project to start organizing work." />
+        <EmptyState title={t("proj.emptyTitle")} hint={t("proj.emptyHint")} />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {projects.map((p) => (
@@ -83,13 +83,14 @@ export default async function ProjectsPage({
                 <CardBody>
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium text-fg">{p.name}</p>
-                    <Badge>{p.status}</Badge>
+                    <Badge>{enumLabel("ProjectStatus", p.status)}</Badge>
                   </div>
                   {p.description ? (
                     <p className="mt-1 line-clamp-2 text-xs text-fg-muted">{p.description}</p>
                   ) : null}
-                  <p className="mt-2 text-[11px] text-muted">
-                    {p._count.tasks} tasks · {p._count.boards} boards · due {formatDate(p.targetDate, "en")}
+                  <p className="mt-2 text-xs text-muted">
+                    {t("proj.cardLine", { tasks: p._count.tasks, boards: p._count.boards })}
+                    {p.targetDate ? ` · ${t("proj.dueLine", { date: fmtDMY(p.targetDate) })}` : ""}
                   </p>
                 </CardBody>
               </Card>

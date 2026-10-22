@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Logo } from "@/components/logo";
+import { DoorShell } from "@/components/theme/door-shell";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { apiPost, ApiError } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
@@ -11,6 +12,9 @@ import { safeNextPath } from "@/lib/safe-next";
 /**
  * Sign-in (username or e-mail + password) and the first-run set-up (the very first company and its
  * owner). Self-registration and joining with a code are closed: the owner creates every account.
+ *
+ * Both sit on the door (`DoorShell`): the Zaki Workspace mark and wordmark, the decoration of the active theme
+ * behind, and the form on an opaque card. Phone first: 375 px, 16 px gutters, fields and buttons 44 px tall.
  */
 export function AuthForm({ mode, firstRun = false }: { mode: "login" | "register"; firstRun?: boolean }) {
   const { t } = useI18n();
@@ -64,16 +68,12 @@ export function AuthForm({ mode, firstRun = false }: { mode: "login" | "register
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-surface-1 px-4 py-6">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center justify-between">
-          <Logo />
-        </div>
-
-        <form onSubmit={submit} className="space-y-4 rounded-xl border border-border bg-surface p-6 shadow-sm">
+    <DoorShell>
+      <Card className="rounded-2xl p-5 shadow-card sm:p-6">
+        <form onSubmit={submit} className="space-y-4">
           {mode === "login" ? (
             <>
-              <p className="text-lg font-semibold text-fg">{t("auth.login")}</p>
+              <h1 className="text-xl font-semibold text-fg">{t("auth.login")}</h1>
               <label className="block">
                 <Label>{t("login.identifier")}</Label>
                 <Input
@@ -95,7 +95,7 @@ export function AuthForm({ mode, firstRun = false }: { mode: "login" | "register
             </>
           ) : (
             <>
-              <p className="text-lg font-semibold text-fg">{t("bootstrap.title")}</p>
+              <h1 className="text-xl font-semibold text-fg">{t("bootstrap.title")}</h1>
               <p className="text-xs leading-5 text-fg-muted">{t("bootstrap.hint")}</p>
               <label className="block">
                 <Label>{t("auth.orgName")}</Label>
@@ -116,13 +116,13 @@ export function AuthForm({ mode, firstRun = false }: { mode: "login" | "register
               <label className="block">
                 <Label>{t("auth.password")}</Label>
                 <Input name="password" type="password" required minLength={8} autoComplete="new-password" dir="ltr" className="h-11 text-base" />
-                <p className="mt-1 text-[10px] text-muted">{t("auth.passwordRule")}</p>
+                <p className="mt-1 text-xs text-fg-muted">{t("auth.passwordRule")}</p>
               </label>
             </>
           )}
 
           {error ? (
-            <p role="alert" className="text-sm text-red-500">
+            <p role="alert" className="text-sm text-danger">
               {error}
             </p>
           ) : null}
@@ -135,20 +135,20 @@ export function AuthForm({ mode, firstRun = false }: { mode: "login" | "register
             <p className="text-center text-xs leading-5 text-fg-muted">
               {t("login.no_account")}
               {firstRun ? (
-                <a href="/register" className="ms-1 block text-accent hover:underline">
+                <a href="/register" className="flex min-h-11 items-center justify-center text-accent hover:underline">
                   {t("login.first_run")}
                 </a>
               ) : null}
             </p>
           ) : (
             <p className="text-center text-xs text-fg-muted">
-              <a href="/login" className="text-accent hover:underline">
+              <a href="/login" className="flex min-h-11 items-center justify-center text-accent hover:underline">
                 {t("auth.haveAccount")}
               </a>
             </p>
           )}
         </form>
-      </div>
-    </div>
+      </Card>
+    </DoorShell>
   );
 }

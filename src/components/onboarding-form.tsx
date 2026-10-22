@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Archive, Briefcase, CalendarCheck, Eye, EyeOff, KeyRound, ShieldCheck } from "lucide-react";
-import { Logo } from "@/components/logo";
+import { DoorShell } from "@/components/theme/door-shell";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { apiPost, ApiError } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
@@ -34,6 +35,9 @@ const SERVER_MESSAGES: Record<string, string> = {
  * The onboarding steps, one at a time, phone first: (1) choose your own password, (2) read and
  * accept the transparency notice. When the last step is done the browser continues to `next`
  * with a full page load, so the middleware sees the fresh session cookie.
+ *
+ * It sits on the same calm door as sign-in (`DoorShell`, the wider column): the Zaki Workspace mark and wordmark,
+ * the decoration of the active theme behind, the steps on an opaque card, and the sign-out under the card.
  */
 export function OnboardingForm({
   name,
@@ -154,24 +158,17 @@ export function OnboardingForm({
   ];
 
   return (
-    <div className="flex min-h-dvh flex-col items-center bg-surface-1 px-4 py-6 sm:justify-center">
-      <div className="w-full max-w-md">
-        <div className="mb-5 flex items-center justify-between">
-          <Logo />
-          <button type="button" onClick={signOut} className="rounded-lg px-2 py-1 text-xs text-muted hover:bg-surface-2 hover:text-fg">
-            {t("common.logout")}
-          </button>
-        </div>
-
-        <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
-          <p className="text-lg font-semibold text-fg">{t("onboarding.welcome", { name })}</p>
+    <DoorShell width="md">
+      <Card className="rounded-2xl p-5 shadow-card sm:p-6">
+        <div>
+          <h1 className="text-xl font-semibold text-fg">{t("onboarding.welcome", { name })}</h1>
           {steps.length > 0 ? (
             <p className="mt-1 text-sm text-fg-muted">{steps.length > 1 ? t("onboarding.intro_two") : t("onboarding.intro_one")}</p>
           ) : null}
 
           {steps.length > 1 ? (
             <div className="mt-4">
-              <p className="text-xs text-muted">{t("onboarding.step", { current: index + 1, total: steps.length })}</p>
+              <p className="text-xs text-fg-muted">{t("onboarding.step", { current: index + 1, total: steps.length })}</p>
               <div className="mt-1.5 flex gap-1.5" aria-hidden="true">
                 {steps.map((s, i) => (
                   <span key={s} className={cn("h-1.5 flex-1 rounded-full", i <= index ? "bg-accent" : "bg-surface-2")} />
@@ -201,16 +198,16 @@ export function OnboardingForm({
                 <Label>{t("onboarding.confirm_password")}</Label>
                 <Input name="confirmPassword" type={fieldType} required minLength={8} maxLength={200} autoComplete="new-password" dir="ltr" className={inputClass} />
               </label>
-              <p className="text-xs leading-5 text-muted">{t("onboarding.password_rule")}</p>
+              <p className="text-xs leading-5 text-fg-muted">{t("onboarding.password_rule")}</p>
               <button
                 type="button"
                 onClick={() => setShowPasswords((v) => !v)}
-                className="flex items-center gap-1.5 text-xs text-accent hover:underline"
+                className="flex min-h-11 items-center gap-1.5 text-xs text-accent hover:underline"
               >
                 {showPasswords ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 {showPasswords ? t("onboarding.hide_passwords") : t("onboarding.show_passwords")}
               </button>
-              {error ? <p role="alert" className="text-sm text-red-500">{error}</p> : null}
+              {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
               <Button type="submit" disabled={pending} className="h-11 w-full text-base">
                 {pending ? t("common.loading") : t("onboarding.password_submit")}
               </Button>
@@ -219,13 +216,13 @@ export function OnboardingForm({
 
           {step === "notice" ? (
             <div className="mt-5">
-              {passwordSaved ? <p className="mb-4 text-sm text-emerald-600">{t("onboarding.password_saved")}</p> : null}
+              {passwordSaved ? <p className="mb-4 text-sm text-ok">{t("onboarding.password_saved")}</p> : null}
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 shrink-0 text-accent" />
                 <p className="text-base font-semibold text-fg">{t("onboarding.notice_title")}</p>
               </div>
               <p className="mt-2 text-sm leading-6 text-fg-muted">{t("onboarding.notice_intro")}</p>
-              <ul className="mt-3 space-y-3 rounded-xl bg-surface-1 p-4 text-sm leading-7 text-fg">
+              <ul className="mt-3 space-y-3 rounded-xl bg-surface-2 p-4 text-sm leading-7 text-fg">
                 {points.map(({ icon: Icon, text }) => (
                   <li key={text} className="flex gap-3">
                     <Icon className="mt-1.5 h-4 w-4 shrink-0 text-accent" />
@@ -233,7 +230,7 @@ export function OnboardingForm({
                   </li>
                 ))}
               </ul>
-              {error ? <p role="alert" className="mt-3 text-sm text-red-500">{error}</p> : null}
+              {error ? <p role="alert" className="mt-3 text-sm text-danger">{error}</p> : null}
               <Button type="button" onClick={acceptNotice} disabled={pending} className="mt-5 h-11 w-full text-base">
                 {pending ? t("common.loading") : t("onboarding.notice_accept")}
               </Button>
@@ -245,7 +242,7 @@ export function OnboardingForm({
               <p className="text-sm text-fg-muted">{t("onboarding.finishing")}</p>
               {error ? (
                 <>
-                  <p role="alert" className="text-sm text-red-500">{error}</p>
+                  <p role="alert" className="text-sm text-danger">{error}</p>
                   <Button type="button" onClick={refreshAndContinue} disabled={pending} className="h-11 w-full text-base">
                     {t("common.retry")}
                   </Button>
@@ -254,7 +251,18 @@ export function OnboardingForm({
             </div>
           ) : null}
         </div>
+      </Card>
+
+      {/* Under the card, on the page (or the scrim panel): the dimmer of the three colours a decorated screen may use. */}
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={signOut}
+          className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg"
+        >
+          {t("common.logout")}
+        </button>
       </div>
-    </div>
+    </DoorShell>
   );
 }

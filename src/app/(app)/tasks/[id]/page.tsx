@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { pageUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { accessibleWorkspaceIds } from "@/server/services/access";
+import { canWriteInWorkspace } from "@/server/workspace-role";
 import { TaskDetail } from "@/components/task-detail";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
@@ -31,15 +32,19 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   });
   if (!task) notFound();
 
-  // editable: creator/assignee, or any non-guest member (an ACTIVE one: a leftover row grants nothing)
+  // Editable exactly when the API would let the person write in this space (the same rule as the
+  // board page): the real organization rank and the real row in the space. An org guest never
+  // writes, a space guest row makes even a member read-only, and being the creator or the assignee
+  // of the task changes nothing - the server refuses a write the screen would have offered.
   const membership = await db.organizationMember.findFirst({
     where: { userId: user.id, organizationId: task.orgId, status: "ACTIVE" },
     select: { role: true },
   });
-  const canEdit =
-    (membership && membership.role !== "GUEST") ||
-    user.id === task.assigneeId ||
-    user.id === task.creatorId;
+  const spaceRow = await db.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: task.workspaceId, userId: user.id } },
+    select: { role: true },
+  });
+  const canEdit = membership ? canWriteInWorkspace(membership.role, spaceRow?.role) : false;
 
   const [members, labels] = await Promise.all([
     // the people who can be assigned: the space's members who are still ACTIVE in the company (a

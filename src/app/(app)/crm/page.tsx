@@ -8,6 +8,7 @@ import { CrmView } from "@/components/crm-view";
  * view is not rendered for them — they get a notice instead of a page that never loads.
  * For everybody else it is the `crm.view` switch: when the owner turned it off for a person, the
  * API refuses them too, so they get the "not enabled for you" notice instead of a page that never loads.
+ * Whoever may read but not `crm.edit` gets the view without its create, edit and delete controls.
  */
 export default async function CrmPage() {
 	const { t } = getServerT();
@@ -20,7 +21,7 @@ export default async function CrmPage() {
 		);
 	}
 	if (!actorCan(actor, "crm.view")) return <SectionOffNotice />;
-	return <CrmView />;
+	return <CrmView canEdit={actorCan(actor, "crm.edit")} />;
 }
 
 export const dynamic = "force-dynamic";
