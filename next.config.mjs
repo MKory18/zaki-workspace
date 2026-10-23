@@ -23,7 +23,8 @@ const nextConfig = {
     instrumentationHook: true,
     // `sharp` is native (it needs child_process/detect-libc): bundling it breaks the
     // instrumentation compile with "Module not found: Can't resolve 'child_process'".
-    serverComponentsExternalPackages: ["bcryptjs", "@prisma/client", "pg", "sharp"],
+    // `nodemailer` (registration mail) is Node-only too: it needs stream/net/tls.
+    serverComponentsExternalPackages: ["bcryptjs", "@prisma/client", "pg", "sharp", "nodemailer"],
   },
   /**
    * Native/server-only modules must stay OUTSIDE the webpack graph. `sharp` is a native
@@ -52,6 +53,7 @@ const nextConfig = {
           pg: "commonjs pg",
           "pg-connection-string": "commonjs pg-connection-string",
           bcryptjs: "commonjs bcryptjs",
+          nodemailer: "commonjs nodemailer",
         },
       ];
     } else {
@@ -70,6 +72,8 @@ const nextConfig = {
         "pg-native": false,
         sharp: false,
         bcryptjs: false,
+        // reached through instrumentation → realtime purge → registration → mail (Node-only)
+        nodemailer: false,
         fs: false,
         path: false,
         net: false,
