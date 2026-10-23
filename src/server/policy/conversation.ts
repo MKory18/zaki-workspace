@@ -104,13 +104,9 @@ export function canModerate(facts: ConversationFacts | null, org: OrgFacts | nul
   // nobody moderates what they may not read (a restricted topic they are not in, a space they left)
   if (!canRead(facts, org)) return false;
   if (facts.kind === "GROUP") return facts.viewerIsMember && facts.viewerGroupRole === "admin";
-<<<<<<< HEAD
   // design §26: "space ADMIN or OWNER". The org rank ADMIN gives no space by itself (AGENTS.md access
   // model): an org admin moderates the spaces where they are a space ADMIN — HQ included, where the
   // space role follows the org rank (accounts.ts alignSpaceRoles)
-=======
-  if (org!.role === "ADMIN") return true; // org admins moderate topics (DMs were refused above)
->>>>>>> fix/chat-topics-not-dms
   return isSpaceAdmin(facts.viewerSpaceRole);
 }
 
