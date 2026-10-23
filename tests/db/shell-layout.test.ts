@@ -69,7 +69,13 @@ describe("the layout draws each person's own places", () => {
     expect(tabs(shell, "admin")).toEqual(["team", "reports", "automation", "telegram", "settings"]);
     expect(placeOf(shell, "admin")?.labelKey).toBe("nav.place.admin");
     expect(shell.props).toMatchObject({ rank: "OWNER", isGuest: false, audience: "managers" });
-    expect(shell.props.user.id).toBe(owner.id);
+    // the shell gets the three fields it draws, never the session facts (WP-ARABIC2 (g))
+    // WP-ARABIC2 (g): only what the shell draws crosses to the browser — never session facts
+    expect(Object.keys(shell.props.user).sort()).toEqual(["email", "name", "username"]);
+    expect(shell.props.user.name).toBe(owner.name);
+    expect(shell.props.user).not.toHaveProperty("id");
+    expect(shell.props.user).not.toHaveProperty("tv");
+    expect(shell.props.user).not.toHaveProperty("locale");
   });
 
   it("an admin: the same five places and admin tabs", async () => {

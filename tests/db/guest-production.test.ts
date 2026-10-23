@@ -93,14 +93,14 @@ describe("production: everyone else keeps what they had", () => {
 
     const create = await call(routinesRoute.POST, { body: { title: "Member routine" } });
     expect(create.status).toBe(403);
-    expect(create.json?.["message"]).toBe("orgm.role_denied");
+    expect(create.json?.["message"]).toBe("production.routines_role_denied");
     const edit = await call(routineRoute.PATCH, {
       method: "PATCH",
       params: { id: w.routine.id },
       body: { title: "Member rename" },
     });
     expect(edit.status).toBe(403);
-    expect(edit.json?.["message"]).toBe("orgm.role_denied");
+    expect(edit.json?.["message"]).toBe("production.routines_role_denied");
     expect((await call(routineRoute.DELETE, { method: "DELETE", params: { id: w.routine.id } })).status).toBe(403);
     expect(await db.routine.count({ where: { orgId: w.org.id } })).toBe(1);
   });

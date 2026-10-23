@@ -152,7 +152,10 @@ describe("frontend register error surfacing", () => {
   it("auth-form maps server messageKeys instead of swallowing them", () => {
     const form = read("src", "components", "auth-form.tsx");
     expect(form).toContain("err.messageKey");
-    expect(form).toContain("err.code === \"validation.failed\"");
+    // WP-ARABIC2 (c): withApi puts "validation.failed" in the ENVELOPE's message, which arrives as
+    // messageKey — so branching on err.code was dead code and the field hints never showed.
+    expect(form).toContain('err.messageKey === "validation.failed"');
+    expect(form).not.toContain('err.code === "validation.failed"');
   });
 
   it("arabic strings exist for every failure the sign-in, onboarding and registration can answer", () => {

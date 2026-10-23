@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Loading from "@/app/(app)/loading";
 import { AR } from "@/lib/i18n/dict";
-import { TIP_KEYS, TIP_ROTATION_MS, tipFor, tipSeed } from "@/lib/tips";
+import { TIP_KEYS, TIP_ROTATION_MS, tipForAudience, tipSeed } from "@/lib/tips";
 import { classesOf, textOf } from "./ui-render"; // (also puts the global React the TSX files need under vitest in place)
 
 const NOON = Date.UTC(2026, 9, 22, 12, 0, 0);
@@ -34,12 +34,26 @@ describe("the loading screen of the app (src/app/(app)/loading.tsx)", () => {
     expect(textOf(markup)).toContain(AR["tips.heading"] as string);
   });
 
-  it("the tip is chosen from the clock, by tipFor(tipSeed(now)): the same moment always shows the same tip", () => {
-    const expected = AR[tipFor(tipSeed(NOON))] as string;
+  // WP-ARABIC2 (d): the loading fallback is painted before the page knows who is looking, so it uses the
+  // safest list — "everyone" — and never promises a guest the chat or the library. Same pure function of
+  // the clock, one list narrower.
+  const tipAt = (ms: number) => tipForAudience(tipSeed(ms), "everyone");
+
+  it("the tip is chosen from the clock, by tipForAudience(tipSeed(now), \"everyone\"): the same moment always shows the same tip", () => {
+    const expected = AR[tipAt(NOON)] as string;
     expect(at(NOON)).toContain(expected);
     expect(at(NOON)).toBe(at(NOON + 1000));
-    expect(at(NOON + TIP_ROTATION_MS)).toContain(AR[tipFor(tipSeed(NOON + TIP_ROTATION_MS))] as string);
+    expect(at(NOON + TIP_ROTATION_MS)).toContain(AR[tipAt(NOON + TIP_ROTATION_MS)] as string);
     expect(at(NOON + TIP_ROTATION_MS)).not.toContain(expected);
+  });
+
+  it("never shows a guest a tip about a feature the server refuses them", () => {
+    const shown = new Set<string>();
+    for (let i = 0; i < TIP_ROTATION_MS * TIP_KEYS.length; i += TIP_ROTATION_MS) shown.add(tipAt(NOON + i));
+    expect(shown.has("tips.chat")).toBe(false);
+    expect(shown.has("tips.files")).toBe(false);
+    // every other key still gets its turn: narrowing the list must not swallow tips
+    expect(shown.size).toBe(TIP_KEYS.length - 2);
   });
 
   it("never rolls a die while rendering (a random pick differs between the server and the browser)", () => {
