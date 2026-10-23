@@ -1,7 +1,7 @@
 import { db } from "@/server/db";
 import { pushNotification } from "@/server/notify";
 import { isOnline } from "@/server/realtime/presence";
-import type { ConversationFacts } from "@/server/policy/conversation";
+import { canReadConversation, type ConversationFacts } from "@/server/policy/conversation";
 
 /**
  * Chat notifications: a message reaches the people of its audience that are NOT looking at the
@@ -16,6 +16,7 @@ export async function notifyMessageToAudience(opts: {
   kind: "DM" | "GROUP" | "TOPIC";
   title: string; // the conversation title (or the DM peer's name)
   preview: string; // the body preview (attachments -> an Arabic «أرسل مرفقًا»)
+  messageId: string; // in the link, so an edit or a delete can reach the preview again
 }): Promise<void> {
   const targets = new Set(opts.audienceIds);
   for (const userId of targets) {
@@ -32,12 +33,58 @@ export async function notifyMessageToAudience(opts: {
       type: "chat_message",
       title: opts.title,
       body: opts.preview,
-      linkUrl: `/chat/${opts.conversationId}`,
+      linkUrl: messageLink(opts.conversationId, opts.messageId),
     });
   }
 }
 
-/** The audience of a facts object that should be notified (members minus the author). */
-export function audienceOf(facts: ConversationFacts, authorId: string): string[] {
-  return facts.memberIds.filter((id) => id !== authorId);
+/** The link a chat notification carries: the conversation, and the message it was about. */
+export function messageLink(conversationId: string, messageId: string): string {
+  return `/chat/${conversationId}?m=${messageId}`;
+}
+
+/** The text shown in place of a deleted message's preview (the bell never keeps it). */
+export const DELETED_PREVIEW = "حُذفت الرسالة";
+
+/**
+ * An edited or deleted message: every notification that still carries its old preview gets the new
+ * one (the edited text, or «حُذفت الرسالة»). Runs inside the edit/delete transaction.
+ */
+export async function rewriteMessagePreviews(
+  tx: Pick<typeof db, "notification">,
+  conversationId: string,
+  messageId: string,
+  preview: string,
+): Promise<void> {
+  await tx.notification.updateMany({
+    where: { type: "chat_message", linkUrl: messageLink(conversationId, messageId) },
+    data: { body: preview },
+  });
+}
+
+/**
+ * Who a new message may notify (spec, 12-PHASE3-TASKS §32): in a DM its other person; in a topic
+ * (or a legacy group) only the people @mentioned and the author of the message replied to — the rest
+ * of a topic is Phase 5. The author is never notified of their own message.
+ * These are CANDIDATES: `readersAmong` keeps only the people who may read the conversation now.
+ */
+export function notifyCandidates(
+  facts: ConversationFacts,
+  authorId: string,
+  mentionIds: string[],
+  replyAuthorId: string | null,
+): string[] {
+  const ids = facts.kind === "DM" ? facts.memberIds : [...mentionIds, ...(replyAuthorId ? [replyAuthorId] : [])];
+  return [...new Set(ids)].filter((id) => id !== authorId);
+}
+
+/**
+ * The people among `ids` who may read the conversation right now, by the policy (their rank in the
+ * conversation's own company, their space row, the topic's restriction). A ConversationMember row
+ * alone proves nothing: one left behind by a removal must not keep receiving the messages.
+ */
+export async function readersAmong(conversationId: string, ids: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const id of ids) if (await canReadConversation(id, conversationId)) out.push(id);
+  return out;
 }

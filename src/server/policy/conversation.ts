@@ -98,10 +98,16 @@ export function canPost(
 /** May the viewer moderate this conversation (mute, delete others, pin, close, settings, notes)? */
 export function canModerate(facts: ConversationFacts | null, org: OrgFacts | null): boolean {
   if (!facts || !isActiveOf(org) || !isOrgOf(facts, org)) return false;
+  // a DM is its two people's: nobody moderates it, the OWNER included (he never writes in it)
+  if (facts.kind === "DM") return false;
   if (isOwnerOf(org)) return true;
+  // nobody moderates what they may not read (a restricted topic they are not in, a space they left)
+  if (!canRead(facts, org)) return false;
   if (facts.kind === "GROUP") return facts.viewerIsMember && facts.viewerGroupRole === "admin";
-  if (org!.role === "ADMIN") return facts.kind !== "DM"; // org admins moderate topics, never DMs
-  return isSpaceAdmin(facts.viewerSpaceRole) && facts.kind !== "DM";
+  // design §26: "space ADMIN or OWNER". The org rank ADMIN gives no space by itself (AGENTS.md access
+  // model): an org admin moderates the spaces where they are a space ADMIN — HQ included, where the
+  // space role follows the org rank (accounts.ts alignSpaceRoles)
+  return isSpaceAdmin(facts.viewerSpaceRole);
 }
 
 /** May the viewer PIN this message's conversation? Topics: moderators; DMs: either participant. */

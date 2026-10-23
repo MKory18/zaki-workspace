@@ -14,6 +14,7 @@ import {
   type RtEvent,
 } from "@/server/realtime/hub";
 import { ensureListener } from "@/server/realtime/listener";
+import { touchPresence } from "@/server/realtime/presence";
 
 /**
  * GET /api/rt — the one SSE stream per tab.
@@ -166,6 +167,9 @@ async function sse(req: NextRequest): Promise<Response> {
 
         heartbeat = setInterval(() => {
           write(`: hb ${Date.now()}\n\n`);
+          // an open stream IS presence: without this, everybody counted as offline 30 s after
+          // connecting, and every message turned into a notification for them (review A3)
+          touchPresence(actor.userId);
           void recheckSession();
         }, HEARTBEAT_MS);
       },
