@@ -509,7 +509,12 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
-/** Space rows follow a change to or from GUEST (an org guest is a guest in every space anyway). */
+/**
+ * Space rows follow a rank change. To or from GUEST: an org guest is a guest in every space anyway.
+ * Any other change: the HQ space role follows the rank (ADMIN ↔ space ADMIN, everybody else MEMBER),
+ * so a demoted admin stops moderating the company-wide space and a new admin starts (review B4).
+ * The other spaces keep the roles their own admins gave.
+ */
 async function alignSpaceRoles(tx: Prisma.TransactionClient, orgId: string, userId: string, from: OrgRole, to: OrgRole) {
   const rows = { userId, workspace: { organizationId: orgId } };
   if (to === "GUEST") {
@@ -517,6 +522,9 @@ async function alignSpaceRoles(tx: Prisma.TransactionClient, orgId: string, user
     await tx.workspaceMember.updateMany({ where: { ...rows, role: { not: "GUEST" } }, data: { role: "GUEST" } });
   } else if (from === "GUEST") {
     await tx.workspaceMember.updateMany({ where: { ...rows, role: "GUEST" }, data: { role: "MEMBER" } });
+    await addPersonToHq(orgId, userId, to, tx);
+  } else {
+    // addPersonToHq re-reads the rank written above and upserts the HQ row with the matching role
     await addPersonToHq(orgId, userId, to, tx);
   }
 }
