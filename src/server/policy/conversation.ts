@@ -98,6 +98,8 @@ export function canPost(
 /** May the viewer moderate this conversation (mute, delete others, pin, close, settings, notes)? */
 export function canModerate(facts: ConversationFacts | null, org: OrgFacts | null): boolean {
   if (!facts || !isActiveOf(org) || !isOrgOf(facts, org)) return false;
+  // a DM is its two people's: nobody moderates it, the OWNER included (he never writes in it)
+  if (facts.kind === "DM") return false;
   if (isOwnerOf(org)) return true;
   if (facts.kind === "GROUP") return facts.viewerIsMember && facts.viewerGroupRole === "admin";
   if (org!.role === "ADMIN") return facts.kind !== "DM"; // org admins moderate topics, never DMs
