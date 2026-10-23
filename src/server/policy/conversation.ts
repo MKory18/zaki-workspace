@@ -102,8 +102,8 @@ export function canModerate(facts: ConversationFacts | null, org: OrgFacts | nul
   if (facts.kind === "DM") return false;
   if (isOwnerOf(org)) return true;
   if (facts.kind === "GROUP") return facts.viewerIsMember && facts.viewerGroupRole === "admin";
-  if (org!.role === "ADMIN") return facts.kind !== "DM"; // org admins moderate topics, never DMs
-  return isSpaceAdmin(facts.viewerSpaceRole) && facts.kind !== "DM";
+  if (org!.role === "ADMIN") return true; // org admins moderate topics (DMs were refused above)
+  return isSpaceAdmin(facts.viewerSpaceRole);
 }
 
 /** May the viewer PIN this message's conversation? Topics: moderators; DMs: either participant. */
