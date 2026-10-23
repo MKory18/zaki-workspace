@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
-import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import { IBM_Plex_Sans_Arabic, Lalezar } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -13,6 +13,18 @@ const plex = IBM_Plex_Sans_Arabic({
   weight: ["400", "500", "600", "700"],
   display: "swap",
   variable: "--font-plex",
+});
+
+/**
+ * The display face of the adopted look (the owner's mockup): the «زاكي» wordmark, the mission
+ * title and the «تمّت المهمّة» stamp. One weight (400) is all the mockup draws; the stroke and the
+ * shadow come from globals.css (.zk-gta), not from the font.
+ */
+const lalezar = Lalezar({
+  subsets: ["arabic"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-lalezar",
 });
 
 /**
@@ -63,7 +75,7 @@ export function generateViewport(): Viewport {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const { theme, decor } = chosen();
   const attrs = rootThemeAttributes(theme, decor);
-  const className = [plex.variable, reem.variable, attrs.dark ? "dark" : ""].filter(Boolean).join(" ");
+  const className = [plex.variable, reem.variable, lalezar.variable, attrs.dark ? "dark" : ""].filter(Boolean).join(" ");
   return (
     <html lang="ar" dir="rtl" data-theme={attrs["data-theme"]} data-decor={attrs["data-decor"]} className={className} suppressHydrationWarning>
       <body>
