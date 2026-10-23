@@ -94,6 +94,24 @@ describe("middleware: unfinished onboarding goes to /onboarding", () => {
     expect(location(res)).toBe("/login");
   });
 
+  it("behind a proxy or tunnel the redirect points at the PUBLIC host, not the internal one", async () => {
+    // `req.nextUrl` carries the address the server was started on (localhost:3001), so a redirect built
+    // from it sends a visitor of the tunnel to a dead address on their own machine.
+    const publicHost = "simpsons-details-hewlett-including.trycloudflare.com";
+    const cases: Array<Record<string, string>> = [
+      { host: publicHost, "x-forwarded-host": publicHost, "x-forwarded-proto": "https" },
+      { host: publicHost, "x-forwarded-proto": "https" },
+    ];
+    for (const headers of cases) {
+      const h = new Headers(headers);
+      const res = await middleware(new NextRequest(`http://localhost:3001/projects`, { headers: h }));
+      const loc = new URL(res.headers.get("location") as string);
+      expect(loc.host, JSON.stringify(headers)).toBe(publicHost);
+      expect(loc.protocol).toBe("https:");
+      expect(loc.pathname + loc.search).toBe("/login?next=%2Fprojects");
+    }
+  });
+
   it("a ?next= is only ever a path on this site", async () => {
     const res = await middleware(req("//evil.example/x"));
     expect(res.status).toBe(307);

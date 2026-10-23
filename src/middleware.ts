@@ -83,13 +83,32 @@ function nextOf(req: NextRequest): string {
   return target === "/" ? "" : target;
 }
 
+/**
+ * The address the BROWSER used. `req.nextUrl` holds the address the server was started on
+ * (localhost:3001), so a redirect built from it sends a visitor of a tunnel or a reverse proxy to a
+ * dead address on their own machine. The public host and scheme are the ones the proxy forwarded —
+ * `x-forwarded-host` first (a proxy in front of another one rewrites `host`), then `host`.
+ */
+function publicBase(req: NextRequest): { origin: string; host: string; proto: string } | null {
+  const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || req.headers.get("host")?.trim() || "";
+  if (!host) return null;
+  const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const proto = forwardedProto === "https" || forwardedProto === "http" ? forwardedProto : req.nextUrl.protocol.replace(":", "");
+  return { origin: `${proto}://${host}`, host, proto };
+}
+
 function redirectTo(req: NextRequest, pathname: string): NextResponse {
-  const url = req.nextUrl.clone();
+  const base = publicBase(req);
+  const url = base ? new URL(`${base.origin}${pathname}`) : req.nextUrl.clone();
   url.pathname = pathname;
   url.search = "";
   const next = nextOf(req);
   if (next) url.searchParams.set("next", next);
-  return NextResponse.redirect(url);
+  const res = NextResponse.redirect(url);
+  // a session cookie set on the internal scheme would never come back from an https visitor
+  if (base && base.proto === "https") res.headers.append("vary", "x-forwarded-proto, x-forwarded-host");
+  return res;
 }
 
 export async function middleware(req: NextRequest) {
