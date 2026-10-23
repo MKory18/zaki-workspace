@@ -6,10 +6,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowBigUp, Rocket, Trash2, ExternalLink } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea, Label } from "@/components/ui/input";
+import { Input, Label } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
+import { enumLabel } from "@/lib/i18n/enums";
 import { cn } from "@/lib/utils";
 
 export interface IdeaItem {
@@ -42,15 +45,32 @@ const NEXT_STATUS: Record<IdeaItem["status"], IdeaItem["status"][]> = {
   ACCEPTED: [],
 };
 
+/**
+ * The server names a refusal "idea.<reason>" (sometimes "idea.<reason>:detail"); the dictionary writes
+ * it "ideas.<reason>". Anything it has no sentence for is the general error, never a raw key.
+ */
+export function ideaError(err: unknown, t: (key: string) => string): string {
+  if (err instanceof ApiError) {
+    const reason = err.messageKey?.replace(/^idea\./, "").split(":")[0];
+    if (reason) {
+      const key = `ideas.${reason}`;
+      const text = t(key);
+      if (text !== key) return text;
+    }
+    if (err.code === "forbidden") return t("forbidden");
+  }
+  return t("common.error");
+}
+
 const FILTERS: (IdeaItem["status"] | "ALL" | "MINE")[] = [
   "ALL", "NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED", "MINE",
 ];
 
 const STATUS_STYLE: Record<IdeaItem["status"], string> = {
   NEW: "bg-surface-2 text-fg-muted",
-  UNDER_REVIEW: "bg-amber-500/15 text-amber-600",
-  ACCEPTED: "bg-emerald-500/15 text-emerald-600",
-  REJECTED: "bg-red-500/15 text-red-600",
+  UNDER_REVIEW: "bg-warn/10 text-warn",
+  ACCEPTED: "bg-ok/10 text-ok",
+  REJECTED: "bg-danger/10 text-danger",
 };
 
 export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx }) {
@@ -114,7 +134,7 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
       toast(t("task.updated"), "success");
       router.refresh();
     } catch (err) {
-      toast(err instanceof ApiError ? t(err.code.startsWith("idea.") ? err.code : "common.error") : t("common.error"), "error");
+      toast(ideaError(err, t), "error");
     }
   }
 
@@ -217,7 +237,7 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
                   {idea.description ? (
                     <p className="mt-1 line-clamp-3 text-xs text-fg-muted">{idea.description}</p>
                   ) : null}
-                  <p className="mt-1.5 text-[10px] text-muted">
+                  <p className="mt-1.5 text-xs text-muted">
                     {idea.creatorName}
                     {idea.creatorJobTitle ? ` · ${idea.creatorJobTitle}` : ""}
                     {idea.taskId ? (
@@ -230,8 +250,8 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
                 </div>
 
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", STATUS_STYLE[idea.status])}>
-                    {t(`ideas.status.${idea.status}`)}
+                  <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", STATUS_STYLE[idea.status])}>
+                    {enumLabel("IdeaStatus", idea.status)}
                   </span>
                   {canEdit ? (
                     <div className="flex items-center gap-1">
@@ -251,7 +271,7 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
                         onClick={() => removeIdea(idea)}
                         aria-label={t("common.delete")}
                         title={t("common.delete")}
-                        className="rounded p-1 text-muted hover:bg-surface-2 hover:text-red-500"
+                        className="rounded p-1 text-muted hover:bg-surface-2 hover:text-danger"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -261,16 +281,16 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
                     <Select
                       aria-label={t("ideas.setStatus")}
                       value={idea.status}
-                      className="!h-7 w-28 text-[10px]"
+                      className="!h-7 w-28 text-xs"
                       onChange={(e) => {
                         const target = e.target.value as IdeaItem["status"];
                         if (target !== idea.status) setStatus(idea, target);
                       }}
                     >
-                      <option value={idea.status}>{t(`ideas.status.${idea.status}`)}</option>
+                      <option value={idea.status}>{enumLabel("IdeaStatus", idea.status)}</option>
                       {nexts.map((s) => (
                         <option key={s} value={s}>
-                          {t(`ideas.status.${s}`)}
+                          {enumLabel("IdeaStatus", s)}
                         </option>
                       ))}
                     </Select>
@@ -354,7 +374,7 @@ function ConvertModal({
       });
       onDone(res.taskId);
     } catch (err) {
-      toast(err instanceof ApiError ? t(err.code === "idea.already_converted" ? "ideas.alreadyConverted" : "common.error") : t("common.error"), "error");
+      toast(ideaError(err, t), "error");
       setBusy(false);
     }
   }
@@ -363,7 +383,7 @@ function ConvertModal({
     <Modal open onClose={onClose} title={t("ideas.convertTo")}>
       <div className="space-y-3">
         <div>
-          <Label>{t("top.workspaces")}</Label>
+          <Label>{t("ws.one")}</Label>
           <Select value={workspaceId} onChange={(e) => { setWorkspaceId(e.target.value); setProjectId(""); setBoardId(""); }}>
             <option value="">—</option>
             {workspaces.map((w) => (
@@ -374,7 +394,7 @@ function ConvertModal({
           </Select>
         </div>
         <div>
-          <Label>{t("nav.projects")}</Label>
+          <Label>{t("proj.one")}</Label>
           <Select value={projectId} onChange={(e) => { setProjectId(e.target.value); setBoardId(""); }} disabled={!workspaceId}>
             <option value="">—</option>
             {(projectsQuery.data?.projects ?? []).map((p) => (
@@ -385,7 +405,7 @@ function ConvertModal({
           </Select>
         </div>
         <div>
-          <Label>{t("board.new")}</Label>
+          <Label>{t("board.one")}</Label>
           <Select value={boardId} onChange={(e) => setBoardId(e.target.value)} disabled={!projectId}>
             <option value="">—</option>
             {(boardsQuery.data?.boards ?? []).map((b) => (
@@ -395,7 +415,7 @@ function ConvertModal({
             ))}
           </Select>
         </div>
-        <p className="text-[10px] text-muted">{t("ideas.convertHint")}</p>
+        <p className="text-xs text-muted">{t("ideas.convertHint")}</p>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             {t("task.cancel")}

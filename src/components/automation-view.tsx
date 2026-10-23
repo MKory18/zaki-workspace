@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { CircleDot, ExternalLink, FileText, Globe, Plug, Webhook } from "lucide-react";
 import { apiDelete, apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { fmtDateTime } from "@/lib/format";
+import { enumLabel, eventDetailLabel, eventLabel } from "@/lib/i18n/enums";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n";
@@ -51,13 +52,13 @@ interface DriveFile {
 }
 
 export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { toast } = useToast();
   const qc = useQueryClient();
   const params = useSearchParams();
   const canManage = ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
 
-  // Google OAuth redirects back with ?google=â€¦ â€” surface exactly one verdict.
+  // Google OAuth redirects back with ?google=… — surface exactly one verdict.
   const googleResult = params.get("google");
   useEffect(() => {
     if (!googleResult) return;
@@ -101,7 +102,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
   const testN8n = useMutation({
     mutationFn: () => apiPost<{ delivered: boolean; detail?: string }>("/api/integrations/n8n/test"),
     onSuccess: (res) => {
-      toast(res.delivered ? t("n8n.testOk") : `${t("n8n.testFail")}${res.detail ? ` â€” ${res.detail}` : ""}`, res.delivered ? "success" : "error");
+      toast(res.delivered ? t("n8n.testOk") : `${t("n8n.testFail")}${res.detail ? ` — ${eventDetailLabel(res.detail)}` : ""}`, res.delivered ? "success" : "error");
       qc.invalidateQueries({ queryKey: ["n8n"] });
     },
     onError: (err) => toast(errText(err, t), "error"),
@@ -117,8 +118,14 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
     onError: (err) => toast(errText(err, t), "error"),
   });
 
-  const google = useQuery({ queryKey: ["google"], queryFn: () => apiGet<GoogleStatus>("/api/integrations/google") });
   const [showFiles, setShowFiles] = useState(false);
+  // The Drive file list is for org managers only (the server answers 403 otherwise) and is only
+  // fetched when it is actually being shown (`?files=1`); the status itself is open to every member.
+  const wantFiles = showFiles && canManage;
+  const google = useQuery({
+    queryKey: ["google", wantFiles],
+    queryFn: () => apiGet<GoogleStatus>(`/api/integrations/google${wantFiles ? "?files=1" : ""}`),
+  });
 
   const disconnectGoogle = useMutation({
     mutationFn: () => apiDelete("/api/integrations/google"),
@@ -140,19 +147,19 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
       <section className="space-y-4 rounded-xl border border-border bg-surface-1 p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="grid size-9 place-items-center rounded-lg bg-fuchsia-500/15 text-fuchsia-500">
+            <span className="grid size-9 place-items-center rounded-lg bg-cat-2/10 text-cat-2">
               <Webhook className="size-5" />
             </span>
             <div>
-              <h2 className="text-sm font-semibold">n8n</h2>
+              <h2 className="text-sm font-semibold">{enumLabel("IntegrationType", "N8N")}</h2>
               <p className="text-xs text-muted">{t("n8n.subtitle")}</p>
             </div>
           </div>
           {n8n.data && (
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                n8n.data.status.connected ? "bg-emerald-500/15 text-emerald-600" : "bg-surface-2 text-muted",
+                "rounded-full px-2 py-0.5 text-xs font-medium",
+                n8n.data.status.connected ? "bg-ok/10 text-ok" : "bg-surface-2 text-muted",
               )}
             >
               {n8n.data.status.connected ? t("n8n.connected") : t("n8n.notConnected")}
@@ -169,7 +176,7 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}
                 className="flex-1 font-mono text-sm"
-                aria-label="n8n webhook URL"
+                aria-label={t("automation.webhookLabel")}
               />
               <Button onClick={() => saveN8n.mutate(false)} disabled={saveN8n.isPending || !webhookUrl.trim()}>
                 {t("n8n.save")}
@@ -186,12 +193,13 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
                     onClick={() =>
                       setSelectedEvents((prev) => (on ? prev.filter((x) => x !== e) : [...prev, e]))
                     }
+                    aria-pressed={on}
                     className={cn(
-                      "rounded-lg border px-2 py-1 font-mono text-[10px] transition-colors",
+                      "rounded-lg border px-2 py-1 text-xs transition-colors",
                       on ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:bg-surface-2",
                     )}
                   >
-                    {e}
+                    {eventLabel(e)}
                   </button>
                 );
               })}
@@ -214,17 +222,21 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
 
             {generatedSecret ? (
               <div className="rounded-lg border border-dashed border-border bg-surface-2 p-3">
-                <p className="mb-1 text-[10px] text-muted">{t("n8n.secretOnce")}</p>
+                <p className="mb-1 text-xs text-muted">{t("n8n.secretOnce")}</p>
                 <code dir="ltr" className="block break-all font-mono text-xs">
                   {generatedSecret}
                 </code>
-                <p className="mt-2 text-[10px] leading-5 text-muted">{t("n8n.inboundHelp")}</p>
-                <code dir="ltr" className="mt-1 block break-all font-mono text-[10px] text-muted">
-                  POST {"{"}APP_URL{"}"}/api/integrations/n8n/inbound â€” x-zaki-org: {"{orgId}"} â€” x-zaki-token: {"{secret}"}
+                <p className="mt-2 text-xs leading-5 text-muted">{t("n8n.inboundHelp")}</p>
+                <code dir="ltr" className="mt-1 block whitespace-pre-wrap break-all font-mono text-xs text-muted">
+                  {`POST {APP_URL}/api/integrations/n8n/inbound
+x-zaki-org: {orgId}
+x-zaki-timestamp: {unix seconds}
+x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
                 </code>
+                <p className="mt-1 text-xs leading-5 text-muted">{t("n8n.inboundLegacy")}</p>
               </div>
             ) : n8n.data?.status.connected ? (
-              <p className="text-[10px] text-muted">{t("n8n.secretStored")}</p>
+              <p className="text-xs text-muted">{t("n8n.secretStored")}</p>
             ) : null}
           </div>
         ) : ctx.orgRole === "GUEST" ? (
@@ -233,9 +245,9 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
           <p className="text-xs text-muted">{t("n8n.managerOnly")}</p>
         )}
 
-        {/* event log â€” every attempt, success or failure */}
+        {/* event log — every attempt, success or failure */}
         <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-right text-[11px]">
+          <table className="w-full text-right text-xs">
             <thead className="bg-surface-2 text-muted">
               <tr>
                 <th className="px-2 py-1.5 font-medium">{t("log.direction")}</th>
@@ -251,19 +263,19 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
                   <td className="px-2 py-1.5">
                     <span
                       className={cn(
-                        "rounded px-1.5 py-0.5 font-mono text-[10px]",
-                        ev.direction === "OUT" ? "bg-fuchsia-500/10 text-fuchsia-600" : "bg-sky-500/10 text-sky-600",
+                        "rounded px-1.5 py-0.5 text-xs",
+                        ev.direction === "OUT" ? "bg-cat-2/10 text-cat-2" : "bg-info/10 text-info",
                       )}
                     >
-                      {ev.direction}
+                      {enumLabel("IntegrationDirection", ev.direction)}
                     </span>
                   </td>
-                  <td className="px-2 py-1.5 font-mono">{ev.type}</td>
-                  <td className={cn("px-2 py-1.5", ev.status === "OK" ? "text-emerald-600" : "text-red-600")}>{ev.status}</td>
-                  <td className="max-w-[16rem] truncate px-2 py-1.5 text-muted" title={ev.detail ?? undefined}>
-                    {ev.detail ?? "â€”"}
+                  <td className="px-2 py-1.5">{eventLabel(ev.type)}</td>
+                  <td className={cn("px-2 py-1.5", ev.status === "OK" ? "text-ok" : "text-danger")}>{enumLabel("IntegrationEventStatus", ev.status)}</td>
+                  <td className="max-w-[16rem] truncate px-2 py-1.5 text-muted" dir="auto" title={ev.detail ? eventDetailLabel(ev.detail) : undefined}>
+                    {ev.detail ? eventDetailLabel(ev.detail) : "—"}
                   </td>
-                  <td className="px-2 py-1.5 text-muted">{fmtDateTime(ev.createdAt, locale)}</td>
+                  <td className="px-2 py-1.5 text-muted">{fmtDateTime(ev.createdAt)}</td>
                 </tr>
               ))}
               {(n8n.data?.events.length ?? 0) === 0 && (
@@ -282,22 +294,22 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
       <section className="space-y-4 rounded-xl border border-border bg-surface-1 p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="grid size-9 place-items-center rounded-lg bg-amber-500/15 text-amber-500">
+            <span className="grid size-9 place-items-center rounded-lg bg-warn/10 text-warn">
               <Globe className="size-5" />
             </span>
             <div>
-              <h2 className="text-sm font-semibold">Google Drive</h2>
+              <h2 className="text-sm font-semibold">{enumLabel("IntegrationType", "GOOGLE_DRIVE")}</h2>
               <p className="text-xs text-muted">{t("google.subtitle")}</p>
             </div>
           </div>
           <span
             className={cn(
-              "rounded-full px-2 py-0.5 text-[10px] font-medium",
+              "rounded-full px-2 py-0.5 text-xs font-medium",
               google.data?.connected
-                ? "bg-emerald-500/15 text-emerald-600"
+                ? "bg-ok/10 text-ok"
                 : google.data?.configured
                   ? "bg-surface-2 text-muted"
-                  : "bg-amber-500/15 text-amber-600",
+                  : "bg-warn/10 text-warn",
             )}
           >
             {google.data?.connected ? t("google.connected") : google.data?.configured ? t("google.notConnected") : t("google.needsEnv")}
@@ -309,25 +321,27 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
         ) : google.data.connected ? (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setShowFiles((s) => !s)}>
-                <FileText className="size-4" />
-                {showFiles ? t("google.hideFiles") : t("google.viewFiles")}
-              </Button>
+              {canManage && (
+                <Button variant="secondary" size="sm" onClick={() => setShowFiles((s) => !s)}>
+                  <FileText className="size-4" />
+                  {showFiles ? t("google.hideFiles") : t("google.viewFiles")}
+                </Button>
+              )}
               {canManage && (
                 <Button variant="danger" size="sm" onClick={() => disconnectGoogle.mutate()} disabled={disconnectGoogle.isPending}>
                   {t("google.disconnect")}
                 </Button>
               )}
             </div>
-            {google.data.filesError && <p className="text-xs text-red-500">{t(google.data.filesError)}</p>}
-            {showFiles && (
+            {google.data.filesError && <p className="text-xs text-danger">{t(google.data.filesError)}</p>}
+            {showFiles && canManage && (
               <ul className="divide-y divide-border rounded-lg border border-border">
                 {google.data.files?.length ? (
                   google.data.files.map((f) => (
                     <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2">
                       <span className="line-clamp-1 text-xs">{f.name}</span>
                       {f.link && (
-                        <a href={f.link} target="_blank" rel="noreferrer" className="text-[10px] text-accent hover:underline">
+                        <a href={f.link} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
                           <ExternalLink className="inline size-3" /> {t("google.open")}
                         </a>
                       )}
@@ -341,13 +355,15 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <Link href="/api/integrations/google/start">
-              <Button size="sm">
-                <Plug className="size-4" />
-                {t("google.connect")}
-              </Button>
-            </Link>
-            <p className="text-[10px] text-muted">{t("google.readonlyNote")}</p>
+            {canManage ? (
+              <Link href="/api/integrations/google/start">
+                <Button size="sm">
+                  <Plug className="size-4" />
+                  {t("google.connect")}
+                </Button>
+              </Link>
+            ) : null}
+            <p className="text-xs text-muted">{t("google.readonlyNote")}</p>
           </div>
         )}
       </section>
@@ -355,10 +371,24 @@ export function AutomationView({ ctx }: { ctx: { orgRole: string } }) {
   );
 }
 
-function errText(err: unknown, t: (key: string, vars?: Record<string, string | number>) => string): string {
-  if (err instanceof ApiError && err.code) {
-    const translated = t(err.code);
-    return translated !== err.code ? translated : t("common.error");
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
+
+function errText(err: unknown, t: TFn): string {
+  if (err instanceof ApiError) {
+    // A validation error names the exact problem (e.g. the webhook URL rules): show that, not a generic text.
+    if (err.code === "validation.failed" && Array.isArray(err.details) && err.details.length > 0) {
+      const first = (err.details[0] as { message?: string }).message;
+      const mapped = first ? t(first) : "";
+      if (mapped && mapped !== first) return mapped;
+    }
+    if (err.messageKey) {
+      const mapped = t(err.messageKey);
+      if (mapped !== err.messageKey) return mapped;
+    }
+    if (err.code) {
+      const translated = t(err.code);
+      if (translated !== err.code) return translated;
+    }
   }
   return t("common.error");
 }

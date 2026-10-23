@@ -1,22 +1,48 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
 import { activeOrgCtx } from "@/server/services/integrations";
+import { assertNotGuest } from "@/server/services/guest-guard";
 import { readStored } from "@/server/services/files";
+import { parseByteRange } from "@/server/files/range";
 
-/** ?download=1 → attachment; otherwise inline (preview) with strict sniffed type. */
+/**
+ * ?download=1 → attachment; otherwise inline (preview) with strict sniffed type.
+ * Honours a single `Range: bytes=…` request (206) so video/audio can be seeked.
+ * Org GUESTs get 403 `guest.no_access` instead of the bytes.
+ */
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
+    assertNotGuest(ctx);
     const { buffer, mimeType, name } = await readStored(ctx.orgId, params.id);
     const wantsDownload = new URL(req.url).searchParams.get("download") === "1";
-    const headers: Record<string, string> = {
+    const base: Record<string, string> = {
       "content-type": mimeType,
-      "content-length": String(buffer.byteLength),
       "content-disposition": `${wantsDownload ? "attachment" : "inline"}; filename*=UTF-8''${encodeIetf(name)}`,
       "x-content-type-options": "nosniff",
       "cache-control": "private, max-age=0, must-revalidate",
+      "accept-ranges": "bytes",
     };
-    return new NextResponse(new Uint8Array(buffer), { status: 200, headers });
+
+    const range = parseByteRange(req.headers.get("range"), buffer.byteLength);
+    if (range.kind === "unsatisfiable") {
+      return new NextResponse(null, { status: 416, headers: { ...base, "content-range": `bytes */${buffer.byteLength}` } });
+    }
+    if (range.kind === "partial") {
+      const slice = buffer.subarray(range.start, range.end + 1);
+      return new NextResponse(new Uint8Array(slice), {
+        status: 206,
+        headers: {
+          ...base,
+          "content-length": String(slice.byteLength),
+          "content-range": `bytes ${range.start}-${range.end}/${buffer.byteLength}`,
+        },
+      });
+    }
+    return new NextResponse(new Uint8Array(buffer), {
+      status: 200,
+      headers: { ...base, "content-length": String(buffer.byteLength) },
+    });
   });
 }
 

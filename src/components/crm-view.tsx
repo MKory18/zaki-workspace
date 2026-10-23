@@ -5,9 +5,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Briefcase, Building2, Mail, Pencil, Phone, Plus, Trash2, Users } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
+import { fmtNumber } from "@/lib/format";
+import { enumLabel, enumOptions } from "@/lib/i18n/enums";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
@@ -43,18 +47,23 @@ interface OpportunityRow {
 	createdAt: string;
 }
 
-const STAGES = ["LEAD", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST"] as const;
+const STAGES = enumOptions("OpportunityStage");
 
 const STAGE_STYLES: Record<string, string> = {
-	LEAD: "bg-slate-500/10 text-slate-600 dark:text-slate-400",
-	QUALIFIED: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-	PROPOSAL: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-	NEGOTIATION: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-	WON: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-	LOST: "bg-red-500/10 text-red-600 dark:text-red-400",
+	LEAD: "bg-surface-2 text-fg-muted",
+	QUALIFIED: "bg-info/10 text-info",
+	PROPOSAL: "bg-warn/10 text-warn",
+	NEGOTIATION: "bg-cat-6/10 text-cat-6",
+	WON: "bg-ok/10 text-ok",
+	LOST: "bg-danger/10 text-danger",
 };
 
-export function CrmView() {
+/**
+ * `canEdit` is the `crm.edit` switch (the page reads it from the person's capabilities): without it
+ * the screen only reads - no create, edit, delete or stage change is offered. The server refuses
+ * those requests too; this keeps the screen honest.
+ */
+export function CrmView({ canEdit }: { canEdit: boolean }) {
 	const { t } = useI18n();
 	const qc = useQueryClient();
 	const { toast } = useToast();
@@ -155,7 +164,7 @@ export function CrmView() {
 						<span className="text-xs text-muted">({opps.length})</span>
 					</button>
 				</div>
-				{tab === "customers" ? (
+				{!canEdit ? null : tab === "customers" ? (
 					<Button onClick={() => setCustomerModal("new")}>
 						<Plus className="size-4" />
 						{t("crm.newCustomer")}
@@ -172,6 +181,7 @@ export function CrmView() {
 				<CustomersTab
 					rows={customers}
 					loading={customersQuery.isLoading}
+					canEdit={canEdit}
 					onEdit={setCustomerModal}
 					onDelete={(id) => delCustomer.mutate(id)}
 				/>
@@ -179,6 +189,7 @@ export function CrmView() {
 				<OpportunitiesTab
 					rows={opps}
 					loading={oppsQuery.isLoading}
+					canEdit={canEdit}
 					onEdit={setOppModal}
 					onDelete={(id) => delOpp.mutate(id)}
 					onStageChange={(id, stage) =>
@@ -215,14 +226,16 @@ export function CrmView() {
 	);
 }
 
-function CustomersTab({
+export function CustomersTab({
 	rows,
 	loading,
+	canEdit,
 	onEdit,
 	onDelete,
 }: {
 	rows: CustomerRow[];
 	loading: boolean;
+	canEdit: boolean;
 	onEdit: (row: CustomerRow) => void;
 	onDelete: (id: string) => void;
 }) {
@@ -240,7 +253,7 @@ function CustomersTab({
 				<div key={c.id} className="rounded-xl border border-border bg-surface-1 p-4">
 					<div className="flex items-start justify-between gap-2">
 						<div className="flex items-center gap-2">
-							<div className="grid size-9 place-items-center rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
+							<div className="grid size-9 place-items-center rounded-lg bg-info/10 text-info">
 								<Users className="size-4.5" />
 							</div>
 							<div>
@@ -253,22 +266,24 @@ function CustomersTab({
 								) : null}
 							</div>
 						</div>
-						<div className="flex gap-1">
-							<button
-								aria-label={t("common.edit")}
-								onClick={() => onEdit(c)}
-								className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-fg"
-							>
-								<Pencil className="size-3.5" />
-							</button>
-							<button
-								aria-label={t("common.delete")}
-								onClick={() => onDelete(c.id)}
-								className="rounded-md p-1.5 text-muted hover:bg-red-500/10 hover:text-red-500"
-							>
-								<Trash2 className="size-3.5" />
-							</button>
-						</div>
+						{canEdit ? (
+							<div className="flex gap-1">
+								<button
+									aria-label={t("common.edit")}
+									onClick={() => onEdit(c)}
+									className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-fg"
+								>
+									<Pencil className="size-3.5" />
+								</button>
+								<button
+									aria-label={t("common.delete")}
+									onClick={() => onDelete(c.id)}
+									className="rounded-md p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
+								>
+									<Trash2 className="size-3.5" />
+								</button>
+							</div>
+						) : null}
 					</div>
 					<div className="mt-3 space-y-1 text-xs text-muted">
 						{c.email ? (
@@ -290,20 +305,22 @@ function CustomersTab({
 	);
 }
 
-function OpportunitiesTab({
+export function OpportunitiesTab({
 	rows,
 	loading,
+	canEdit,
 	onEdit,
 	onDelete,
 	onStageChange,
 }: {
 	rows: OpportunityRow[];
 	loading: boolean;
+	canEdit: boolean;
 	onEdit: (row: OpportunityRow) => void;
 	onDelete: (id: string) => void;
 	onStageChange: (id: string, stage: string) => void;
 }) {
-	const { t, locale } = useI18n();
+	const { t } = useI18n();
 	if (loading) return <div className="py-10 text-center text-sm text-muted">{t("common.loading")}</div>;
 	if (rows.length === 0)
 		return (
@@ -317,7 +334,7 @@ function OpportunitiesTab({
 				<div key={o.id} className="rounded-xl border border-border bg-surface-1 p-4">
 					<div className="flex flex-wrap items-center justify-between gap-2">
 						<div className="flex items-center gap-2">
-							<span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-muted">
+							<span dir="ltr" className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-muted">
 								OP-{o.number}
 							</span>
 							<div>
@@ -329,44 +346,46 @@ function OpportunitiesTab({
 							</div>
 						</div>
 						<div className="flex items-center gap-2">
-							<span className="text-sm font-semibold text-fg">
-								{o.value.toLocaleString(locale === "ar" ? "ar" : "en")} {t("crm.currency")}
-							</span>
-							<Select
-								value={o.stage}
-								onChange={(e) => onStageChange(o.id, e.target.value)}
-								aria-label={t("crm.stage")}
-								className="w-36 text-xs"
-							>
-								{STAGES.map((s) => (
-									<option key={s} value={s}>
-										{t(`crm.stage_${s.toLowerCase()}`)}
-									</option>
-								))}
-							</Select>
-							<button
-								aria-label={t("common.edit")}
-								onClick={() => onEdit(o)}
-								className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-fg"
-							>
-								<Pencil className="size-3.5" />
-							</button>
-							<button
-								aria-label={t("common.delete")}
-								onClick={() => onDelete(o.id)}
-								className="rounded-md p-1.5 text-muted hover:bg-red-500/10 hover:text-red-500"
-							>
-								<Trash2 className="size-3.5" />
-							</button>
+							<span className="text-sm font-semibold text-fg">{fmtNumber(o.value)}</span>
+							{canEdit ? (
+								<>
+									<Select
+										value={o.stage}
+										onChange={(e) => onStageChange(o.id, e.target.value)}
+										aria-label={t("crm.stage")}
+										className="w-36 text-xs"
+									>
+										{STAGES.map((s) => (
+											<option key={s.value} value={s.value}>
+												{s.label}
+											</option>
+										))}
+									</Select>
+									<button
+										aria-label={t("common.edit")}
+										onClick={() => onEdit(o)}
+										className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-fg"
+									>
+										<Pencil className="size-3.5" />
+									</button>
+									<button
+										aria-label={t("common.delete")}
+										onClick={() => onDelete(o.id)}
+										className="rounded-md p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
+									>
+										<Trash2 className="size-3.5" />
+									</button>
+								</>
+							) : null}
 						</div>
 					</div>
 					<span
 						className={cn(
-							"mt-2 inline-block rounded-full px-2 py-0.5 text-[11px]",
+							"mt-2 inline-block rounded-full px-2 py-0.5 text-xs",
 							STAGE_STYLES[o.stage],
 						)}
 					>
-						{t(`crm.stage_${o.stage.toLowerCase()}`)}
+						{enumLabel("OpportunityStage", o.stage)}
 					</span>
 				</div>
 			))}
@@ -487,8 +506,8 @@ function OpportunityModal({
 						<label className="text-xs text-muted">{t("crm.stage")}</label>
 						<Select value={stage} onChange={(e) => setStage(e.target.value)}>
 							{STAGES.map((s) => (
-								<option key={s} value={s}>
-									{t(`crm.stage_${s.toLowerCase()}`)}
+								<option key={s.value} value={s.value}>
+									{s.label}
 								</option>
 							))}
 						</Select>

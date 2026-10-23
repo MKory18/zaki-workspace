@@ -53,3 +53,17 @@ describe("shiftMonth", () => {
     expect(shiftMonth("nonsense", 5)).toBe(expected);
   });
 });
+
+describe("dayWindow with a company time zone", () => {
+  it("is the COMPANY's day, whatever the server's clock says", () => {
+    // 21:30 UTC on 15 March is 00:30 on 16 March in Damascus (UTC+3)
+    const { from, to } = dayWindow(new Date("2026-03-15T21:30:00Z"), "Asia/Damascus");
+    expect(from.toISOString()).toBe("2026-03-15T21:00:00.000Z");
+    expect(to.toISOString()).toBe("2026-03-16T20:59:59.999Z");
+  });
+
+  it("the same instant is still the 15th in a zone behind UTC", () => {
+    const { from } = dayWindow(new Date("2026-03-15T21:30:00Z"), "America/New_York");
+    expect(from.toISOString()).toBe("2026-03-15T04:00:00.000Z"); // 00:00 EDT (UTC-4)
+  });
+});

@@ -5,11 +5,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LifeBuoy, Pencil, Plus, Ticket as TicketIcon, Trash2 } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
-import { PRIORITY_STYLES } from "@/lib/format";
+import { enumLabel, enumOptions } from "@/lib/i18n/enums";
 import { TicketDetailModal } from "@/components/ticket-detail-modal";
 
 export function errText(err: unknown, t: (k: string) => string): string {
@@ -34,10 +36,10 @@ interface TicketRow {
 }
 
 const STATUS_CHIP: Record<string, string> = {
-  OPEN: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-  IN_PROGRESS: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  RESOLVED: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  CLOSED: "bg-gray-500/10 text-gray-500",
+  OPEN: "bg-info/10 text-info",
+  IN_PROGRESS: "bg-warn/10 text-warn",
+  RESOLVED: "bg-ok/10 text-ok",
+  CLOSED: "bg-surface-2 text-muted",
 };
 
 /** التذاكر — IT desk for one department. */
@@ -132,7 +134,7 @@ export function DepartmentTickets({
   return (
     <>
       <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
-        <LifeBuoy className="size-4 text-rose-500" />
+        <LifeBuoy className="size-4 text-cat-3" />
         {t("ticket.new")}
       </Button>
 
@@ -151,9 +153,9 @@ export function DepartmentTickets({
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder={t("ticket.descPlaceholder")} />
             <div className="grid grid-cols-2 gap-2">
               <Select value={priority} onChange={(e) => setPriority(e.target.value)}>
-                {Object.entries(PRIORITY_STYLES).map(([key, v]) => (
-                  <option key={key} value={key}>
-                    {t(`priority.${key}`)}
+                {enumOptions("TaskPriority").map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </Select>
@@ -203,9 +205,9 @@ export function DepartmentTickets({
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder={t("ticket.descPlaceholder")} />
             <div className="grid grid-cols-2 gap-2">
               <Select value={priority} onChange={(e) => setPriority(e.target.value)}>
-                {Object.entries(PRIORITY_STYLES).map(([key, v]) => (
-                  <option key={key} value={key}>
-                    {t(`priority.${key}`)}
+                {enumOptions("TaskPriority").map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </Select>
@@ -232,14 +234,14 @@ export function DepartmentTickets({
 
       {rows.length > 0 ? (
         <div className="mt-3 space-y-2 rounded-xl border border-border bg-surface p-3">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold text-fg-muted">
-            <TicketIcon className="size-3.5 text-rose-500" />
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-fg-muted">
+            <TicketIcon className="size-3.5 text-cat-3" />
             {t("ticket.openCount", { n: open })}
           </p>
           <ul className="divide-y divide-border">
             {rows.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-2 py-2">
-                <span className="shrink-0 font-mono text-[10px] text-muted">T{r.number}</span>
+                <span dir="ltr" className="shrink-0 font-mono text-xs text-muted">T{r.number}</span>
                 <div className="min-w-0 flex-1">
                   <button
                     type="button"
@@ -248,25 +250,25 @@ export function DepartmentTickets({
                   >
                     {r.title}
                   </button>
-                  <p className="truncate text-[10px] text-muted">
+                  <p className="truncate text-xs text-muted">
                     {r.creator?.name}
                     {r.assignee ? ` · ${t("ticket.to")} ${r.assignee.name}` : ""}
                   </p>
                 </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${STATUS_CHIP[r.status]}`}>
-                  {t(`ticket.status_${r.status.toLowerCase()}`)}
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CHIP[r.status]}`}>
+                  {enumLabel("TicketStatus", r.status)}
                 </span>
                 {canAssign ? (
                   <>
                     <Select
                       value={r.status}
                       onChange={(e) => update.mutate({ id: r.id, payload: { status: e.target.value } })}
-                      className="h-7 w-28 text-[11px]"
+                      className="h-7 w-28 text-xs"
                       aria-label={t("ticket.statusLabel")}
                     >
-                      {(["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] as const).map((s) => (
-                        <option key={s} value={s}>
-                          {t(`ticket.status_${s.toLowerCase()}`)}
+                      {enumOptions("TicketStatus").map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
                         </option>
                       ))}
                     </Select>
@@ -291,7 +293,7 @@ export function DepartmentTickets({
                     size="sm"
                     variant="ghost"
                     aria-label={t("ticket.delete")}
-                    className="text-red-500"
+                    className="text-danger"
                     disabled={del.isPending}
                     onClick={() => del.mutate(r.id)}
                   >

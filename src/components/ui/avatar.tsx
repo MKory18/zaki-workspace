@@ -14,10 +14,11 @@ export function Avatar({
     <span
       aria-hidden="true"
       className={cn(
-        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white",
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-surface",
         className,
       )}
-      style={{ backgroundColor: `hsl(${hue}, 55%, 45%)` }}
+      // dark enough that the white initials keep 4.5:1 on every hue (yellow-green is the hard one)
+      style={{ backgroundColor: `hsl(${hue}, 45%, 30%)` }}
     >
       {initials(name)}
     </span>

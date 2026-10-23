@@ -100,7 +100,7 @@ export function TimelineGantt({
       const left = Math.round((d.getTime() - min) / DAY) * scale.pxPerDay;
       out.push({
         left,
-        label: `${monthName(d.getMonth(), "ar")} ${d.getFullYear()}`,
+        label: `${monthName(d.getMonth())} ${d.getFullYear()}`,
       });
       d.setMonth(d.getMonth() + 1);
     }
@@ -133,7 +133,7 @@ export function TimelineGantt({
             </Link>
               {project.startDate && project.targetDate ? (
               <span className="mx-2">
-                {fmtDMY(project.startDate, "ar")} ← {fmtDMY(project.targetDate, "ar")}
+                {fmtDMY(project.startDate)} ← {fmtDMY(project.targetDate)}
               </span>
             ) : null}
           </p>
@@ -168,7 +168,7 @@ export function TimelineGantt({
               {ticks.map((tick, i) => (
                 <div
                   key={i}
-                  className="absolute top-0 h-8 border-s border-border px-1.5 text-[10px] leading-8 text-muted"
+                  className="absolute top-0 h-8 border-s border-border px-1.5 text-xs leading-8 text-muted"
                   style={{ left: tick.left }}
                 >
                   {tick.label}
@@ -179,7 +179,7 @@ export function TimelineGantt({
             {/* project window */}
             {project.startDate && project.targetDate ? (
               <div
-                className="absolute top-8 bottom-0 bg-sky-500/5 border-x border-dashed border-sky-300/50"
+                className="absolute top-8 bottom-0 bg-info/5 border-x border-dashed border-info/50"
                 style={{
                   left: (
                     Math.max(0, Math.round((dayStart(new Date(project.startDate).getTime()) - min) / DAY)) * scale.pxPerDay
@@ -220,18 +220,18 @@ export function TimelineGantt({
                       className={cn(
                         "absolute top-1.5 z-[1] h-6 rounded-md",
                         task.done
-                          ? "bg-emerald-500/90"
+                          ? "bg-ok/90"
                           : new Date(task.end).getTime() < Date.now()
-                            ? "bg-red-500/80"
+                            ? "bg-danger/80"
                             : task.priority === "URGENT" || task.priority === "HIGH"
-                              ? "bg-amber-500/90"
-                              : "bg-sky-500/85",
+                              ? "bg-warn/90"
+                              : "bg-info/85",
                       )}
                       style={{ left: bar.left, width: bar.width }}
-                      title={`${task.title} — ${fmtDMY(task.start, "ar")} ← ${fmtDMY(task.end, "ar")}${task.assignee ? ` · ${task.assignee}` : ""}`}
+                      title={`${task.title} — ${fmtDMY(task.start)} ← ${fmtDMY(task.end)}${task.assignee ? ` · ${task.assignee}` : ""}`}
                     >
                       {bar.width > 90 ? (
-                        <span className="block max-w-full truncate px-2 pt-0.5 text-[10px] font-medium leading-5 text-white">
+                        <span className="block max-w-full truncate px-2 pt-0.5 text-xs font-medium leading-5 text-fg">
                           {task.title}
                         </span>
                       ) : null}
@@ -243,9 +243,9 @@ export function TimelineGantt({
               {milestones.map((m) => (
                 <span
                   key={m.id}
-                  className="absolute z-[2] size-2.5 rotate-45 bg-fuchsia-500 ring-2 ring-white"
+                  className="absolute z-[2] size-2.5 rotate-45 bg-cat-2 ring-2 ring-white"
                   style={{ left: milestoneAt(m) - 5, top: 4 }}
-                  title={`${m.name} — ${m.date ? fmtDMY(m.date, "ar") : ""}`}
+                  title={`${m.name} — ${m.date ? fmtDMY(m.date) : ""}`}
                 />
               ))}
               {tasks.length === 0 && milestones.length === 0 ? (
@@ -272,12 +272,12 @@ export function TimelineGantt({
         </div>
       ) : null}
 
-      <p className="flex flex-wrap gap-3 text-[11px] text-muted">
-        <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-sm bg-sky-500" />{t("timeline.legend_active")}</span>
-        <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-sm bg-amber-500" />{t("timeline.legend_priority")}</span>
-        <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-sm bg-emerald-500" />{t("timeline.legend_done")}</span>
-        <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-sm bg-red-500" />{t("timeline.legend_late")}</span>
-        <span className="flex items-center gap-1"><i className="inline-block size-2.5 rotate-45 bg-fuchsia-500" />{t("timeline.legend_milestone")}</span>
+      <p className="flex flex-wrap gap-3 text-xs text-muted">
+        <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-sm bg-info" />{t("timeline.legend_active")}</span>
+        <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-sm bg-warn" />{t("timeline.legend_priority")}</span>
+        <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-sm bg-ok" />{t("timeline.legend_done")}</span>
+        <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-sm bg-danger" />{t("timeline.legend_late")}</span>
+        <span className="flex items-center gap-1"><i className="inline-block size-2.5 rotate-45 bg-cat-2" />{t("timeline.legend_milestone")}</span>
       </p>
     </div>
   );

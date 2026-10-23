@@ -1,19 +1,11 @@
 import { redirect } from "next/navigation";
-import { currentUser } from "@/server/auth";
-import { db } from "@/server/db";
-import {
-  dayWindow,
-  queryTasksForView,
-  type ViewTask,
-} from "@/server/services/views";
+import { pageUser } from "@/server/auth";
+import { MY_WORK_TABS, getMyWork, type MyWorkTab } from "@/server/services/my-work";
 import { TaskRow } from "@/components/task-row";
 import { getServerT } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
 
-const TABS = ["today", "upcoming", "overdue", "completed", "mine", "created"] as const;
-type WorkTab = (typeof TABS)[number];
-
-const TAB_KEYS: Record<WorkTab, string> = {
+const TAB_KEYS: Record<MyWorkTab, string> = {
   today: "mywork.tab.today",
   upcoming: "mywork.tab.upcoming",
   overdue: "mywork.tab.overdue",
@@ -22,57 +14,28 @@ const TAB_KEYS: Record<WorkTab, string> = {
   created: "mywork.tab.created",
 };
 
-type Row = { task: ViewTask; editable: boolean };
-
 export default async function MyWorkPage({ searchParams }: { searchParams: { tab?: string } }) {
   const { t } = getServerT();
-  const user = await currentUser();
+  const user = await pageUser();
   if (!user) redirect("/login");
 
-  const wanted = (searchParams.tab ?? "") as WorkTab;
-  const tab: WorkTab = TABS.includes(wanted) ? wanted : "today";
+  const wanted = (searchParams.tab ?? "") as MyWorkTab;
+  const tab: MyWorkTab = MY_WORK_TABS.includes(wanted) ? wanted : "today";
 
-  const memberships = await db.organizationMember.findMany({
-    where: { userId: user.id },
-    select: { organizationId: true, role: true },
-  });
-
-  const day = dayWindow();
-  const dayAfter = new Date(day.to.getTime() + 1);
-
-  const tabQueries: Record<WorkTab, Parameters<typeof queryTasksForView>[0]> = {
-    today: { orgId: "", dueFrom: day.from, dueTo: day.to, openOnly: true },
-    upcoming: { orgId: "", dueFrom: dayAfter, openOnly: true },
-    overdue: { orgId: "", overdueOnly: true },
-    completed: { orgId: "", completedOnly: true, limit: 100 },
-    mine: { orgId: "", assigneeId: user.id, openOnly: true },
-    created: { orgId: "", creatorId: user.id, openOnly: true },
-  };
-
-  // One evaluation per tab per org; every query is org-scoped.
-  const results = new Map<WorkTab, Row[]>();
-  for (const key of TABS) results.set(key, []);
-
-  for (const m of memberships) {
-    const editable = m.role !== "GUEST";
-    for (const key of TABS) {
-      const found = await queryTasksForView({ ...tabQueries[key], orgId: m.organizationId });
-      found.forEach((task) => results.get(key)!.push({ task, editable }));
-    }
-  }
-
-  const current = results.get(tab)!;
-  const rows = sortRows(current, tab === "completed" ? "completed" : "due");
+  // which tasks belong in each tab (and which workspaces they may come from) is
+  // decided by the service; this page only renders the rows it returns
+  const data = await getMyWork(user.id);
+  const rows = data[tab];
 
   return (
-    <main className="flex h-full min-w-0 flex-col overflow-y-auto">
+    <div className="flex h-full min-w-0 flex-col overflow-y-auto">
       <header className="border-b border-border bg-surface px-5 py-4">
         <h1 className="text-base font-semibold text-fg">{t("mywork.title")}</h1>
         <p className="text-xs text-fg-muted">{t("mywork.subtitle")}</p>
       </header>
 
       <nav className="flex gap-1 overflow-x-auto border-b border-border bg-surface px-4" aria-label={t("mywork.title")}>
-        {TABS.map((k) => (
+        {MY_WORK_TABS.map((k) => (
           <a
             key={k}
             href={`/my-work?tab=${k}`}
@@ -85,8 +48,8 @@ export default async function MyWorkPage({ searchParams }: { searchParams: { tab
             )}
           >
             {t(TAB_KEYS[k])}
-            <span className="rounded-full bg-surface-2 px-1.5 text-[10px] text-fg-muted">
-              {results.get(k)!.length}
+            <span className="rounded-full bg-surface-2 px-1.5 text-xs text-fg-muted">
+              {data[k].length}
             </span>
           </a>
         ))}
@@ -103,24 +66,8 @@ export default async function MyWorkPage({ searchParams }: { searchParams: { tab
           </ul>
         )}
       </div>
-    </main>
+    </div>
   );
-}
-
-function sortRows(rows: Row[], by: "due" | "completed"): Row[] {
-  return [...rows].sort((a, b) => {
-    if (by === "completed") {
-      return (b.task.completedAt?.getTime() ?? 0) - (a.task.completedAt?.getTime() ?? 0);
-    }
-    const da = a.task.dueDate?.getTime() ?? null;
-    const db = b.task.dueDate?.getTime() ?? null;
-    if (da === null && db === null) {
-      return b.task.updatedAt.getTime() - a.task.updatedAt.getTime();
-    }
-    if (da === null) return 1;
-    if (db === null) return -1;
-    return da - db;
-  });
 }
 
 export const dynamic = "force-dynamic";

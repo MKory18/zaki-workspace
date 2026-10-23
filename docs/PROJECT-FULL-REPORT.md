@@ -1,3 +1,5 @@
+> ⚠️ Written before the 2026-10-22 audit; some claims do not match the code (for example that uploads persist and that the worker runs). The verified state is in [docs/PHASE0-AUDIT.md](PHASE0-AUDIT.md).
+
 # تقرير شامل — Zakai.io (مساحة عمل الأعمال)
 
 التاريخ: 19 أكتوبر 2026 · الإصدار: 0.1.0 · المستودع: `MKory18/zaki-workspace`

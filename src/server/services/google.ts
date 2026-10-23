@@ -1,5 +1,7 @@
+import { randomBytes } from "node:crypto";
 import { db } from "@/server/db";
-import { decryptSecrets, encryptSecrets, hmacHex } from "@/server/crypto";
+import { decryptSecrets, encryptSecrets, hmacHex, safeEqual } from "@/server/crypto";
+import { appUrl } from "@/server/env";
 import { getIntegration, logEvent, upsertIntegration } from "@/server/services/integrations";
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -22,23 +24,49 @@ export function googleEnv(): { clientId: string; clientSecret: string } | null {
   return { clientId, clientSecret: clientSecret };
 }
 
+/**
+ * The callback address registered with Google. Built from the normalised public URL, so a
+ * trailing slash in APP_URL cannot produce `//api/...` (Google would answer redirect_uri_mismatch).
+ */
 function redirectUri(): string {
-  return `${process.env.APP_URL ?? "http://localhost:3000"}/api/integrations/google/callback`;
+  return `${appUrl()}/api/integrations/google/callback`;
 }
 
-/** CSRF-safe state: orgId.userId.signature (HMAC over AUTH_SECRET). */
-export function signState(orgId: string, userId: string): string {
-  return `${orgId}.${userId}.${hmacHex(process.env.AUTH_SECRET ?? "", `${orgId}.${userId}`)}`;
+// ---------------------------------------------------------------------------
+// OAuth state: `orgId.userId.issuedAt.nonce.signature`
+//
+// Signed (HMAC over AUTH_SECRET) so it cannot be forged, stamped so it expires, and
+// carrying a random nonce so every state is unique. It is NOT secret: the callback also
+// checks that the person finishing the flow is the one it was issued to.
+// ---------------------------------------------------------------------------
+
+/** A state older than this is refused: consent takes a minute, not a day. */
+const STATE_MAX_AGE_SEC = 10 * 60;
+/** Slack for clocks that disagree by a moment; a state further in the future is refused. */
+const STATE_FUTURE_SKEW_SEC = 5;
+const STATE_LABEL = "zaki:google-oauth-state:v2";
+const STATE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+function stateMac(orgId: string, userId: string, issuedAt: string, nonce: string): string {
+  return hmacHex(process.env["AUTH_SECRET"] ?? "", `${STATE_LABEL}|${orgId}|${userId}|${issuedAt}|${nonce}`);
 }
 
-export function verifyState(state: string): { orgId: string; userId: string } | null {
-  const idx1 = state.indexOf(".");
-  const idx2 = state.lastIndexOf(".");
-  if (idx1 <= 0 || idx2 <= idx1) return null;
-  const orgId = state.slice(0, idx1);
-  const userId = state.slice(idx1 + 1, idx2);
-  const sig = state.slice(idx2 + 1);
-  if (signState(orgId, userId).split(".").pop() !== sig) return null;
+/** `now` is injectable so tests can mint a state at any moment. */
+export function signState(orgId: string, userId: string, now: Date = new Date()): string {
+  const issuedAt = String(Math.floor(now.getTime() / 1000));
+  const nonce = randomBytes(16).toString("hex");
+  return [orgId, userId, issuedAt, nonce, stateMac(orgId, userId, issuedAt, nonce)].join(".");
+}
+
+export function verifyState(state: string, now: Date = new Date()): { orgId: string; userId: string } | null {
+  const parts = state.split(".");
+  if (parts.length !== 5) return null;
+  const [orgId, userId, issuedAt, nonce, sig] = parts as [string, string, string, string, string];
+  if (!STATE_ID.test(orgId) || !STATE_ID.test(userId)) return null;
+  if (!/^\d{9,12}$/.test(issuedAt) || !/^[0-9a-f]{32}$/.test(nonce) || !/^[0-9a-f]{64}$/.test(sig)) return null;
+  if (!safeEqual(stateMac(orgId, userId, issuedAt, nonce), sig)) return null;
+  const age = Math.floor(now.getTime() / 1000) - Number(issuedAt);
+  if (age > STATE_MAX_AGE_SEC || age < -STATE_FUTURE_SKEW_SEC) return null;
   return { orgId, userId };
 }
 

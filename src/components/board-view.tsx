@@ -19,12 +19,13 @@ import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, MessageSquare, CalendarDays, GripVertical, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { apiPost, apiDelete } from "@/lib/api-client";
+import { ApiError, apiPost, apiDelete } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/card";
-import { PRIORITY_STYLES, formatDate, isOverdue } from "@/lib/format";
+import { PRIORITY_STYLES, fmtDMY, fmtRelative, isOverdue } from "@/lib/format";
+import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 import { useToast } from "@/components/ui/toast";
 
 export interface ColumnData {
@@ -254,10 +255,16 @@ function BoardColumn({
   onSubmit: () => void;
 }) {
   const { t } = useI18n();
+  const { toast } = useToast();
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const deleteColumn = useMutation({
     mutationFn: () => apiDelete(`/api/boards/${boardId}/columns/${column.id}`),
     onSuccess: () => window.location.reload(),
+    // a refused delete (a column that still holds cards, 409) was SILENT: say why, in the column
+    onError: (err) => {
+      const key = err instanceof ApiError && err.messageKey ? err.messageKey : "common.error";
+      toast(t(key), "error");
+    },
   });
   return (
     <div
@@ -274,13 +281,13 @@ function BoardColumn({
             className="h-2 w-2 rounded-full"
             style={{ backgroundColor: column.color }}
           />
-          {column.name}
+          {columnLabel(column.name)}
           <span className="font-normal text-muted">{tasks.length}</span>
         </span>
         {canEdit ? (
           <span className="flex items-center gap-0.5">
             <button
-              aria-label="New task"
+              aria-label={t("task.new")}
               className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-fg"
               onClick={onOpenQuick}
             >
@@ -289,7 +296,7 @@ function BoardColumn({
             <button
               aria-label={t("common.delete")}
               title={t("board.deleteColumn")}
-              className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-red-500"
+              className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-danger"
               onClick={() => {
                 if (window.confirm(t("board.deleteColumnConfirm"))) deleteColumn.mutate();
               }}
@@ -313,16 +320,16 @@ function BoardColumn({
               autoFocus
               value={quick.title}
               onChange={(e) => onTitleChange(e.target.value)}
-              placeholder="Task title"
+              placeholder={t("task.title")}
               className="h-8 text-xs"
               maxLength={280}
             />
-            {quick.error ? <p className="mt-1 text-[10px] text-red-500">{quick.error}</p> : null}
+            {quick.error ? <p className="mt-1 text-xs text-danger">{quick.error}</p> : null}
             <div className="mt-2 flex gap-1">
               <Button type="submit" size="sm" className="flex-1">
-                Add
+                {t("common.add")}
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+              <Button type="button" size="sm" variant="ghost" onClick={onCancel} aria-label={t("common.cancel")}>
                 ✕
               </Button>
             </div>
@@ -336,8 +343,8 @@ function BoardColumn({
         </SortableContext>
 
         {tasks.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border p-3 text-center text-[11px] text-muted">
-            Drop tasks here
+          <p className="rounded-lg border border-dashed border-border p-3 text-center text-xs text-muted">
+            {t("board.dropHere")}
           </p>
         ) : null}
       </div>
@@ -346,6 +353,7 @@ function BoardColumn({
 }
 
 function TaskCard({ task }: { task: TaskCardData }) {
+  const { t } = useI18n();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
   });
@@ -358,7 +366,7 @@ function TaskCard({ task }: { task: TaskCardData }) {
       <div className="flex items-start gap-1">
         <button
           className="mt-2 cursor-grab touch-none text-muted/60 hover:text-fg"
-          aria-label="Drag task"
+          aria-label={t("board.dragTask")}
           {...attributes}
           {...listeners}
         >
@@ -375,12 +383,13 @@ function TaskCard({ task }: { task: TaskCardData }) {
 }
 
 function TaskCardContent({ task }: { task: TaskCardData }) {
+  const { t } = useI18n();
   const overdue = task.dueDate && isOverdue(task.dueDate) && !task.completed;
   return (
     <div className="rounded-lg border border-border bg-surface p-2.5 shadow-sm transition-colors hover:border-accent/40">
       <div className="flex items-center gap-1.5">
-        <span className="font-mono text-[10px] text-muted">{task.key}</span>
-        {overdue ? <span className="text-[10px] font-medium text-red-500">overdue</span> : null}
+        <span dir="ltr" className="font-mono text-xs text-muted">{task.key}</span>
+        {overdue ? <span className="text-xs font-medium text-danger">{t("dash.overdue")}</span> : null}
       </div>
       <p className={cn("mt-1 text-xs font-medium text-fg", task.completed && "line-through opacity-60")}>
         {task.title}
@@ -393,21 +402,23 @@ function TaskCardContent({ task }: { task: TaskCardData }) {
         ))}
         <span
           className="ms-auto h-3 w-3 rounded-full"
-          title={task.priority}
-          style={{ backgroundColor: PRIORITY_STYLES[task.priority]?.color ?? "#9ca3af" }}
+          title={enumLabel("TaskPriority", task.priority)}
+          style={{ backgroundColor: PRIORITY_STYLES[task.priority]?.color ?? "rgb(var(--border))" }}
         />
       </div>
-      <div className="mt-2 flex items-center gap-2 text-[10px] text-muted">
-        <span className="truncate">{task.assignee?.name ?? "Unassigned"}</span>
+      <div className="mt-2 flex items-center gap-2 text-xs text-muted">
+        <span className="truncate">{task.assignee?.name ?? t("list.unassigned")}</span>
         {task.dueDate ? (
           <span
+            title={fmtDMY(task.dueDate)}
+            suppressHydrationWarning
             className={cn(
               "flex shrink-0 items-center gap-1",
-              overdue ? "text-red-500" : undefined,
+              overdue ? "text-danger" : undefined,
             )}
           >
             <CalendarDays className="h-3 w-3" />
-            {formatDate(task.dueDate, "en")}
+            {fmtRelative(task.dueDate)}
           </span>
         ) : null}
         {task.commentCount > 0 ? (

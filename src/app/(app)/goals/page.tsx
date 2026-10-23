@@ -1,19 +1,16 @@
-import { redirect } from "next/navigation";
-import { currentUser } from "@/server/auth";
-import { db } from "@/server/db";
+import { pageActor } from "@/app/(app)/_access";
+import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { GoalsView } from "@/components/goals-view";
 
-/** الأهداف الشهرية والاسبوعية — period goals with live progress. */
+/**
+ * الأهداف الأسبوعية والشهرية — period goals with live progress. The company's own plans (titles,
+ * descriptions, who set them): the tab is for staff, and /api/goals refuses an external partner, so the
+ * view is not rendered for them - they get a notice instead of a page that never loads.
+ */
 export default async function GoalsPage() {
-	const user = await currentUser();
-	if (!user) redirect("/login");
-	const membership = await db.organizationMember.findFirst({
-		where: { userId: user.id },
-		orderBy: { createdAt: "asc" },
-		select: { role: true },
-	});
-	if (!membership) redirect("/login");
-	const canManage = membership.role === "OWNER" || membership.role === "ADMIN";
+	const { actor } = await pageActor();
+	if (refusedToGuest(actor, "goals")) return <GuestNotice />;
+	const canManage = actor.role === "OWNER" || actor.role === "ADMIN";
 	return <GoalsView canManage={canManage} />;
 }
 

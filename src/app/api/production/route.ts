@@ -1,26 +1,26 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/server/auth";
+import { requireActor } from "@/server/policy/actor";
 import { withApi } from "@/server/api";
-import { db } from "@/server/db";
 import { dayChecklist, dayIso } from "@/server/services/production";
+import { db } from "@/server/db";
+import { resolveTimeZone } from "@/lib/zoned-time";
 
 /**
  * GET /api/production?day=YYYY-MM-DD — the daily production checklist for the
  * caller's org on that day (active routines scheduled that day + completion).
+ * Without a `day` it is the COMPANY's today (Organization.timezone), not the server's.
  */
 export async function GET(req: Request) {
 	return withApi(async () => {
-		const user = await requireUser();
+		const actor = await requireActor();
 		const url = new URL(req.url);
 		const raw = url.searchParams.get("day");
-		const day = raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : dayIso(new Date());
-		const membership = await db.organizationMember.findFirst({
-			where: { userId: user.id },
-			orderBy: { createdAt: "asc" },
-			select: { organizationId: true },
-		});
-		if (!membership) return NextResponse.json({ day, items: [] });
-		const data = await dayChecklist(membership.organizationId, day);
-		return NextResponse.json(data);
+		if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+			return NextResponse.json(await dayChecklist(actor.orgId, raw));
+		}
+		const zone = resolveTimeZone(
+			(await db.organization.findUnique({ where: { id: actor.orgId }, select: { timezone: true } }))?.timezone,
+		);
+		return NextResponse.json(await dayChecklist(actor.orgId, dayIso(new Date(), zone), zone));
 	});
 }

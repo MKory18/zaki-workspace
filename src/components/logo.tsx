@@ -1,23 +1,30 @@
+"use client";
+
+import { useId } from "react";
 import { cn } from "@/lib/utils";
+import { AR } from "@/lib/i18n/dict";
 
 const FACETS = [
   // main silhouette (leaping dolphin, head up-right)
   "88,20 78,12 62,14 56,2 50,16 38,30 26,52 20,70 8,62 18,74 12,84 28,82 44,56 56,40 68,32 80,22",
 ];
 
-/** Zakai.io poly-dolphin mark (reference logo recreation). */
+/** The poly-dolphin mark (reference logo recreation). */
 export function DolphinMark({ className }: { className?: string }) {
+  // every mark has its own gradient id: two marks on a page (phone top bar and side menu) must not share one,
+  // or a browser paints both with the first (a gradient inside a hidden part of the page paints nothing)
+  const gradientId = `zk-wave-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   return (
-    <svg viewBox="0 0 100 100" role="img" aria-label="Zakai.io" className={className}>
+    <svg viewBox="0 0 100 100" role="img" aria-label={AR["app.name"]} className={className}>
       <defs>
-        <linearGradient id="zk-wave" x1="0" y1="1" x2="1" y2="0">
+        <linearGradient id={gradientId} x1="0" y1="1" x2="1" y2="0">
           <stop offset="0" stopColor="#0E4C66" />
           <stop offset="1" stopColor="#17A5BF" />
         </linearGradient>
       </defs>
 
       {/* base body */}
-      <polygon points={FACETS[0]} fill="url(#zk-wave)" />
+      <polygon points={FACETS[0]} fill={`url(#${gradientId})`} />
 
       {/* faceted overlays */}
       <polygon points="78,12 62,14 56,2 50,16" fill="#4FC2D8" opacity="0.9" />
@@ -35,7 +42,7 @@ export function DolphinMark({ className }: { className?: string }) {
       <circle cx="81" cy="21.5" r="1.6" fill="#0A3350" />
 
       {/* circuit wave below */}
-      <path d="M34,88 Q46,88 54,80 Q62,72 76,74 Q86,76 90,84" fill="none" stroke="url(#zk-wave)" strokeWidth="4.2" strokeLinecap="round" />
+      <path d="M34,88 Q46,88 54,80 Q62,72 76,74 Q86,76 90,84" fill="none" stroke={`url(#${gradientId})`} strokeWidth="4.2" strokeLinecap="round" />
       <path d="M34,88 Q46,84 52,76" fill="none" stroke="#0E4C66" strokeWidth="2.4" strokeLinecap="round" opacity="0.8" />
       <g stroke="#17A5BF" strokeWidth="1.6" fill="none" opacity="0.9">
         <path d="M46,89.5 L52,89.5 L56,85.5" />
@@ -52,18 +59,17 @@ export function DolphinMark({ className }: { className?: string }) {
   );
 }
 
-/** Sidebar/login logo: poly-dolphin + Zakai.io wordmark. */
+/**
+ * Sidebar/login logo: poly-dolphin + the product name. The name on screen is «Zaki Workspace»
+ * (the owner's decision); the old «Zakai.io / Intelligent Systems» lock-up, with its English tagline,
+ * is gone.
+ */
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
       <DolphinMark className="size-8 shrink-0" />
       <span className="flex min-w-0 flex-col leading-none">
-        <span className="text-sm font-bold tracking-tight text-fg">
-          Zakai<span className="text-accent">.io</span>
-        </span>
-        <span className="mt-0.5 hidden text-[8px] font-semibold uppercase tracking-[0.18em] text-muted md:block">
-          Intelligent Systems
-        </span>
+        <span className="text-sm font-bold tracking-tight text-fg">{AR["app.name"]}</span>
       </span>
     </span>
   );

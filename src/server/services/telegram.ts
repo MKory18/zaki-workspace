@@ -1,6 +1,8 @@
+import { randomInt } from "node:crypto";
 import { db } from "@/server/db";
 import { NotFoundError } from "@/server/auth";
 import { decryptSecrets } from "@/server/crypto";
+import { log } from "@/server/log";
 import { getIntegration, requireConnected, upsertIntegration, logEvent } from "@/server/services/integrations";
 
 const API = "https://api.telegram.org";
@@ -226,15 +228,42 @@ export async function sendMessage(orgId: string, chatId: string, text: string): 
   const { secrets } = await requireConnected(orgId, "TELEGRAM");
   const botToken = secrets.botToken;
   if (!botToken) return { ok: false, error: "integration.bad_secret" };
-  const res = await tg<string>(botToken, "sendMessage", { chat_id: chatId, text });
+  const res = await tg<TgMessage>(botToken, "sendMessage", { chat_id: chatId, text });
   if (!res.ok) return { ok: false, error: res.description };
-  // inbound-style record of outgoing sends keeps the conversation one thread
-  await upsertOutgoingCopy(orgId, chatId, text);
+
+  // Telegram has delivered the message. Nothing below may turn that into a failure:
+  // the stored copy is a convenience (it keeps the conversation one thread), not the send.
+  try {
+    await storeOutgoingCopy(orgId, chatId, text, res.result?.message_id);
+  } catch (err) {
+    log.warn("telegram.outgoing_copy_failed", { orgId, error: err instanceof Error ? err.message.slice(0, 200) : "unknown" });
+  }
   await logEvent(orgId, { direction: "OUT", type: "telegram.message_sent", payload: { chatId } });
   return { ok: true };
 }
 
-async function upsertOutgoingCopy(orgId: string, chatId: string, text: string): Promise<void> {
+const INT32_MAX = 2_147_483_647;
+
+/** A message_id Telegram can really have assigned: a positive 32-bit integer. */
+function isTelegramMessageId(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= INT32_MAX;
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
+}
+
+/**
+ * Stores the bot's own message in the thread under Telegram's real message_id (unique per
+ * chat). It used to be -unixSeconds, so two sends in one second collided on the unique key
+ * and the second request failed although Telegram had already delivered it.
+ *
+ * - With the real id the write is an upsert that leaves an existing row alone: a channel
+ *   echoes the bot's own post back to the sync, which stores the very same message.
+ * - Only when Telegram's answer carries no usable id does the copy get a negative marker,
+ *   drawn at random and retried on the (very unlikely) collision.
+ */
+async function storeOutgoingCopy(orgId: string, chatId: string, text: string, telegramMessageId: unknown): Promise<void> {
   const integration = await db.integration.findUnique({
     where: { orgId_type: { orgId, type: "TELEGRAM" } },
     select: { id: true, config: true },
@@ -247,18 +276,23 @@ async function upsertOutgoingCopy(orgId: string, chatId: string, text: string): 
   });
   if (!chat) return;
   const botName = meta.botUsername ? `@${meta.botUsername}` : "Zaki";
-  // messageId: negative marker for outgoing copies (platform id unknown)
-  await db.telegramMessage.create({
-    data: {
-      orgId,
-      integrationId: integration.id,
-      chatId,
-      messageId: -Math.floor(Date.now() / 1000),
-      fromName: botName,
-      fromId: null,
-      text,
-      isCommand: false,
-      sentAt: new Date(),
-    },
-  });
+  const copy = { orgId, integrationId: integration.id, chatId, fromName: botName, fromId: null, text, isCommand: false, sentAt: new Date() };
+
+  if (isTelegramMessageId(telegramMessageId)) {
+    await db.telegramMessage.upsert({
+      where: { integrationId_chatId_messageId: { integrationId: integration.id, chatId, messageId: telegramMessageId } },
+      create: { ...copy, messageId: telegramMessageId },
+      update: {},
+    });
+    return;
+  }
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await db.telegramMessage.create({ data: { ...copy, messageId: -randomInt(1, INT32_MAX) } });
+      return;
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+    }
+  }
 }

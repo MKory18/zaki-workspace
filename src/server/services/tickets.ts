@@ -1,17 +1,29 @@
 import { z } from "zod";
 import type { TicketStatus } from "@prisma/client";
+import { AR } from "@/lib/i18n/dict";
+import { enumLabel } from "@/lib/i18n/enums";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { nextTaskNumber, type Tx } from "@/server/services/tasks";
 import { pushNotificationToMany } from "@/server/notify";
+import { assertCanWrite } from "@/server/services/guest-guard";
+import { assertActiveAssignee } from "@/server/services/active-people";
 
 /**
  * IT tickets live inside a department. Access policy:
+ * - org GUESTs: read-only. They cannot create, edit, comment, change a status or
+ *   delete anything (assertCanWrite), whatever their ticket/department links are.
  * - org OWNER/ADMIN: full manage
- * - department members: create, assign within the department, transition status
- * - other org members: read-only inside their org? NO — org-wide visibility is
- *   intentional for support desks: any org member may create a ticket; only
- *   dept members/org admins may assign or close.
+ * - department members and the department lead: create, assign within the
+ *   department, transition status
+ * - the assignee: works the ticket through its whole lifecycle
+ * - the creator: may edit or delete it while it is still OPEN (see canEditTicket)
+ * - everybody else: org-wide visibility is intentional for support desks and any
+ *   (non-guest) org member may open a ticket or comment, but may NOT edit or
+ *   close somebody else's ticket.
+ * - a ticket is only ever handed to an ACTIVE member of the organization (not a suspended or an
+ *   offboarded person, not a stranger), whoever hands it; a ticket somebody already holds stays
+ *   readable and editable around them until it is moved.
  */
 
 export const TICKET_STATUSES: TicketStatus[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
@@ -50,15 +62,53 @@ export async function nextTicketNumber(orgId: string, tx: Tx): Promise<number> {
   return nextTaskNumber(orgId, tx);
 }
 
+export interface TicketEditFacts {
+  isAdmin: boolean; // org OWNER / ADMIN
+  isDeptMember: boolean; // has a DepartmentMember row for the ticket's department
+  isDeptLead: boolean; // is Department.leadId
+  isCreator: boolean;
+  isAssignee: boolean;
+  status: TicketStatus;
+}
+
+/**
+ * Who may edit a ticket or change its status (the status path itself is still
+ * limited by canTransition). Admins, department members, the department lead and
+ * the assignee may at every status. A creator who is none of those keeps the old
+ * limit: only while the ticket is still OPEN. Anyone else may not touch it.
+ * (Guests are refused before this is asked, by assertCanWrite.)
+ */
+export function canEditTicket(f: TicketEditFacts): boolean {
+  if (f.isAdmin || f.isDeptMember || f.isDeptLead || f.isAssignee) return true;
+  return f.isCreator && f.status === "OPEN";
+}
+
 async function departmentContext(ctx: OrgAccessContext, departmentId: string) {
   const dept = await db.department.findFirst({
     where: { id: departmentId, orgId: ctx.orgId },
-    select: { id: true, name: true, memberships: { select: { userId: true } } },
+    select: { id: true, name: true, leadId: true, memberships: { select: { userId: true } } },
   });
   if (!dept) throw new NotFoundError("dept.not_found");
   const isMember = dept.memberships.some((m) => m.userId === ctx.userId);
+  const isLead = dept.leadId === ctx.userId;
   const isAdmin = ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
-  return { dept, isMember, isAdmin };
+  return { dept, isMember, isLead, isAdmin };
+}
+
+/** The facts `canEditTicket` needs for this actor and this ticket. Editing and deleting share them. */
+async function ticketEditFacts(
+  ctx: OrgAccessContext,
+  ticket: Awaited<ReturnType<typeof loadTicketForOrg>>,
+): Promise<TicketEditFacts> {
+  const { isMember, isLead, isAdmin } = await departmentContext(ctx, ticket.departmentId);
+  return {
+    isAdmin,
+    isDeptMember: isMember,
+    isDeptLead: isLead,
+    isCreator: ticket.creatorId === ctx.userId,
+    isAssignee: ticket.assigneeId === ctx.userId,
+    status: ticket.status,
+  };
 }
 
 export async function listDepartmentTickets(departmentId: string) {
@@ -85,10 +135,12 @@ export async function createTicket(
   departmentId: string,
   input: z.infer<typeof createTicketSchema>,
 ) {
+  assertCanWrite(ctx);
   const { dept } = await departmentContext(ctx, departmentId);
   if (input.assigneeId) {
     const ok = dept.memberships.some((m) => m.userId === input.assigneeId) || ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
     if (!ok) throw new ForbiddenError("ticket.assignee_not_member");
+    await assertActiveAssignee(ctx.orgId, input.assigneeId);
   }
   const ticket = await db.$transaction(async (tx) => {
     const number = await nextTicketNumber(ctx.orgId, tx);
@@ -124,8 +176,8 @@ export async function createTicket(
     const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
     await pushNotificationToMany([input.assigneeId], {
       type: "ticket_assigned",
-      title: `${org?.keyPrefix ?? "ZK"}-T${ticket.number}`,
-      body: ticket.title,
+      title: AR["notif.type.ticket_assigned"] ?? "إشعار",
+      body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title}`,  // the label is machine text; the title is what the bell prints
       linkUrl: "/departments",
     });
   }
@@ -166,8 +218,9 @@ export async function ticketDetail(ctx: OrgAccessContext, ticketId: string) {
   return ticket;
 }
 
-/** Comments: any org member may comment; author or org admin may edit/delete. */
+/** Comments: any org member except a guest may comment; author or org admin may edit/delete. */
 export async function addTicketComment(ctx: OrgAccessContext, ticketId: string, body: string) {
+  assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   const comment = await db.$transaction(async (tx) => {
     const c = await tx.ticketComment.create({
@@ -187,8 +240,8 @@ export async function addTicketComment(ctx: OrgAccessContext, ticketId: string, 
     const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
     await pushNotificationToMany([...new Set(watchers)], {
       type: "ticket_comment",
-      title: `${org?.keyPrefix ?? "ZK"}-T${ticket.number}`,
-      body: `${ctx.userId === ticket.assigneeId ? "" : ""}${body.slice(0, 120)}`,
+      title: AR["notif.type.ticket_comment"] ?? "إشعار",
+      body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${body.slice(0, 120)}`,  // the label rides in the body
       linkUrl: "/departments",
     });
   }
@@ -213,6 +266,7 @@ export async function listTicketActivity(ticketId: string) {
 }
 
 export async function editTicketComment(ctx: OrgAccessContext, ticketId: string, commentId: string, body: string) {
+  assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   const comment = await db.ticketComment.findFirst({ where: { id: commentId, ticketId: ticket.id }, select: { id: true, authorId: true } });
   if (!comment) throw new NotFoundError("comment.not_found");
@@ -223,6 +277,7 @@ export async function editTicketComment(ctx: OrgAccessContext, ticketId: string,
 }
 
 export async function deleteTicketComment(ctx: OrgAccessContext, ticketId: string, commentId: string) {
+  assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   const comment = await db.ticketComment.findFirst({ where: { id: commentId, ticketId: ticket.id }, select: { id: true, authorId: true } });
   if (!comment) throw new NotFoundError("comment.not_found");
@@ -251,13 +306,9 @@ export async function updateTicket(
   ticketId: string,
   input: z.infer<typeof updateTicketSchema>,
 ) {
+  assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
-  const { isMember, isAdmin } = await departmentContext(ctx, ticket.departmentId);
-  const canWrite = isMember || isAdmin;
-  if (!canWrite) {
-    // plain org members may only edit what they created while still OPEN
-    if (ticket.status !== "OPEN") throw new ForbiddenError("ticket.admin_only");
-  }
+  if (!canEditTicket(await ticketEditFacts(ctx, ticket))) throw new ForbiddenError("ticket.admin_only");
   if (input.assigneeId) {
     const dept = await db.department.findFirst({
       where: { id: ticket.departmentId },
@@ -268,6 +319,9 @@ export async function updateTicket(
       ctx.orgRole === "ADMIN" ||
       (dept?.memberships.some((m) => m.userId === input.assigneeId) ?? false);
     if (!ok) throw new ForbiddenError("ticket.assignee_not_member");
+    // handing it to somebody NEW: they must be active (re-sending the current assignee, who may have
+    // been suspended since, changes nothing and is not re-checked)
+    if (input.assigneeId !== ticket.assigneeId) await assertActiveAssignee(ctx.orgId, input.assigneeId);
   }
   if (input.status && !canTransition(ticket.status, input.status)) {
     throw new ForbiddenError("ticket.bad_transition");
@@ -304,8 +358,8 @@ export async function updateTicket(
     const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
     await pushNotificationToMany([input.assigneeId], {
       type: "ticket_assigned",
-      title: `${org?.keyPrefix ?? "ZK"}-T${ticket.number}`,
-      body: ticket.title,
+      title: AR["notif.type.ticket_assigned"] ?? "إشعار",
+      body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title}`,  // the label is machine text; the title is what the bell prints
       linkUrl: "/departments",
     });
   }
@@ -318,8 +372,9 @@ export async function updateTicket(
       const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
       await pushNotificationToMany([...new Set(watchers)], {
         type: "ticket_status",
-        title: `${org?.keyPrefix ?? "ZK"}-T${ticket.number}`,
-        body: `${ticket.title} → ${input.status}`,
+        title: AR["notif.type.ticket_status"] ?? "إشعار",
+        // the status is an English enum on the wire; the bell gets its Arabic name from the dictionary
+        body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title} → ${enumLabel("TicketStatus", input.status)}`,
         linkUrl: "/departments",
       });
     }
@@ -327,9 +382,10 @@ export async function updateTicket(
   return updated;
 }
 
+/** Deleting follows the same rule as editing (canEditTicket): the creator only while the ticket is OPEN. */
 export async function deleteTicket(ctx: OrgAccessContext, ticketId: string): Promise<void> {
+  assertCanWrite(ctx);
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
-  const { isMember, isAdmin } = await departmentContext(ctx, ticket.departmentId);
-  if (!isAdmin && !isMember && ticket.creatorId !== ctx.userId) throw new ForbiddenError("ticket.admin_only");
+  if (!canEditTicket(await ticketEditFacts(ctx, ticket))) throw new ForbiddenError("ticket.admin_only");
   await db.ticket.delete({ where: { id: ticket.id } });
 }

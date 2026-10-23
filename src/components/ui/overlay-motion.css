@@ -1,0 +1,136 @@
+/*
+ * Enter and exit motion of dialogs, sheets and menus (src/components/ui/{dialog,sheet,dropdown-menu}.tsx).
+ *
+ * Radix keeps an element mounted until its exit animation has finished, so every state below is a
+ * real CSS animation. Under `prefers-reduced-motion: reduce` none of these rules apply: there is
+ * no animation to wait for, so the element appears and disappears at once and nothing slides.
+ *
+ * No colours live here: they come from the theme tokens, in the components' Tailwind classes.
+ * Tests: tests/ui-motion.test.ts.
+ */
+
+/* ---- slide direction -------------------------------------------------------------------------
+ * A side sheet slides in from the edge it is attached to. `--zk-dir` is +1 when that edge is on
+ * the right and -1 when it is on the left, so the end side flips with the reading direction. */
+.zk-sheet-end {
+  --zk-dir: 1;
+}
+[dir="rtl"] .zk-sheet-end {
+  --zk-dir: -1;
+}
+.zk-sheet-start {
+  --zk-dir: -1;
+}
+[dir="rtl"] .zk-sheet-start {
+  --zk-dir: 1;
+}
+
+/* A menu grows out of the point it was opened from (Radix computes this origin). */
+.zk-menu {
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+}
+
+@keyframes zk-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes zk-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes zk-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes zk-pop-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+}
+@keyframes zk-sheet-up-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes zk-sheet-up-out {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes zk-sheet-side-in {
+  from {
+    transform: translateX(calc(100% * var(--zk-dir, 1)));
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes zk-sheet-side-out {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateX(calc(100% * var(--zk-dir, 1)));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* the dimming layer behind a dialog or a sheet */
+  .zk-fade[data-state="open"] {
+    animation: zk-fade-in 160ms ease-out both;
+  }
+  .zk-fade[data-state="closed"] {
+    animation: zk-fade-out 120ms ease-in both;
+  }
+
+  /* a dialog panel or a menu */
+  .zk-pop[data-state="open"] {
+    animation: zk-pop-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .zk-pop[data-state="closed"] {
+    animation: zk-pop-out 110ms ease-in both;
+  }
+
+  /* a sheet: up from the bottom on phones */
+  .zk-sheet[data-state="open"] {
+    animation: zk-sheet-up-in 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+  .zk-sheet[data-state="closed"] {
+    animation: zk-sheet-up-out 200ms ease-in both;
+  }
+}
+
+/* ...and in from its side from Tailwind's `md` breakpoint (768px), where the sheet becomes a side panel */
+@media (prefers-reduced-motion: no-preference) and (min-width: 768px) {
+  .zk-sheet[data-state="open"] {
+    animation-name: zk-sheet-side-in;
+  }
+  .zk-sheet[data-state="closed"] {
+    animation-name: zk-sheet-side-out;
+  }
+}

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/server/auth";
+import { requireActor } from "@/server/policy/actor";
 import { withApi } from "@/server/api";
-import { db } from "@/server/db";
 import { parseJson } from "@/server/validation";
 import { setRoutineDone } from "@/server/services/production";
 
@@ -12,19 +11,13 @@ const toggleSchema = z.object({
 	done: z.boolean(),
 });
 
-/** POST: check/uncheck a routine for one day. Any org member may check off. */
+/** POST: check/uncheck a routine for one day. Any org member may check off; guests get 403 (service). */
 export async function POST(req: Request) {
 	return withApi(async () => {
+		const actor = await requireActor();
 		const input = await parseJson(toggleSchema, req);
-		const user = await requireUser();
-		const membership = await db.organizationMember.findFirst({
-			where: { userId: user.id },
-			orderBy: { createdAt: "asc" },
-			select: { organizationId: true },
-		});
-		if (!membership) return NextResponse.json({ error: "auth.required" }, { status: 401 });
 		await setRoutineDone(
-			{ orgId: membership.organizationId, userId: user.id },
+			{ orgId: actor.orgId, userId: actor.userId },
 			input.routineId,
 			input.day,
 			input.done,

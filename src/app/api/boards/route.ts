@@ -4,6 +4,7 @@ import { db } from "@/server/db";
 import { requireWorkspace, audit, ForbiddenError, NotFoundError } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
+import { DEFAULT_BOARD_COLUMNS } from "@/server/services/tasks";
 
 const createSchema = z.object({
   projectId: z.string().min(1),
@@ -11,21 +12,7 @@ const createSchema = z.object({
   description: z.string().max(2000).optional(),
 });
 
-interface BoardInput {
-  name: string;
-  color: string;
-  done: boolean;
-}
-
-const DEFAULT_COLUMNS: BoardInput[] = [
-  { name: "Backlog", color: "#6b7280", done: false },
-  { name: "Todo", color: "#3b82f6", done: false },
-  { name: "In Progress", color: "#f59e0b", done: false },
-  { name: "In Review", color: "#a855f7", done: false },
-  { name: "Done", color: "#10b981", done: true },
-];
-
-/** Creates a board with the default workflow columns (customizable later). */
+/** Creates a board with the default workflow columns (Arabic names, customizable later). */
 export async function POST(req: Request) {
   return withApi(async () => {
     const input = await parseJson(createSchema, req);
@@ -42,7 +29,7 @@ export async function POST(req: Request) {
         name: input.name,
         description: input.description ?? null,
         columns: {
-          create: DEFAULT_COLUMNS.map((c, i) => ({ ...c, position: i })),
+          create: DEFAULT_BOARD_COLUMNS.map((c, i) => ({ ...c, position: i })),
         },
       },
       select: { id: true, name: true, projectId: true },

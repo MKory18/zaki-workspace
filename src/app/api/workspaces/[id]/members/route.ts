@@ -1,24 +1,27 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { audit, ForbiddenError, NotFoundError, requireWorkspace } from "@/server/auth";
-import { withApi } from "@/server/api";
+import { audit, ForbiddenError, requireWorkspace, ValidationError, type OrgAccessContext } from "@/server/auth";
+import { apiError, withApi } from "@/server/api";
 import { db } from "@/server/db";
 import { parseJson } from "@/server/validation";
-import { listWorkspaceMembers } from "@/server/services/workspaces";
-import { canManageWorkspaceMembers } from "@/server/services/access";
+import {
+  SpaceConflictError,
+  canManageHere,
+  changeWorkspaceMembers,
+  listWorkspaceMembers,
+  type MemberChanges,
+} from "@/server/services/workspaces";
 import { notifyMembership } from "@/server/notify";
 
-/** Assignable people for the caller's workspace. */
+/**
+ * The people of a space: only those IN it whose membership is ACTIVE. The OWNER reads the list
+ * without being on it. `canManage` tells the caller whether they may change it.
+ */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const ws = await db.workspace.findUnique({
-      where: { id: params.id },
-      select: { id: true },
-    });
-    if (!ws) throw new NotFoundError("workspace.not_found");
-    await requireWorkspace(ws.id);
-    const members = await listWorkspaceMembers(ws.id);
-    return NextResponse.json({ members });
+    const ctx = await requireWorkspace(params.id);
+    const members = await listWorkspaceMembers(params.id, ctx.userId);
+    return NextResponse.json({ members, canManage: await canManageHere(ctx, params.id) });
   });
 }
 
@@ -40,79 +43,76 @@ const manageSchema = z
     { message: "ws.no_change" },
   );
 
-/** POST: add / remove / promote / demote workspace members. Org OWNER/ADMIN or workspace ADMIN. */
+const roleSchema = z.object({
+  userId: z.string().min(1),
+  role: z.enum(["ADMIN", "MEMBER"]),
+});
+
+/** The caller must manage this space: its ADMIN, the OWNER, or an org ADMIN who is in it. */
+async function requireManager(workspaceId: string): Promise<OrgAccessContext> {
+  const ctx = await requireWorkspace(workspaceId, ["ADMIN"]);
+  if (!(await canManageHere(ctx, workspaceId))) throw new ForbiddenError("ws.admin_only");
+  return ctx;
+}
+
+/** Applies the changes through the one service, then tells the people who were put in and writes the audit entry. */
+async function apply(ctx: OrgAccessContext, workspaceId: string, changes: MemberChanges): Promise<NextResponse> {
+  const ws = await db.workspace.findUnique({ where: { id: workspaceId }, select: { name: true, organizationId: true } });
+  if (!ws) return apiError("not_found", "workspace.not_found");
+  let added: string[];
+  try {
+    ({ added } = await changeWorkspaceMembers(ctx, workspaceId, changes));
+  } catch (err) {
+    if (err instanceof SpaceConflictError) return apiError("conflict", err.message);
+    throw err;
+  }
+  if (added.length) {
+    await notifyMembership({
+      userIds: added,
+      kind: "workspace",
+      title: ws.name,
+      linkUrl: "/projects",
+      actorId: ctx.userId,
+    });
+  }
+  await audit("workspace.members_updated", {
+    actorId: ctx.userId,
+    orgId: ws.organizationId,
+    target: workspaceId,
+    meta: { name: ws.name },
+  });
+  return NextResponse.json({ ok: true });
+}
+
+/** POST: add / remove / promote / demote people. The OWNER, the space ADMIN, or an org ADMIN who is in the space. */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
+    const ctx = await requireManager(params.id);
     const input = await parseJson(manageSchema, req);
-    const ws = await db.workspace.findUnique({
-      where: { id: params.id },
-      select: { id: true, organizationId: true, name: true },
+    return apply(ctx, params.id, {
+      add: input.addUserIds,
+      remove: input.removeUserIds,
+      promote: input.promoteUserIds,
+      demote: input.demoteUserIds,
     });
-    if (!ws) throw new NotFoundError("workspace.not_found");
-    const ctx = await requireWorkspace(ws.id, ["ADMIN"]);
-    if (!(await canManageWorkspaceMembers(ctx.userId, ws.id))) {
-      throw new ForbiddenError("ws.admin_only");
-    }
-    await manage(ws.id, input);
-    if (input.addUserIds?.length) {
-      await notifyMembership({
-        userIds: input.addUserIds,
-        kind: "workspace",
-        title: ws.name,
-        linkUrl: "/projects",
-        actorId: ctx.userId,
-      });
-    }
-    await audit("workspace.members_updated", {
-      actorId: ctx.userId,
-      orgId: ws.organizationId,
-      target: ws.id,
-      meta: { name: ws.name },
-    });
-    return NextResponse.json({ ok: true });
   });
 }
 
-async function manage(
-  workspaceId: string,
-  input: z.infer<typeof manageSchema>,
-) {
-  const orgId = (
-    await db.workspace.findUnique({ where: { id: workspaceId }, select: { organizationId: true } })
-  )?.organizationId;
-  const orgUsers = new Set(
-    (
-      await db.organizationMember.findMany({
-        where: { organizationId: orgId ?? "" },
-        select: { userId: true },
-      })
-    ).map((m) => m.userId),
-  );
-  const add = (input.addUserIds ?? []).filter((id) => orgUsers.has(id));
-  await db.$transaction(async (tx) => {
-    for (const userId of add) {
-      await tx.workspaceMember.upsert({
-        where: { workspaceId_userId: { workspaceId, userId } },
-        create: { workspaceId, userId, role: "MEMBER" },
-        update: {},
-      });
-    }
-    if (input.promoteUserIds?.length) {
-      await tx.workspaceMember.updateMany({
-        where: { workspaceId, userId: { in: input.promoteUserIds }, role: "MEMBER" },
-        data: { role: "ADMIN" },
-      });
-    }
-    if (input.demoteUserIds?.length) {
-      await tx.workspaceMember.updateMany({
-        where: { workspaceId, userId: { in: input.demoteUserIds }, role: "ADMIN" },
-        data: { role: "MEMBER" },
-      });
-    }
-    if (input.removeUserIds?.length) {
-      await tx.workspaceMember.deleteMany({
-        where: { workspaceId, userId: { in: input.removeUserIds } },
-      });
-    }
+/** PATCH `{ userId, role }`: makes one person a space ADMIN or an ordinary MEMBER. Same rules as POST. */
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  return withApi(async () => {
+    const ctx = await requireManager(params.id);
+    const input = await parseJson(roleSchema, req);
+    return apply(ctx, params.id, input.role === "ADMIN" ? { promote: [input.userId] } : { demote: [input.userId] });
+  });
+}
+
+/** DELETE `?userId=…`: takes one person out of the space. Same rules as POST. */
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  return withApi(async () => {
+    const ctx = await requireManager(params.id);
+    const userId = new URL(req.url).searchParams.get("userId");
+    if (!userId) throw new ValidationError([{ path: "userId", message: "required" }]);
+    return apply(ctx, params.id, { remove: [userId] });
   });
 }

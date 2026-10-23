@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { db } from "@/server/db";
-import { currentUser } from "@/server/auth";
+import { pageUser } from "@/server/auth";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { getProjectTimeline } from "@/server/services/timeline";
 import { TimelineGantt } from "@/components/timeline-gantt";
@@ -9,7 +9,7 @@ import { getServerT } from "@/lib/i18n/server";
 /** Per-project timeline (Microsoft-Project-style Gantt), workspace-scoped. */
 export default async function TimelinePage({ params }: { params: { id: string } }) {
   const { t } = await getServerT();
-  const user = await currentUser();
+  const user = await pageUser();
   if (!user) redirect("/login");
   const wsScope = await accessibleWorkspaceIds(user.id);
   // authorize BEFORE fetching data: resolve the project's workspace first

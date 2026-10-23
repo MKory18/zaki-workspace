@@ -1,0 +1,55 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const queryRaw = vi.hoisted(() => vi.fn());
+vi.mock("@/server/db", () => ({ db: { $queryRaw: queryRaw } }));
+
+import * as health from "../src/app/api/health/route";
+
+describe("/api/health", () => {
+  beforeEach(() => {
+    queryRaw.mockReset(); // (not returned: vitest would run a returned function as cleanup)
+  });
+
+  it("is evaluated per request (a build-time snapshot made the Docker health check blind to a database outage)", () => {
+    expect(health.dynamic).toBe("force-dynamic");
+  });
+
+  it("answers 200 when the database answers", async () => {
+    queryRaw.mockResolvedValue([{ "?column?": 1 }]);
+    const res = await health.GET();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: "ok", checks: { app: "ok", database: "ok" } });
+  });
+
+  it("answers 503 when the database is unreachable, so Docker/Coolify can see the outage, without leaking the error", async () => {
+    queryRaw.mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.5:5432 password authentication failed"));
+    const res = await health.GET();
+    expect(res.status).toBe(503);
+    const text = JSON.stringify(await res.json());
+    expect(text).toContain('"database":"fail"');
+    expect(text).not.toContain("ECONNREFUSED");
+    expect(text).not.toContain("password");
+  });
+});
+
+describe("docker-compose.yml", () => {
+  const compose = readFileSync(path.resolve(__dirname, "../docker-compose.yml"), "utf8");
+
+  /** The `ports:` entries of one top-level service. */
+  function ports(service: string): string[] {
+    const block = new RegExp(`\\n  ${service}:\\n([\\s\\S]*?)(?=\\n  [a-z]+:\\n|\\nvolumes:|$)`).exec(compose)?.[1] ?? "";
+    return [...block.matchAll(/ports:\s*\n((?:\s+-\s+"[^"]+"\s*\n?)+)/g)].flatMap((m) =>
+      [...m[1]!.matchAll(/"([^"]+)"/g)].map((x) => x[1]!),
+    );
+  }
+
+  it("publishes Postgres and Redis on the loopback interface only (they have default passwords / none)", () => {
+    for (const service of ["db", "redis"]) {
+      const published = ports(service);
+      expect(published.length, service).toBeGreaterThan(0);
+      for (const p of published) expect(p.startsWith("127.0.0.1:"), `${service}: ${p}`).toBe(true);
+    }
+  });
+});

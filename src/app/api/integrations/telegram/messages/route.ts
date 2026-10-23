@@ -3,17 +3,19 @@ import { z } from "zod";
 import { withApi } from "@/server/api";
 import { activeOrgCtx } from "@/server/services/integrations";
 import { chatMessages } from "@/server/services/telegram";
+import { assertNotGuest } from "@/server/services/guest-guard";
 
 const querySchema = z.object({
   chatId: z.string().min(1).max(64),
 });
 
-/** GET ?chatId=… : message thread of one chat (read-only, guests included). */
+/** GET ?chatId=… : message thread of one chat (org members read it; never guests: it holds customer phone numbers). */
 export async function GET(req: Request) {
   return withApi(async () => {
+    const ctx = await activeOrgCtx();
+    assertNotGuest(ctx);
     const url = new URL(req.url);
     const q = querySchema.parse(Object.fromEntries(url.searchParams.entries()));
-    const ctx = await activeOrgCtx();
     const messages = await chatMessages(ctx.orgId, q.chatId);
     return NextResponse.json({ messages: messages.reverse() }); // oldest first for the thread view
   });

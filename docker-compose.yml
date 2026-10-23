@@ -9,13 +9,17 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zaki -d zaki_workspace"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # Not used by the application yet: nothing in the code connects to Redis (the planned
+  # realtime layer uses Postgres LISTEN/NOTIFY instead). Kept so the service name and
+  # port stay reserved; it can be removed from `app.depends_on` and from this file
+  # without touching any code.
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -23,7 +27,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -40,14 +44,29 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: postgresql://zaki:${POSTGRES_PASSWORD:-zaki_local}@db:5432/zaki_workspace
-      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      # Required (16+ characters). Not enforced here with `:?` because Compose evaluates that for
+      # EVERY service, which made the very first documented step (`docker compose up db -d`) fail on a
+      # fresh clone. The app refuses to boot without it (src/instrumentation.ts), with a clear message.
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      # Optional. Empty = the key for secrets at rest is derived from AUTH_SECRET (the old
+      # behaviour). Set it to a separate random value (openssl rand -hex 32) so rotating
+      # AUTH_SECRET no longer breaks the stored Telegram / n8n / Google secrets, then run
+      # scripts/reencrypt-secrets.ts once.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       APP_URL: ${APP_URL:-http://localhost:3000}
+      # Uploaded files. Must be the same path as the volume mounted below (the Dockerfile
+      # creates it and gives it to the runtime user), so it is fixed here on purpose.
+      UPLOAD_DIR: /app/storage/uploads
       NODE_ENV: production
     ports:
       - "3000:3000"
     volumes:
       - uploads:/app/storage/uploads
 
+  # Heartbeat placeholder: worker/index.ts only proves the database connection and logs a
+  # tick every 60 seconds - there are no background jobs yet (they will run inside the app
+  # process, see docs/PHASE0-AUDIT.md). The image copies worker/ and keeps tsx, so this
+  # starts. It mounts the same uploads volume so that a future job sees the same files.
   worker:
     build: .
     restart: unless-stopped
@@ -55,9 +74,16 @@ services:
       db:
         condition: service_healthy
     command: ["npm", "run", "worker"]
+    # The image's HEALTHCHECK probes the web server on port 3000. The worker serves nothing,
+    # so the inherited check would report it unhealthy for ever.
+    healthcheck:
+      disable: true
     environment:
       DATABASE_URL: postgresql://zaki:${POSTGRES_PASSWORD:-zaki_local}@db:5432/zaki_workspace
+      UPLOAD_DIR: /app/storage/uploads
       LOG_LEVEL: info
+    volumes:
+      - uploads:/app/storage/uploads
 
   migrate:
     build: .

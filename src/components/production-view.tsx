@@ -5,10 +5,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarCheck, CheckSquare, ChevronLeft, ChevronRight, Cog, Factory, Plus, Square, Trash2, Pencil } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
+import { fmtLongDate } from "@/lib/format";
+import { zonedParts } from "@/lib/zoned-time";
 import { cn } from "@/lib/utils";
 
 function errText(err: unknown, t: (k: string) => string): string {
@@ -43,7 +46,13 @@ interface RoutineRow {
 
 const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-function dayIso(d: Date): string {
+function dayIso(d: Date, timeZone?: string): string {
+	if (timeZone) {
+		const p = zonedParts(d, timeZone);
+		const m = p.month;
+		const day = p.day;
+		return p.year + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day);
+	}
 	const m = d.getMonth() + 1;
 	const day = d.getDate();
 	return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day);
@@ -58,27 +67,19 @@ function shiftDay(s: string, delta: number): string {
 	return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dd < 10 ? "0" + dd : dd);
 }
 
-function dayLabel(day: string, locale: string): string {
+/** "الخميس 22 تشرين الأول 2026" for a "YYYY-MM-DD" day. */
+function dayLabel(day: string): string {
 	const p = day.split("-");
-	const d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), 12);
-	const AR = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-	const FR = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
-	const EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-	const MO = {
-		ar: ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"],
-		fr: ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
-		en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-	}[locale] ?? [];
-	const wd = { ar: AR, fr: FR, en: EN }[locale] ?? AR;
-	return wd[d.getDay()] + " " + d.getDate() + " " + (MO[d.getMonth()] ?? "") + " " + d.getFullYear();
+	return fmtLongDate(new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), 12));
 }
 
-/** الإنتاج اليومي — recurring daily-production checklist with per-day completion. */
-export function ProductionView({ canManage }: { canManage: boolean }) {
-	const { t, locale } = useI18n();
+/** الروتين اليومي — recurring daily checklist with per-day completion. */
+/** `readOnly`: an external partner (guest) sees the checklist but cannot tick anything (the server refuses too). */
+export function ProductionView({ canManage, readOnly = false, timeZone }: { canManage: boolean; readOnly?: boolean; /** The company's zone: the default day is its today, not the browser's. */ timeZone?: string }) {
+	const { t } = useI18n();
 	const { toast } = useToast();
 	const qc = useQueryClient();
-	const [day, setDay] = useState(() => dayIso(new Date()));
+	const [day, setDay] = useState(() => dayIso(new Date(), timeZone));
 	const [manageOpen, setManageOpen] = useState(false);
 
 	const checklist = useQuery({
@@ -131,8 +132,8 @@ export function ProductionView({ canManage }: { canManage: boolean }) {
 					<ChevronRight className="size-4 rtl:rotate-0 ltr:rotate-180" />
 				</Button>
 				<div className="text-center">
-					<p className="text-sm font-semibold text-fg">{dayLabel(day, locale)}</p>
-					<p className="text-[11px] text-muted">
+					<p className="text-sm font-semibold text-fg">{dayLabel(day)}</p>
+					<p className="text-xs text-muted">
 						{items.length > 0 ? `${doneCount}/${items.length} ${t("prod.doneRatio")}` : t("prod.noSchedule")}
 					</p>
 				</div>
@@ -156,17 +157,17 @@ export function ProductionView({ canManage }: { canManage: boolean }) {
 							key={item.id}
 							className={cn(
 								"flex items-center gap-3 rounded-xl border border-border bg-surface p-3 shadow-card transition-colors",
-								done && "border-emerald-500/40 bg-emerald-500/5",
+								done && "border-ok/40 bg-ok/5",
 							)}
 						>
 							<button
 								aria-label={done ? t("prod.uncheck") : t("prod.check")}
-								disabled={toggle.isPending}
+								disabled={toggle.isPending || readOnly}
 								onClick={() => toggle.mutate({ routineId: item.id, done: !done })}
 								className="shrink-0"
 							>
 								{done ? (
-									<CheckSquare className="size-5 text-emerald-500" />
+									<CheckSquare className="size-5 text-ok" />
 								) : (
 									<Square className="size-5 text-muted hover:text-accent" />
 								)}
@@ -175,13 +176,13 @@ export function ProductionView({ canManage }: { canManage: boolean }) {
 								<p className={cn("truncate text-sm font-medium", done ? "text-muted line-through" : "text-fg")}>
 									{item.title}
 								</p>
-								<p className="truncate text-[11px] text-muted">
+								<p className="truncate text-xs text-muted">
 									{item.assigneeName ? `${t("prod.assignedTo")} ${item.assigneeName}` : t("prod.unassigned")}
 									{item.departmentName ? ` · ${item.departmentName}` : ""}
 								</p>
 							</div>
 							{item.doneAt ? (
-								<span className="flex shrink-0 items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
+								<span className="flex shrink-0 items-center gap-1 text-xs text-ok">
 									<CalendarCheck className="size-3.5" />
 									{t("prod.done")}
 								</span>
@@ -257,7 +258,7 @@ function ManageRoutinesModal({
 						<li key={r.id} className="flex items-center gap-2 px-3 py-2">
 							<div className="min-w-0 flex-1">
 								<p className="truncate text-xs font-medium text-fg">{r.title}</p>
-								<p className="truncate text-[10px] text-muted">
+								<p className="truncate text-xs text-muted">
 									{r.weekdays === "" ? t("prod.everyDay") : r.weekdays.split(",").map((w) => t(`prod.wd_${WEEKDAY_KEYS[Number(w)]}`)).join(" · ")}
 									{r.assigneeName ? ` · ${r.assigneeName}` : ""}
 									{!r.active ? ` · ${t("prod.paused")}` : ""}
@@ -270,7 +271,7 @@ function ManageRoutinesModal({
 								size="sm"
 								variant="ghost"
 								aria-label={t("prod.deleteRoutine")}
-								className="text-red-500"
+								className="text-danger"
 								onClick={() => remove.mutate(r.id)}
 							>
 								<Trash2 className="size-3.5" />
@@ -279,7 +280,7 @@ function ManageRoutinesModal({
 					))}
 					{loading ? <li className="px-3 py-3 text-xs text-muted">…</li> : null}
 					{!loading && routines.length === 0 ? (
-						<li className="px-3 py-4 text-center text-[11px] text-muted">{t("prod.noRoutines")}</li>
+						<li className="px-3 py-4 text-center text-xs text-muted">{t("prod.noRoutines")}</li>
 					) : null}
 				</ul>
 				{editing ? (
@@ -359,7 +360,7 @@ function RoutineEditor({
 							type="button"
 							onClick={() => toggleDay(k)}
 							className={cn(
-								"rounded-md border px-2 py-1 text-[10px] font-medium transition-colors",
+								"rounded-md border px-2 py-1 text-xs font-medium transition-colors",
 								weekdays.includes(k) ? "border-accent/60 bg-accent/10 text-fg" : "border-border text-muted hover:border-accent/40",
 							)}
 						>

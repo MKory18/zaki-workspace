@@ -1,12 +1,27 @@
+import { randomUUID } from "node:crypto";
 import { db } from "@/server/db";
 import type { Prisma } from "@prisma/client";
 import type { IntegrationType } from "@prisma/client";
-import { decryptSecrets, encryptSecrets, hmacHex } from "@/server/crypto";
-import { requireOrgRole, requireUser, ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
+import { decryptSecrets, encryptSecrets } from "@/server/crypto";
+import { assertPublicHttpsUrl, UnsafeUrlError } from "@/server/net-guard";
+import { unixSeconds, zakiSignatureHeader } from "@/server/webhook-signing";
+import { requireOrgMember, ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
+import { requireActor } from "@/server/policy/actor";
+import { can } from "@/server/policy/capabilities";
 
-/** OWNER/ADMIN only for connect/disconnect/config changes (org-level assets). */
+/** Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. */
 export async function assertOrgManager(orgId: string): Promise<OrgAccessContext> {
-  return requireOrgRole(orgId, ["OWNER", "ADMIN"]);
+  // Integrations (n8n, Telegram, Google Drive) belong to whoever holds the capability: the OWNER,
+  // an ADMIN by default, or anybody the owner switched it on for (e.g. the automation person).
+  const ctx = await requireOrgMember(orgId);
+  const member = await db.organizationMember.findUnique({
+    where: { organizationId_userId: { organizationId: orgId, userId: ctx.userId } },
+    select: { role: true, status: true, capabilities: true, revokedCapabilities: true },
+  });
+  if (!member || member.status !== "ACTIVE" || !can(member, "integrations.manage")) {
+    throw new ForbiddenError("insufficient_role");
+  }
+  return ctx;
 }
 
 /**
@@ -14,14 +29,8 @@ export async function assertOrgManager(orgId: string): Promise<OrgAccessContext>
  * Shared by every /api/integrations route.
  */
 export async function activeOrgCtx(): Promise<OrgAccessContext> {
-  const user = await requireUser();
-  const membership = await db.organizationMember.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: { organizationId: true, role: true },
-  });
-  if (!membership) throw new ForbiddenError("not_org_member");
-  return { orgId: membership.organizationId, orgRole: membership.role, userId: user.id };
+  const actor = await requireActor();
+  return { orgId: actor.orgId, orgRole: actor.role, userId: actor.userId };
 }
 
 export interface IntegrationConfigMeta extends Record<string, unknown> {}
@@ -46,6 +55,13 @@ export async function requireConnected(orgId: string, type: IntegrationType) {
   return { row, secrets };
 }
 
+/**
+ * Creates or updates an integration row.
+ *   secrets: {...}     encrypt and store
+ *   secrets: null      DROP the stored secret (a disconnect). The row stays, so the
+ *                      conversation history that hangs off it is not cascade-deleted.
+ *   secrets omitted    leave the stored secret alone
+ */
 export async function upsertIntegration(
   orgId: string,
   type: IntegrationType,
@@ -68,7 +84,7 @@ export async function upsertIntegration(
     },
     update: {
       connected: data.connected,
-      ...(secretEnc !== undefined ? { secretEnc } : {}),
+      ...(secretEnc !== undefined ? { secretEnc } : data.secrets === null ? { secretEnc: null } : {}),
       ...(data.config !== undefined ? { config: data.config } : {}),
       ...(data.lastSyncAt !== undefined ? { lastSyncAt: data.lastSyncAt } : {}),
     },
@@ -97,7 +113,18 @@ export async function logEvent(
 }
 
 /**
- * Outbound webhook delivery with HMAC signature (X-Zaki-Signature).
+ * Outbound webhook delivery, signed the way every Zaki system signs (see
+ * webhook-signing.ts):
+ *   X-Zaki-Event, X-Zaki-Delivery (uuid), X-Zaki-Timestamp (unix seconds),
+ *   X-Zaki-Signature = sha256=HMAC(secret, "<timestamp>.<raw body>").
+ * The shared secret itself is NEVER sent: the receiver holds its own copy and
+ * recomputes the signature (it refuses anything more than five minutes old).
+ * X-Zaki-Org is a routing id, not a secret, and stays.
+ *
+ * The URL is checked again here, right before the request, because DNS answers
+ * and old saved rows change after the save-time check; redirects are not followed
+ * (a webhook that redirects is a webhook pointed somewhere else).
+ *
  * Fire-and-audit: the caller's business logic never fails because of n8n.
  */
 export async function emitOutbound(orgId: string, event: string, payload: unknown): Promise<void> {
@@ -110,38 +137,43 @@ export async function emitOutbound(orgId: string, event: string, payload: unknow
   if (events.length && !events.includes(event)) return;
 
   const body = JSON.stringify({ event, orgId, at: new Date().toISOString(), payload });
+  const record = (status: "OK" | "FAILED", detail?: string) =>
+    logEvent(orgId, { direction: "OUT", type: event, payload: payload as Prisma.InputJsonValue, status, detail });
+
+  let target: URL;
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(meta.webhookUrl, {
+    target = await assertPublicHttpsUrl(meta.webhookUrl);
+  } catch (err) {
+    // `n8n.url_<reason>` is also the i18n key explaining why
+    await record("FAILED", err instanceof UnsafeUrlError ? `n8n.url_${err.code}` : "n8n.url_invalid");
+    return;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const timestamp = unixSeconds();
+    const res = await fetch(target.href, {
       method: "POST",
       headers: {
-        "content-type": "application/json",
-        "x-zaki-signature": `sha256=${hmacHex(secrets.sharedSecret, body)}`,
-        "x-zaki-event": event,
-        // also carries the org + shared token so token-validating receivers
-        // (incl. Zaki's own inbound webhook) can route/verify without parsing JSON
-        "x-zaki-org": orgId,
-        "x-zaki-token": secrets.sharedSecret,
+        "Content-Type": "application/json",
+        "X-Zaki-Event": event,
+        "X-Zaki-Delivery": randomUUID(),
+        "X-Zaki-Timestamp": timestamp,
+        "X-Zaki-Signature": zakiSignatureHeader(secrets.sharedSecret, timestamp, body),
+        "X-Zaki-Org": orgId,
       },
       body,
       signal: controller.signal,
+      redirect: "manual",
     });
-    clearTimeout(timer);
-    await logEvent(orgId, {
-      direction: "OUT",
-      type: event,
-      payload: payload as Prisma.InputJsonValue,
-      status: res.ok ? "OK" : "FAILED",
-      detail: res.ok ? undefined : `HTTP ${res.status}`,
-    });
+    // the answer's body is of no interest: release the connection
+    void res.body?.cancel().catch(() => undefined);
+    const redirected = res.status >= 300 && res.status < 400;
+    await record(res.ok ? "OK" : "FAILED", res.ok ? undefined : redirected ? `HTTP ${res.status} (redirect not followed)` : `HTTP ${res.status}`);
   } catch (err) {
-    await logEvent(orgId, {
-      direction: "OUT",
-      type: event,
-      payload: payload as Prisma.InputJsonValue,
-      status: "FAILED",
-      detail: err instanceof Error ? err.message.slice(0, 200) : "network error",
-    });
+    await record("FAILED", err instanceof Error ? err.message.slice(0, 200) : "network error");
+  } finally {
+    clearTimeout(timer);
   }
 }

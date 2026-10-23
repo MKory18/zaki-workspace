@@ -2,23 +2,45 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, audit } from "@/server/auth";
 import { canManageOrg } from "@/server/services/orgs";
+import { assertCanWrite } from "@/server/services/guest-guard";
+import { assertActiveAssignee } from "@/server/services/active-people";
+import { resolveTimeZone, zonedParts, zonedWallTime } from "@/lib/zoned-time";
+
+/**
+ * Daily production. Reading the checklist and the routine list stays open to every
+ * org member; every write (tick a routine off, create/edit/delete one) is refused to
+ * org GUESTs with `guest.readonly`, and managing routines is OWNER/ADMIN only.
+ * A routine is only ever handed to an ACTIVE member of the organization; one that somebody
+ * already holds stays readable (and editable around them) after they are suspended or leave.
+ */
 
 /** Local calendar day string "YYYY-MM-DD" (the whole app runs on one machine). */
-export function dayIso(d: Date): string {
-	const y = d.getFullYear();
-	const m = d.getMonth() + 1;
-	const day = d.getDate();
-	const mm = m < 10 ? "0" + m : String(m);
-	const dd = day < 10 ? "0" + day : String(day);
-	return y + "-" + mm + "-" + dd;
+export function dayIso(d: Date, timeZone?: string): string {
+  if (timeZone) {
+    // the company's day: the zone's calendar date, whatever the machine says
+    const p = zonedParts(d, resolveTimeZone(timeZone));
+    const m = p.month;
+    const day = p.day;
+    return p.year + "-" + (m < 10 ? "0" + m : String(m)) + "-" + (day < 10 ? "0" + day : String(day));
+  }
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const mm = m < 10 ? "0" + m : String(m);
+  const dd = day < 10 ? "0" + day : String(day);
+  return y + "-" + mm + "-" + dd;
 }
 
-export function parseDayIso(s: string): Date {
-	const parts = s.split("-");
-	const y = Number(parts[0]);
-	const m = Number(parts[1]);
-	const d = Number(parts[2]);
-	return new Date(y, m - 1, d, 12, 0, 0, 0);
+/** Noon (in `timeZone`, or the machine's zone without one) of the "YYYY-MM-DD" day `s`. */
+export function parseDayIso(s: string, timeZone?: string): Date {
+  const parts = s.split("-");
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (timeZone) {
+    return zonedWallTime({ year: y, month: m, day: d, hour: 12 }, resolveTimeZone(timeZone));
+  }
+  return new Date(y, m - 1, d, 12, 0, 0, 0);
 }
 
 export function shiftDay(s: string, delta: number): string {
@@ -68,16 +90,16 @@ export async function listRoutines(orgId: string): Promise<RoutineRow[]> {
 	}));
 }
 
-/** Does a routine run on the given day? Empty weekdays = every day. */
-export function runsOnDay(weekdays: string, day: string): boolean {
+/** Does a routine run on the given day? Empty weekdays = every day. The weekday is `timeZone`'s (or the machine's). */
+export function runsOnDay(weekdays: string, day: string, timeZone?: string): boolean {
 	if (!weekdays || weekdays === "") return true;
 	const parts = weekdays.split(",");
-	const weekday = String(parseDayIso(day).getDay());
+	const weekday = String(parseDayIso(day, timeZone).getDay());
 	return parts.indexOf(weekday) !== -1;
 }
 
 /** Checklist for one day: active routines scheduled that day + today's completion state. */
-export async function dayChecklist(orgId: string, day: string) {
+export async function dayChecklist(orgId: string, day: string, timeZone?: string) {
 	const routines = await db.routine.findMany({
 		where: { orgId, active: true },
 		orderBy: { createdAt: "asc" },
@@ -92,7 +114,7 @@ export async function dayChecklist(orgId: string, day: string) {
 			weekdays: true,
 		},
 	});
-	const due = routines.filter((r) => runsOnDay(r.weekdays, day));
+	const due = routines.filter((r) => runsOnDay(r.weekdays, day, timeZone));
 	const logs = await db.routineLog.findMany({
 		where: { routineId: { in: due.map((r) => r.id) }, day },
 		select: { routineId: true, completedAt: true, completedById: true },
@@ -128,12 +150,14 @@ function weekdaysToCsv(days: number[] | undefined): string {
 }
 
 async function assertRoutineOrg(orgId: string, routineId: string) {
-	const r = await db.routine.findFirst({ where: { id: routineId, orgId }, select: { id: true } });
+	const r = await db.routine.findFirst({ where: { id: routineId, orgId }, select: { id: true, assigneeId: true } });
 	if (!r) throw new NotFoundError("routine.not_found");
+	return r;
 }
 
 export async function createRoutine(ctx: { orgId: string; userId: string }, input: z.infer<typeof routineSchema>) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	await assertCanManageRoutines(ctx);
+	if (input.assigneeId) await assertActiveAssignee(ctx.orgId, input.assigneeId);
 	const routine = await db.routine.create({
 		data: {
 			orgId: ctx.orgId,
@@ -151,8 +175,10 @@ export async function createRoutine(ctx: { orgId: string; userId: string }, inpu
 }
 
 export async function updateRoutine(ctx: { orgId: string; userId: string }, id: string, input: z.infer<typeof routineSchema>) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
-	await assertRoutineOrg(ctx.orgId, id);
+	await assertCanManageRoutines(ctx);
+	const current = await assertRoutineOrg(ctx.orgId, id);
+	// a NEW assignee must be active; re-sending the current one (who may have left since) changes nothing
+	if (input.assigneeId && input.assigneeId !== current.assigneeId) await assertActiveAssignee(ctx.orgId, input.assigneeId);
 	await db.routine.update({
 		where: { id },
 		data: {
@@ -168,19 +194,30 @@ export async function updateRoutine(ctx: { orgId: string; userId: string }, id: 
 }
 
 export async function deleteRoutine(ctx: { orgId: string; userId: string }, id: string) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	await assertCanManageRoutines(ctx);
 	await assertRoutineOrg(ctx.orgId, id);
 	await db.routine.delete({ where: { id } });
 	await audit("routine.deleted", { actorId: ctx.userId, orgId: ctx.orgId, target: id });
 }
 
-/** Toggle (or force) one routine's completion for one day. Any org member may check off. */
+/**
+ * Managing routines (create, edit, delete) is OWNER/ADMIN only. A guest is told it is
+ * read-only (`guest.readonly`), a plain member that their role is not enough.
+ */
+async function assertCanManageRoutines(ctx: { orgId: string; userId: string }): Promise<void> {
+	const role = await orgRoleOf(ctx.orgId, ctx.userId);
+	assertCanWrite({ orgRole: role });
+	if (!canManageOrg(role)) throw new ForbiddenError("production.routines_role_denied");
+}
+
+/** Toggle (or force) one routine's completion for one day. Any org member except a guest may check off. */
 export async function setRoutineDone(
 	ctx: { orgId: string; userId: string },
 	routineId: string,
 	day: string,
 	done: boolean,
 ): Promise<void> {
+	assertCanWrite({ orgRole: await orgRoleOf(ctx.orgId, ctx.userId) });
 	const routine = await db.routine.findFirst({ where: { id: routineId, orgId: ctx.orgId }, select: { id: true } });
 	if (!routine) throw new NotFoundError("routine.not_found");
 	if (done) {
@@ -194,11 +231,12 @@ export async function setRoutineDone(
 	}
 }
 
+/** The person's role in the organization. A suspended or offboarded member has none: they are "not a member". */
 export async function orgRoleOf(orgId: string, userId: string) {
 	const m = await db.organizationMember.findUnique({
 		where: { organizationId_userId: { organizationId: orgId, userId } },
-		select: { role: true },
+		select: { role: true, status: true },
 	});
-	if (!m) throw new ForbiddenError("not_org_member");
+	if (!m || m.status !== "ACTIVE") throw new ForbiddenError("not_org_member");
 	return m.role;
 }

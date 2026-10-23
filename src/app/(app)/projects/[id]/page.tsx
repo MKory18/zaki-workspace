@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/server/db";
-import { currentUser } from "@/server/auth";
+import { pageUser } from "@/server/auth";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { Card, CardBody, CardHeader, Badge } from "@/components/ui/card";
 import { BoardCreateButton } from "@/components/board-create-button";
-import { formatDate } from "@/lib/format";
+import { fmtDMY } from "@/lib/format";
+import { enumLabel } from "@/lib/i18n/enums";
+import { getServerT } from "@/lib/i18n/server";
 import { TimelineBadgeButton } from "@/components/timeline-badge-button";
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
-  const user = await currentUser();
+  const { t } = getServerT();
+  const user = await pageUser();
   if (!user) return null;
   const accessible = await accessibleWorkspaceIds(user.id);
   const project = await db.project.findFirst({
@@ -43,20 +46,26 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           <TimelineBadgeButton projectId={project.id} />
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-          <Badge>{project.status}</Badge>
-          <span>target {formatDate(project.targetDate, "en")}</span>
-          <span>· {open} open / {doneCount} done · {pct}%</span>
+          <Badge>{enumLabel("ProjectStatus", project.status)}</Badge>
+          <span>
+            {[
+              project.targetDate ? t("proj.dueLine", { date: fmtDMY(project.targetDate) }) : null,
+              t("proj.progressLine", { open, done: doneCount, pct }),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
         </div>
         {project.description ? <p className="max-w-2xl text-sm text-fg-muted">{project.description}</p> : null}
       </header>
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-fg">Boards</h2>
+          <h2 className="text-sm font-semibold text-fg">{t("proj.boards")}</h2>
           <BoardCreateButton projectId={project.id} />
         </div>
         {project.boards.length === 0 ? (
-          <p className="text-sm text-fg-muted">No boards yet.</p>
+          <p className="text-sm text-fg-muted">{t("board.empty")}</p>
         ) : (
           <div className="grid gap-2 md:grid-cols-3">
             {project.boards.map((b) => (
@@ -64,7 +73,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 <Card className="transition-colors hover:border-accent/40">
                   <CardBody className="py-3">
                     <p className="text-sm font-medium text-fg">{b.name}</p>
-                    <p className="text-[11px] text-muted">{b._count.tasks} tasks</p>
+                    <p className="text-xs text-muted">{t("proj.tasksCount", { n: b._count.tasks })}</p>
                   </CardBody>
                 </Card>
               </Link>
@@ -76,7 +85,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       {project.milestones.length > 0 ? (
         <Card>
           <CardHeader>
-            <p className="text-sm font-semibold text-fg">Milestones</p>
+            <p className="text-sm font-semibold text-fg">{t("proj.milestones")}</p>
           </CardHeader>
           <CardBody>
             <ul className="divide-y divide-border">
@@ -84,7 +93,8 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 <li key={m.id} className="flex items-center justify-between py-2 text-sm">
                   <span className="text-fg">{m.name}</span>
                   <span className="text-xs text-muted">
-                    {m.status} · {formatDate(m.targetDate, "en")}
+                    {enumLabel("MilestoneStatus", m.status)}
+                    {m.targetDate ? ` · ${fmtDMY(m.targetDate)}` : ""}
                   </span>
                 </li>
               ))}

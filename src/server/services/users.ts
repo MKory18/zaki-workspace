@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
-import { ForbiddenError, NotFoundError, hashPassword, verifyPassword } from "@/server/auth";
+import { ForbiddenError, NotFoundError } from "@/server/auth";
+import { can } from "@/server/policy/capabilities";
+import { RANK } from "@/server/policy/rank";
 import { avatarHue } from "@/lib/format";
 
 export interface ProfilePatch {
@@ -20,24 +22,8 @@ export async function updateProfile(userId: string, patch: ProfilePatch): Promis
   await db.user.update({ where: { id: userId }, data });
 }
 
-/** Password change requires the current password to match (verified server-side). */
-export async function changePassword(
-  userId: string,
-  currentPassword: string,
-  newPassword: string,
-): Promise<void> {
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { passwordHash: true },
-  });
-  if (!user) throw new NotFoundError("user.not_found");
-  const ok = await verifyPassword(currentPassword, user.passwordHash);
-  if (!ok) throw new ForbiddenError("password.wrong_current");
-  await db.user.update({
-    where: { id: userId },
-    data: { passwordHash: await hashPassword(newPassword) },
-  });
-}
+// Changing one's own password lives in services/onboarding.ts (changeOwnPassword): it also ends the
+// person's other sessions and clears a temporary password.
 
 export interface PublicProfile {
   id: string;
@@ -57,16 +43,33 @@ export interface PublicProfile {
 }
 
 /**
- * Profile of another member, visible only through a shared organization.
- * Cross-org ids → not found (no existence oracle).
+ * What a viewer may see of another person.
+ *  - "full": the whole profile (everyone who is not an org GUEST and holds `directory.view`; their
+ *    own profile is always open to them).
+ *  - "limited": an org GUEST sees `{ id, name }` and nothing else (no job title, bio,
+ *    email, role or stats), and only for people who share a workspace with them
+ *    (and themselves). Anybody else is "not found".
+ * Only ACTIVE people count on both sides: a suspended or offboarded person has no profile to look at
+ * ("not found"), and a viewer who is suspended or offboarded is not a member anywhere.
  */
-export async function getPublicProfile(viewerId: string, targetId: string): Promise<PublicProfile> {
+export type ProfileView =
+  | { kind: "full"; profile: PublicProfile }
+  | { kind: "limited"; profile: { id: string; name: string } };
+
+/**
+ * Profile of another member, visible only through a shared organization.
+ * Cross-org ids → not found (no existence oracle). A viewer who is only a GUEST
+ * in every organization they share with the target gets the "limited" view.
+ */
+export async function getProfileForViewer(viewerId: string, targetId: string): Promise<ProfileView> {
   const viewMemberships = await db.organizationMember.findMany({
-    where: { userId: viewerId },
-    select: { organizationId: true },
+    where: { userId: viewerId, status: "ACTIVE" },
+    select: { organizationId: true, role: true, capabilities: true, revokedCapabilities: true },
   });
   const visibleOrgIds = viewMemberships.map((m) => m.organizationId);
   if (visibleOrgIds.length === 0) throw new ForbiddenError("not_org_member");
+  // organizations where the viewer is a real member (guests see no profiles there)
+  const staffOrgIds = viewMemberships.filter((m) => m.role !== "GUEST").map((m) => m.organizationId);
 
   const target = await db.user.findUnique({
     where: { id: targetId },
@@ -77,85 +80,187 @@ export async function getPublicProfile(viewerId: string, targetId: string): Prom
       bio: true,
       createdAt: true,
       memberships: {
-        where: { organizationId: { in: visibleOrgIds } },
+        // somebody who is no longer ACTIVE in a shared organization is not there to be looked at
+        where: { organizationId: { in: visibleOrgIds }, status: "ACTIVE" },
         select: { role: true, organization: { select: { id: true, name: true } } },
       },
     },
   });
   if (!target) throw new NotFoundError("user.not_found");
-  const membership = target.memberships[0];
-  if (!membership) throw new NotFoundError("user.not_found"); // no shared org
+  if (target.memberships.length === 0) throw new NotFoundError("user.not_found"); // no shared org
+
+  const sharedStaff = target.memberships.filter((m) => staffOrgIds.includes(m.organization.id));
+  const firstShared = sharedStaff[0];
+  if (!firstShared) {
+    // the viewer is only a guest in every organization they share with the target
+    if (target.id !== viewerId) {
+      const sharedWorkspace = await db.workspaceMember.findFirst({
+        where: {
+          userId: target.id,
+          workspace: {
+            organizationId: { in: target.memberships.map((m) => m.organization.id) },
+            members: { some: { userId: viewerId } },
+          },
+        },
+        select: { id: true },
+      });
+      if (!sharedWorkspace) throw new NotFoundError("user.not_found");
+    }
+    return { kind: "limited", profile: { id: target.id, name: target.name } };
+  }
+
+  // The staff directory is a capability: whoever may not see it may not read a colleague's profile
+  // by id either (their own stays open to them). The profile shown is the one of a shared
+  // organization where the viewer holds it.
+  const membership =
+    target.id === viewerId
+      ? firstShared
+      : sharedStaff.find((m) => {
+          const viewerRow = viewMemberships.find((v) => v.organizationId === m.organization.id);
+          return viewerRow !== undefined && can(viewerRow, "directory.view");
+        });
+  if (!membership) throw new ForbiddenError("insufficient_role");
 
   const stats = await Promise.all([
-    db.idea.count({ where: { creatorId: targetId, orgId: { in: visibleOrgIds } } }),
+    db.idea.count({ where: { creatorId: targetId, orgId: { in: staffOrgIds } } }),
     db.ideaVote.count({
-      where: { idea: { creatorId: targetId, orgId: { in: visibleOrgIds } } },
+      where: { idea: { creatorId: targetId, orgId: { in: staffOrgIds } } },
     }),
-    db.task.count({ where: { assigneeId: targetId, orgId: { in: visibleOrgIds }, completedAt: null, archived: false } }),
-    db.task.count({ where: { assigneeId: targetId, orgId: { in: visibleOrgIds }, completedAt: { not: null }, archived: false } }),
+    db.task.count({ where: { assigneeId: targetId, orgId: { in: staffOrgIds }, completedAt: null, archived: false } }),
+    db.task.count({ where: { assigneeId: targetId, orgId: { in: staffOrgIds }, completedAt: { not: null }, archived: false } }),
   ]);
   const votesReceived = stats[1];
 
   return {
-    id: target.id,
-    name: target.name,
-    jobTitle: target.jobTitle,
-    bio: target.bio,
-    createdAt: target.createdAt,
-    organizationId: membership.organization.id,
-    organizationName: membership.organization.name,
-    organizationRole: membership.role,
-    stats: {
-      ideasCreated: stats[0],
-      ideasVotesReceived: votesReceived,
-      openTasksAssigned: stats[2],
-      tasksCompleted: stats[3],
+    kind: "full",
+    profile: {
+      id: target.id,
+      name: target.name,
+      jobTitle: target.jobTitle,
+      bio: target.bio,
+      createdAt: target.createdAt,
+      organizationId: membership.organization.id,
+      organizationName: membership.organization.name,
+      organizationRole: membership.role,
+      stats: {
+        ideasCreated: stats[0],
+        ideasVotesReceived: votesReceived,
+        openTasksAssigned: stats[2],
+        tasksCompleted: stats[3],
+      },
     },
   };
 }
 
-/** Member directory of the viewer's organizations. */
-export async function memberDirectory(viewerId: string): Promise<
-  {
-    organizationId: string;
-    organizationName: string;
-    orgRole: string; // viewer's role in this org
-    canManage: boolean;
-    joinCode: string | null;
-    members: {
-      userId: string;
-      name: string;
-      jobTitle: string | null;
-      role: string;
-      email: string | null; // email exposed only to admins/owner
-    }[];
-  }[]
-> {
+/**
+ * The full profile page of a member (the /u/[id] page). Guests have no profile
+ * pages: they only ever get the names-only view of getProfileForViewer, so for
+ * them this is "not found".
+ */
+export async function getPublicProfile(viewerId: string, targetId: string): Promise<PublicProfile> {
+  const view = await getProfileForViewer(viewerId, targetId);
+  if (view.kind === "limited") throw new NotFoundError("user.not_found");
+  return view.profile;
+}
+
+/**
+ * The people an org GUEST may see in `orgId`: those who share a workspace with them
+ * (and the guest). Names only; every other field is blanked.
+ */
+async function guestDirectoryMembers(viewerId: string, orgId: string) {
+  const mine = await db.workspaceMember.findMany({
+    where: { userId: viewerId, workspace: { organizationId: orgId } },
+    select: { workspaceId: true },
+  });
+  const mates = mine.length
+    ? await db.workspaceMember.findMany({
+        where: {
+          workspaceId: { in: mine.map((w) => w.workspaceId) },
+          // somebody who left or was suspended may still have a workspace row; they are not listed
+          user: { memberships: { some: { organizationId: orgId, status: "ACTIVE" } } },
+        },
+        select: { user: { select: { id: true, name: true } } },
+      })
+    : [];
+  const people = new Map<string, string>();
+  for (const row of mates) people.set(row.user.id, row.user.name);
+  if (!people.has(viewerId)) {
+    const me = await db.user.findUnique({ where: { id: viewerId }, select: { id: true, name: true } });
+    if (me) people.set(me.id, me.name);
+  }
+  return [...people.entries()]
+    .map(([userId, name]) => ({ userId, name, jobTitle: null, role: "", email: null }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+type DirectoryOrg = {
+  organizationId: string;
+  organizationName: string;
+  orgRole: string; // viewer's role in this org
+  canManage: boolean;
+  restricted: boolean; // true for a guest viewer: names only
+  members: {
+    userId: string;
+    name: string;
+    jobTitle: string | null;
+    role: string;
+    email: string | null; // e-mail exposed only to people who hold `users.manage` (the owner, admins by default)
+  }[];
+};
+
+/**
+ * Member directory of the viewer's organizations. In an organization where the
+ * viewer is a GUEST the list is names only and limited to the people they share a
+ * workspace with (`restricted: true`; job title, role and email are blank).
+ *
+ * Everybody else needs the `directory.view` capability (403 `insufficient_role` when it was taken
+ * away), sees ACTIVE people only, and sees e-mail addresses and the manager's panel only with
+ * `users.manage`. A viewer who is suspended or offboarded is a member nowhere: an empty list.
+ */
+export async function memberDirectory(viewerId: string): Promise<DirectoryOrg[]> {
   const memberships = await db.organizationMember.findMany({
-    where: { userId: viewerId },
-    select: { organizationId: true, organization: { select: { id: true, name: true, joinCode: true } }, role: true },
+    where: { userId: viewerId, status: "ACTIVE" },
+    select: {
+      organizationId: true,
+      organization: { select: { id: true, name: true } },
+      role: true,
+      capabilities: true,
+      revokedCapabilities: true,
+    },
     orderBy: { createdAt: "asc" },
   });
 
   const result = await Promise.all(
-    memberships.map(async (m) => {
-      const canManage = m.role === "OWNER" || m.role === "ADMIN";
+    memberships.map(async (m): Promise<DirectoryOrg | "refused"> => {
+      if (m.role === "GUEST") {
+        return {
+          organizationId: m.organizationId,
+          organizationName: m.organization.name,
+          orgRole: m.role,
+          canManage: false,
+          restricted: true,
+          members: await guestDirectoryMembers(viewerId, m.organizationId),
+        };
+      }
+      if (!can(m, "directory.view")) return "refused";
+      const canManage = can(m, "users.manage");
       const rows = await db.organizationMember.findMany({
-        where: { organizationId: m.organizationId },
+        where: { organizationId: m.organizationId, status: "ACTIVE" },
         select: {
           role: true,
           user: { select: { id: true, name: true, jobTitle: true, email: true } },
         },
         orderBy: { createdAt: "asc" },
       });
-      const roleOrder: Record<string, number> = { OWNER: 0, ADMIN: 1, MEMBER: 2, GUEST: 3 };
-      rows.sort((a, b) => (roleOrder[a.role] ?? 9) - (roleOrder[b.role] ?? 9));
+      // by rank, highest first (the order of the enum in the database means nothing); a stable sort keeps
+      // the people of one rank in the order they joined
+      rows.sort((a, b) => RANK[b.role] - RANK[a.role]);
       return {
         organizationId: m.organizationId,
         organizationName: m.organization.name,
         orgRole: m.role,
         canManage,
-        joinCode: canManage ? m.organization.joinCode : null,
+        restricted: false,
         members: rows.map((r) => ({
           userId: r.user.id,
           name: r.user.name,
@@ -166,5 +271,8 @@ export async function memberDirectory(viewerId: string): Promise<
       };
     }),
   );
-  return result;
+  const listed = result.filter((org): org is DirectoryOrg => org !== "refused");
+  // nothing to show only because the capability was taken away: say so (a guest-only list is not that)
+  if (listed.length === 0 && result.length > 0) throw new ForbiddenError("insufficient_role");
+  return listed;
 }

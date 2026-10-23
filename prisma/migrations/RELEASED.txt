@@ -1,0 +1,31 @@
+# Migration folders that have been applied to a shared database (production).
+# One line per folder:   <folder> sha256:<hex>      Blank lines and # comments are ignored.
+#
+# NEVER rename, edit or delete a folder listed here. The database remembers each
+# migration by name and checksum: a renamed folder is a migration that "was never
+# applied", and `prisma migrate deploy` stops with P3009 (the 2026-10-19 incident,
+# docs/DEPLOYMENT-INCIDENT-2026-10-19.md).
+#
+# The hash pins the SQL itself, so an edit - or a file truncated by accident, as it_tickets
+# was on 2026-10-19 - fails the lint. It is taken with CRLF read as LF, so a Windows checkout and
+# the Linux CI agree; every other byte counts. A line WITHOUT a hash is refused on purpose: it
+# would be a released migration that nothing protects, and the protection would decay unnoticed.
+#
+# To release a migration, after it has been deployed (not before: until then it may still be
+# fixed in place, and it is still judged by the review rules of scripts/lint-migrations.mjs):
+#     node scripts/lint-migrations.mjs --hash <folder>
+# and paste the line it prints below. A folder that is not listed must have a timestamp LATER
+# than the last one that is. Adding a line here freezes the migration AND stops the review rules
+# from judging it, so a change to this file is reviewed with care.
+20261016192059_init sha256:53537c32f44e61b78bd6b17260e9166645b8d1246b3e8aa962a37fa78c084dab
+20261017080000_accounts_ideas_profiles sha256:e9cde14f1c864ace37232b31082318fba341ce947cb88b295040d01620e24a57
+20261017090000_integrations sha256:911c66e948ab5d43b3e07fbc2b69f79b21677a4f64d4563cc51812c16df3bd98
+20261017100000_event_optional_link sha256:24df76039e9943364bef961d77631a7a67c61cfceb47e15827149453551eda82
+20261017113000_internal_chat sha256:507436b40b5be34ad1a89df2f163c198fbfdeb93289940cd4d3b46a6f96baa11
+20261017121500_file_library sha256:8cda801622609ce01a2f4b10cf7eb55f46da7008de4277c60d01d45fe24a31c0
+20261017123000_departments sha256:6f7195c3f6b4564c14ea48f451a0e6bb057a5e81fc5498d1fcd91b7df89f8dc3
+20261017123500_it_tickets sha256:11f3bca4d376fe8a9b2e5f17dfb6777df18307c48d3e79d2d5acfb5335779ee1
+20261017130000_production_goals sha256:5fe700564675188171f80492e6d10bf6099c73506d163fb5060d192e10a7c9d8
+20261019120000_crm_models sha256:3466a54df7b450f3c377b9fb146c0e6d2d6bd068344b5e01f8af8ae3d2d7b5f1
+20261019190000_ticket_comments_activity sha256:37628f4f7dd569ddd572c04c011871e2f9af0d898929858d66046eabb941c053
+20261019200000_campaign_calendar sha256:7eaa381fd38a1e5550af5d7a90348cb02ce80e2af42641a73b8421ee0e7744a1

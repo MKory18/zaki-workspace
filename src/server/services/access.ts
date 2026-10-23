@@ -2,13 +2,17 @@ import { db } from "@/server/db";
 
 /**
  * Workspace-level isolation — the company's master switch.
- * Org OWNER/ADMIN see every workspace in their orgs (inherit).
- * Everyone else only sees workspaces they are explicitly assigned to.
- * GUESTs never inherit; they only get assigned workspaces.
+ *
+ * A workspace (space) is visible to the people who are IN it and to the organization OWNER, who
+ * sees every workspace of the company. Nobody else inherits anything: an ADMIN sees the spaces
+ * they were added to, like everybody else. Only ACTIVE organization members count (a suspended
+ * or offboarded person has no access, whatever rows they left behind).
  */
+
+/** Organizations where the user is an ACTIVE OWNER (they see every workspace there). */
 export async function canInheritWorkspaces(userId: string): Promise<string[]> {
   const memberships = await db.organizationMember.findMany({
-    where: { userId, role: { in: ["OWNER", "ADMIN"] } },
+    where: { userId, role: "OWNER", status: "ACTIVE" },
     select: { organizationId: true },
   });
   return memberships.map((m) => m.organizationId);
@@ -17,19 +21,17 @@ export async function canInheritWorkspaces(userId: string): Promise<string[]> {
 /** Workspace ids the user may open. Returned ids are already org-bound. */
 export async function accessibleWorkspaceIds(userId: string): Promise<string[]> {
   const memberships = await db.organizationMember.findMany({
-    where: { userId },
+    where: { userId, status: "ACTIVE" },
     select: { role: true, organizationId: true },
   });
   const orgIds = memberships.map((m) => m.organizationId);
   if (orgIds.length === 0) return [];
 
-  const inheritIds = memberships
-    .filter((m) => m.role === "OWNER" || m.role === "ADMIN")
-    .map((m) => m.organizationId);
+  const ownedOrgIds = memberships.filter((m) => m.role === "OWNER").map((m) => m.organizationId);
 
-  const [inherited, assigned] = await Promise.all([
-    inheritIds.length
-      ? db.workspace.findMany({ where: { organizationId: { in: inheritIds } }, select: { id: true } })
+  const [everything, assigned] = await Promise.all([
+    ownedOrgIds.length
+      ? db.workspace.findMany({ where: { organizationId: { in: ownedOrgIds } }, select: { id: true } })
       : Promise.resolve([] as { id: string }[]),
     db.workspaceMember.findMany({
       where: { userId, workspace: { organizationId: { in: orgIds } } },
@@ -38,7 +40,7 @@ export async function accessibleWorkspaceIds(userId: string): Promise<string[]> 
   ]);
 
   const ids = new Set<string>();
-  for (const w of inherited) ids.add(w.id);
+  for (const w of everything) ids.add(w.id);
   for (const m of assigned) ids.add(m.workspaceId);
   return [...ids];
 }
@@ -60,8 +62,14 @@ export async function canManageWorkspaceMembers(
     }),
     db.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: ws.organizationId, userId } },
-      select: { role: true },
+      select: { role: true, status: true },
     }),
   ]);
-  return wsMember?.role === "ADMIN" || om?.role === "OWNER" || om?.role === "ADMIN";
+  if (!om || om.status !== "ACTIVE") return false;
+  if (om.role === "OWNER") return true;
+  // an external partner never manages anybody, whatever an old row of theirs says
+  if (om.role === "GUEST") return false;
+  // anyone else must be IN the workspace; a workspace admin manages it, and so does an org ADMIN
+  // (who outranks a lower row of their own)
+  return !!wsMember && (wsMember.role === "ADMIN" || om.role === "ADMIN");
 }

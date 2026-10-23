@@ -1,14 +1,15 @@
 import { redirect } from "next/navigation";
 import {
+  listWorkspacePeople,
   queryTasksForView,
   resolveWorkspaceView,
   sortByDue,
   type ViewTask,
 } from "@/server/services/views";
-import { db } from "@/server/db";
 import { TaskRow, type RowMember } from "@/components/task-row";
 import { ListFilters } from "@/components/list-filters";
 import { getServerT } from "@/lib/i18n/server";
+import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 
 const GROUPS = ["status", "priority", "project", "assignee"] as const;
 type Group = (typeof GROUPS)[number];
@@ -25,7 +26,7 @@ export default async function ListPage({
 
   if ("none" in result) {
     return (
-      <main className="grid h-full place-items-center p-8 text-center">
+      <div className="grid h-full place-items-center p-8 text-center">
         <div>
           <h1 className="text-base font-semibold text-fg">{t("list.title")}</h1>
           <p className="mt-1 text-sm text-muted">{t("list.noWorkspace")}</p>
@@ -33,7 +34,7 @@ export default async function ListPage({
             {t("nav.projects")}
           </a>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -50,14 +51,8 @@ export default async function ListPage({
   const assigneeId = assigneeParam === "__none__" ? "__none__" : assigneeParam || undefined;
   const q = (searchParams.q ?? "").trim();
 
-  const members: RowMember[] = ctx.denied
-    ? []
-    : (
-        await db.organizationMember.findMany({
-          where: { organizationId: ctx.orgId },
-          select: { user: { select: { id: true, name: true } } },
-        })
-      ).map((m) => m.user);
+  // org members: the org's people; org guests: only those who share this workspace
+  const members: RowMember[] = ctx.denied ? [] : await listWorkspacePeople(ctx);
 
   const tasks: ViewTask[] = ctx.denied
     ? []
@@ -91,11 +86,11 @@ export default async function ListPage({
   for (const task of tasks) {
     switch (group) {
       case "status":
-        ensure(task.columnId, task.columnName, "0").rows.push(task);
+        ensure(task.columnId, columnLabel(task.columnName), "0").rows.push(task);
         break;
       case "priority": {
         const idx = PRIORITY_ORDER.indexOf(task.priority);
-        ensure(task.priority, `${task.priority}`, String(idx < 0 ? 9 : idx)).rows.push(task);
+        ensure(task.priority, enumLabel("TaskPriority", task.priority), String(idx < 0 ? 9 : idx)).rows.push(task);
         break;
       }
       case "project":
@@ -110,17 +105,17 @@ export default async function ListPage({
   }
 
   const sortedBuckets = [...buckets.values()].sort((a, b) =>
-    a.ordered === b.ordered ? a.label.localeCompare(b.label) : a.ordered.localeCompare(b.ordered),
+    a.ordered === b.ordered ? a.label.localeCompare(b.label, "ar") : a.ordered.localeCompare(b.ordered),
   );
 
   const labels = {
-    workspace: t("top.workspaces"),
+    workspace: t("ws.one"),
     groupBy: t("list.groupBy"),
     group_status: t("list.group.status"),
     group_priority: t("list.group.priority"),
     group_project: t("list.group.project"),
     group_assignee: t("list.group.assignee"),
-    priority: t("task.priority"),
+    priorityField: t("task.priority"),
     priorityAny: t("list.priorityAny"),
     assignee: t("task.assignee"),
     assigneeAny: t("list.assigneeAny"),
@@ -129,7 +124,7 @@ export default async function ListPage({
   };
 
   return (
-    <main className="flex h-full min-w-0 flex-col overflow-y-auto">
+    <div className="flex h-full min-w-0 flex-col overflow-y-auto">
       <header className="border-b border-border bg-surface px-5 py-4">
         <h1 className="text-base font-semibold text-fg">{t("list.title")}</h1>
         <p className="text-xs text-fg-muted">{ctx.denied ? t("forbidden") : ctx.workspaceName}</p>
@@ -157,7 +152,7 @@ export default async function ListPage({
               <section key={b.label} aria-label={b.label}>
                 <h2 className="mb-1 flex items-center gap-2 px-2 text-xs font-semibold text-fg-muted">
                   {b.label}
-                  <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-normal">{b.rows.length}</span>
+                  <span className="rounded-full bg-surface-2 px-1.5 text-xs font-normal">{b.rows.length}</span>
                 </h2>
                 <ul className="divide-y divide-border/60">
                   {b.rows.map((task) => (
@@ -176,7 +171,7 @@ export default async function ListPage({
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 

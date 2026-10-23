@@ -1,51 +1,59 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import * as React from "react";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-export function Modal({
-  open,
-  title,
-  onClose,
-  children,
-}: {
+/**
+ * The props every call site already passes: `open`, `title`, `onClose`, children. They did not change
+ * when the insides moved to Radix (tests/ui-overlays.test.ts pins the type), so no call site changes.
+ */
+export interface ModalProps {
   open: boolean;
   title: string;
   onClose: () => void;
-  children: ReactNode;
-}) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  children: React.ReactNode;
+}
 
-  if (!open) return null;
+/** Radix says when it wants the dialog to open or close; the call sites only ever hear about closing. */
+export function whenClosed(onClose: () => void): (open: boolean) => void {
+  return (open) => {
+    if (!open) onClose();
+  };
+}
+
+/**
+ * The visible part of a Modal: the title (the dialog's name for screen readers) pinned on top and the
+ * children below it, scrolling inside the panel when they are tall. `portal={false}` is for tests that
+ * render on the server, where a portal draws nothing.
+ */
+export function ModalContent({
+  title,
+  children,
+  portal,
+}: {
+  title: string;
+  children: React.ReactNode;
+  portal?: boolean;
+}): React.JSX.Element {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-lg animate-fade-in">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-fg">{title}</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg p-1 text-muted hover:bg-surface-2 hover:text-fg"
-          >
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <DialogContent aria-label={title} portal={portal}>
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+      </DialogHeader>
+      <DialogBody>{children}</DialogBody>
+    </DialogContent>
+  );
+}
+
+/**
+ * A modal dialog. Focus is trapped inside it and given back to the button that opened it, Escape and a
+ * tap on the dimmed area close it (through `onClose`), the page behind does not scroll and is hidden
+ * from screen readers. Nothing is drawn while `open` is false.
+ */
+export function Modal({ open, title, onClose, children }: ModalProps): React.JSX.Element {
+  return (
+    <Dialog open={open} onOpenChange={whenClosed(onClose)}>
+      <ModalContent title={title}>{children}</ModalContent>
+    </Dialog>
   );
 }

@@ -1,0 +1,17 @@
+{
+  "chatc.message": "اكتب رسالة…",
+  "chatc.send": "إرسال",
+  "chatc.sending": "جارٍ الإرسال…",
+  "chatc.attach": "إرفاق ملفات",
+  "chatc.remove_file": "إزالة الملف",
+  "chatc.file_too_large": "حجم الملف أكبر من المسموح",
+  "chatc.too_many_files": "الحد الأقصى 10 مرفقات للرسالة",
+  "chatc.message_failed": "تعذّر إرسال الرسالة، حاول مرة أخرى",
+  "chatc.upload_failed": "تعذّر رفع الملف، حاول مرة أخرى",
+  "chatc.mention": "اختر عضواً للإشارة إليه",
+  "chatc.reply_to": "رد على {name}: {body}",
+  "chatc.cancel_reply": "إلغاء الرد",
+  "chatc.editing": "تعديل الرسالة",
+  "chatc.save": "حفظ",
+  "chatc.cancel": "إلغاء"
+}

@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
-import { withApi } from "@/server/api";
-import { db } from "@/server/db";
-import { requireOrgMember } from "@/server/auth";
-import { regenerateJoinCode } from "@/server/services/orgs";
 
-/** Rotate the org invitation join code. OWNER/ADMIN only. */
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
-  return withApi(async () => {
-    const ctx = await requireOrgMember(params.id);
-    const code = await regenerateJoinCode(params.id, ctx);
-    return NextResponse.json({ joinCode: code });
-  });
+/**
+ * RETIRED. The invitation code used to let anybody holding it create an account in the
+ * organization; accounts are now created by the owner (and the people they allow) inside the app.
+ * The endpoint answers 410 for good. `Organization.joinCode` and its stored values are kept
+ * (additive-only database rule) but no code path honours them any more.
+ */
+function gone(): NextResponse {
+  return NextResponse.json({ error: "gone", message: "auth.registration_closed" }, { status: 410 });
+}
+
+export async function POST() {
+  return gone();
+}
+
+export async function GET() {
+  return gone();
 }

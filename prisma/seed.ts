@@ -1,24 +1,43 @@
 import * as crypto from "node:crypto";
-import { db } from "@/server/db";
+import type { PrismaClient } from "@prisma/client";
+import { db as appDb } from "@/server/db";
 import { hashPassword } from "@/server/auth";
+import { transparencyVersionOf } from "@/server/policy/org-settings";
+import {
+  DEFAULT_SEED_OWNER_USERNAME,
+  assertSeedAllowed,
+  resolveOwnerEmail,
+  resolveOwnerPassword,
+  type Env,
+} from "./seed-guard";
 
 /**
  * Seed: demo organization with owner + workspace + project + default board.
  * Safe to run repeatedly — idempotent by email/slug lookup.
+ *
+ * The owner is created already onboarded — they chose (or were shown) the password themselves and
+ * nobody else accepts the transparency notice for them — and with the username "owner", so they
+ * can sign in with it or with the e-mail.
+ *
+ * The repository is public, so no password is written here:
+ *  - the owner gets a random password, printed ONCE when the account is created
+ *    (or the one in SEED_OWNER_PASSWORD, which is never echoed);
+ *  - it refuses to run when NODE_ENV=production, or when DATABASE_URL points at
+ *    a host that is not this machine, unless ALLOW_PROD_SEED=1 (prisma/seed-guard.ts).
  */
 async function main(): Promise<void> {
-  const email = "owner@zaki.local";
+  assertSeedAllowed();
+  await seedDemo(appDb);
+}
+
+/** The seed itself, exported so tests/db/seed-demo.test.ts can run it against the test database. */
+export async function seedDemo(
+  db: PrismaClient,
+  env: Env = process.env,
+  say: (line: string) => void = (line) => console.log(line),
+): Promise<void> {
+  const email = resolveOwnerEmail(env);
   let user = await db.user.findUnique({ where: { email } });
-  if (!user) {
-    user = await db.user.create({
-      data: {
-        email,
-        name: "Zaki Owner",
-        passwordHash: await hashPassword("owner1234"),
-      },
-    });
-    console.log("created user", user.email);
-  }
 
   let org = await db.organization.findUnique({ where: { slug: "zaki-demo" } });
   if (!org) {
@@ -28,15 +47,39 @@ async function main(): Promise<void> {
       joinCode += alphabet[crypto.randomInt(alphabet.length)];
     }
     org = await db.organization.create({
-      data: {
-        name: "Zaki Demo Org",
-        slug: "zaki-demo",
-        keyPrefix: "ZD",
-        joinCode,
-        members: { create: { userId: user.id, role: "OWNER" } },
-      },
+      data: { name: "Zaki Demo Org", slug: "zaki-demo", keyPrefix: "ZD", joinCode },
     });
   }
+
+  if (!user) {
+    const { password, generated } = resolveOwnerPassword(env);
+    const usernameTaken = await db.user.findUnique({ where: { username: DEFAULT_SEED_OWNER_USERNAME }, select: { id: true } });
+    user = await db.user.create({
+      data: {
+        email,
+        username: usernameTaken ? null : DEFAULT_SEED_OWNER_USERNAME,
+        name: "Zaki Owner",
+        passwordHash: await hashPassword(password),
+        mustChangePassword: false,
+        transparencyVersion: transparencyVersionOf(org.settings),
+        transparencyAcceptedAt: new Date(),
+      },
+    });
+    say(`created user ${user.email}${user.username ? ` (username: ${user.username})` : ""}`);
+    say(
+      generated
+        ? `password (random, shown once, not stored anywhere): ${password}`
+        : "password: the value of SEED_OWNER_PASSWORD",
+    );
+  } else {
+    say(`owner already exists - password left unchanged: ${user.email}`);
+  }
+
+  await db.organizationMember.upsert({
+    where: { organizationId_userId: { organizationId: org.id, userId: user.id } },
+    create: { organizationId: org.id, userId: user.id, role: "OWNER" },
+    update: {},
+  });
 
   let ws = await db.workspace.findFirst({ where: { organizationId: org.id } });
   if (!ws) {
@@ -45,7 +88,6 @@ async function main(): Promise<void> {
         organizationId: org.id,
         name: "Main Workspace",
         slug: "main",
-        members: { create: { userId: user.id, role: "ADMIN" } },
         projects: {
           create: {
             name: "First Project",
@@ -71,6 +113,11 @@ async function main(): Promise<void> {
       },
     });
   }
+  await db.workspaceMember.upsert({
+    where: { workspaceId_userId: { workspaceId: ws.id, userId: user.id } },
+    create: { workspaceId: ws.id, userId: user.id, role: "ADMIN" },
+    update: {},
+  });
 
   await db.taskCounter.upsert({
     where: { organizationId: org.id },
@@ -78,15 +125,17 @@ async function main(): Promise<void> {
     update: {},
   });
 
-  console.log(`seeded org=${org.slug} workspace=${ws.name}`);
-  console.log(`login: ${email} / owner1234 (dev only)`);
+  say(`seeded org=${org.slug} workspace=${ws.name}`);
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await db.$disconnect();
-  });
+// Runs when executed (`npm run db:seed`, `prisma db seed`), not when a test imports seedDemo.
+if (/(^|[\\/])prisma[\\/]seed\.ts$/.test(process.argv[1] ?? "")) {
+  main()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await appDb.$disconnect();
+    });
+}

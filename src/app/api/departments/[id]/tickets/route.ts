@@ -24,11 +24,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   });
 }
 
-/** POST: open a ticket in this department (org member; dept members assign). */
+/** POST: open a ticket in this department (org member, not a guest; dept members assign). */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(createTicketSchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(createTicketSchema, req);
     const ticket = await createTicket(ctx, params.id, input);
     return NextResponse.json({ ticket }, { status: 201 });
   });

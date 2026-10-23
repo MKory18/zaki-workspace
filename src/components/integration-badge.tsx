@@ -25,7 +25,7 @@ export function IntegrationBadge({
         <Link2 className="size-4 text-muted" />
         {label}
       </span>
-      <span className={cn("flex items-center gap-1.5 text-[10px] font-medium", ok ? "text-emerald-600" : "text-muted")}>
+      <span className={cn("flex items-center gap-1.5 text-xs font-medium", ok ? "text-ok" : "text-muted")}>
         {ok ? <CheckCircle2 className="size-3.5" /> : <XCircle className="size-3.5" />}
         {ok ? t("settings.connected") : mutedKey(muted, t)}
       </span>

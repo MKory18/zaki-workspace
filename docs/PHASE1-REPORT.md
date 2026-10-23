@@ -1,3 +1,5 @@
+> ⚠️ Written before the 2026-10-22 audit; some claims do not match the code. The verified state is in [docs/PHASE0-AUDIT.md](PHASE0-AUDIT.md).
+
 # Phase 1 Report — Foundation + First Vertical Slice
 
 Date: 2026-10-17 · Repo was empty → greenfield build.

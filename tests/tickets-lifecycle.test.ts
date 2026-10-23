@@ -62,9 +62,11 @@ describe("ticket lifecycle service contract (P1 regression)", () => {
     expect(mine).toContain("creatorId: ctx.userId");
   });
 
-  it("delete allows the creator even without dept membership", () => {
-    const del = svc.slice(svc.indexOf("deleteTicket"));
-    expect(del).toContain("ticket.creatorId !== ctx.userId");
+  it("delete follows the edit rule (canEditTicket): the old 'creator may always delete' shortcut is gone", () => {
+    // behaviour is covered by tests/db/guest-tickets.test.ts; this pins that delete reuses the edit facts
+    const del = svc.slice(svc.indexOf("export async function deleteTicket("));
+    expect(del).toContain("canEditTicket");
+    expect(del).not.toContain("ticket.creatorId !== ctx.userId");
   });
 });
 

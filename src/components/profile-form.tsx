@@ -3,19 +3,34 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { Input, Label } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { apiPost, apiPatch, ApiError } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 
 export interface MeData {
   id: string;
-  email: string;
+  /** Absent for an account that has only a username. */
+  email: string | null;
   name: string;
   jobTitle: string | null;
   bio: string | null;
   locale: string;
   hue: number;
+}
+
+/**
+ * The Arabic text for a failed password change: the current password was wrong, the new one breaks
+ * a rule (the server sends the rule's key in `details`), or there were too many tries.
+ */
+export function passwordErrorText(err: unknown, t: (key: string) => string): string {
+  if (!(err instanceof ApiError)) return t("common.error");
+  if (err.messageKey === "password.wrong_current") return t("profile.wrongCurrent");
+  if (err.code === "rate_limited") return t("auth.too_many_attempts");
+  const details = Array.isArray(err.details) ? (err.details as { message?: unknown }[]) : [];
+  const rule = details.map((d) => d.message).find((m): m is string => typeof m === "string" && t(m) !== m);
+  return rule ? t(rule) : t("common.error");
 }
 
 /** Self-service account form: identity + job title + bio + password change. */
@@ -57,8 +72,7 @@ export function ProfileForm({ me }: { me: MeData }) {
       form.reset();
       toast(t("profile.passwordChanged"), "success");
     } catch (err) {
-      const code = err instanceof ApiError ? err.code : "internal";
-      toast(code === "password.wrong_current" ? t("profile.wrongCurrent") : t("common.error"), "error");
+      toast(passwordErrorText(err, t), "error");
     } finally {
       setPending(false);
     }
@@ -95,9 +109,9 @@ export function ProfileForm({ me }: { me: MeData }) {
             <Input name="currentPassword" type="password" required autoComplete="current-password" />
           </div>
           <div>
-            <Label>{t("auth.password")}</Label>
+            <Label>{t("onboarding.new_password")}</Label>
             <Input name="newPassword" type="password" required minLength={8} autoComplete="new-password" />
-            <p className="mt-1 text-[10px] text-muted">{t("auth.passwordRule")}</p>
+            <p className="mt-1 text-xs text-muted">{t("auth.passwordRule")}</p>
           </div>
           <Button type="submit" disabled={pending}>
             {t("profile.changePassword")}

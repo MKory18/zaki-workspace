@@ -1,27 +1,19 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/server/auth";
+import { requireActor } from "@/server/policy/actor";
 import { withApi } from "@/server/api";
-import { db } from "@/server/db";
 import { parseJson } from "@/server/validation";
+import { assertNotGuest } from "@/server/services/guest-guard";
 import { deleteGoal, goalPatchSchema, updateGoal } from "@/server/services/goals";
 
-async function orgOf(userId: string) {
-	const membership = await db.organizationMember.findFirst({
-		where: { userId },
-		orderBy: { createdAt: "asc" },
-		select: { organizationId: true },
-	});
-	return membership?.organizationId ?? null;
-}
+/** Goals are staff only: an external partner (guest) gets 403 `guest.no_access` before anything is read. */
 
 /** PATCH: edit a goal incl. live progress (OWNER/ADMIN). */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
 	return withApi(async () => {
+		const actor = await requireActor();
+		assertNotGuest({ orgRole: actor.role });
 		const input = await parseJson(goalPatchSchema, req);
-		const user = await requireUser();
-		const orgId = await orgOf(user.id);
-		if (!orgId) return NextResponse.json({ error: "auth.required" }, { status: 401 });
-		await updateGoal({ orgId, userId: user.id }, params.id, input);
+		await updateGoal({ orgId: actor.orgId, userId: actor.userId }, params.id, input);
 		return NextResponse.json({ ok: true });
 	});
 }
@@ -29,10 +21,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 /** DELETE: remove a goal (OWNER/ADMIN). */
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
 	return withApi(async () => {
-		const user = await requireUser();
-		const orgId = await orgOf(user.id);
-		if (!orgId) return NextResponse.json({ error: "auth.required" }, { status: 401 });
-		await deleteGoal({ orgId, userId: user.id }, params.id);
+		const actor = await requireActor();
+		assertNotGuest({ orgRole: actor.role });
+		await deleteGoal({ orgId: actor.orgId, userId: actor.userId }, params.id);
 		return NextResponse.json({ ok: true });
 	});
 }

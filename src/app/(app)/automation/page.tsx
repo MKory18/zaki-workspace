@@ -1,21 +1,17 @@
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { currentUser, ForbiddenError } from "@/server/auth";
-import { db } from "@/server/db";
+import { pageActor, presentedRole } from "@/app/(app)/_access";
 import { AutomationView } from "@/components/automation-view";
 
 export default async function AutomationPage() {
-  const user = await currentUser();
-  if (!user) redirect("/login");
+  const { actor } = await pageActor();
 
-  const membership = await db.organizationMember.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: { role: true },
-  });
-  if (!membership) throw new ForbiddenError("not_org_member");
-
-  return <Suspense fallback={null}><AutomationView ctx={{ orgRole: membership.role }} /></Suspense>;
+  // The view shows its management controls to an OWNER or an ADMIN: here that is whoever holds the
+  // `integrations.manage` switch (the server decides again on every request).
+  return (
+    <Suspense fallback={null}>
+      <AutomationView ctx={{ orgRole: presentedRole(actor, "integrations.manage") }} />
+    </Suspense>
+  );
 }
 
 export const dynamic = "force-dynamic";

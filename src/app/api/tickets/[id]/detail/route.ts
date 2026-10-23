@@ -17,11 +17,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   });
 }
 
-/** POST: add a comment to the ticket (org member). */
+/** POST: add a comment to the ticket (org member; guests get 403 from the service). */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const input = await parseJson(ticketCommentSchema, req);
     const ctx = await activeOrgCtx();
+    const input = await parseJson(ticketCommentSchema, req);
     const comment = await addTicketComment(ctx, params.id, input.body);
     return NextResponse.json({ comment }, { status: 201 });
   });

@@ -1,6 +1,7 @@
 import { Prisma, type Task } from "@prisma/client";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
+import { AR } from "@/lib/i18n/dict";
 
 export interface ActorContext {
   userId: string;
@@ -30,13 +31,33 @@ export interface MoveTaskInput {
 
 export const TASK_INCLUDE = {
   labels: { select: { label: { select: { id: true, name: true, color: true } } } },
-  assignee: { select: { id: true, name: true, email: true } },
+  assignee: { select: { id: true, name: true } },
   _count: { select: { comments: true } },
 } satisfies Prisma.TaskInclude;
 
 export type TaskDTO = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;
 
 export type Tx = Prisma.TransactionClient;
+
+export interface DefaultBoardColumn {
+  name: string;
+  color: string;
+  done: boolean;
+}
+
+/**
+ * The workflow a new board starts with. The names are Arabic (no English reaches a screen): the same
+ * words `columnLabel` shows for the English defaults boards were given before, so an old board and a
+ * new one read alike. Boards that already exist keep their names; only what is shown is translated.
+ * (A column's colour is user data, stored as a hex value.)
+ */
+export const DEFAULT_BOARD_COLUMNS: readonly DefaultBoardColumn[] = [
+  { name: AR["column.backlog"]!, color: "#6b7280", done: false },
+  { name: AR["column.todo"]!, color: "#3b82f6", done: false },
+  { name: AR["column.in_progress"]!, color: "#f59e0b", done: false },
+  { name: AR["column.review"]!, color: "#a855f7", done: false },
+  { name: AR["column.done"]!, color: "#10b981", done: true },
+];
 
 /**
  * Per-org sequential number (task key = `${prefix}-${number}`).
@@ -143,13 +164,15 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
       if (count !== uniqueIds.length) throw new ForbiddenError("label.invalid");
     }
 
-    // P1: never allow assigning a task to a user outside the actor's org
+    // P1: never allow assigning a task to a user outside the actor's org, nor to one who is no
+    // longer active in it (suspended or offboarded keep their row, but they do not count)
     if (input.assigneeId) {
       const member = await tx.organizationMember.findFirst({
         where: { organizationId: actor.orgId, userId: input.assigneeId },
-        select: { id: true },
+        select: { status: true },
       });
       if (!member) throw new ForbiddenError("assignee.not_member");
+      if (member.status !== "ACTIVE") throw new ForbiddenError("assignee.not_active");
     }
 
     const number = await nextTaskNumber(actor.orgId, tx);
@@ -250,6 +273,17 @@ export async function updateTask(
     if (data.priority !== undefined) updateData.priority = data.priority;
     if (data.type !== undefined) updateData.type = data.type;
     if (data.assigneeId !== undefined) {
+      // never assign to a user outside the actor's org, or to one who is not active in it (the same
+      // rule as on create); re-sending the current assignee changes nothing, so it is not re-checked:
+      // work somebody already holds stays editable around them until it is moved
+      if (data.assigneeId !== null && data.assigneeId !== before.assigneeId) {
+        const member = await tx.organizationMember.findFirst({
+          where: { organizationId: actor.orgId, userId: data.assigneeId },
+          select: { status: true },
+        });
+        if (!member) throw new ForbiddenError("assignee.not_member");
+        if (member.status !== "ACTIVE") throw new ForbiddenError("assignee.not_active");
+      }
       updateData.assignee =
         data.assigneeId === null
           ? { disconnect: true }

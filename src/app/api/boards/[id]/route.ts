@@ -44,7 +44,7 @@ export async function GET(
           position: true,
           updatedAt: true,
           labels: { select: { label: { select: { id: true, name: true, color: true } } } },
-          assignee: { select: { id: true, name: true, email: true } },
+          assignee: { select: { id: true, name: true } },
           _count: { select: { comments: true } },
         },
       }),

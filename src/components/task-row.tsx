@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { apiPatch, apiPost, ApiError } from "@/lib/api-client";
-import { PRIORITY_STYLES, fmtShort } from "@/lib/format";
+import { PRIORITY_STYLES, fmtDMY, fmtRelative } from "@/lib/format";
+import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -46,7 +47,7 @@ export function TaskRow({
   const { toast } = useToast();
   const done = task.completedAt != null;
   const [busy, setBusy] = useState(false);
-  const priority = PRIORITY_STYLES[task.priority] ?? { label: "—", color: "#9ca3af" };
+  const priorityColor = PRIORITY_STYLES[task.priority]?.color ?? "rgb(var(--border))";
 
   function fail(err: unknown) {
     const code = err instanceof ApiError ? err.code : "internal";
@@ -110,8 +111,8 @@ export function TaskRow({
         className={cn(
           "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-colors",
           done
-            ? "border-emerald-500 bg-emerald-500 text-white"
-            : "border-muted/50 hover:border-emerald-500",
+            ? "border-ok bg-ok text-ok-fg"
+            : "border-muted/50 hover:border-ok",
           (!editable || busy) && "opacity-40",
         )}
       >
@@ -119,27 +120,28 @@ export function TaskRow({
       </button>
 
       <a href={`/tasks/${task.id}`} className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="shrink-0 font-mono text-[10px] text-muted">{task.key}</span>
+        <span dir="ltr" className="shrink-0 font-mono text-xs text-muted">{task.key}</span>
         <span className={cn("truncate text-sm", done ? "text-muted line-through" : "text-fg")}>
           {task.title}
         </span>
         {showProject && task.projectName ? (
-          <span className="hidden shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-muted md:inline">
+          <span className="hidden shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-xs text-fg-muted md:inline">
             {task.projectName}
           </span>
         ) : null}
         {showColumn && task.columnName ? (
-          <span className="hidden shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-muted md:inline">
-            {task.columnName}
+          <span className="hidden shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-xs text-fg-muted md:inline">
+            {columnLabel(task.columnName)}
           </span>
         ) : null}
       </a>
 
       <span
-        aria-label={t("task.priority")}
-        title={priority.label}
+        role="img"
+        aria-label={`${t("task.priority")}: ${enumLabel("TaskPriority", task.priority)}`}
+        title={enumLabel("TaskPriority", task.priority)}
         className="h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: priority.color }}
+        style={{ backgroundColor: priorityColor }}
       />
 
       {editable ? (
@@ -148,11 +150,15 @@ export function TaskRow({
           aria-label={t("task.due")}
           defaultValue={dueValue}
           onChange={(e) => changeDue(e.target.value)}
-          className="w-28 shrink-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] text-fg-muted hover:border-border focus:border-border focus:outline-none"
+          className="w-28 shrink-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-fg-muted hover:border-border focus:border-border focus:outline-none"
         />
       ) : (
-        <span className="w-28 shrink-0 text-[11px] text-fg-muted">
-          {task.dueDate ? fmtShort(task.dueDate, "ar") : ""}
+        <span
+          className="w-28 shrink-0 text-xs text-fg-muted"
+          title={task.dueDate ? fmtDMY(task.dueDate) : undefined}
+          suppressHydrationWarning
+        >
+          {task.dueDate ? fmtRelative(task.dueDate) : ""}
         </span>
       )}
 
@@ -162,7 +168,7 @@ export function TaskRow({
           value={task.assigneeId ?? ""}
           disabled={busy}
           onChange={(e) => changeAssignee(e.target.value)}
-          className="max-w-28 shrink-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] text-fg-muted hover:border-border focus:border-border focus:outline-none"
+          className="max-w-28 shrink-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-fg-muted hover:border-border focus:border-border focus:outline-none"
         >
           <option value="">{t("list.unassigned")}</option>
           {members.map((m) => (
@@ -172,7 +178,7 @@ export function TaskRow({
           ))}
         </select>
       ) : (
-        <span className="w-20 shrink-0 truncate text-[11px] text-muted" title={task.assigneeName ?? ""}>
+        <span className="w-20 shrink-0 truncate text-xs text-muted" title={task.assigneeName ?? ""}>
           {task.assigneeName ?? ""}
         </span>
       )}

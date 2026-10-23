@@ -7,7 +7,7 @@ import { apiDelete, apiGet, ApiError, apiUpload } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
-import { fmtShort } from "@/lib/format";
+import { fmtShort, fmtSize } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +38,7 @@ interface FileMeta {
 }
 
 export function FilesView({ me }: { me: { id: string; role: string } }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { toast } = useToast();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,13 +157,13 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
                 <TypeGlyph mime={f.mimeType} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{f.name}</p>
-                  <p className="text-[11px] text-muted">
-                    {t("files.v_line", { n: f.version })} · {humanSize(f.size)} · {t("files.by", { who: f.uploader })}
+                  <p className="text-xs text-muted">
+                    {t("files.v_line", { n: f.version })} · {fmtSize(f.size)} · {t("files.by", { who: f.uploader })}
                   </p>
                   {f.versions > 1 && (
                     <button
                       type="button"
-                      className="text-[11px] text-accent hover:underline"
+                      className="text-xs text-accent hover:underline"
                       onClick={() => setVersioning(f)}
                     >
                       {t("files.line", { n: f.version, m: f.versions })}
@@ -183,7 +183,7 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
                   </a>
                   {canManage(f) && (
                     <Button size="sm" variant="ghost" aria-label={`${t("common.delete")}`} onClick={() => del.mutate(f.id)} disabled={del.isPending}>
-                      <Trash2 className="size-4 text-red-500" />
+                      <Trash2 className="size-4 text-danger" />
                     </Button>
                   )}
                 </div>
@@ -216,21 +216,14 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
 
 function TypeGlyph({ mime }: { mime: string }) {
   const cls = "size-8 shrink-0 p-1.5 rounded-lg bg-surface-2";
-  if (mime.startsWith("image/")) return <FileImage className={cn(cls, "text-emerald-500")} />;
-  if (mime.startsWith("video/")) return <FileVideo className={cn(cls, "text-indigo-500")} />;
-  if (mime.startsWith("audio/")) return <FileAudio className={cn(cls, "text-fuchsia-500")} />;
-  if (mime === "application/pdf" || mime === "text/plain") return <FileText className={cn(cls, "text-sky-500")} />;
-  return <FileArchive className={cn(cls, "text-amber-500")} />;
-}
-
-function humanSize(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  if (mime.startsWith("image/")) return <FileImage className={cn(cls, "text-ok")} />;
+  if (mime.startsWith("video/")) return <FileVideo className={cn(cls, "text-info")} />;
+  if (mime.startsWith("audio/")) return <FileAudio className={cn(cls, "text-cat-2")} />;
+  if (mime === "application/pdf" || mime === "text/plain") return <FileText className={cn(cls, "text-info")} />;
+  return <FileArchive className={cn(cls, "text-warn")} />;
 }
 
 function PreviewModal({ file, onClose }: { file: FileRow; onClose: () => void }) {
-  const { t, locale } = useI18n();
   const src = `/api/files/${file.id}/raw`;
   return (
     <Modal open onClose={onClose} title={file.name}>
@@ -273,7 +266,7 @@ function VersionModal({
   uploading: boolean;
   onClose: () => void;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const meta = useQuery({
     queryKey: ["files", "meta", row.id],
@@ -289,7 +282,7 @@ function VersionModal({
               <History className="size-3.5 text-muted" />
               <span className="font-medium">{t("files.v_line", { n: v.version })}</span>
               <span className="flex-1 truncate text-muted">
-                {t("files.by", { who: v.uploader })} · {humanSize(v.size)} · {fmtShort(v.createdAt, locale)}
+                {t("files.by", { who: v.uploader })} · {fmtSize(v.size)} · {fmtShort(v.createdAt)}
               </span>
               <a href={`/api/files/${v.id}/raw?download=1`} download className="text-accent hover:underline">
                 {t("files.download")}
@@ -306,7 +299,7 @@ function VersionModal({
               className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-4 text-sm text-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
             >
               <UploadCloud className="size-4" />
-              {t("files.newVersion")} (v{(meta.data?.version ?? row.version) + 1})
+              {t("files.newVersionNumbered", { n: (meta.data?.version ?? row.version) + 1 })}
             </button>
             <input
               ref={fileInputRef}

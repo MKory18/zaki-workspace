@@ -1,0 +1,129 @@
+# The gate every pull request passes before it is merged.
+#
+# It runs what a person would run by hand, cheapest failure first: types, lint,
+# unit tests, the migration rules, then everything that needs a real PostgreSQL
+# (a fresh deploy of every migration on an EMPTY database, the schema-drift check,
+# the database tests), then the secret scan and the production build.
+#
+# Why the database steps exist: on 2026-10-19 production failed with P3009 because a
+# migration depended on a table created by a LATER migration. Unit tests cannot see
+# that; applying every migration to an empty database can
+# (docs/DEPLOYMENT-INCIDENT-2026-10-19.md).
+#
+# The repository is PUBLIC. Nothing here uses a secret: the database below is a
+# throw-away service container that lives for this job only, and every value that
+# looks like a credential is a dummy that says so. The token is read-only, so a pull
+# request from a fork cannot make this workflow comment, label, push or release.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    # The same image family System 7 uses, so `pgvector` (planned for the semantic
+    # search phase) is available the day a migration needs it.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-test-password-not-used-anywhere
+          POSTGRES_DB: zaki_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d zaki_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci`, not `npm install`: the lockfile is the input. A resolution that
+      # drifts between a developer's machine and this one is a green CI over
+      # different code.
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Unit tests: no database, no network (tests/setup.ts sets dummy values).
+      - name: Unit tests
+        run: npm test
+
+      # Static rules over prisma/migrations: UTF-8 without BOM, additive only,
+      # enum values in a migration of their own, and no released folder renamed
+      # or removed (RELEASED.txt). Cheap, so it runs before anything touches a database.
+      - name: Migration lint
+        run: node scripts/lint-migrations.mjs
+
+      # Every migration, in order, on an empty database - exactly what the
+      # container does at start. `migrate status` then proves nothing is pending.
+      - name: Migrations apply from scratch (empty database)
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate status
+        env:
+          DATABASE_URL: postgresql://postgres:ci-test-password-not-used-anywhere@localhost:5432/zaki_ci
+
+      # The migrations must produce exactly the schema schema.prisma describes.
+      # `--from-migrations` replays them in a SHADOW database, which must be empty
+      # and separate from the one above - so create it first. `--exit-code` makes
+      # any difference fail the job (0 = identical, 2 = drift, 1 = error).
+      - name: Migrations match schema.prisma (no drift)
+        run: |
+          npx prisma db execute --url "$ADMIN_URL" --stdin <<< 'CREATE DATABASE zaki_ci_shadow;'
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "postgresql://postgres:ci-test-password-not-used-anywhere@localhost:5432/zaki_ci_shadow" \
+            --exit-code
+        env:
+          ADMIN_URL: postgresql://postgres:ci-test-password-not-used-anywhere@localhost:5432/postgres
+
+      # The database tests create their own throw-away database on this server,
+      # apply the real migrations to it and drop it afterwards (tests/db/global-setup.ts).
+      - name: Database tests
+        run: npm run test:db
+        env:
+          TEST_DATABASE_ADMIN_URL: postgresql://postgres:ci-test-password-not-used-anywhere@localhost:5432/postgres
+
+      # This repository is public: a password written into a file is published the
+      # moment the commit is, and deleting the line later does not unpublish it.
+      - name: Secret scan
+        run: npm run scan:secrets
+
+      # `next build` collects page data, and some modules read the environment on
+      # import, so a build without values fails for a reason that has nothing to do
+      # with the change under review. These are placeholders; production's real
+      # values come from Coolify.
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://postgres:ci-test-password-not-used-anywhere@localhost:5432/zaki_ci
+          AUTH_SECRET: ci-build-secret-dummy-not-used-in-production
+          APP_URL: http://localhost:3000

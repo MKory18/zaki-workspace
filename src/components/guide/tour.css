@@ -1,0 +1,148 @@
+/*
+ * The guided tour («فرجيني») is drawn by driver.js, which ships a white card with a left-to-right
+ * layout. Here it wears the theme: every colour is a token (so all four themes work with no extra
+ * rule), the text reads right to left, the buttons are thumb-sized and nothing moves for somebody
+ * who asked for reduced motion. The popover carries the class `zaki-tour` (set in tour-runner.tsx),
+ * which outranks the library's own single-class rules whatever the load order.
+ */
+
+/* the dimmed page around the highlighted element */
+.driver-overlay path {
+  fill: rgb(var(--scrim, 0 0 0)) !important;
+}
+
+.driver-popover.zaki-tour {
+  box-sizing: border-box;
+  width: min(22rem, calc(100vw - 2rem));
+  min-width: 0;
+  max-width: none;
+  padding: 1rem;
+  color: rgb(var(--fg));
+  background-color: rgb(var(--surface-1));
+  border: 1px solid rgb(var(--border));
+  border-radius: 1rem;
+  box-shadow: 0 12px 32px rgb(var(--scrim, 0 0 0) / 0.35);
+  font-family: var(--font-plex), "Segoe UI", Tahoma, sans-serif;
+  text-align: start;
+}
+
+.driver-popover.zaki-tour .driver-popover-title {
+  padding-inline-end: 2.25rem; /* room for the close button */
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.7;
+  color: rgb(var(--fg));
+}
+
+.driver-popover.zaki-tour .driver-popover-description {
+  font-size: 0.9375rem;
+  line-height: 1.9;
+  color: rgb(var(--fg-muted));
+}
+
+.driver-popover.zaki-tour .driver-popover-progress-text {
+  font-size: 0.8125rem;
+  color: rgb(var(--fg-muted));
+}
+
+.driver-popover.zaki-tour .driver-popover-footer {
+  gap: 0.5rem;
+  margin-top: 1rem;
+  text-align: start;
+}
+
+.driver-popover.zaki-tour .driver-popover-navigation-btns {
+  gap: 0.5rem;
+}
+
+.driver-popover.zaki-tour .driver-popover-navigation-btns button + button {
+  margin-left: 0;
+  margin-inline-start: 0;
+}
+
+.driver-popover.zaki-tour .driver-popover-footer-btn {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1;
+  color: rgb(var(--fg));
+  background-color: rgb(var(--surface-2));
+  border: 1px solid rgb(var(--border));
+  border-radius: 0.75rem;
+  text-shadow: none;
+}
+
+.driver-popover.zaki-tour .driver-popover-footer-btn:hover,
+.driver-popover.zaki-tour .driver-popover-footer-btn:focus-visible {
+  background-color: rgb(var(--surface-2));
+  border-color: rgb(var(--accent));
+}
+
+/* «التالي» / «تمام» is the one action: the accent colour */
+.driver-popover.zaki-tour .driver-popover-next-btn,
+.driver-popover.zaki-tour .driver-popover-done-btn {
+  color: rgb(var(--accent-fg));
+  background-color: rgb(var(--accent));
+  border-color: transparent;
+}
+
+.driver-popover.zaki-tour .driver-popover-next-btn:hover,
+.driver-popover.zaki-tour .driver-popover-next-btn:focus-visible,
+.driver-popover.zaki-tour .driver-popover-done-btn:hover,
+.driver-popover.zaki-tour .driver-popover-done-btn:focus-visible {
+  background-color: rgb(var(--accent));
+  opacity: 0.9;
+}
+
+.driver-popover.zaki-tour .driver-popover-close-btn {
+  /* the end side of a right-to-left card is the left; the library puts it on the right */
+  right: auto;
+  inset-inline-end: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  font-size: 1.25rem;
+  color: rgb(var(--fg-muted));
+}
+
+.driver-popover.zaki-tour .driver-popover-close-btn:hover,
+.driver-popover.zaki-tour .driver-popover-close-btn:focus-visible {
+  color: rgb(var(--fg));
+}
+
+/* the little triangle pointing at the element takes the card's colour */
+.driver-popover.zaki-tour .driver-popover-arrow {
+  border-color: rgb(var(--surface-1));
+}
+.driver-popover.zaki-tour .driver-popover-arrow-side-top {
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+.driver-popover.zaki-tour .driver-popover-arrow-side-bottom {
+  border-top-color: transparent;
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+.driver-popover.zaki-tour .driver-popover-arrow-side-left {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-right-color: transparent;
+}
+.driver-popover.zaki-tour .driver-popover-arrow-side-right {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+}
+
+/* reduced motion: no fade, no slide (the script also turns the library's animation off) */
+@media (prefers-reduced-motion: reduce) {
+  .driver-fade .driver-overlay,
+  .driver-fade .driver-popover,
+  .driver-popover.zaki-tour,
+  .driver-popover.zaki-tour * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

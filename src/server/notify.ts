@@ -1,4 +1,19 @@
+import { AR } from "@/lib/i18n/dict";
 import { db } from "./db";
+
+/**
+ * Only people who are IN receive notifications. A suspended or offboarded person gets nothing new
+ * (a comment on their old task would otherwise land in their notifications with its text).
+ */
+async function activeRecipients(userIds: readonly string[]): Promise<string[]> {
+  if (userIds.length === 0) return [];
+  const rows = await db.organizationMember.findMany({
+    where: { userId: { in: [...userIds] }, status: "ACTIVE" },
+    select: { userId: true },
+  });
+  const active = new Set(rows.map((r) => r.userId));
+  return userIds.filter((id) => active.has(id));
+}
 
 /** Generic in-app notification writer (bell UI maps type → localized label). */
 export async function pushNotification(input: {
@@ -9,6 +24,7 @@ export async function pushNotification(input: {
   taskId?: string | null;
   linkUrl?: string | null;
 }): Promise<void> {
+  if ((await activeRecipients([input.userId])).length === 0) return;
   await db.notification.create({
     data: {
       userId: input.userId,
@@ -32,7 +48,7 @@ export async function pushNotificationToMany(
     linkUrl?: string | null;
   },
 ): Promise<void> {
-  const unique = [...new Set(userIds)];
+  const unique = await activeRecipients([...new Set(userIds)]);
   if (unique.length === 0) return;
   await db.notification.createMany({
     data: unique.map((userId) => ({
@@ -54,11 +70,13 @@ export async function notifyAssignment(input: {
   taskId: string;
   title: string;
 }): Promise<void> {
+  // the bell prints the stored title VERBATIM (notification-bell.tsx), so the title is the Arabic
+  // phrase and the machine label goes in the body (WP-ARABIC2 (a): nothing English on screen)
   await pushNotification({
     userId: input.assigneeId,
     type: "task_assigned",
-    title: `${input.orgPrefix}-${input.taskNumber}`,
-    body: input.title,
+    title: AR["notif.type.task_assigned"] ?? "إشعار",
+    body: `${input.orgPrefix}-${input.taskNumber} · ${input.title}`,
     taskId: input.taskId,
     linkUrl: `/tasks/${input.taskId}`,
   });
@@ -76,8 +94,8 @@ export async function notifyComment(input: {
 }): Promise<void> {
   await pushNotificationToMany(input.watcherIds.filter((id) => id !== input.authorId), {
     type: "comment",
-    title: `${input.orgPrefix}-${input.taskNumber}`,
-    body: `${input.authorName}: ${input.body.slice(0, 140)}`,
+    title: AR["notif.type.comment"] ?? "إشعار",
+    body: `${input.authorName}: ${input.body.slice(0, 140)}`,  // the task label rides in the link
     taskId: input.taskId,
     linkUrl: `/tasks/${input.taskId}`,
   });

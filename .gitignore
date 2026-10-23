@@ -12,3 +12,8 @@ next-env.d.ts
 storage/
 .data/
 tsconfig.tsbuildinfo
+# a local port remap for the database (AGENTS.md); never committed
+docker-compose.override.yml
+
+# uploaded files land here at run time (src/server/files); never committed
+data/files/

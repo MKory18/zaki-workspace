@@ -1,0 +1,20 @@
+{
+  "theme.picker": "المظهر",
+  "theme.picker_hint": "بيتغيّر فورًا، وبيتذكّره حسابك على كل أجهزتك.",
+  "theme.islamic-calm": "إسلامي هادي",
+  "theme.islamic-calm.mood": "ورق عاجي وأخضر زمردي ولمسة ذهب، مريح للعين بالنهار.",
+  "theme.islamic-epic": "إسلامي ملحمي",
+  "theme.islamic-epic.mood": "كحلي وذهب، فخم وهادي بالليل.",
+  "theme.neon-coast": "ساحل النيون",
+  "theme.neon-coast.mood": "ساحل بعد الغروب: نيون سماوي ووردي على ليل غامق.",
+  "theme.day": "نهاري",
+  "theme.day.mood": "أبيض وأزرق بترولي، واضح وبسيط.",
+  "theme.kind_light": "فاتح",
+  "theme.kind_dark": "داكن",
+  "theme.decor": "الزخرفة",
+  "theme.decor_hint": "بتظهر بس بصفحة الدخول والصفحات الفاضية ورأس القائمة وشريط «اليوم»، وما بتكون ورا رقم أو جدول.",
+  "theme.decor.off": "بدون زخرفة",
+  "theme.decor.light": "خفيفة",
+  "theme.decor.full": "كاملة",
+  "theme.decor_motion": "«كاملة» فيها حركة هادية، وبتوقف لحالها إذا جهازك طالب تقليل الحركة."
+}

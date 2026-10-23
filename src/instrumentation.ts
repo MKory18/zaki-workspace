@@ -10,7 +10,7 @@
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   try {
-    const { env } = await import("./server/env");
+    const { env, bootWarnings } = await import("./server/env");
     const e = env();
     console.log(
       JSON.stringify({
@@ -19,6 +19,9 @@ export async function register(): Promise<void> {
         authSecretLen: e.AUTH_SECRET.length,
       }),
     );
+    for (const key of bootWarnings()) {
+      console.warn(JSON.stringify({ event: key, level: "warn" }));
+    }
   } catch (err) {
     console.error(
       JSON.stringify({
@@ -29,5 +32,28 @@ export async function register(): Promise<void> {
     );
     // fail fast: a server that cannot mint sessions is worse than a down one
     process.exit(1);
+  }
+
+  // ---- Phase 3 realtime (additive; the env contract above is untouched) ----
+  // Only a serving nodejs process: never during `next build`, never in Edge middleware.
+  // Postgres LISTEN needs no listener at build time and the purge job must not run
+  // under the build's temporary Prisma engines.
+  if (process.env.NEXT_PHASE !== "phase-production-build") {
+    try {
+      const { ensureListener } = await import("./server/realtime/listener");
+      const { startPurgeJob } = await import("./server/realtime/purge");
+      void ensureListener();
+      startPurgeJob();
+      console.log(JSON.stringify({ event: "boot.realtime_started" }));
+    } catch (err) {
+      // The chat still works without realtime (the client falls back to polling);
+      // a failed listener must not take the whole boot down.
+      console.error(
+        JSON.stringify({
+          event: "boot.realtime_failed",
+          detail: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
   }
 }

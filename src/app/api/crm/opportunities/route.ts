@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { activeOrgCtx } from "@/server/services/integrations";
+import { crmContext } from "@/app/api/_access";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import {
@@ -8,20 +8,20 @@ import {
   listOpportunities,
 } from "@/server/services/crm";
 
-/** GET: opportunities of the caller's org. */
+/** GET: opportunities of the caller's org (staff with `crm.view`; guests get 403 `guest.no_access`). */
 export async function GET() {
   return withApi(async () => {
-    const ctx = await activeOrgCtx();
-    const opportunities = await listOpportunities(ctx.orgId);
+    const ctx = await crmContext("view");
+    const opportunities = await listOpportunities(ctx);
     return NextResponse.json({ opportunities });
   });
 }
 
-/** POST: create an opportunity linked to an existing customer. */
+/** POST: create an opportunity linked to an existing customer (`crm.edit`). */
 export async function POST(req: Request) {
   return withApi(async () => {
+    const ctx = await crmContext("edit");
     const input = await parseJson(createOpportunitySchema, req);
-    const ctx = await activeOrgCtx();
     const opportunity = await createOpportunity(ctx, input);
     return NextResponse.json({ opportunity }, { status: 201 });
   });

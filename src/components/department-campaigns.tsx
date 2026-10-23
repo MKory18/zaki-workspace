@@ -5,11 +5,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Megaphone, Plus, Trash2 } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { fmtShort } from "@/lib/format";
+import { enumLabel, enumOptions } from "@/lib/i18n/enums";
 import { cn } from "@/lib/utils";
 
 export function errText(err: unknown, t: (k: string) => string): string {
@@ -35,11 +38,11 @@ interface CampaignRow {
 }
 
 const STATUS_CHIP: Record<string, string> = {
-  DRAFT: "bg-slate-500/10 text-slate-600 dark:text-slate-400",
-  SCHEDULED: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-  RUNNING: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  DONE: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  CANCELLED: "bg-gray-500/10 text-gray-500",
+  DRAFT: "bg-surface-2 text-fg-muted",
+  SCHEDULED: "bg-info/10 text-info",
+  RUNNING: "bg-warn/10 text-warn",
+  DONE: "bg-ok/10 text-ok",
+  CANCELLED: "bg-surface-2 text-muted",
 };
 
 const STATUSES = ["DRAFT", "SCHEDULED", "RUNNING", "DONE", "CANCELLED"] as const;
@@ -120,7 +123,7 @@ export function DepartmentCampaigns({
   return (
     <>
       <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
-        <Megaphone className="size-4 text-violet-500" />
+        <Megaphone className="size-4 text-cat-1" />
         {t("camp.new")}
       </Button>
 
@@ -137,21 +140,23 @@ export function DepartmentCampaigns({
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder={t("camp.descPlaceholder")} />
             <div className="grid grid-cols-3 gap-2">
               <label className="space-y-1">
-                <span className="text-[10px] text-muted">{t("camp.start")}</span>
+                <span className="text-xs text-muted">{t("camp.start")}</span>
                 <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
               </label>
               <label className="space-y-1">
-                <span className="text-[10px] text-muted">{t("camp.end")}</span>
+                <span className="text-xs text-muted">{t("camp.end")}</span>
                 <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
               </label>
               <label className="space-y-1">
-                <span className="text-[10px] text-muted">{t("camp.priority")}</span>
+                <span className="text-xs text-muted">{t("camp.priority")}</span>
                 <Select value={priority} onChange={(e) => setPriority(e.target.value)}>
-                  {["URGENT", "HIGH", "NORMAL", "LOW"].map((p) => (
-                    <option key={p} value={p}>
-                      {t(`priority.${p}`)}
-                    </option>
-                  ))}
+                  {enumOptions("TaskPriority")
+                    .filter((o) => o.value !== "NONE")
+                    .map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
                 </Select>
               </label>
             </div>
@@ -170,8 +175,8 @@ export function DepartmentCampaigns({
 
       {rows.length > 0 ? (
         <div className="mt-3 space-y-2 rounded-xl border border-border bg-surface p-3">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold text-fg-muted">
-            <CalendarClock className="size-3.5 text-violet-500" />
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-fg-muted">
+            <CalendarClock className="size-3.5 text-cat-1" />
             {t("camp.activeCount", { n: running })}
           </p>
           <ul className="divide-y divide-border">
@@ -179,28 +184,28 @@ export function DepartmentCampaigns({
               const mine = r.owner?.id === currentUserId;
               return (
                 <li key={r.id} className="flex flex-wrap items-center gap-2 py-2">
-                  <span className="shrink-0 font-mono text-[10px] text-muted">C{r.number}</span>
+                  <span dir="ltr" className="shrink-0 font-mono text-xs text-muted">C{r.number}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium text-fg">{r.title}</p>
-                    <p className="truncate text-[10px] text-muted">
-                      {fmtShort(r.startDate, "ar")} ← {fmtShort(r.endDate, "ar")}
+                    <p className="truncate text-xs text-muted">
+                      {fmtShort(r.startDate)} ← {fmtShort(r.endDate)}
                       {r.owner ? ` · ${r.owner.name}` : ""}
-                      {` · ${r._count.items} ${t("camp.items")}`}
+                      {` · ${t("camp.itemsLine", { n: r._count.items })}`}
                     </p>
                   </div>
-                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold", STATUS_CHIP[r.status])}>
-                    {t(`camp.status_${r.status.toLowerCase()}`)}
+                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold", STATUS_CHIP[r.status])}>
+                    {enumLabel("CampaignStatus", r.status)}
                   </span>
                   {canManage ? (
                     <Select
                       value={r.status}
                       onChange={(e) => update.mutate({ id: r.id, payload: { status: e.target.value } })}
-                      className="h-7 w-28 text-[11px]"
+                      className="h-7 w-28 text-xs"
                       aria-label={t("camp.statusLabel")}
                     >
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {t(`camp.status_${s.toLowerCase()}`)}
+                      {enumOptions("CampaignStatus").map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
                         </option>
                       ))}
                     </Select>
@@ -210,7 +215,7 @@ export function DepartmentCampaigns({
                       size="sm"
                       variant="ghost"
                       aria-label={t("camp.delete")}
-                      className="text-red-500"
+                      className="text-danger"
                       disabled={del.isPending}
                       onClick={() => {
                         if (confirm(t("camp.deleteConfirm", { title: r.title }))) del.mutate(r.id);

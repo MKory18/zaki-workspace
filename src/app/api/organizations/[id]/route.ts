@@ -2,17 +2,17 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
-import { NotFoundError, audit, requireOrgRole } from "@/server/auth";
+import { NotFoundError, audit, requireOrgMember, requireOrgRole } from "@/server/auth";
 import { db } from "@/server/db";
 
 const renameSchema = z.object({
   name: z.string().trim().min(2).max(80),
 });
 
-/** GET: org summary for settings (member read; joinCode intentionally omitted). */
+/** GET: org summary for settings (any ACTIVE member, whatever their rank; joinCode intentionally omitted). */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    await requireOrgRole(params.id, ["OWNER", "ADMIN", "MEMBER", "GUEST"]);
+    await requireOrgMember(params.id);
     const org = await db.organization.findUnique({
       where: { id: params.id },
       select: { id: true, name: true, createdAt: true },

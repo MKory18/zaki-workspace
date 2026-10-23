@@ -1,88 +1,208 @@
-/** Direction-aware formatting helpers. */
+/**
+ * Dates, times and numbers as the screens show them: Arabic names, Western digits (0-9).
+ *
+ * Everything here is hand-written on purpose. `toLocaleDateString`/`Intl` print different digits and
+ * different names per device (and Node's ICU differs from the browser's), which makes server and
+ * client render different text and the page mismatch while hydrating. Arabic is the only language,
+ * so the old per-locale tables (French, English) are gone; the `locale` parameter that many callers
+ * still pass is accepted and ignored.
+ *
+ * The sentences that need Arabic's number forms (قبل يومين / قبل 3 أيام / قبل 11 يومًا) live in the
+ * dictionary, not here.
+ */
+import { AR } from "./i18n/dict";
+import { interpolate } from "./i18n/interpolate";
 
-// Hand-rolled names — hydration determinism (Node ICU vs browser ICU differ).
-const MONTHS: Record<string, string[]> = {
-  ar: ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"],
-  fr: ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."],
-  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-};
-const WEEKDAYS: Record<string, string[]> = {
-  ar: ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"],
-  fr: ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."],
-  en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-};
+/**
+ * The Gregorian months under the names used in Jordan, Syria, Lebanon and Palestine. Replace the
+ * array to switch to يناير / فبراير / ... everywhere at once.
+ */
+const MONTHS: readonly string[] = [
+  "كانون الثاني",
+  "شباط",
+  "آذار",
+  "نيسان",
+  "أيار",
+  "حزيران",
+  "تموز",
+  "آب",
+  "أيلول",
+  "تشرين الأول",
+  "تشرين الثاني",
+  "كانون الأول",
+];
+
+/** Sunday first, as the calendar grid and the week of the goals start. */
+const WEEKDAYS_SHORT: readonly string[] = ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
+const WEEKDAYS_LONG: readonly string[] = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
+const DAY_MS = 86_400_000;
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
 
-function monthsFor(locale: string): string[] {
-  return MONTHS[locale] ?? MONTHS["en"]!;
+function toDate(d: Date | string | number | null | undefined): Date | null {
+  if (!d) return null;
+  const date = d instanceof Date ? new Date(d.getTime()) : new Date(d);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** "5 أكتوبر 2026" style date — identical output on server and client. */
-export function fmtDMY(d: Date | string | number | null | undefined, locale = "ar"): string {
-  if (!d) return "";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "";
-  const months = monthsFor(locale);
-  return `${date.getDate()} ${months[date.getMonth()]!} ${date.getFullYear()}`;
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
-/** Short "5 أكتوبر" — identical on both sides. */
-export function fmtShort(d: Date | string | number | null | undefined, locale = "ar"): string {
-  if (!d) return "";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getDate()} ${monthsFor(locale)[date.getMonth()]!}`;
+/** "5 تشرين الأول 2026" - identical output on server and client. The locale is ignored (Arabic only). */
+export function fmtDMY(d: Date | string | number | null | undefined, _locale?: string): string {
+  const date = toDate(d);
+  if (!date) return "";
+  return `${date.getDate()} ${MONTHS[date.getMonth()]!} ${date.getFullYear()}`;
 }
 
-/** "14:05" local time — identical on both sides (same machine timezone). */
+/** Short "5 تشرين الأول" - identical on both sides. */
+export function fmtShort(d: Date | string | number | null | undefined, _locale?: string): string {
+  const date = toDate(d);
+  if (!date) return "";
+  return `${date.getDate()} ${MONTHS[date.getMonth()]!}`;
+}
+
+/** "14:05" local time - identical on both sides (24 hours, so nothing needs "ص" or "م"). */
 export function fmtTime(d: Date | string | number | null | undefined): string {
-  if (!d) return "";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "";
+  const date = toDate(d);
+  if (!date) return "";
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
-/** "5 أكتوبر 2026، 14:05" — for event tables & logs. */
-export function fmtDateTime(d: Date | string | number | null | undefined, locale = "ar"): string {
-  if (!d) return "";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${fmtDMY(date, locale)} ${fmtTime(date)}`;
+/** "5 تشرين الأول 2026، 14:05" - for event tables and logs. */
+export function fmtDateTime(d: Date | string | number | null | undefined, _locale?: string): string {
+  const date = toDate(d);
+  if (!date) return "";
+  return `${fmtDMY(date)}، ${fmtTime(date)}`;
 }
 
-/** Grouped number with plain commas — no locale separators. */
+/** "الخميس 22 تشرين الأول 2026" - for the heading of a day. */
+export function fmtLongDate(d: Date | string | number | null | undefined): string {
+  const date = toDate(d);
+  if (!date) return "";
+  return `${WEEKDAYS_LONG[date.getDay()]!} ${fmtDMY(date)}`;
+}
+
+/** Grouped number with plain commas and Western digits - no locale separators. */
 export function fmtNumber(n: number | null | undefined): string {
   if (n == null) return "";
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-/** Weekday label for a 0-based index (0=Sunday) — deterministic. */
-export function weekdayName(index: number, locale = "ar"): string {
-  const list = WEEKDAYS[locale] ?? WEEKDAYS["en"]!;
-  return list[((index % 7) + 7) % 7]!;
+/** A file size in Arabic units: "512 بايت" / "340 كيلوبايت" / "1.5 ميغابايت". */
+export function fmtSize(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return "";
+  if (bytes < 1024) return `${Math.round(bytes)} ${AR["unit.byte"] ?? ""}`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} ${AR["unit.kilobyte"] ?? ""}`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} ${AR["unit.megabyte"] ?? ""}`;
 }
 
-/** Month label for 0-based index + optional year — deterministic. */
-export function monthName(index: number, locale = "ar"): string {
-  return monthsFor(locale)[((index % 12) + 12) % 12]!;
+/** Short weekday label for a 0-based index (0 = Sunday): "أحد" ... "سبت". */
+export function weekdayName(index: number, _locale?: string): string {
+  return WEEKDAYS_SHORT[((index % 7) + 7) % 7]!;
 }
 
-/** Task priority presentation tokens shared by views (no business logic). */
+/** Full weekday name for a 0-based index (0 = Sunday): "الأحد" ... "السبت". */
+export function weekdayLong(index: number): string {
+  return WEEKDAYS_LONG[((index % 7) + 7) % 7]!;
+}
+
+/** Month label for a 0-based index - deterministic. */
+export function monthName(index: number, _locale?: string): string {
+  return MONTHS[((index % 12) + 12) % 12]!;
+}
+
+/** The Arabic number form: one, two, 3-10 (plural), 11+ (singular again). */
+export function arabicPlural(n: number): "one" | "two" | "few" | "many" {
+  if (n === 1) return "one";
+  if (n === 2) return "two";
+  const m = n % 100;
+  if (m >= 3 && m <= 10) return "few";
+  return "many";
+}
+
+/**
+ * How many calendar days from today a date is (negative = in the past), counted in the device's own
+ * days: 23:59 and 00:01 of the same date are the same day. `null` for no date.
+ */
+export function dayDiff(d: Date | string | number | null | undefined, now: Date = new Date()): number | null {
+  const date = toDate(d);
+  if (!date) return null;
+  return Math.round((startOfDay(date) - startOfDay(now)) / DAY_MS);
+}
+
+/**
+ * A day, said the way people say it: «اليوم» «أمس» «بكرا» «قبل يومين» «بعد 3 أيام» «قبل 11 يومًا»;
+ * a month or more away it is the date itself (with the year only when it is not this year).
+ */
+export function fmtRelative(d: Date | string | number | null | undefined, now: Date = new Date()): string {
+  const date = toDate(d);
+  if (!date) return "";
+  const diff = Math.round((startOfDay(date) - startOfDay(now)) / DAY_MS);
+  if (diff === 0) return AR["time.today"] ?? "";
+  if (diff === -1) return AR["time.yesterday"] ?? "";
+  if (diff === 1) return AR["time.tomorrow"] ?? "";
+  const n = Math.abs(diff);
+  if (n < 30) {
+    const form = arabicPlural(n);
+    const key = diff < 0 ? `members.ago.day.${form}` : `time.in.day.${form}`;
+    return interpolate(AR[key] ?? "", { n });
+  }
+  return date.getFullYear() === now.getFullYear() ? fmtShort(date) : fmtDMY(date);
+}
+
+/**
+ * A moment, counted back from now: «الآن» «قبل 5 دقائق» «قبل ساعتين» «قبل يومين» «قبل شهر». The same
+ * phrases as the team screen (`members.ago.*`); a moment in the future (a clock that runs ahead) is «الآن».
+ */
+export function fmtAgo(d: Date | string | number | null | undefined, now: Date = new Date()): string {
+  const date = toDate(d);
+  if (!date) return "";
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 45) return AR["members.ago.now"] ?? "";
+  let unit: "minute" | "hour" | "day" | "month" | "year";
+  let n: number;
+  if (seconds < 3600) {
+    unit = "minute";
+    n = Math.max(1, Math.floor(seconds / 60));
+  } else if (seconds < 86_400) {
+    unit = "hour";
+    n = Math.floor(seconds / 3600);
+  } else {
+    const days = Math.floor(seconds / 86_400);
+    if (days < 30) {
+      unit = "day";
+      n = days;
+    } else if (days < 365) {
+      unit = "month";
+      n = Math.floor(days / 30);
+    } else {
+      unit = "year";
+      n = Math.floor(days / 365);
+    }
+  }
+  return interpolate(AR[`members.ago.${unit}.${arabicPlural(n)}`] ?? "", { n });
+}
+
+/**
+ * Task priority presentation tokens shared by views (no business logic): the Arabic label and the
+ * dot colour. The words come from the dictionary (`priority.*`), the same ones `enumLabel` returns.
+ */
 export const PRIORITY_STYLES: Record<string, { label: string; color: string }> = {
-  URGENT: { label: "Urgent", color: "#ef4444" },
-  HIGH: { label: "High", color: "#f97316" },
-  NORMAL: { label: "Normal", color: "#3b82f6" },
-  LOW: { label: "Low", color: "#6b7280" },
-  NONE: { label: "—", color: "#9ca3af" },
+  URGENT: { label: AR["priority.URGENT"] ?? "", color: "rgb(var(--danger))" },
+  HIGH: { label: AR["priority.HIGH"] ?? "", color: "rgb(var(--warn))" },
+  NORMAL: { label: AR["priority.NORMAL"] ?? "", color: "rgb(var(--info))" },
+  LOW: { label: AR["priority.LOW"] ?? "", color: "rgb(var(--muted))" },
+  NONE: { label: AR["priority.NONE"] ?? "", color: "rgb(var(--border))" },
 };
 
-/** Direction-aware formatting helpers. */
-export function formatDate(d: Date | string | null | undefined, locale: string): string {
-  if (!d) return "";
-  return fmtShort(d, locale === "fr" ? "fr" : locale === "ar" ? "ar" : "en");
+/** The short date a task shows (the locale many callers still pass is ignored: Arabic only). */
+export function formatDate(d: Date | string | null | undefined, _locale?: string): string {
+  return fmtShort(d);
 }
 
 export function isOverdue(d: string | null | undefined): boolean {
@@ -90,7 +210,7 @@ export function isOverdue(d: string | null | undefined): boolean {
   return new Date(d).getTime() < Date.now();
 }
 
-/** Deterministic avatar hue from the name — same on server and client. */
+/** Deterministic avatar hue from the name - same on server and client. */
 export function avatarHue(name: string): number {
   let h = 0;
   for (let i = 0; i < name.length; i += 1) {

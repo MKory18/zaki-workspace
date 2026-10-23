@@ -42,7 +42,11 @@ export async function logChat(orgId: string, type: string, payload?: Record<stri
   await logEvent(orgId, { direction: "IN", type, payload: payload as Prisma.InputJsonValue });
 }
 
-/** Guests are read-only across the workspace — chat included. */
+/**
+ * Chat is closed to org GUESTs, for reading as much as for writing: every function below that a
+ * route can reach starts with this check, so a member who is demoted to guest loses every thread
+ * they were in (their conversation rows stay, but nothing serves them).
+ */
 export async function assertChatAllowed(orgRole: string): Promise<void> {
   if (orgRole === "GUEST") throw new ForbiddenError("chat.guest_forbidden");
 }
@@ -73,15 +77,18 @@ export const createDmSchema = z.object({
 export async function createDm(ctx: OrgAccessContext, otherUserId: string): Promise<string> {
   await assertChatAllowed(ctx.orgRole);
   if (otherUserId === ctx.userId) throw new ForbiddenError("chat.dm_self");
+  // the other person must be an ACTIVE, non-GUEST member of the SAME org (guests cannot chat; a
+  // suspended or offboarded colleague is not somebody you can start a conversation with)
   const other = await db.organizationMember.findFirst({
-    where: { organizationId: ctx.orgId, userId: otherUserId },
+    where: { organizationId: ctx.orgId, userId: otherUserId, role: { not: "GUEST" }, status: "ACTIVE" },
     select: { userId: true },
   });
   if (!other) throw new NotFoundError("chat.not_org_member");
 
-  // exactly one DM per pair — find it by member signature, whatever creation order
+  // exactly one DM per pair PER ORG — find it by member signature, whatever creation
+  // order; a conversation of another org is never a match
   const mine = await db.conversation.findMany({
-    where: { kind: "DM", members: { some: { userId: ctx.userId } } },
+    where: { orgId: ctx.orgId, kind: "DM", members: { some: { userId: ctx.userId } } },
     select: { id: true, members: { select: { userId: true } } },
   });
   const existing = mine.find(
@@ -104,9 +111,9 @@ export async function createDm(ctx: OrgAccessContext, otherUserId: string): Prom
 export async function createGroup(ctx: OrgAccessContext, input: z.infer<typeof createGroupSchema>): Promise<string> {
   await assertChatAllowed(ctx.orgRole);
   const invited = Array.from(new Set(input.memberIds.filter((id) => id !== ctx.userId)));
-  // invitees must belong to the same org AND not be guests
+  // invitees must be ACTIVE members of the same org AND not be guests
   const valid = await db.organizationMember.findMany({
-    where: { organizationId: ctx.orgId, userId: { in: invited }, role: { not: "GUEST" } },
+    where: { organizationId: ctx.orgId, userId: { in: invited }, role: { not: "GUEST" }, status: "ACTIVE" },
     select: { userId: true },
   });
   if (valid.length === 0) throw new ForbiddenError("chat.group_needs_members");
@@ -127,10 +134,10 @@ export async function createGroup(ctx: OrgAccessContext, input: z.infer<typeof c
   return conv.id;
 }
 
-/** Org-level chat directory (recipients picker; guests excluded — they cannot chat). */
+/** Org-level chat directory (recipients picker; guests excluded — they cannot chat; only ACTIVE people are offered). */
 export async function chatDirectory(orgId: string) {
   return db.organizationMember.findMany({
-    where: { organizationId: orgId, role: { not: "GUEST" } },
+    where: { organizationId: orgId, role: { not: "GUEST" }, status: "ACTIVE" },
     select: {
       userId: true,
       role: true,
@@ -154,6 +161,7 @@ export async function manageGroup(
   conversationId: string,
   input: z.infer<typeof manageGroupSchema>,
 ): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
   const me = await requireConversationMember(conversationId, ctx.userId);
   if (me.conversation.kind !== "GROUP") throw new ForbiddenError("chat.dm_immutable");
   if (me.role !== "admin") throw new ForbiddenError("chat.group_admin_only");
@@ -168,7 +176,7 @@ export async function manageGroup(
     }
     if (input.addUserIds?.length) {
       const valid = await tx.organizationMember.findMany({
-        where: { organizationId: ctx.orgId, userId: { in: input.addUserIds }, role: { not: "GUEST" } },
+        where: { organizationId: ctx.orgId, userId: { in: input.addUserIds }, role: { not: "GUEST" }, status: "ACTIVE" },
         select: { userId: true },
       });
       for (const v of valid) {
@@ -237,6 +245,7 @@ export async function sendMessage(
 }
 
 export async function editMessage(ctx: OrgAccessContext, messageId: string, body: string): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
   const msg = await db.chatMessage.findUnique({
     where: { id: messageId },
     select: { id: true, authorId: true, deletedAt: true, conversation: { select: { kind: true, members: { select: { userId: true, role: true } } } } },
@@ -253,6 +262,7 @@ export async function editMessage(ctx: OrgAccessContext, messageId: string, body
 }
 
 export async function deleteMessage(ctx: OrgAccessContext, messageId: string): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
   const msg = await db.chatMessage.findUnique({
     where: { id: messageId },
     select: { id: true, authorId: true, conversation: { select: { kind: true, members: { select: { userId: true, role: true } } } } },
@@ -289,6 +299,7 @@ export async function toggleReact(ctx: OrgAccessContext, messageId: string, emoj
 }
 
 export async function togglePin(ctx: OrgAccessContext, messageId: string): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
   const msg = await db.chatMessage.findUnique({
     where: { id: messageId },
     select: { id: true, pinned: true, conversation: { select: { kind: true, members: { select: { userId: true, role: true } } } } },
@@ -317,7 +328,9 @@ export interface ConversationSummary {
   otherMembers: { id: string; name: string }[];
 }
 
-export async function listConversations(userId: string, orgId: string): Promise<ConversationSummary[]> {
+export async function listConversations(ctx: OrgAccessContext): Promise<ConversationSummary[]> {
+  await assertChatAllowed(ctx.orgRole);
+  const { userId, orgId } = ctx;
   const rows = await db.conversation.findMany({
     where: { orgId, members: { some: { userId } } },
     orderBy: { updatedAt: "desc" },
@@ -327,7 +340,9 @@ export async function listConversations(userId: string, orgId: string): Promise<
       title: true,
       emoji: true,
       updatedAt: true,
+      // only people who are in: a suspended person is not shown to the others (their rows stay for when they return)
       members: {
+        where: { user: { memberships: { some: { organizationId: orgId, status: "ACTIVE" } } } },
         select: { userId: true, lastReadAt: true, user: { select: { id: true, name: true } } },
       },
       messages: {
@@ -382,7 +397,26 @@ export async function markRead(userId: string, conversationId: string): Promise<
   });
 }
 
-export async function conversationDetail(conversationId: string, userId: string) {
+/** A member opened the thread: mark it read. (`markRead` itself is for callers that already passed the guard.) */
+export async function markConversationRead(ctx: OrgAccessContext, conversationId: string): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
+  await requireConversationMember(conversationId, ctx.userId);
+  await markRead(ctx.userId, conversationId);
+}
+
+/** Leave a group (DMs are immutable). */
+export async function leaveConversation(ctx: OrgAccessContext, conversationId: string): Promise<void> {
+  await assertChatAllowed(ctx.orgRole);
+  const member = await requireConversationMember(conversationId, ctx.userId);
+  if (member.conversation.kind !== "GROUP") throw new ForbiddenError("chat.dm_immutable");
+  await db.conversationMember.delete({
+    where: { conversationId_userId: { conversationId, userId: ctx.userId } },
+  });
+}
+
+export async function conversationDetail(ctx: OrgAccessContext, conversationId: string) {
+  await assertChatAllowed(ctx.orgRole);
+  const userId = ctx.userId;
   const member = await requireConversationMember(conversationId, userId);
   const conv = await db.conversation.findUnique({
     where: { id: conversationId },
@@ -393,6 +427,7 @@ export async function conversationDetail(conversationId: string, userId: string)
       emoji: true,
       createdAt: true,
       members: {
+        where: { user: { memberships: { some: { organizationId: ctx.orgId, status: "ACTIVE" } } } },
         select: {
           userId: true,
           role: true,

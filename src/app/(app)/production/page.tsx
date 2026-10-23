@@ -1,20 +1,17 @@
-import { redirect } from "next/navigation";
-import { currentUser } from "@/server/auth";
-import { db } from "@/server/db";
+import { pageActor } from "@/app/(app)/_access";
 import { ProductionView } from "@/components/production-view";
+import { resolveTimeZone } from "@/lib/zoned-time";
+import { db } from "@/server/db";
 
-/** الإنتاج اليومي — recurring daily-production checklist. */
+/** الروتين اليومي — recurring daily checklist. */
 export default async function ProductionPage() {
-	const user = await currentUser();
-	if (!user) redirect("/login");
-	const membership = await db.organizationMember.findFirst({
-		where: { userId: user.id },
-		orderBy: { createdAt: "asc" },
-		select: { role: true },
-	});
-	if (!membership) redirect("/login");
-	const canManage = membership.role === "OWNER" || membership.role === "ADMIN";
-	return <ProductionView canManage={canManage} />;
+	const { actor } = await pageActor();
+	const canManage = actor.role === "OWNER" || actor.role === "ADMIN";
+	// the company's zone: the checklist's default day and its weekdays are cut there
+	const zone = resolveTimeZone(
+		(await db.organization.findUnique({ where: { id: actor.orgId }, select: { timezone: true } }))?.timezone,
+	);
+	return <ProductionView canManage={canManage} readOnly={actor.isExternal} timeZone={zone} />;
 }
 
 export const dynamic = "force-dynamic";

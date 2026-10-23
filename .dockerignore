@@ -2,13 +2,18 @@ node_modules
 .next
 .git
 .gitignore
+.github
 audit.json
 *.log
+*.tsbuildinfo
 .temp
 temp
 coverage
 tests
 docs
+# local uploads and any storage folder: user files never belong in an image layer
+.data
+storage
 .env*
 !.env.example
 README.md

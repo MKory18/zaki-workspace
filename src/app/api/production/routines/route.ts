@@ -1,37 +1,24 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/server/auth";
+import { requireActor } from "@/server/policy/actor";
 import { withApi } from "@/server/api";
-import { db } from "@/server/db";
 import { parseJson } from "@/server/validation";
 import { createRoutine, listRoutines, routineSchema } from "@/server/services/production";
 
 /** GET: all routines (admin manage view). */
 export async function GET() {
 	return withApi(async () => {
-		const user = await requireUser();
-		const membership = await db.organizationMember.findFirst({
-			where: { userId: user.id },
-			orderBy: { createdAt: "asc" },
-			select: { organizationId: true },
-		});
-		if (!membership) return NextResponse.json({ routines: [] });
-		const routines = await listRoutines(membership.organizationId);
+		const actor = await requireActor();
+		const routines = await listRoutines(actor.orgId);
 		return NextResponse.json({ routines });
 	});
 }
 
-/** POST: create a recurring daily-production routine (OWNER/ADMIN). */
+/** POST: create a recurring daily-production routine (OWNER/ADMIN; guests get 403 `guest.readonly`). */
 export async function POST(req: Request) {
 	return withApi(async () => {
+		const actor = await requireActor();
 		const input = await parseJson(routineSchema, req);
-		const user = await requireUser();
-		const membership = await db.organizationMember.findFirst({
-			where: { userId: user.id },
-			orderBy: { createdAt: "asc" },
-			select: { organizationId: true },
-		});
-		if (!membership) return NextResponse.json({ error: "auth.required" }, { status: 401 });
-		const routine = await createRoutine({ orgId: membership.organizationId, userId: user.id }, input);
+		const routine = await createRoutine({ orgId: actor.orgId, userId: actor.userId }, input);
 		return NextResponse.json({ routine }, { status: 201 });
 	});
 }

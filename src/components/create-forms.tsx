@@ -7,7 +7,8 @@ import { apiPost, ApiError } from "@/lib/api-client";
 import { useI18n as useT } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { Input, Label } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 
 function useCreate<T>({ path, onDone }: { path: string; onDone?: (data: T) => void }) {
@@ -63,7 +64,7 @@ export function WorkspaceCreateModal({
     <Modal open={open} title={t("ws.new")} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <div>
-          <Label>{t("top.workspaces")}</Label>
+          <Label>{t("settings.org")}</Label>
           <select
             name="organizationId"
             required
@@ -84,7 +85,7 @@ export function WorkspaceCreateModal({
           <Label>{t("ws.desc")}</Label>
           <Textarea name="description" rows={2} maxLength={2000} />
         </div>
-        {error ? <p className="text-xs text-red-500">{t(error)}</p> : null}
+        {error ? <p className="text-xs text-danger">{t(error)}</p> : null}
         <Button type="submit" disabled={mutation.isPending} className="w-full">
           {t("ws.create")}
         </Button>
@@ -130,7 +131,7 @@ export function ProjectCreateModal({
     <Modal open={open} title={t("proj.new")} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <div>
-          <Label>{t("top.workspaces")}</Label>
+          <Label>{t("ws.one")}</Label>
           <select
             name="workspaceId"
             required
@@ -161,7 +162,7 @@ export function ProjectCreateModal({
             <Input type="date" name="targetDate" />
           </div>
         </div>
-        {error ? <p className="text-xs text-red-500">{t(error)}</p> : null}
+        {error ? <p className="text-xs text-danger">{t(error)}</p> : null}
         <Button type="submit" disabled={mutation.isPending} className="w-full">
           {t("proj.create")}
         </Button>
@@ -210,7 +211,7 @@ export function BoardCreateModal({
           <Label>{t("proj.desc")}</Label>
           <Textarea name="description" rows={2} maxLength={2000} />
         </div>
-        {error ? <p className="text-xs text-red-500">{t(error)}</p> : null}
+        {error ? <p className="text-xs text-danger">{t(error)}</p> : null}
         <Button type="submit" disabled={mutation.isPending} className="w-full">
           {t("board.create")}
         </Button>

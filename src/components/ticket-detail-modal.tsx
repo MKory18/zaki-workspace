@@ -5,11 +5,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, MessageSquare, Send, Ticket as TicketIcon } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { fmtDateTime } from "@/lib/format";
+import { enumLabel } from "@/lib/i18n/enums";
 import { errText } from "@/components/department-tickets";
 
 interface CommentRow {
@@ -112,7 +113,7 @@ export function TicketDetailModal({
         {/* Comments */}
         <section className="space-y-2">
           <h3 className="flex items-center gap-1.5 text-xs font-semibold text-fg">
-            <MessageSquare className="size-3.5 text-sky-500" />
+            <MessageSquare className="size-3.5 text-info" />
             {t("tkAct.comments")} ({comments.length})
           </h3>
           <ul className="max-h-56 space-y-2 overflow-y-auto">
@@ -121,9 +122,9 @@ export function TicketDetailModal({
               return (
                 <li key={c.id} className="rounded-lg border border-border bg-surface-1 p-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11px] font-medium text-fg">{c.author?.name ?? "—"}</p>
+                    <p className="text-xs font-medium text-fg">{c.author?.name ?? "—"}</p>
                     <div className="flex items-center gap-1">
-                      <span className="text-[9px] text-muted">{fmtDateTime(c.createdAt, "ar")}</span>
+                      <span className="text-xs text-muted">{fmtDateTime(c.createdAt)}</span>
                       {mine ? (
                         <>
                           <button
@@ -133,14 +134,14 @@ export function TicketDetailModal({
                               setEditingId(c.id);
                               setEditBody(c.body);
                             }}
-                            className="text-[10px] text-accent hover:underline"
+                            className="text-xs text-accent hover:underline"
                           >
                             {t("common.edit")}
                           </button>
                           <button
                             type="button"
                             aria-label={t("common.delete")}
-                            className="text-[10px] text-red-500 hover:underline"
+                            className="text-xs text-danger hover:underline"
                             disabled={delComment.isPending}
                             onClick={() => delComment.mutate(c.id)}
                           >
@@ -175,7 +176,7 @@ export function TicketDetailModal({
               );
             })}
             {comments.length === 0 ? (
-              <li className="py-3 text-center text-[11px] text-muted">{t("tkAct.noComments")}</li>
+              <li className="py-3 text-center text-xs text-muted">{t("tkAct.noComments")}</li>
             ) : null}
           </ul>
           <form
@@ -187,7 +188,7 @@ export function TicketDetailModal({
           >
             <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder={t("tkAct.commentPlaceholder")} />
             <Button type="submit" size="icon" aria-label={t("tkAct.send")} disabled={!body.trim() || addComment.isPending}>
-              <Send className="size-4" />
+              <Send className="size-4 rtl:-scale-x-100" />
             </Button>
           </form>
         </section>
@@ -195,23 +196,23 @@ export function TicketDetailModal({
         {/* Activity log */}
         <section className="space-y-1.5">
           <h3 className="flex items-center gap-1.5 text-xs font-semibold text-fg">
-            <Activity className="size-3.5 text-emerald-500" />
+            <Activity className="size-3.5 text-ok" />
             {t("tkAct.log")}
           </h3>
           <ul className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-border bg-surface-1 p-2">
             {activities.map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-2 text-[10px] text-muted">
+              <li key={a.id} className="flex items-center justify-between gap-2 text-xs text-muted">
                 <span>
                   <b className="font-medium text-fg">{a.actor?.name ?? "—"}</b>{" "}
                   {t(EVENT_KEYS[a.event] ?? "tkAct.unknown")}
                   {a.event === "status_changed" && a.meta
-                    ? ` (${String((a.meta as Record<string, unknown>).from ?? "")} → ${String((a.meta as Record<string, unknown>).to ?? "")})`
+                    ? ` (${enumLabel("TicketStatus", String((a.meta as Record<string, unknown>).from ?? ""))} ← ${enumLabel("TicketStatus", String((a.meta as Record<string, unknown>).to ?? ""))})`
                     : ""}
                 </span>
-                <span className="shrink-0">{fmtDateTime(a.createdAt, "ar")}</span>
+                <span className="shrink-0">{fmtDateTime(a.createdAt)}</span>
               </li>
             ))}
-            {activities.length === 0 ? <li className="py-2 text-center text-[11px] text-muted">{t("tkAct.noActivity")}</li> : null}
+            {activities.length === 0 ? <li className="py-2 text-center text-xs text-muted">{t("tkAct.noActivity")}</li> : null}
           </ul>
         </section>
       </div>

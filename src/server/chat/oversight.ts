@@ -1,0 +1,101 @@
+import { db } from "@/server/db";
+import { ForbiddenError, type OrgAccessContext } from "@/server/auth";
+import { canArchive } from "@/server/policy/conversation";
+import { logChat } from "@/server/chat/moderation";
+import type { OversightConversationDto } from "@/server/chat/dto";
+
+/**
+ * The OWNER's silent eye: every space and every topic of the company, and the DMs' EXISTENCE only
+ * (two names, the message count, the last moment) — never a DM's words, never a DM's detail. Every
+ * look is written to the audit trail (`chat.oversight_read`), because reading without being in the
+ * room is exactly the act that must leave a trace.
+ */
+
+export async function listOversight(
+  ctx: OrgAccessContext,
+  opts: { spaceId?: string; cursor?: string; limit?: number } = {},
+): Promise<{ items: OversightConversationDto[]; nextCursor: string | null }> {
+  const role = await db.organizationMember.findUnique({
+    where: {
+      organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId },
+      status: "ACTIVE",
+    },
+    select: { role: true },
+  });
+  if (!canArchive(role?.role)) throw new ForbiddenError("chat.e.oversight_denied");
+
+  const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+  const rows = await db.conversation.findMany({
+    where: {
+      orgId: ctx.orgId,
+      ...(opts.spaceId ? { spaceId: opts.spaceId } : {}),
+      ...(opts.cursor ? { id: { lt: opts.cursor } } : {}),
+    },
+    select: {
+      id: true,
+      kind: true,
+      title: true,
+      emoji: true,
+      spaceId: true,
+      space: { select: { name: true } },
+      updatedAt: true,
+      _count: { select: { members: true } },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: limit + 1,
+  });
+
+  await logChat({
+    orgId: ctx.orgId,
+    actorId: ctx.userId,
+    action: "chat.oversight_read",
+    spaceId: opts.spaceId ?? null,
+    meta: { scope: opts.spaceId ? "space" : "org", returnCount: Math.min(rows.length, limit) },
+  });
+
+  const hasMore = rows.length > limit;
+  return {
+    items: rows.slice(0, limit).map((c) => ({
+      id: c.id,
+      kind: c.kind as OversightConversationDto["kind"],
+      title: c.kind === "DM" ? "" : (c.title ?? ""), // a DM shows its two names, never a title
+      emoji: c.emoji,
+      spaceId: c.spaceId,
+      spaceName: c.space?.name ?? null,
+      membersCount: c._count.members,
+      lastMessageAt: c.messages[0]?.createdAt.toISOString() ?? null,
+    })),
+    nextCursor: hasMore ? rows[limit - 1]!.id : null,
+  };
+}
+
+/**
+ * Reading one conversation AS the owner: topics and groups are fully readable (he is in no row,
+ * he reads everything); a DM's messages are refused — the design does not open that door.
+ */
+export async function assertOversightRead(ctx: OrgAccessContext, conversationId: string): Promise<{ kind: string; spaceId: string | null }> {
+  const role = await db.organizationMember.findUnique({
+    where: {
+      organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId },
+      status: "ACTIVE",
+    },
+    select: { role: true },
+  });
+  if (!canArchive(role?.role)) throw new ForbiddenError("chat.e.oversight_denied");
+  const conv = await db.conversation.findFirst({
+    where: { id: conversationId, orgId: ctx.orgId },
+    select: { id: true, kind: true, spaceId: true },
+  });
+  if (!conv) throw new ForbiddenError("chat.e.not_found");
+  if (conv.kind === "DM") throw new ForbiddenError("chat.e.oversight_dm_denied");
+  await logChat({
+    orgId: ctx.orgId,
+    actorId: ctx.userId,
+    action: "chat.oversight_read",
+    spaceId: conv.spaceId,
+    conversationId: conv.id,
+    meta: { kind: conv.kind },
+  });
+  return { kind: conv.kind, spaceId: conv.spaceId };
+}
