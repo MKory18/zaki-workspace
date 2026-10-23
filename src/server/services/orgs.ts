@@ -36,9 +36,7 @@ export function generateJoinCode(): string {
 }
 
 /**
- * Self-registration exists for the very first run only: while NO organization exists at all,
- * somebody may create the company and become its OWNER. After that, accounts are created by the
- * owner (and the people they allow) from inside the app.
+ * Whether any organisation exists yet. Used by tests; registration is always open.
  */
 export async function registrationOpen(): Promise<boolean> {
   return (await db.organization.findFirst({ select: { id: true } })) === null;
@@ -48,12 +46,8 @@ export async function registrationOpen(): Promise<boolean> {
 const BOOTSTRAP_LOCK = 724_310_051;
 
 /**
- * First run: creates the organization and its OWNER. The OWNER is created fully onboarded
- * (they chose this password themselves and they are the person the transparency notice protects).
- *
- * Race-safe: the "no organization yet" check and the creation run in one transaction holding an
- * advisory lock, so two simultaneous first-run requests cannot both create a company — the second
- * one waits, then finds the first company and is refused with `auth.registration_closed`.
+ * Create a new organisation with its OWNER under an advisory lock, so two simultaneous
+ * registrations with the same email cannot both succeed — the second one finds the email taken.
  */
 export async function registerOrganization(input: RegisterOrgInput & ProfileFields): Promise<{ userId: string }> {
   const email = input.email.toLowerCase().trim();
@@ -65,7 +59,6 @@ export async function registerOrganization(input: RegisterOrgInput & ProfileFiel
   try {
     const user = await db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOTSTRAP_LOCK}::bigint)`;
-      if (await tx.organization.findFirst({ select: { id: true } })) throw new ForbiddenError("auth.registration_closed");
       if (await tx.user.findUnique({ where: { email }, select: { id: true } })) throw new ForbiddenError("email.taken");
       const keyPrefix = await availablePrefix(tx, base.slice(0, 4).toUpperCase() || "ZW");
       const joinCode = await uniqueJoinCode(tx);

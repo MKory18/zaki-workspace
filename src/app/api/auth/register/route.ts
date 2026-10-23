@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { startSession } from "@/server/auth";
 import { apiError, withApi } from "@/server/api";
 import { registerSchema } from "@/server/validation";
-import { registerOrganization, registrationOpen } from "@/server/services/orgs";
+import { registerOrganization } from "@/server/services/orgs";
 import { FixedWindowLimiter, REGISTER_LIMIT, RateLimitedError, clientIp } from "@/server/rate-limit";
 
 const registerLimiter = new FixedWindowLimiter(REGISTER_LIMIT);
@@ -13,10 +13,8 @@ function gone(): NextResponse {
 }
 
 /**
- * First-run bootstrap ONLY: while no organization exists at all, creates the company and its
- * OWNER (fully onboarded) and signs them in. Once any organization exists the answer is
- * 403 `auth.registration_closed` — accounts are created by the owner inside the app.
- * Joining an organization with its invitation code is retired: 410, always.
+ * Create a new organisation with its OWNER. Rate-limited per IP.
+ * Joining via code is retired (410).
  */
 export async function POST(req: Request) {
   return withApi(async () => {
@@ -32,7 +30,6 @@ export async function POST(req: Request) {
       return apiError("validation.failed", "invalid JSON");
     }
     if (typeof body === "object" && body !== null && "joinCode" in body) return gone();
-    if (!(await registrationOpen())) return apiError("forbidden", "auth.registration_closed");
 
     const parsed = registerSchema.safeParse(body);
     if (!parsed.success) {
@@ -43,7 +40,6 @@ export async function POST(req: Request) {
       );
     }
     if (parsed.data.mode === "join") return gone();
-    // registerOrganization re-checks under a lock: two simultaneous first runs make ONE company
     const result = await registerOrganization(parsed.data);
     await startSession(result.userId);
     return NextResponse.json({ ok: true, next: "/" }, { status: 201 });

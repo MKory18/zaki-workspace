@@ -317,7 +317,7 @@ describe("the door — login, first-run set-up and the onboarding on the same ca
 });
 
 describe("sign-in and first-run set-up", () => {
-  const login = (firstRun = false) => render(createElement(AuthForm, { mode: "login", firstRun }));
+  const login = () => render(createElement(AuthForm, { mode: "login" }));
   const register = () => render(createElement(AuthForm, { mode: "register" }));
 
   it("— sign-in keeps every field, name and behaviour hook", () => {
@@ -335,10 +335,9 @@ describe("sign-in and first-run set-up", () => {
     expect(html, "no error until something fails").not.toContain('role="alert"');
   });
 
-  it("— the first-run link appears only when the set-up is open, and is a tap target a thumb can hit", () => {
-    expect(login(false)).not.toContain('href="/register"');
-    const html = login(true);
-    expect(html).toMatch(new RegExp(`<a [^>]*href="/register"[^>]*>${t("login.first_run")}</a>`));
+  it("— the register link is always visible and is a tap target a thumb can hit", () => {
+    const html = login();
+    expect(html).toMatch(new RegExp(`<a [^>]*href="/register"[^>]*>${t("login.register_link")}</a>`));
     expect(/<a\b[^>]*href="\/register"[^>]*>/.exec(html)?.[0]).toMatch(/\bmin-h-11\b/);
   });
 
@@ -355,7 +354,7 @@ describe("sign-in and first-run set-up", () => {
   });
 
   it("— both sit on the door: the layer, the picture slot, the wordmark; no English but the brand", () => {
-    for (const html of [login(true), register()]) {
+    for (const html of [login(), register()]) {
       expect(html).toContain("zk-decor-door");
       // no artwork has shipped yet (WP-UI2 item 5): the picture slot is empty, the layer carries the door
       expect(html).not.toContain("data-art-slot");

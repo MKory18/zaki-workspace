@@ -10,13 +10,13 @@ import { useI18n } from "@/lib/i18n";
 import { safeNextPath } from "@/lib/safe-next";
 
 /**
- * Sign-in (username or e-mail + password) and the first-run set-up (the very first company and its
- * owner). Self-registration and joining with a code are closed: the owner creates every account.
+ * Sign-in (username or e-mail + password) and create a new organisation.
+ * Everyone can register and start their own workspace.
  *
  * Both sit on the door (`DoorShell`): the Zaki Workspace mark and wordmark, the decoration of the active theme
  * behind, and the form on an opaque card. Phone first: 375 px, 16 px gutters, fields and buttons 44 px tall.
  */
-export function AuthForm({ mode, firstRun = false }: { mode: "login" | "register"; firstRun?: boolean }) {
+export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,11 +137,9 @@ export function AuthForm({ mode, firstRun = false }: { mode: "login" | "register
           {mode === "login" ? (
             <p className="text-center text-xs leading-5 text-fg-muted">
               {t("login.no_account")}
-              {firstRun ? (
-                <a href="/register" className="flex min-h-11 items-center justify-center text-accent hover:underline">
-                  {t("login.first_run")}
-                </a>
-              ) : null}
+              <a href="/register" className="flex min-h-11 items-center justify-center text-accent hover:underline">
+                {t("login.register_link")}
+              </a>
             </p>
           ) : (
             <p className="text-center text-xs text-fg-muted">
