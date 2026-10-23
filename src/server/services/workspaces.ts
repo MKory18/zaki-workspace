@@ -4,6 +4,7 @@ import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, requireUser, type OrgAccessContext } from "@/server/auth";
 import { canManageWorkspaceMembers } from "@/server/services/access";
 import { workspaceRoleOf, type WorkspaceRoleName } from "@/server/workspace-role";
+import { emitRealtime } from "@/server/realtime/emit";
 
 /**
  * Spaces (workspaces): who is in one, who may change it.
@@ -261,6 +262,17 @@ export async function changeWorkspaceMembers(
     }
     if (remove.length) {
       await tx.workspaceMember.deleteMany({ where: { workspaceId, userId: { in: remove } } });
+      // and out of the space's topics: a row left behind kept feeding them its messages (review A3)
+      const rows = await tx.conversationMember.findMany({
+        where: { userId: { in: remove }, conversation: { spaceId: workspaceId } },
+        select: { id: true, conversationId: true, userId: true },
+      });
+      if (rows.length) {
+        await tx.conversationMember.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } });
+        for (const r of rows) {
+          await emitRealtime(tx, ws.organizationId, "membership.changed", { conversationId: r.conversationId, userId: r.userId, spaceId: workspaceId });
+        }
+      }
       // the moderation trail of the space: who was taken out of it (ids only, no content)
       await tx.auditLog.createMany({
         data: remove.map((userId) => ({
