@@ -54,7 +54,7 @@
   "guide.tour.today.first-steps.title": "خطواتك الأولى",
   "guide.tour.today.first-steps.body": "بطاقة بتمشّيك على أهم الأشياء، وكل خطوة بتتعلّم لحالها لما تخلّصها.",
 
-  "guide.first.title": "خطواتك الأولى",
+  "guide.first.title": "أول خطواتك",
   "guide.first.progress": "{done} من {total}",
   "guide.first.collapse": "طيّ البطاقة",
   "guide.first.expand": "فتح البطاقة",
@@ -150,5 +150,11 @@
   "guide.page.guide-article.what": "هاي صفحة من الدليل: خطوات قصيرة لموضوع واحد.",
   "guide.page.guide-article.next": "كمّل للمقال اللي بعده، أو ارجع للدليل.",
 
-  "guide.page.internal.what": "هاي صفحة للفريق الداخلي، وما بتنفتح لحساب الشريك الخارجي."
+  "guide.page.internal.what": "هاي صفحة للفريق الداخلي، وما بتنفتح لحساب الشريك الخارجي.",
+
+  "guide.card.aria": "دليل زاكي",
+  "guide.card.title": "أهلين! أنا زاكي، دليلك هون.",
+  "guide.card.body": "بدك جولة سريعة؟ 30 ثانية وبتعرف كل إشي.",
+  "guide.card.start": "يلا",
+  "guide.card.later": "بعدين"
 }

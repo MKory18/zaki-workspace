@@ -71,6 +71,7 @@ export const COLOR_TOKENS = [
   "cat-4",
   "cat-5",
   "cat-6",
+  "on-photo",
 ] as const;
 export type ColorToken = (typeof COLOR_TOKENS)[number];
 
@@ -125,6 +126,7 @@ export const PALETTES: Record<ThemeKey, Palette> = {
       "cat-4": "#0A6F81", // teal (OMS chart-5 #2997AE, darker)
       "cat-5": "#596D08", // olive (new)
       "cat-6": "#2929AE", // indigo (OMS chart-6)
+      "on-photo": "#FFFFFF", // text painted over a photograph (the Today hero), on every theme
     },
     style: {
       "font-display": KUFI_STACK,
@@ -133,38 +135,39 @@ export const PALETTES: Record<ThemeKey, Palette> = {
     },
   },
 
-  /** «إسلامي ملحمي» — night navy and gold, turquoise as the second accent. Dark. */
+  /** «ليلي» — the adopted look («نجمة وطريق»): deep sea-night navy, gold as the metal and teal as the action. Dark. The default. */
   "islamic-epic": {
     colors: {
-      surface: "#0A1430",
-      "surface-1": "#101C40",
-      "surface-2": "#212C4D",
-      border: "#404966",
-      muted: "#A79F8B",
-      fg: "#EEECE7",
-      "fg-muted": "#C3B9A2",
-      accent: "#D4AF5A",
-      "accent-fg": "#0A0A0A",
-      "accent-2": "#5CC6B9", // turquoise (new): the tile beside the gold
+      surface: "#050F1F",
+      "surface-1": "#0A1A2E",
+      "surface-2": "#0F2438",
+      border: "#1C3A52",
+      muted: "#9FB6C2",
+      fg: "#E6F1F4",
+      "fg-muted": "#AFC4CE",
+      accent: "#36B5CC",
+      "accent-fg": "#04182B",
+      "accent-2": "#E3B04B", // the gold of the star, the ribbon and «جديد»
       ok: "#24DB70",
-      warn: "#E98E3F", // OMS #DB9824 turned toward orange: it was the gold's twin
-      danger: "#F57B7E", // OMS #E4585D, lightened further: the 10% chip must clear 4.5:1 on surface-2
-      info: "#62A8DA", // sky (OMS chart-2)
-      "ok-fg": "#0A1430",
-      "warn-fg": "#0A1430",
-      "danger-fg": "#0A1430",
-      "info-fg": "#0A1430",
-      scrim: "#050B1C", // the night under the navy
-      "cat-1": "#AE7CF0", // violet (OMS chart-3's family, lighter)
-      "cat-2": "#DF67CB", // fuchsia (OMS chart-4, a step lighter)
-      "cat-3": "#F486AD", // rose (new)
-      "cat-4": "#62C6DA", // cyan (OMS chart-5)
-      "cat-5": "#AED561", // lime (new)
-      "cat-6": "#758DF8", // indigo (OMS chart-6 #6262DA, lighter)
+      warn: "#E98E3F",
+      danger: "#F57B7E",
+      info: "#8FA8FF", // periwinkle: the mockup's teal action owns the cyan, so info keeps its distance
+      "ok-fg": "#04182B",
+      "warn-fg": "#04182B",
+      "danger-fg": "#04182B",
+      "info-fg": "#04182B",
+      scrim: "#030812", // the ink under the night
+      "cat-1": "#AE7CF0", // violet
+      "cat-2": "#DF67CB", // fuchsia
+      "cat-3": "#F486AD", // rose
+      "cat-4": "#62C6DA", // cyan
+      "cat-5": "#AED561", // lime
+      "cat-6": "#758DF8", // indigo
+      "on-photo": "#FFFFFF",
     },
     style: {
       "font-display": KUFI_STACK,
-      "radius-card": "0.75rem",
+      "radius-card": "1.125rem", // 18px: the adopted cards
       "shadow-card": "0 1px 2px rgb(0 0 0 / 0.52), 0 1px 3px rgb(0 0 0 / 0.30)",
     },
   },
@@ -197,6 +200,7 @@ export const PALETTES: Record<ThemeKey, Palette> = {
       "cat-4": "#4DD9DB", // aqua: the theme's own aqua neon (OMS chart-1)
       "cat-5": "#B3DC5E", // lime (new)
       "cat-6": "#8E94F0", // periwinkle-indigo (OMS chart-3)
+      "on-photo": "#FFFFFF",
     },
     style: {
       "font-display": PLEX_STACK,
@@ -205,38 +209,39 @@ export const PALETTES: Record<ThemeKey, Palette> = {
     },
   },
 
-  /** «نهاري» — white and petrol blue, plain. Light. */
+  /** «نهاري» — the adopted look by day: warm ivory paper, deep petrol blue, gold as the metal. Light. */
   day: {
     colors: {
-      surface: "#FFFFFF",
-      "surface-1": "#F4F8FA",
-      "surface-2": "#E9F0F3",
-      border: "#D5E1E6",
-      muted: "#5F6C75",
+      surface: "#F6F2EA",
+      "surface-1": "#FFFDF8",
+      "surface-2": "#EFE9DE",
+      border: "#D8CEBC",
+      muted: "#5E6B72",
       fg: "#0C3252",
-      "fg-muted": "#4A6272",
+      "fg-muted": "#4E5A60",
       accent: "#1A6382",
       "accent-fg": "#FFFFFF",
-      "accent-2": "#2E9AAD", // the brand mark's cyan (OMS chart-1)
-      ok: "#1A7336", // OMS #1E7A3A, darker: the 10% chip must clear 4.5:1 on surface-2
-      warn: "#90560E", // OMS #9A5B12, darker: the 10% chip must clear 4.5:1 on surface-2
+      "accent-2": "#A8761F", // the gold of the star, the ribbon and «جديد»
+      ok: "#1A7336",
+      warn: "#90560E",
       danger: "#B42318",
-      info: "#094982", // royal blue, deepened: the 10% chip must clear 4.5:1 on surface-2
+      info: "#094982",
       "ok-fg": "#FFFFFF",
       "warn-fg": "#FFFFFF",
       "danger-fg": "#FFFFFF",
       "info-fg": "#FFFFFF",
-      scrim: "#071A2B", // the navy of the text, deepened
-      "cat-1": "#705EA2", // violet (OMS chart-3 #8E7CC3, darker)
-      "cat-2": "#9D3D8D", // fuchsia (new)
-      "cat-3": "#9A526B", // rose (OMS chart-6 #C1758E, darker)
-      "cat-4": "#0C7383", // teal (OMS chart-1 #2E9AAD, darker)
-      "cat-5": "#5F7019", // olive (new)
-      "cat-6": "#384DB8", // indigo (new)
+      scrim: "#0C1A2B", // the navy of the text, deepened
+      "cat-1": "#624F91", // violet
+      "cat-2": "#9D3D8D", // fuchsia
+      "cat-3": "#8F4A62", // rose (darkened for the warm ground)
+      "cat-4": "#0A6B7A", // teal (darkened for the warm ground)
+      "cat-5": "#56661A", // olive (darkened for the warm ground)
+      "cat-6": "#384DB8", // indigo
+      "on-photo": "#FFFFFF",
     },
     style: {
-      "font-display": PLEX_STACK,
-      "radius-card": "0.75rem",
+      "font-display": KUFI_STACK,
+      "radius-card": "1.125rem",
       "shadow-card": "0 1px 2px rgb(12 50 82 / 0.06), 0 1px 3px rgb(12 50 82 / 0.08)",
     },
   },

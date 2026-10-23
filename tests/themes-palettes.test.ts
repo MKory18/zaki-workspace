@@ -24,7 +24,7 @@ describe("every theme defines the whole token set", () => {
     expect([...COLOR_TOKENS]).toEqual([
       "surface", "surface-1", "surface-2", "border", "muted", "fg", "fg-muted", "accent", "accent-fg",
       "accent-2", "ok", "warn", "danger", "info", "ok-fg", "warn-fg", "danger-fg", "info-fg", "scrim",
-      "cat-1", "cat-2", "cat-3", "cat-4", "cat-5", "cat-6",
+      "cat-1", "cat-2", "cat-3", "cat-4", "cat-5", "cat-6", "on-photo",
     ]);
     expect([...CAT_TOKENS]).toEqual(["cat-1", "cat-2", "cat-3", "cat-4", "cat-5", "cat-6"]);
     expect([...STYLE_TOKENS]).toEqual(["font-display", "radius-card", "shadow-card"]);
@@ -61,16 +61,18 @@ describe("each theme keeps its character", () => {
   const { colors: neon } = PALETTES["neon-coast"];
   const { colors: day } = PALETTES.day;
 
-  it("the default is the OMS «إسلامي هادي»: ivory paper, emerald action, a gold second accent", () => {
-    expect(PALETTES[DEFAULT_THEME]).toBe(PALETTES["islamic-calm"]);
+  it("the default is the adopted night («ليلي»): sea-night navy, teal action, gold second accent", () => {
+    expect(PALETTES[DEFAULT_THEME]).toBe(PALETTES["islamic-epic"]);
+    expect(epic.surface).toBe("#050F1F");
+    expect(epic.accent).toBe("#36B5CC");
+    expect(epic["accent-2"]).toBe("#E3B04B");
+    expect(epic.fg).toBe("#E6F1F4");
+  });
+
+  it("«إسلامي هادي» keeps its ivory paper, emerald action and gold second accent", () => {
     expect(calm.surface).toBe("#F6F1E7");
     expect(calm.accent).toBe("#0E5E55");
     expect(calm.fg).toBe("#1D2A29");
-  });
-
-  it("«إسلامي ملحمي» is the OMS navy and gold", () => {
-    expect(epic.surface).toBe("#0A1430");
-    expect(epic.accent).toBe("#D4AF5A");
   });
 
   it("«ساحل النيون» is the OMS teal-black with the aqua neon and the rose neon", () => {
@@ -79,9 +81,11 @@ describe("each theme keeps its character", () => {
     expect(deltaEOK(neon["accent-2"], "#E75FA6")).toBeLessThan(0.05);
   });
 
-  it("«نهاري» is the OMS white and petrol blue", () => {
-    expect(day.surface).toBe("#FFFFFF");
+  it("«نهاري» is the adopted day: warm ivory paper, petrol blue, gold as the metal", () => {
+    expect(day.surface).toBe("#F6F2EA");
     expect(day.accent).toBe("#1A6382");
+    expect(day["accent-2"]).toBe("#A8761F");
+    expect(day.fg).toBe("#0C3252");
   });
 
   it("dark themes have dark pages and light text, light themes the other way round", () => {
@@ -92,7 +96,7 @@ describe("each theme keeps its character", () => {
     }
   });
 
-  it("the Islamic themes title in Reem Kufi, the others in IBM Plex — and every stack ends in Plex", () => {
+  it("a theme's titles wear the face it declares — and every stack ends in Plex", () => {
     for (const key of THEME_KEYS) {
       const font = PALETTES[key].style["font-display"];
       expect(font.includes("--font-reem"), key).toBe(THEMES[key].headingFont === "reem-kufi");

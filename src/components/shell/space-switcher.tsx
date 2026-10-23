@@ -77,7 +77,7 @@ export function SpaceSwitcher({
     variant === "sidebar" ? (
       <button
         type="button"
-        className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm text-fg transition-colors hover:bg-surface-2"
+        className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-muted bg-surface px-3 text-sm text-fg transition-colors hover:bg-surface-2"
       >
         <Layers aria-hidden="true" className="size-4 shrink-0 text-muted" />
         <span className="min-w-0 flex-1 truncate text-start">{t("top.workspaces")}</span>

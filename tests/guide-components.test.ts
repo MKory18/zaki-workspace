@@ -215,6 +215,10 @@ describe("FirstStepsView: «خطواتك الأولى»", () => {
     // ... and every other step still waiting is one tap from its page (the done one, the theme, has no link)
     for (const step of FIRST_STEPS.filter((s) => s.id !== "theme")) expect(html, step.id).toContain(`href="${step.href}"`);
     expect(html).not.toContain('href="/guide/themes"');
+    // the route marks the three states of a node: a star (done), a breathing ring (current), a plain ring
+    expect(html).toContain('data-state="done"');
+    expect(html).toContain('data-state="current"');
+    expect(html).toContain('data-state="todo"');
   });
 
   it("when the next step is done the next one opens (a person moves down the list as they go)", () => {
@@ -236,7 +240,7 @@ describe("FirstStepsView: «خطواتك الأولى»", () => {
     expect(html).toContain('aria-valuemax="7"');
   });
 
-  it("draws a done step differently — a check, the word «تمّت», no link, no button — and a waiting one with «لسا»", () => {
+  it("draws a done step differently — a star node, the word «تمّت», no link, no button — and a waiting one with «لسا»", () => {
     const html = view(manager({ theme: true }));
     const themeRow = html.split("<li").find((chunk) => chunk.includes(t("guide.first.theme.title")))!;
     expect(themeRow).toContain(t("guide.first.done_sr"));
@@ -252,7 +256,6 @@ describe("FirstStepsView: «خطواتك الأولى»", () => {
     const row = html.split("<li").find((chunk) => chunk.includes(t("guide.first.open-guide.title")))!;
     expect(row).toMatch(/<a [^>]*class="[^"]*\bmin-h-12\b/);
   });
-
   it("only the install step has the manual «تم» button, named after its step — as the next step or as a compact row", () => {
     const html = view();
     const installRow = html.split("<li").find((chunk) => chunk.includes(t("guide.first.install.title")))!;

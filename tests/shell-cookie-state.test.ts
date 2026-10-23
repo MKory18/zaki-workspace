@@ -127,7 +127,7 @@ describe("the side menu's folded state is in the first frame (the `zk-sidebar` c
     expect(aside).not.toContain("transition-[width]");
   });
 
-  it("AppShell unfolded (the default) is the 256px menu, as before", () => {
+  it("AppShell unfolded (the default) is the 236px menu of the adopted look", () => {
     const subject: NavSubject = { role: "OWNER", caps: [...effectiveCapabilities({ role: "OWNER" })] };
     const out = html(
       createElement(AppShell, {
@@ -139,6 +139,6 @@ describe("the side menu's folded state is in the first frame (the `zk-sidebar` c
         children: createElement("p", null, "محتوى"),
       }),
     );
-    expect(/<aside[^>]*class="([^"]*)"/.exec(out)?.[1]?.split(" ")).toContain("w-64");
+    expect(/<aside[^>]*class="([^"]*)"/.exec(out)?.[1]?.split(" ")).toContain("w-[236px]");
   });
 });

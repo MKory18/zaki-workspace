@@ -161,12 +161,12 @@ describe("the frame for the owner, on a project page", () => {
     expect(outerOf(html, /<div[^>]*data-tour="search"[^>]*>/, "div")).toContain(`aria-label="${AR["pal.open"]}"`);
   });
 
-  it("the side menu's 72px header carries the theme's ornament (the sidebar place), never the list of places", () => {
+  it("the side menu's header carries the theme's ornament (the sidebar place), never the list of places", () => {
     const aside = sidebar(html);
     expect(aside).toContain("zk-decor zk-decor-sidebar");
-    expect(aside).toMatch(/class="relative isolate flex h-\[72px\][^"]*overflow-hidden/);
+    expect(aside).toMatch(/class="zk-gta[^"]*"/);
     expect(sidebarPlaces(html)).not.toContain("zk-decor");
-    expect(aside).toContain("Zaki Workspace");
+    expect(aside).toContain(AR["app.brand"] as string);
   });
 
   it("offers the spaces and «+» in the side menu, and the spaces at the end of «الشغل»'s strip for the phone", () => {
@@ -197,9 +197,9 @@ describe("the frame for the owner, on a project page", () => {
     expect(html).toMatch(/<main id="zk-main"[^>]*>.*محتوى الصفحة/s);
   });
 
-  it("gives every dolphin mark its own gradient id (the phone bar and the side menu both draw one)", () => {
+  it("gives every dolphin mark its own gradient id (the mark is drawn once, in the phone bar)", () => {
     const ids = [...html.matchAll(/<linearGradient id="([^"]+)"/g)].map((m) => m[1]!);
-    expect(ids.length).toBeGreaterThanOrEqual(2);
+    expect(ids.length).toBeGreaterThanOrEqual(1);
     expect(new Set(ids).size).toBe(ids.length);
     for (const [, ref] of html.matchAll(/url\(#([^)]+)\)/g)) expect(ids, ref).toContain(ref);
   });
@@ -307,9 +307,9 @@ describe("the side menu folded to an icon rail", () => {
     expect(html).not.toContain(`aria-label="${AR["ws.new"]}"`); // «+» lives in the menu when folded
   });
 
-  it("unfolded: 256px, the toggle says it folds", () => {
+  it("unfolded: 236px, the toggle says it folds", () => {
     const open = rail(false);
-    expect(/<aside[^>]*class="([^"]*)"/.exec(open)?.[1]?.split(" ")).toContain("w-64");
+    expect(/<aside[^>]*class="([^"]*)"/.exec(open)?.[1]?.split(" ")).toContain("w-[236px]");
     expect(open).toContain(`aria-label="${AR["shell.sidebar.collapse"]}"`);
     expect(open).toContain('aria-expanded="true"');
   });

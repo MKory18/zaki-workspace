@@ -194,11 +194,11 @@ export function CommandPalette({ nav, defaultOpen = false, portal = true }: { na
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-label={t("pal.open")}
-        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-xl border-muted bg-surface-1 px-3 text-sm text-muted transition-colors hover:border-accent/50 hover:text-fg-muted"
+        className="flex h-[42px] w-full min-w-0 items-center gap-2.5 rounded-[14px] border border-muted bg-surface-1 px-3.5 text-sm text-muted transition-colors hover:border-accent-2 hover:text-fg-muted"
       >
-        <Search aria-hidden="true" className="size-4 shrink-0" />
+        <Search aria-hidden="true" className="size-[18px] shrink-0" />
         <span className="min-w-0 flex-1 truncate text-start">{t("pal.open")}</span>
-        <kbd dir="ltr" className="hidden shrink-0 rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-muted md:inline">
+        <kbd dir="ltr" className="hidden shrink-0 rounded-md border border-border bg-surface-2 px-2 py-px font-mono text-xs text-muted md:inline">
           Ctrl K
         </kbd>
       </button>
