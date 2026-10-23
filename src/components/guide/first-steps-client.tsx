@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, ChevronDown, ChevronLeft, ChevronUp, X } from "lucide-react";
+import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { allStepsDone, progressOf, stepDone, type FirstStepView } from "@/lib/guide/first-steps";
 import {
@@ -22,29 +22,15 @@ import {
 } from "./first-steps-cookie";
 import { cn } from "@/lib/utils";
 
-/** The little circle in front of a step: filled with a check when it is done. */
-function Mark({ done }: { done: boolean }) {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "grid size-6 shrink-0 place-items-center rounded-full border",
-        done ? "border-accent bg-accent text-accent-fg" : "border-border text-transparent",
-      )}
-    >
-      <Check className="size-4" />
-    </span>
-  );
-}
-
 /**
  * The card drawn from its two sources of truth: what the server says (`steps`, from real data) and
  * what this device remembers (`local`). A pure view - the state lives in FirstStepsCardClient - so
  * every state of the card can be rendered and tested.
  *
- * One primary action at a time: the NEXT step (the first one not done) is opened, with its hint and
- * its «ابدأ» button; the other waiting steps are compact rows, each a whole-row link to its page, and
- * the done ones are muted. So the card stays short on a phone however many steps there are.
+ * It is the «أول خطواتك» route of the adopted mockup: a dashed gold thread with a node per step —
+ * a gold star once the step is done, a breathing gold ring on the current one, a plain ring on the
+ * ones still waiting. Each waiting step is a link to its page; the current one also carries its hint
+ * and the single primary button («ابدأ»).
  *
  * It draws nothing when it was hidden on this device, when there is nothing to show, or when every
  * step is done: a finished card disappears.
@@ -78,7 +64,7 @@ export function FirstStepsView({
         onClick={() => onMark(step.id)}
         aria-label={t("guide.first.mark_aria", { title })}
         className={cn(
-          "inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium text-fg hover:bg-surface-1",
+          "inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-3 text-sm font-medium text-fg hover:bg-surface-2",
           className,
         )}
       >
@@ -87,21 +73,21 @@ export function FirstStepsView({
     ) : null;
 
   return (
-    <section data-tour="first-steps" aria-labelledby="first-steps-title" className="rounded-2xl border border-border bg-surface-1 p-4">
-      <div className="flex items-center gap-1">
-        <div className="min-w-0 flex-1">
-          <h2 id="first-steps-title" className="text-base font-semibold text-fg">
-            {t("guide.first.title")}
-          </h2>
-          <p className="text-xs text-fg-muted">{t("guide.first.progress", { done, total })}</p>
-        </div>
+    <section data-tour="first-steps" aria-labelledby="first-steps-title" className="rounded-[18px] border border-border bg-surface-1 p-[18px]">
+      <div className="flex items-center gap-2">
+        <h2 id="first-steps-title" className="font-display text-lg font-bold leading-tight text-fg">
+          {t("guide.first.title")}
+        </h2>
+        <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[13px] font-medium text-muted">
+          {t("guide.first.progress", { done, total })}
+        </span>
         <button
           type="button"
           onClick={() => onCollapse(!local.collapsed)}
           aria-expanded={!local.collapsed}
           aria-controls="first-steps-list"
           aria-label={local.collapsed ? t("guide.first.expand") : t("guide.first.collapse")}
-          className={iconButton}
+          className={cn(iconButton, "ms-auto")}
         >
           {local.collapsed ? <ChevronDown aria-hidden className="size-5" /> : <ChevronUp aria-hidden className="size-5" />}
         </button>
@@ -110,81 +96,77 @@ export function FirstStepsView({
         </button>
       </div>
 
+      <div aria-hidden="true" className="zk-orn my-2" />
+
       <div
         role="progressbar"
         aria-label={t("guide.first.title")}
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={done}
-        className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2"
+        className="sr-only"
       >
-        <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round((done / total) * 100)}%` }} />
+        {done}
       </div>
 
       {local.collapsed ? null : (
-        <ol id="first-steps-list" className="mt-3 space-y-1">
+        <ol id="first-steps-list" className="zk-route">
           {steps.map((step) => {
             const isDone = stepDone(step, local);
+            const isNext = step.id === nextId;
             const title = t(step.titleKey);
             const stateNote = <span className="sr-only"> — {isDone ? t("guide.first.done_sr") : t("guide.first.todo_sr")}</span>;
+            const state = isDone ? "done" : isNext ? "current" : "todo";
 
-            // done: a muted line, nothing to press
+            // done: the star node and a muted line, nothing to press
             if (isDone) {
               return (
-                <li key={step.id} className="flex min-h-12 items-center gap-3 px-1">
-                  <Mark done />
-                  <p className="min-w-0 flex-1 text-[15px] leading-7 text-fg-muted">
+                <li key={step.id} data-state={state}>
+                  <span aria-hidden="true" className="zk-route-node" />
+                  <b className="text-[15px] font-semibold leading-6 text-fg-muted">
                     {title}
                     {stateNote}
-                  </p>
+                  </b>
+                  <small className="text-[13px] leading-5 text-muted">{t("guide.first.done_sr")}</small>
                 </li>
               );
             }
 
-            // the next step: opened, with its hint and the one primary button
-            if (step.id === nextId) {
+            // the next step: the breathing node, its hint, and the one primary button
+            if (isNext) {
               return (
-                <li key={step.id} className="rounded-xl bg-surface-2 p-3">
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5">
-                      <Mark done={false} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[15px] font-semibold leading-7 text-fg">
-                        {title}
-                        {stateNote}
-                      </p>
-                      <p className="text-sm leading-6 text-fg-muted">{t(step.hintKey)}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Link
-                          href={step.href}
-                          className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-5 text-sm font-semibold text-accent-fg hover:opacity-90"
-                        >
-                          {t("guide.first.go")}
-                        </Link>
-                        {markButton(step, title, "")}
-                      </div>
-                    </div>
-                  </div>
+                <li key={step.id} data-state={state}>
+                  <span aria-hidden="true" className="zk-route-node" />
+                  <b className="text-[15px] font-semibold leading-6 text-accent-2">
+                    {title}
+                    {stateNote}
+                  </b>
+                  <small className="text-[13px] leading-5 text-muted">{t(step.hintKey)}</small>
+                  <span className="mt-2 flex flex-wrap gap-2">
+                    <Link
+                      href={step.href}
+                      className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg hover:brightness-110"
+                    >
+                      {t("guide.first.go")}
+                    </Link>
+                    {markButton(step, title, "")}
+                  </span>
                 </li>
               );
             }
 
-            // waiting, not next: a compact row, the whole row a link to the step's page
+            // waiting, not next: the whole row is one link to the step's page
             return (
-              <li key={step.id} className="flex items-center gap-1">
-                <Link
-                  href={step.href}
-                  className="flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-lg px-1 text-fg transition-colors hover:bg-surface-2"
-                >
-                  <Mark done={false} />
-                  <span className="min-w-0 flex-1 text-[15px] leading-7">
+              <li key={step.id} data-state={state} className="relative">
+                <span aria-hidden="true" className="zk-route-node" />
+                <Link href={step.href} className="flex min-h-12 flex-col justify-center rounded-lg pe-2 hover:bg-surface-2">
+                  <b className="text-[15px] font-semibold leading-6 text-fg">
                     {title}
                     {stateNote}
-                  </span>
-                  <ChevronLeft aria-hidden className="size-4 shrink-0 text-fg-muted" />
+                  </b>
+                  <small className="text-[13px] leading-5 text-muted">{t("guide.first.todo_sr")}</small>
                 </Link>
-                {markButton(step, title, "shrink-0")}
+                {markButton(step, title, "absolute end-2 top-1/2 -translate-y-1/2")}
               </li>
             );
           })}
