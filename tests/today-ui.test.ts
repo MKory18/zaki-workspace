@@ -112,15 +112,10 @@ const PROJECTS: TodayProject[] = [
   { id: "p2", name: "حملة رمضان", status: "AT_RISK", statusLabel: AR["enum.ProjectStatus.AT_RISK"] as string, openTasks: 11 },
 ];
 
-// ───────────────────────────────────────── the mission card ─────────────────────────────────────────
+// ───────────────────────────────────────── the hero strip ─────────────────────────────────────────
 
-describe("the mission card", () => {
-  const greeting = "صباح الخير يا أحمد";
-  const date = "الخميس 22 تشرين الأول 2026";
-  const markup = html(createElement(TodayHero, { greeting, date, mission: null }));
-  const withTask = html(
-    createElement(TodayHero, { greeting, date, mission: task({ title: "جهّز عرض العميل", dueLabel: "اليوم 4:00 م", priority: "HIGH", priorityLabel: AR["priority.HIGH"] as string }) }),
-  );
+describe("the hero strip", () => {
+  const markup = html(createElement(TodayHero, { greeting: "صباح الخير يا أحمد", date: "الخميس 22 تشرين الأول 2026" }));
 
   it("is the one place of the Today page that draws the strip: the decoration layer and the owner's picture slot", () => {
     expect(markup).toContain('class="zk-decor zk-decor-strip"');
@@ -130,42 +125,25 @@ describe("the mission card", () => {
     expect(markup).toMatch(/<div aria-hidden="true" class="zk-decor zk-decor-strip">/);
   });
 
-  it("carries the greeting and the date over the photograph, in the on-photo colour", () => {
-    expect(markup).toContain(greeting);
-    expect(markup).toContain(date);
-    expect(markup).toMatch(/class="[^"]*text-on-photo/);
-    const dimmer = classTokens(markup).filter((c) => /(^|:)text-(?:muted|fg-muted)$/.test(c));
-    expect(dimmer, "only on-photo is held over a picture").toEqual([]);
+  it("carries the greeting and the date, on a scrim panel (text over a picture always sits on one)", () => {
+    expect(markup).toMatch(/<h1[^>]*>صباح الخير يا أحمد<\/h1>/);
+    expect(markup).toContain("الخميس 22 تشرين الأول 2026");
+    expect(markup).toMatch(/class="zk-scrim[^"]*"/);
+    expect(markup.indexOf("zk-scrim")).toBeLessThan(markup.indexOf("صباح الخير"));
   });
 
-  it("with no task due, says so and points at the field below: no start button, no link", () => {
-    expect(markup).toContain(t("today.mission.empty_title"));
-    expect(markup).toContain(t("today.mission.empty_body"));
-    expect(markup).not.toContain(t("today.mission.start"));
+  it("holds no count, no amount and no link: nothing that is measured is drawn over a picture", () => {
     expect(hrefs(markup)).toEqual([]);
-  });
-
-  it("with a task, names it as the next mission and offers «ابدأ المهمّة» and «خلّصتها»", () => {
-    expect(withTask).toContain(t("today.mission.ribbon"));
-    expect(withTask).toContain("جهّز عرض العميل");
-    expect(withTask).toContain("مشروع الهوية");
-    expect(withTask).toContain(t("today.mission.start"));
-    expect(hrefs(withTask)).toEqual(["/tasks/t1"]);
-    expect(withTask).toContain(`aria-label="${t("today.mission.done_aria", { title: "جهّز عرض العميل" })}"`);
-    expect(withTask).toContain(AR["priority.HIGH"] as string);
-  });
-
-  it("offers no «خلّصتها» for a task the person may not change", () => {
-    const readOnly = html(createElement(TodayHero, { greeting, date, mission: task({ editable: false }) }));
-    expect(readOnly).not.toContain(t("today.mission.done"));
-    expect(readOnly).toContain(t("today.mission.start"));
+    expect(markup).not.toMatch(/<(button|ul|li|table)\b/);
+    const dimmer = classTokens(markup).filter((c) => /(^|:)text-muted$/.test(c));
+    expect(dimmer, "only fg, fg-muted and accent are held over a picture").toEqual([]);
   });
 });
 
 // ───────────────────────────────────────── the tasks ─────────────────────────────────────────
 
 describe("«مهامي اليوم»: overdue, today and later", () => {
-  const markup = html(createElement(TodayTasksCard, { tasks: FULL, hasSpaces: true, timeZone: "Asia/Damascus" }));
+  const markup = html(createElement(TodayTasksCard, { tasks: FULL, hasSpaces: true }));
 
   it("carries the tour's hook on the list container, once", () => {
     expect([...markup.matchAll(/data-tour="today-tasks"/g)]).toHaveLength(1);
@@ -219,7 +197,6 @@ describe("«مهامي اليوم»: overdue, today and later", () => {
       createElement(TodayTasksCard, {
         tasks: { ...FULL, counts: counts({ open: 40, overdue: 20, today: 2, later: 18 }) },
         hasSpaces: true,
-        timeZone: "Asia/Damascus",
       }),
     );
     expect(cut).toContain(t("today.tasks.show_rest", { n: 18 })); // overdue: 20 counted, 2 shown
@@ -232,7 +209,6 @@ describe("«مهامي اليوم»: overdue, today and later", () => {
       createElement(TodayTasksCard, {
         tasks: tasksOf({ later: [task({ id: "l1", title: "تجهيز العرض", dueLabel: "بكرا" })], counts: counts({ open: 1, later: 1 }) }),
         hasSpaces: true,
-        timeZone: "Asia/Damascus",
       }),
     );
     expect(quiet).toContain(t("today.tasks.nothing_today"));
@@ -243,7 +219,7 @@ describe("«مهامي اليوم»: overdue, today and later", () => {
 
 describe("«مهامي اليوم» with nothing in it: no dead end", () => {
   it("shows the empty state with the next step, «افتح مهامي», and the empty-tasks drawing slot", () => {
-    const markup = html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: true, timeZone: "Asia/Damascus" }));
+    const markup = html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: true }));
     expect(markup).toContain(t("today.empty.title"));
     expect(markup).toContain(t("today.empty.hint"));
     expect(markup).toMatch(new RegExp(`<a[^>]*href="/my-work"[^>]*>${t("today.empty.action")}</a>`));
@@ -256,7 +232,7 @@ describe("«مهامي اليوم» with nothing in it: no dead end", () => {
   });
 
   it("a person who is in no space yet is told so, with a way to learn what a space is", () => {
-    const markup = html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: false, timeZone: "Asia/Damascus" }));
+    const markup = html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: false }));
     expect(markup).toContain(t("today.empty.no_space_title"));
     expect(markup).toContain(t("today.empty.no_space_hint"));
     expect(hrefs(markup)).toContain("/guide/spaces");
@@ -265,14 +241,14 @@ describe("«مهامي اليوم» with nothing in it: no dead end", () => {
   });
 
   it("somebody who may open a space of their own is told to open the first one, not to wait for the owner", () => {
-    const markup = html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: false, canCreateSpaces: true, timeZone: "Asia/Damascus" }));
+    const markup = html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: false, canCreateSpaces: true }));
     expect(markup).toContain(t("today.empty.create_space_title"));
     expect(markup).toContain(t("today.empty.create_space_hint"));
     expect(markup).toMatch(new RegExp(`<a[^>]*href="/projects"[^>]*>${t("today.empty.create_space_action")}</a>`));
     expect(markup).not.toContain("data-art-slot");
     expect(markup).not.toContain(t("today.empty.no_space_title"));
     // being in a space makes the question moot, whatever the person may open
-    const inSpace = html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: true, canCreateSpaces: true, timeZone: "Asia/Damascus" }));
+    const inSpace = html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: true, canCreateSpaces: true }));
     expect(inSpace).toContain(t("today.empty.title"));
     expect(inSpace).not.toContain(t("today.empty.create_space_title"));
   });
@@ -515,13 +491,11 @@ describe("«مشاريعي النشطة»", () => {
 // ───────────────────────────────────────── rules over everything the page renders ─────────────────────────────────────────
 
 const everything = [
-  html(createElement(TodayHero, { greeting: "صباح الخير يا أحمد", date: "الخميس 22 تشرين الأول 2026", mission: null })),
-  html(createElement(TodayHero, { greeting: "صباح الخير يا أحمد", date: "الخميس 22 تشرين الأول 2026", mission: FULL.overdue[0]! })),
-  html(createElement(TodayTasksCard, { tasks: FULL, hasSpaces: true, timeZone: "Asia/Damascus" })),
-  html(createElement(TodayTasksCard, { tasks: FULL, hasSpaces: true, quickAdd: QUICK, timeZone: "Asia/Damascus" })),
-  html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: true, timeZone: "Asia/Damascus" })),
-  html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: false, timeZone: "Asia/Damascus" })),
-  html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: false, canCreateSpaces: true, timeZone: "Asia/Damascus" })),
+  html(createElement(TodayHero, { greeting: "صباح الخير يا أحمد", date: "الخميس 22 تشرين الأول 2026" })),
+  html(createElement(TodayTasksCard, { tasks: FULL, hasSpaces: true })),
+  html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: true })),
+  html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: false })),
+  html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: false, canCreateSpaces: true })),
   html(createElement(TodayQuickAdd, { quickAdd: QUICK, timeZone: "Asia/Damascus" })),
   html(createElement(QuickAddForm, { quickAdd: QUICK, timeZone: "Asia/Damascus", onDone: () => {} })),
   html(createElement(QuickAddSheet, { open: true, onOpenChange: () => {}, quickAdd: QUICK, timeZone: "Asia/Damascus", portal: false })),
@@ -698,10 +672,9 @@ describe("the source of the Today page", () => {
     expect(page).not.toMatch(/lucide-react|NavGrid|NavCardItem|ProjectsToolbar/);
     expect(page).not.toMatch(/db\.|from "@\/server\/db"/);
     expect((page.match(/<Link\b/g) ?? []).length).toBe(0);
-    // the adopted layout: the mission, then the tasks beside the route and the guide; the install
-    // hint sits BELOW both columns (WP-UI2 item 1: it must not push the tasks down)
-    expect(page.indexOf("<TodayHero")).toBeLessThan(page.indexOf("<TodayTasksCard"));
+    // the first-steps card comes first, then the tasks; the install hint sits BELOW the tasks
+    // (WP-UI2 item 1 moved it there on purpose: it must not push the tasks down)
+    expect(page.indexOf("<FirstStepsCard")).toBeLessThan(page.indexOf("<TodayTasksCard"));
     expect(page.indexOf("<TodayTasksCard")).toBeLessThan(page.indexOf("<InstallHint"));
-    expect(page.indexOf("<FirstStepsCard")).toBeLessThan(page.indexOf("<InstallHint"));
   });
 });

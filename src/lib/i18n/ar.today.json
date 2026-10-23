@@ -41,28 +41,5 @@
   "today.projects.open": "المهام المفتوحة: {n}",
   "today.projects.open_mine": "مهامك المفتوحة: {n}",
   "today.projects.empty": "ما في مشاريع نشطة حاليًا.",
-  "today.projects.all": "كل المشاريع",
-
-  "today.mission.ribbon": "المهمّة الجاية",
-  "today.mission.none_ribbon": "يومك",
-  "today.mission.start": "ابدأ المهمّة",
-  "today.mission.done": "خلّصتها",
-  "today.mission.done_aria": "خلّصتها: {title}",
-  "today.mission.empty_title": "ما في مهمّة مستحقّة اليوم",
-  "today.mission.empty_body": "اكتب أول مهمّة تحت، وبتصير هي مهمّة اليوم.",
-  "today.mission.passed_title": "تمّت المهمّة!",
-  "today.mission.passed_sub": "+1 نجمة · كمّل عالجاية",
-  "today.mission.priority_urgent": "أولوية عاجلة",
-  "today.mission.priority_high": "أولوية عالية",
-
-  "today.quick.inline_placeholder": "+ أضف مهمّة… اكتب العنوان واضغط إدخال",
-  "today.quick.more": "المشروع والموعد",
-  "today.quick.inline_hint": "العنوان بس — المشروع والموعد بتضيفهم بعدين إذا بدك.",
-  "today.quick.inline_aria": "مهمّة جديدة",
-  "today.quick.inline_empty": "اكتب عنوان المهمّة أول.",
-  "today.quick.inline_added": "انضافت المهمّة",
-  "today.quick.inline_failed": "تعذّرت الإضافة، جرّب من جديد.",
-
-  "today.count": "{n} مهمّة",
-  "today.credits": "صورة الغلاف: «أفق عمّان عند الغروب» — إبراهيم نبيل صالح — ويكيميديا كومنز، رخصة المشاع الإبداعي نَسب المُصنَّف 4.0 (معدّلة). رسمة الدليل أصلية."
+  "today.projects.all": "كل المشاريع"
 }

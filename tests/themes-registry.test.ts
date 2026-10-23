@@ -23,25 +23,25 @@ import {
 
 describe("the four themes", () => {
   it("are exactly the four agreed keys, in the picker's order", () => {
-    expect([...THEME_KEYS]).toEqual(["islamic-epic", "day", "islamic-calm", "neon-coast"]);
+    expect([...THEME_KEYS]).toEqual(["islamic-calm", "islamic-epic", "neon-coast", "day"]);
     expect(THEME_LIST.map((t) => t.key)).toEqual([...THEME_KEYS]);
   });
 
-  it("the adopted night («ليلي») is the default, and it is a dark theme", () => {
-    expect(DEFAULT_THEME).toBe("islamic-epic");
-    expect(isDarkTheme(DEFAULT_THEME)).toBe(true);
+  it("«إسلامي هادي» is the default, and it is a light theme", () => {
+    expect(DEFAULT_THEME).toBe("islamic-calm");
+    expect(isDarkTheme(DEFAULT_THEME)).toBe(false);
   });
 
   it("two are dark (they also carry the `dark` class) and two are light", () => {
     expect(THEME_KEYS.filter(isDarkTheme)).toEqual(["islamic-epic", "neon-coast"]);
-    expect(THEME_KEYS.filter((k) => !isDarkTheme(k))).toEqual(["day", "islamic-calm"]);
+    expect(THEME_KEYS.filter((k) => !isDarkTheme(k))).toEqual(["islamic-calm", "day"]);
   });
 
-  it("the two faces of the adopted look title in Reem Kufi; the other two keep theirs", () => {
+  it("the Islamic themes title in Reem Kufi, the others in IBM Plex", () => {
     expect(THEMES["islamic-calm"].headingFont).toBe("reem-kufi");
     expect(THEMES["islamic-epic"].headingFont).toBe("reem-kufi");
     expect(THEMES["neon-coast"].headingFont).toBe("plex");
-    expect(THEMES.day.headingFont).toBe("reem-kufi");
+    expect(THEMES.day.headingFont).toBe("plex");
   });
 });
 

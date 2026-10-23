@@ -14,7 +14,7 @@ import {
 } from "@/components/theme/theme-provider";
 import { ThemePicker } from "@/components/theme/theme-picker";
 import { PALETTES } from "@/lib/themes/palettes";
-import { DECOR_LEVELS, DEFAULT_THEME, PREF_COOKIE_MAX_AGE, THEME_KEYS, themeLabelKey, themeMoodKey } from "@/lib/themes/registry";
+import { DECOR_LEVELS, PREF_COOKIE_MAX_AGE, THEME_KEYS, themeLabelKey, themeMoodKey } from "@/lib/themes/registry";
 
 // The components are TSX; under vitest their JSX compiles to React.createElement, which needs a global React.
 (globalThis as { React?: typeof React }).React = React;
@@ -187,7 +187,7 @@ describe("ThemeProvider / useTheme", () => {
 
   it("a garbage initial value from a forged cookie is the default", () => {
     const ctx = capture("system", "loud");
-    expect(ctx.theme).toBe(DEFAULT_THEME);
+    expect(ctx.theme).toBe("islamic-calm");
     expect(ctx.decor).toBe("light");
   });
 
@@ -211,7 +211,7 @@ describe("ThemeProvider / useTheme", () => {
       return null;
     };
     renderToStaticMarkup(createElement(Probe));
-    expect(seen).toMatchObject({ theme: DEFAULT_THEME, decor: "light" });
+    expect(seen).toMatchObject({ theme: "islamic-calm", decor: "light" });
   });
 });
 
@@ -250,7 +250,7 @@ describe("ThemePicker", () => {
 
   it("shows each theme's Arabic name and mood", () => {
     expect(AR[themeLabelKey("islamic-calm")]).toBe("إسلامي هادي");
-    expect(AR[themeLabelKey("islamic-epic")]).toBe("ليلي");
+    expect(AR[themeLabelKey("islamic-epic")]).toBe("إسلامي ملحمي");
     expect(AR[themeLabelKey("neon-coast")]).toBe("ساحل النيون");
     expect(AR[themeLabelKey("day")]).toBe("نهاري");
     for (const key of THEME_KEYS) {

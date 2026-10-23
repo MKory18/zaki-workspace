@@ -21,9 +21,8 @@ export const storageKeys = {
   firstSteps: (userId: string) => `${NS}first-steps.${userId}`,
   tourSeen: (tour: string) => `${NS}tour.${tour}`,
   hint: (id: string) => `${NS}hint.${id}`,
-  /** The «دليل زاكي» card of today's page, once «بعدين» was pressed on this device. */
-  guideCardLater: (userId: string) => `${NS}card-later.${userId}`,
 } as const;
+
 /** The browser's localStorage, or null when there is none (server render) or it cannot be reached. */
 export function browserStore(): KeyValueStore | null {
   try {
