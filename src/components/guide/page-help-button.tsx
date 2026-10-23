@@ -6,7 +6,7 @@ import Link from "next/link";
 import { X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { Audience } from "@/lib/guide/audience";
-import { helpArticleHref, helpNextKey, matchHelp, type PageHelp } from "@/lib/guide/page-help";
+import {helpArticleHref, helpNextKey, matchHelp, type PageHelp, helpWhatKey } from "@/lib/guide/page-help";
 import { cn } from "@/lib/utils";
 
 /**
@@ -63,7 +63,7 @@ export function HelpPanel({
 
       <section className="mt-2">
         <h3 className="text-sm font-semibold text-accent">{t("guide.help.what")}</h3>
-        <p className="mt-1 text-[15px] leading-8 text-fg">{t(help.whatKey)}</p>
+        <p className="mt-1 text-[15px] leading-8 text-fg">{t(helpWhatKey(help, audience))}</p>
       </section>
       <section className="mt-4">
         <h3 className="text-sm font-semibold text-accent">{t("guide.help.next")}</h3>

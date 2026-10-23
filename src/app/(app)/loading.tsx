@@ -1,13 +1,13 @@
 import { Lightbulb } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getServerT } from "@/lib/i18n/server";
-import { tipFor, tipSeed } from "@/lib/tips";
+import { tipForAudience, tipSeed } from "@/lib/tips";
 
 /**
  * What Next.js shows in place of a page of the app while it loads: a calm skeleton of a page, painted
  * with the theme's own tokens, and ONE usage tip. The shell around it stays where it is.
  *
- * - The tip comes from the clock, `tipFor(tipSeed(now))` (it changes every 30 seconds): a pure function of
+ * - The tip comes from the clock, `tipForAudience(tipSeed(now), "everyone")` (it changes every 30 seconds): a pure function of
  *   a number, never Math.random, so the same moment gives the same tip. This is a server component, so it
  *   is rendered once, on the server, and the browser never re-renders it: nothing to mismatch.
  * - The skeleton is decoration (hidden from screen readers); what a screen reader gets is "جارٍ التحميل…"
@@ -18,7 +18,10 @@ import { tipFor, tipSeed } from "@/lib/tips";
  */
 export default function Loading() {
   const { t } = getServerT();
-  const tip = t(tipFor(tipSeed(Date.now())));
+  // The safest list, for EVERYBODY: a loading fallback is painted before the page knows who is
+  // looking (and must not do a database read to find out), so it never promises a guest the chat or
+  // the library — the two tips the server refuses an external partner.
+  const tip = t(tipForAudience(tipSeed(Date.now()), "everyone"));
 
   return (
     <div role="status" aria-live="polite" aria-busy="true" className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-5 p-4 md:p-6">

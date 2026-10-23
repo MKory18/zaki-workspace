@@ -26,7 +26,7 @@ export default async function ListPage({
 
   if ("none" in result) {
     return (
-      <main className="grid h-full place-items-center p-8 text-center">
+      <div className="grid h-full place-items-center p-8 text-center">
         <div>
           <h1 className="text-base font-semibold text-fg">{t("list.title")}</h1>
           <p className="mt-1 text-sm text-muted">{t("list.noWorkspace")}</p>
@@ -34,7 +34,7 @@ export default async function ListPage({
             {t("nav.projects")}
           </a>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -124,7 +124,7 @@ export default async function ListPage({
   };
 
   return (
-    <main className="flex h-full min-w-0 flex-col overflow-y-auto">
+    <div className="flex h-full min-w-0 flex-col overflow-y-auto">
       <header className="border-b border-border bg-surface px-5 py-4">
         <h1 className="text-base font-semibold text-fg">{t("list.title")}</h1>
         <p className="text-xs text-fg-muted">{ctx.denied ? t("forbidden") : ctx.workspaceName}</p>
@@ -171,7 +171,7 @@ export default async function ListPage({
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 

@@ -15,7 +15,7 @@ export default async function TeamsPage() {
   const orgs = await memberDirectory(user.id);
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
+    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
       <header>
         <h1 className="text-lg font-semibold text-fg">{t("teams.title")}</h1>
         <p className="text-xs text-fg-muted">
@@ -67,7 +67,7 @@ export default async function TeamsPage() {
           </ul>
         </section>
       ))}
-    </main>
+    </div>
   );
 }
 

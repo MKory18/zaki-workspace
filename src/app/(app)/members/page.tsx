@@ -44,7 +44,8 @@ export default async function MembersPage() {
     return (
       <div className="mx-auto max-w-2xl p-6">
         <div className="rounded-xl border border-border bg-surface-1 p-8 text-center">
-          <h1 className="text-base font-semibold text-fg">{t("orgm.title")}</h1>
+          <h1 className="text-base font-semibold text-fg">{t("guest.no_access")}</h1>
+          {/* the honest detail stays: a guest is refused this section, not merely read-only */}
           <p className="mt-2 text-sm text-fg-muted">{t("orgm.members_only")}</p>
         </div>
       </div>

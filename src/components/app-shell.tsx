@@ -6,7 +6,7 @@ import { useI18n } from "@/lib/i18n";
 import type { Audience } from "@/lib/guide/audience";
 import { browserStore } from "@/lib/guide/storage";
 import { locate, type NavModel, type NavRole } from "@/lib/nav/places";
-import type { CurrentUser } from "@/server/auth";
+import type { AvatarUser } from "@/components/shell/avatar-menu";
 import { DolphinMark } from "@/components/logo";
 import { BottomNav } from "@/components/shell/bottom-nav";
 import { PlaceTabs } from "@/components/shell/place-tabs";
@@ -17,7 +17,7 @@ import { readSidebarCollapsed, writeSidebarCollapsed } from "@/components/shell/
 import { parseSidebarCookie, writeSidebarCookie } from "@/components/shell/sidebar-cookie";
 
 export interface AppShellProps {
-  user: CurrentUser;
+  user: AvatarUser;
   /** The person's map, computed on the server from their rank and switches (src/lib/nav/places.ts). */
   nav: NavModel;
   /** The rank in the active organization, shown in Arabic in the avatar menu. */

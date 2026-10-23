@@ -53,13 +53,16 @@ export function AuthForm({ mode, firstRun = false }: { mode: "login" | "register
       // show the server's known error keys in Arabic; unknown → generic message
       let msg = t("common.error");
       if (err instanceof ApiError) {
-        if (err.messageKey) {
-          const mapped = t(err.messageKey);
-          if (mapped !== err.messageKey) msg = mapped;
-        } else if (err.code === "validation.failed" && Array.isArray(err.details) && err.details.length > 0) {
-          const first = (err.details[0] as { message?: string }).message;
+        // withApi ALWAYS sends `message: "validation.failed"` on a failed zod check, so the envelope's
+        // message lands in `messageKey` and the old `err.code` branch below it was unreachable — the
+        // field hints never showed. Decide on the messageKey.
+        if (err.messageKey === "validation.failed" && Array.isArray(err.details) && err.details.length > 0) {
+          const first = (err.details[0] as { message?: string; path?: string[] }).message;
           const mapped = first ? t(first) : "";
           msg = mapped && mapped !== first ? mapped : t("auth.validationHint");
+        } else if (err.messageKey) {
+          const mapped = t(err.messageKey);
+          if (mapped !== err.messageKey) msg = mapped;
         }
       }
       setError(msg);

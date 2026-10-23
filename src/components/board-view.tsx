@@ -19,7 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, MessageSquare, CalendarDays, GripVertical, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { apiPost, apiDelete } from "@/lib/api-client";
+import { ApiError, apiPost, apiDelete } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -255,10 +255,16 @@ function BoardColumn({
   onSubmit: () => void;
 }) {
   const { t } = useI18n();
+  const { toast } = useToast();
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const deleteColumn = useMutation({
     mutationFn: () => apiDelete(`/api/boards/${boardId}/columns/${column.id}`),
     onSuccess: () => window.location.reload(),
+    // a refused delete (a column that still holds cards, 409) was SILENT: say why, in the column
+    onError: (err) => {
+      const key = err instanceof ApiError && err.messageKey ? err.messageKey : "common.error";
+      toast(t(key), "error");
+    },
   });
   return (
     <div

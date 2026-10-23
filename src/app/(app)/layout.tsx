@@ -25,7 +25,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const sidebarCollapsed = parseSidebarCookie(cookies().get(SIDEBAR_COOKIE)?.value);
   return (
     <AppShell
-      user={user}
+      // the shell draws a name, a username and an e-mail; session facts (tv, locale, onboarding
+      // flags) are the server's business and never cross to the browser
+      user={{ name: user.name, username: user.username, email: user.email }}
       rank={actor.role}
       isGuest={actor.isExternal}
       nav={buildNav({ role: actor.role, caps: [...actor.caps] })}

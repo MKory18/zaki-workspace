@@ -50,3 +50,14 @@ const GUEST_EXCLUDED: readonly TipKey[] = ["tips.chat", "tips.files"];
 export function tipsFor(audience: "everyone" | "staff" | "managers" = "staff"): readonly TipKey[] {
   return audience === "everyone" ? TIP_KEYS.filter((k) => !GUEST_EXCLUDED.includes(k)) : TIP_KEYS;
 }
+
+/**
+ * The tip for a seed AND a level: what the loading screen uses, so a guest is never told about a
+ * feature the server refuses them. Still a pure function of two values (server and client agree),
+ * and every seed still gets its turn inside the level's own list.
+ */
+export function tipForAudience(seed: number, audience: "everyone" | "staff" | "managers" = "staff"): TipKey {
+  const list = tipsFor(audience);
+  const whole = Number.isFinite(seed) ? Math.trunc(Math.abs(seed)) : 0;
+  return list[whole % list.length] as TipKey;
+}

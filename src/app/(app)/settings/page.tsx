@@ -74,9 +74,9 @@ export default async function SettingsPage() {
       {/* integrations */}
       <section className="space-y-3 rounded-xl border border-border bg-surface-1 p-5">
         <h2 className="text-sm font-semibold">{t("settings.integrations")}</h2>
-        <IntegrationBadge ok={Boolean(telegram?.connected)} label="Telegram" href="/telegram" />
-        <IntegrationBadge ok={Boolean(n8n?.connected)} label="n8n" href="/automation" />
-        <IntegrationBadge ok={google.connected} label="Google Drive" href="/automation" muted={google.connected ? null : google.configured ? "google.notConnected" : "google.needsEnv"} />
+        <IntegrationBadge ok={Boolean(telegram?.connected)} label={t("nav.telegram")} href="/telegram" />
+        <IntegrationBadge ok={Boolean(n8n?.connected)} label={t("nav.n8n")} href="/automation" />
+        <IntegrationBadge ok={google.connected} label={t("settings.google_drive")} href="/automation" muted={google.connected ? null : google.configured ? "google.notConnected" : "google.needsEnv"} />
       </section>
 
       {/* security & personal */}

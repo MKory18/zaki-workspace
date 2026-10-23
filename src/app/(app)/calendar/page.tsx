@@ -20,12 +20,12 @@ export default async function CalendarPage({
 
   if ("none" in view) {
     return (
-      <main className="grid h-full place-items-center p-8 text-center">
+      <div className="grid h-full place-items-center p-8 text-center">
         <div>
           <h1 className="text-base font-semibold text-fg">{t("cal.title")}</h1>
           <p className="mt-1 text-sm text-muted">{t("list.noWorkspace")}</p>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -67,7 +67,7 @@ export default async function CalendarPage({
   const mineUrl = `/calendar?workspace=${ctx.workspaceId}&month=${month}${mine ? "" : "&mine=1"}`;
 
   return (
-    <main className="flex h-full min-w-0 flex-col overflow-y-auto">
+    <div className="flex h-full min-w-0 flex-col overflow-y-auto">
       <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-5 py-3">
         <div className="flex-1">
           <h1 className="text-base font-semibold text-fg">{t("cal.title")}</h1>
@@ -103,7 +103,7 @@ export default async function CalendarPage({
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 

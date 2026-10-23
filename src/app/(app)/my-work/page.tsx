@@ -28,7 +28,7 @@ export default async function MyWorkPage({ searchParams }: { searchParams: { tab
   const rows = data[tab];
 
   return (
-    <main className="flex h-full min-w-0 flex-col overflow-y-auto">
+    <div className="flex h-full min-w-0 flex-col overflow-y-auto">
       <header className="border-b border-border bg-surface px-5 py-4">
         <h1 className="text-base font-semibold text-fg">{t("mywork.title")}</h1>
         <p className="text-xs text-fg-muted">{t("mywork.subtitle")}</p>
@@ -66,7 +66,7 @@ export default async function MyWorkPage({ searchParams }: { searchParams: { tab
           </ul>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 
