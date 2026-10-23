@@ -246,13 +246,17 @@ export async function conversationDetail(
   };
 }
 
-/** Shared guard: the conversation exists, is of this org, and facts/org are non-null. */
+/**
+ * Shared guard of every topic action: the conversation exists, is of this org, IS A TOPIC, and
+ * facts/org are non-null. A DM or a group is not a topic: joining it, adding or removing its people,
+ * renaming or closing it through these doors is "not found" (spec: never someone else's DM).
+ */
 export async function guardTopic(ctx: OrgAccessContext, conversationId: string) {
   const [facts, org] = await Promise.all([
     loadConversationFacts(ctx.userId, conversationId),
     loadOrgFacts(ctx.userId, ctx.orgId),
   ]);
-  if (!facts || !org || facts.orgId !== ctx.orgId) throw new NotFoundError("chat.e.not_found");
+  if (!facts || !org || facts.orgId !== ctx.orgId || facts.kind !== "TOPIC") throw new NotFoundError("chat.e.not_found");
   return { facts, org };
 }
 
