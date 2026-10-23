@@ -14,7 +14,7 @@ import {
 import { emitRealtime } from "@/server/realtime/emit";
 import { claimUploads, MAX_ATTACHMENTS_PER_MESSAGE } from "@/server/chat/attachments";
 import { presentMessage, previewOf, type Viewer } from "@/server/chat/redact";
-import { notifyMessageToAudience, audienceOf, rewriteMessagePreviews, DELETED_PREVIEW } from "@/server/chat/notify";
+import { notifyMessageToAudience, notifyCandidates, readersAmong, rewriteMessagePreviews, DELETED_PREVIEW } from "@/server/chat/notify";
 import { FixedWindowLimiter, RateLimitedError } from "@/server/rate-limit";
 import type { Prisma } from "@prisma/client";
 import type { MessageDto } from "@/server/chat/dto";
@@ -107,8 +107,9 @@ export async function sendMessage(
     if (!parent) throw new NotFoundError("chat.e.reply_not_found");
   }
 
-  // mentions must be people the audience contains (or the owner, who may join first)
-  const mentionIds = [...new Set(input.mentions ?? [])].filter((id) => facts.memberIds.includes(id));
+  // mentions must be people who may read the conversation (the policy decides, not a member row:
+  // an open topic's audience is its whole space, and a row left behind by a removal counts for nothing)
+  const mentionIds = await readersAmong(conversationId, [...new Set(input.mentions ?? [])]);
 
   // idempotent send: the same clientId of the same author returns the same message
   if (input.clientId) {
@@ -170,17 +171,13 @@ async function notifyAfterSend(
   replyToId: string | null,
   dto: MessageDto,
 ): Promise<void> {
-  const audience = new Set(audienceOf(facts, ctx.userId));
-  if (replyToId) {
-    const parent = await db.chatMessage.findUnique({ where: { id: replyToId }, select: { authorId: true } });
-    if (parent && audience.has(parent.authorId)) audience.add(parent.authorId);
-  }
-  for (const id of mentionIds) audience.add(id);
+  const parent = replyToId ? await db.chatMessage.findUnique({ where: { id: replyToId }, select: { authorId: true } }) : null;
+  const audience = await readersAmong(conversationId, notifyCandidates(facts, ctx.userId, mentionIds, parent?.authorId ?? null));
   const isDm = facts.kind === "DM";
   await notifyMessageToAudience({
     conversationId,
     authorId: ctx.userId,
-    audienceIds: [...audience],
+    audienceIds: audience,
     kind: isDm ? "DM" : "TOPIC",
     title: isDm ? dto.authorName : dto.authorName,
     messageId: dto.id,
