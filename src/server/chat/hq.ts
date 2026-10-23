@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import type { Prisma } from "@prisma/client";
 
 /**
  * The company space (HQ). Its shape is NOT invented here: it is the shape the data move created
@@ -61,19 +62,19 @@ export async function hqTopicIds(orgId: string): Promise<Record<string, string |
  * Ensures HQ exists for the org exactly as the data move made it (idempotent, same ids).
  * Returns the space id.
  */
-export async function ensureHqSpace(orgId: string, name: string): Promise<string> {
-  const existing = await hqSpaceId(orgId);
-  if (existing) return existing;
+export async function ensureHqSpace(orgId: string, name: string, tx: Prisma.TransactionClient | typeof db = db): Promise<string> {
+  const existing = await tx.workspace.findFirst({ where: { organizationId: orgId, systemKey: HQ_SYSTEM_KEY }, select: { id: true } });
+  if (existing) return existing.id;
 
   const spaceId = hqSpaceIdOf(orgId);
-  await db.workspace.upsert({
+  await tx.workspace.upsert({
     where: { id: spaceId },
     create: { id: spaceId, organizationId: orgId, name, slug: "hq", kind: "HQ", emoji: "🏢", systemKey: HQ_SYSTEM_KEY },
     update: {},
   });
 
   for (const t of HQ_TOPICS) {
-    await db.conversation.upsert({
+    await tx.conversation.upsert({
       where: { id: hqTopicIdOf(orgId, t.key) },
       create: {
         id: hqTopicIdOf(orgId, t.key),
@@ -118,12 +119,47 @@ export async function addOrgToHq(orgId: string): Promise<void> {
 }
 
 /** Puts one person in HQ (a reactivated member comes back this way). */
-export async function addPersonToHq(orgId: string, userId: string, role: string): Promise<void> {
+export async function addPersonToHq(orgId: string, userId: string, role: string, tx: Prisma.TransactionClient | typeof db = db): Promise<void> {
   if (role === "OWNER" || role === "GUEST") return;
-  const spaceId = await ensureHqSpace(orgId, "الشركة");
-  await db.workspaceMember.upsert({
+  const membership = await tx.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: orgId, userId } }, select: { status: true, role: true } });
+  if (!membership || membership.status !== "ACTIVE" || membership.role === "OWNER" || membership.role === "GUEST") return;
+  const spaceId = await ensureHqSpace(orgId, "الشركة", tx);
+  await tx.workspaceMember.upsert({
     where: { workspaceId_userId: { workspaceId: spaceId, userId } },
-    create: { workspaceId: spaceId, userId, role: role === "ADMIN" ? "ADMIN" : "MEMBER" },
-    update: { role: role === "ADMIN" ? "ADMIN" : "MEMBER" },
+    create: { workspaceId: spaceId, userId, role: membership.role === "ADMIN" ? "ADMIN" : "MEMBER" },
+    update: { role: membership.role === "ADMIN" ? "ADMIN" : "MEMBER" },
+  });
+}
+
+// ---------- hooks for the services (accounts.ts) ----------
+
+/**
+ * Takes one person out of the HQ topics (their DMs stay, so the other side keeps the history).
+ * Works inside a transaction (the offboarding's) or alone. Idempotent.
+ */
+export async function removePersonFromHq(
+  tx: Prisma.TransactionClient | typeof db,
+  orgId: string,
+  userId: string,
+): Promise<void> {
+  const spaceId = await hqSpaceId(orgId);
+  if (!spaceId) return;
+  await tx.conversationMember.deleteMany({
+    where: { userId, conversation: { spaceId } },
+  });
+}
+
+/** The audit row of a chat removal from HQ (an action of its own, so the archive can find it). */
+export async function removePersonAudit(orgId: string, actorId: string, userId: string): Promise<void> {
+  const spaceId = await hqSpaceId(orgId);
+  await db.auditLog.create({
+    data: {
+      action: "org.member_offboarded_chat",
+      actorId,
+      orgId,
+      target: userId,
+      workspaceId: spaceId,
+      meta: { scope: "hq" },
+    },
   });
 }

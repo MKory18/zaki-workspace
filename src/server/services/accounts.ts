@@ -18,6 +18,7 @@ import { canManageDepartments } from "@/server/services/departments";
 import { activeMember } from "@/server/services/active-people";
 import { pushNotification } from "@/server/notify";
 import { getServerT } from "@/lib/i18n/server";
+import { addPersonToHq, removePersonAudit, removePersonFromHq } from "@/server/chat/hq";
 import { ROLE_KEYS } from "@/lib/i18n/roles";
 import { generateTemporaryPassword, passwordSchema, usernameSchema } from "@/server/services/credentials";
 import {
@@ -367,6 +368,7 @@ export async function createAccount(actor: Actor, input: CreateAccountInput): Pr
           data: workspaceIds.map((workspaceId) => ({ workspaceId, userId: user.id, role: spaceRole })),
         });
       }
+      await addPersonToHq(actor.orgId, user.id, input.role, tx);
       return user.id;
     });
   } catch (err) {
@@ -511,9 +513,11 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
 async function alignSpaceRoles(tx: Prisma.TransactionClient, orgId: string, userId: string, from: OrgRole, to: OrgRole) {
   const rows = { userId, workspace: { organizationId: orgId } };
   if (to === "GUEST") {
+    await tx.workspaceMember.deleteMany({ where: { ...rows, workspace: { organizationId: orgId, kind: "HQ" } } });
     await tx.workspaceMember.updateMany({ where: { ...rows, role: { not: "GUEST" } }, data: { role: "GUEST" } });
   } else if (from === "GUEST") {
     await tx.workspaceMember.updateMany({ where: { ...rows, role: "GUEST" }, data: { role: "MEMBER" } });
+    await addPersonToHq(orgId, userId, to, tx);
   }
 }
 
@@ -554,6 +558,7 @@ async function reactivateAccount(actor: Actor, target: Target): Promise<string> 
   await db.$transaction(async (tx) => {
     await flipStatus(tx, actor, target, "reactivate", "ACTIVE");
     await endSessions(tx, target.userId, { passwordHash, mustChangePassword: true });
+    await addPersonToHq(actor.orgId, target.userId, target.role, tx);
   });
   await audit("org.member_reactivated", { actorId: actor.userId, orgId: actor.orgId, target: target.userId, meta: { from: target.status } });
   return temporaryPassword;
@@ -615,6 +620,8 @@ async function offboardAccount(actor: Actor, target: Target, transferToUserId: s
       where: { ...where, conversation: { orgId: actor.orgId, kind: { not: "DM" } } },
     });
     const departments = await tx.departmentMember.deleteMany({ where: { ...where, department: { orgId: actor.orgId } } });
+    // out of the HQ topics too (DMs stay, the other side keeps the history): inside the same transaction
+    await removePersonFromHq(tx, actor.orgId, target.userId);
     const reports = await repointReports(tx, actor.orgId, target);
     await endSessions(tx, target.userId);
     return {
@@ -635,6 +642,7 @@ async function offboardAccount(actor: Actor, target: Target, transferToUserId: s
     target: target.userId,
     meta: { from: target.status, transferTo: transferee?.userId ?? null, ...moved },
   });
+  await removePersonAudit(actor.orgId, actor.userId, target.userId);
   if (transferee && transferee.userId !== actor.userId && moved.tasks + moved.tickets + moved.routines > 0) {
     const { t } = getServerT();
     await pushNotification({

@@ -422,8 +422,8 @@ describe("the last space ADMIN, under pressure", () => {
     for (let round = 0; round < 8; round++) {
       const w = await makeSpaceWorld({ lead: "ADMIN", member: "ADMIN" });
       const results = await Promise.allSettled([
-        changeWorkspaceMembers({ orgRole: "MEMBER" }, w.ws.id, { demote: [w.lead.id] }),
-        changeWorkspaceMembers({ orgRole: "MEMBER" }, w.ws.id, { demote: [w.member.id] }),
+        changeWorkspaceMembers({ userId: w.lead.id, orgRole: "MEMBER" }, w.ws.id, { demote: [w.lead.id] }),
+        changeWorkspaceMembers({ userId: w.member.id, orgRole: "MEMBER" }, w.ws.id, { demote: [w.member.id] }),
       ]);
       const admins = await db.workspaceMember.count({ where: { workspaceId: w.ws.id, role: "ADMIN" } });
       expect(admins, `round ${round}: the space kept an ADMIN`).toBe(1);
@@ -439,8 +439,8 @@ describe("the last space ADMIN, under pressure", () => {
     for (let round = 0; round < 8; round++) {
       const w = await makeSpaceWorld({ lead: "ADMIN", member: "ADMIN" });
       await Promise.allSettled([
-        changeWorkspaceMembers({ orgRole: "ADMIN" }, w.ws.id, { remove: [w.lead.id] }),
-        changeWorkspaceMembers({ orgRole: "ADMIN" }, w.ws.id, { remove: [w.member.id] }),
+        changeWorkspaceMembers({ userId: w.lead.id, orgRole: "ADMIN" }, w.ws.id, { remove: [w.lead.id] }),
+        changeWorkspaceMembers({ userId: w.member.id, orgRole: "ADMIN" }, w.ws.id, { remove: [w.member.id] }),
       ]);
       expect(await db.workspaceMember.count({ where: { workspaceId: w.ws.id, role: "ADMIN" } }), `round ${round}`).toBe(1);
     }

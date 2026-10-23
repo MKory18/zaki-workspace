@@ -5,6 +5,7 @@ import { log } from "@/server/log";
 import { audit, hashPassword } from "@/server/auth";
 import { ForbiddenError } from "@/server/auth";
 import { DEFAULT_TRANSPARENCY_VERSION } from "@/server/policy/org-settings";
+import { addOrgToHq } from "@/server/chat/hq";
 import type { OrgRole } from "@prisma/client";
 
 export interface RegisterOrgInput {
@@ -84,7 +85,7 @@ export async function registerOrganization(input: RegisterOrgInput & ProfileFiel
             },
           },
         },
-        select: { id: true },
+        select: { id: true, memberships: { where: { status: "ACTIVE" }, select: { organizationId: true } } },
       });
     });
 
@@ -95,6 +96,15 @@ export async function registerOrganization(input: RegisterOrgInput & ProfileFiel
       log.error("audit.write_failed", {
         action: "user.registered",
         actor: user.id,
+        detail: err instanceof Error ? err.name : String(err).slice(0, 80),
+      });
+    }
+    // the HQ space and its topics follow the company (idempotent; never fails the registration)
+    try {
+      await addOrgToHq(user.memberships[0]!.organizationId);
+    } catch (err) {
+      log.error("hq.ensure_failed", {
+        org: user.memberships[0]?.organizationId,
         detail: err instanceof Error ? err.name : String(err).slice(0, 80),
       });
     }

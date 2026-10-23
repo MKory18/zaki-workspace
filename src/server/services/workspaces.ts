@@ -181,7 +181,7 @@ export interface MemberChanges {
  * Returns who was newly put in (and so has to be told); nobody is told about a repair or a repeat.
  */
 export async function changeWorkspaceMembers(
-  ctx: Pick<OrgAccessContext, "orgRole">,
+  ctx: Pick<OrgAccessContext, "userId" | "orgRole">,
   workspaceId: string,
   changes: MemberChanges,
 ): Promise<{ added: string[] }> {
@@ -261,6 +261,16 @@ export async function changeWorkspaceMembers(
     }
     if (remove.length) {
       await tx.workspaceMember.deleteMany({ where: { workspaceId, userId: { in: remove } } });
+      // the moderation trail of the space: who was taken out of it (ids only, no content)
+      await tx.auditLog.createMany({
+        data: remove.map((userId) => ({
+          action: "workspace.member_removed",
+          actorId: ctx.userId,
+          orgId: ws.organizationId,
+          target: userId,
+          workspaceId,
+        })),
+      });
     }
     return { added: add.filter((id) => !rowRole.has(id)) };
   });

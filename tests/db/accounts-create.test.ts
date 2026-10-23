@@ -251,7 +251,8 @@ describe("creating an account: spaces and manager", () => {
     const res = await accountsApi.create(org.id, { name: "Designer", username: username(), workspaceIds: [ws1.id, ws2.id, ws1.id] });
     expect(res.status).toBe(201);
     const rows = await db.workspaceMember.findMany({ where: { userId: (res.json as { userId: string }).userId } });
-    expect(rows.map((r) => [r.workspaceId, r.role]).sort()).toEqual([[ws1.id, "MEMBER"], [ws2.id, "MEMBER"]].sort());
+    const hq = await db.workspace.findFirstOrThrow({ where: { organizationId: org.id, systemKey: "hq" } });
+    expect(rows.map((r) => [r.workspaceId, r.role]).sort()).toEqual([[ws1.id, "MEMBER"], [ws2.id, "MEMBER"], [hq.id, "MEMBER"]].sort());
 
     const partner = await accountsApi.create(org.id, { name: "Partner", username: username(), role: "GUEST", workspaceIds: [ws1.id] });
     const guestRows = await db.workspaceMember.findMany({ where: { userId: (partner.json as { userId: string }).userId } });

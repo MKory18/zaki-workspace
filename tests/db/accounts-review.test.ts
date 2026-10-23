@@ -434,7 +434,8 @@ describe("L3: offboarding takes the person out of everything and hands over what
     expect((await accountsApi.status(w.org.id, w.leaver.id, { action: "reactivate" })).status).toBe(200);
     expect(await db.conversationMember.count({ where: { conversationId: w.group.id, userId: w.leaver.id } })).toBe(0);
     expect(await db.departmentMember.count({ where: { userId: w.leaver.id } })).toBe(0);
-    expect(await db.workspaceMember.count({ where: { userId: w.leaver.id } })).toBe(0);
+    expect(await db.workspaceMember.count({ where: { userId: w.leaver.id, workspace: { organizationId: w.org.id, systemKey: { not: "hq" } } } })).toBe(0);
+    expect(await db.workspaceMember.count({ where: { userId: w.leaver.id, workspace: { organizationId: w.org.id, systemKey: "hq" } } })).toBe(1);
     expect((await db.department.findUniqueOrThrow({ where: { id: w.dept.id } })).leadId).toBeNull();
   });
 
