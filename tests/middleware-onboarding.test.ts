@@ -112,6 +112,29 @@ describe("middleware: unfinished onboarding goes to /onboarding", () => {
     }
   });
 
+  it("with APP_URL set, a forwarded host that is not APP_URL's never becomes the redirect's host (review B5)", async () => {
+    const saved = process.env["APP_URL"];
+    process.env["APP_URL"] = "https://workspace.zakiai.io";
+    try {
+      // a hostile header: the Location is relative, so the browser stays on the address it used
+      const hostile = await middleware(
+        new NextRequest("http://localhost:3001/projects", { headers: new Headers({ host: "localhost:3001", "x-forwarded-host": "evil.example", "x-forwarded-proto": "https" }) }),
+      );
+      expect(hostile.status).toBe(307);
+      expect(hostile.headers.get("location")).toBe("/login?next=%2Fprojects");
+      // the configured public host: an absolute redirect to it, as before
+      const real = await middleware(
+        new NextRequest("http://localhost:3001/projects", { headers: new Headers({ host: "localhost:3001", "x-forwarded-host": "workspace.zakiai.io", "x-forwarded-proto": "https" }) }),
+      );
+      const loc = new URL(real.headers.get("location") as string);
+      expect(loc.origin).toBe("https://workspace.zakiai.io");
+      expect(loc.pathname + loc.search).toBe("/login?next=%2Fprojects");
+    } finally {
+      if (saved === undefined) delete process.env["APP_URL"];
+      else process.env["APP_URL"] = saved;
+    }
+  });
+
   it("a ?next= is only ever a path on this site", async () => {
     const res = await middleware(req("//evil.example/x"));
     expect(res.status).toBe(307);

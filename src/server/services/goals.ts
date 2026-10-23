@@ -3,7 +3,7 @@ import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, audit } from "@/server/auth";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { canManageOrg } from "@/server/services/orgs";
-import { orgRoleOf } from "@/server/services/production";
+import { assertDepartmentInOrg, orgRoleOf } from "@/server/services/production";
 import { resolveTimeZone, zonedParts, zonedWallTime } from "@/lib/zoned-time";
 
 export type GoalPeriodT = "WEEKLY" | "MONTHLY";
@@ -99,6 +99,7 @@ async function orgZone(orgId: string): Promise<string> {
 
 export async function createGoal(ctx: { orgId: string; userId: string }, input: z.infer<typeof goalSchema>) {
 	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
+	await assertDepartmentInOrg(ctx.orgId, input.departmentId);
 	const anchor = parseAnchor(input.anchorDate);
 	// the period is the company's week / month, cut in its zone
 	const win = periodWindow(input.period, anchor, await orgZone(ctx.orgId));
@@ -127,6 +128,7 @@ export async function updateGoal(ctx: { orgId: string; userId: string }, id: str
 	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
 	const existing = await db.goal.findFirst({ where: { id, orgId: ctx.orgId }, select: { id: true, periodStart: true, periodEnd: true, period: true } });
 	if (!existing) throw new NotFoundError("goal.not_found");
+	await assertDepartmentInOrg(ctx.orgId, input.departmentId);
 	let data: Record<string, unknown> = {
 		title: input.title ?? undefined,
 		description: input.description ?? undefined,
