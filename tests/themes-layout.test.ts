@@ -4,7 +4,6 @@ import path from "node:path";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Metadata } from "next";
-import { DEFAULT_THEME } from "@/lib/themes/registry";
 
 /**
  * The root layout paints the chosen theme on the SERVER, from the cookie: no script, no flash.
@@ -25,10 +24,6 @@ vi.mock("next/font/google", () => ({
   IBM_Plex_Sans_Arabic: (opts: unknown) => {
     googleFont.calls.push(opts);
     return { variable: "plex-variable", className: "plex-class", style: { fontFamily: "plex" } };
-  },
-  Lalezar: (opts: unknown) => {
-    googleFont.calls.push(opts);
-    return { variable: "lalezar-variable", className: "lalezar-class", style: { fontFamily: "lalezar" } };
   },
 }));
 vi.mock("next/font/local", () => ({
@@ -60,14 +55,14 @@ function render(): Html {
 beforeEach(() => jar.clear());
 
 describe("the root layout paints the theme from the cookie", () => {
-  it("Arabic, right-to-left, the default theme (the adopted night, with the dark class) when there is no cookie", () => {
+  it("Arabic, right-to-left, the default theme (light, no dark class) when there is no cookie", () => {
     const html = render();
     expect(html.type).toBe("html");
     expect(html.props.lang).toBe("ar");
     expect(html.props.dir).toBe("rtl");
-    expect(html.props["data-theme"]).toBe(DEFAULT_THEME);
+    expect(html.props["data-theme"]).toBe("islamic-calm");
     expect(html.props["data-decor"]).toBe("light");
-    expect(html.props.className.split(/\s+/)).toContain("dark");
+    expect(html.props.className.split(/\s+/)).not.toContain("dark");
   });
 
   it("a dark theme from the cookie carries the dark class (Tailwind's dark: variants)", () => {
@@ -89,7 +84,7 @@ describe("the root layout paints the theme from the cookie", () => {
   it("an old or forged cookie value is the default theme, never an attribute that matches nothing", () => {
     for (const value of ["system", "dark", "neon", '"><script>', ""]) {
       jar.set("zaki_theme", value);
-      expect(render().props["data-theme"], value).toBe(DEFAULT_THEME);
+      expect(render().props["data-theme"], value).toBe("islamic-calm");
     }
   });
 
@@ -112,7 +107,7 @@ describe("the root layout paints the theme from the cookie", () => {
 
   it("keeps the fonts' CSS variables on <html> and tolerates attributes added by browser extensions", () => {
     const html = render();
-    expect(html.props.className.split(/\s+/)).toEqual(expect.arrayContaining(["plex-variable", "reem-variable", "lalezar-variable"]));
+    expect(html.props.className.split(/\s+/)).toEqual(expect.arrayContaining(["plex-variable", "reem-variable"]));
     expect(html.props.suppressHydrationWarning).toBe(true);
   });
 });
@@ -143,7 +138,7 @@ describe("metadata and the browser chrome colour", () => {
   });
 
   it("the browser bar takes the chosen theme's page colour", () => {
-    expect(layout.generateViewport().themeColor).toBe("#050F1F");
+    expect(layout.generateViewport().themeColor).toBe("#F6F1E7");
     jar.set("zaki_theme", "neon-coast");
     expect(layout.generateViewport()).toMatchObject({ width: "device-width", initialScale: 1, themeColor: "#061C28" });
   });

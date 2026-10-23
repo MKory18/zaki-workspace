@@ -94,7 +94,7 @@ export function NotificationBell({ defaultOpen = false }: { defaultOpen?: boolea
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((v) => !v)}
-        className="relative grid size-11 place-items-center rounded-xl border border-border bg-surface-1 text-fg-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-inset md:hover:[@media(hover:hover)]:bg-surface-2 md:hover:[@media(hover:hover)]:text-fg"
+        className="relative grid size-11 place-items-center rounded-full text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-inset md:hover:bg-transparent md:hover:text-fg-muted md:hover:[@media(hover:hover)]:bg-surface-2 md:hover:[@media(hover:hover)]:text-fg"
       >
         <Bell aria-hidden="true" className="size-5" />
         {unread > 0 ? (

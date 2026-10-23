@@ -9,11 +9,11 @@
  * The colours are in palettes.ts; the stylesheet they become is src/app/themes.css (generated).
  */
 
-export const THEME_KEYS = ["islamic-epic", "day", "islamic-calm", "neon-coast"] as const;
+export const THEME_KEYS = ["islamic-calm", "islamic-epic", "neon-coast", "day"] as const;
 export type ThemeKey = (typeof THEME_KEYS)[number];
 
-/** The adopted look is the night: everybody who has not chosen starts there. */
-export const DEFAULT_THEME: ThemeKey = "islamic-epic";
+/** Calm Islamic: the default for everybody who has not chosen. */
+export const DEFAULT_THEME: ThemeKey = "islamic-calm";
 
 export interface ThemeInfo {
   key: ThemeKey;
@@ -24,10 +24,10 @@ export interface ThemeInfo {
 }
 
 export const THEMES: Record<ThemeKey, ThemeInfo> = {
-  "islamic-epic": { key: "islamic-epic", dark: true, headingFont: "reem-kufi" },
-  day: { key: "day", dark: false, headingFont: "reem-kufi" },
   "islamic-calm": { key: "islamic-calm", dark: false, headingFont: "reem-kufi" },
+  "islamic-epic": { key: "islamic-epic", dark: true, headingFont: "reem-kufi" },
   "neon-coast": { key: "neon-coast", dark: true, headingFont: "plex" },
+  day: { key: "day", dark: false, headingFont: "plex" },
 };
 
 /** The themes in the order the picker shows them. */

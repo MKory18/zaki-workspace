@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Check } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 import type { TodayTask } from "@/lib/today";
@@ -14,20 +15,20 @@ export type RowTone = "overdue" | "today" | "later";
 
 /** Only the two priorities that ask for attention get a mark: a calm list does not label every row «عادية». */
 const PRIORITY_MARK: Partial<Record<string, string>> = {
-  URGENT: "text-danger",
-  HIGH: "text-warn",
+  URGENT: "border-danger/40 text-danger",
+  HIGH: "border-warn/40 text-warn",
 };
 
 /**
- * One task of «مهمّاتي اليوم», in the mockup's shape: a 30px circle that fills with the gold star
- * when the task is finished, and beside it the title over its project, its day and its priority.
+ * One task of «مهامي اليوم»: the circle at the start finishes it (the guide calls it «الدائرة اللي بأول المهمة»),
+ * the rest of the row opens it.
  *
- * - The circle is a 44px target around a 30px drawing, and it is there only when the person may
- *   change the task. Pressing it is OPTIMISTIC: the star appears at once,
- *   `POST /api/tasks/<id>/complete` goes out, and on success the page is refreshed (the task leaves
- *   the list); if the server says no, the row comes back and the reason is said in Arabic in a toast.
- * - The due day arrives already written (in the company's zone, by the server), so this part does no
- *   date maths and cannot disagree with the server about what «اليوم» is.
+ * - The circle is a 44px target around a 24px drawing, and it is there only when the person may change the
+ *   task. Pressing it is OPTIMISTIC: the row is crossed out at once, `POST /api/tasks/<id>/complete` goes out,
+ *   and on success the page is refreshed (the task leaves the list); if the server says no, the row comes back
+ *   and the reason is said in Arabic in a toast.
+ * - The due day arrives already written (in the company's zone, by the server), so this part does no date maths
+ *   and cannot disagree with the server about what «اليوم» is. Under «اليوم» it is not repeated on every row.
  */
 export function TodayTaskRow({ task, tone }: { task: TodayTask; tone: RowTone }) {
   const { t } = useI18n();
@@ -52,37 +53,34 @@ export function TodayTaskRow({ task, tone }: { task: TodayTask; tone: RowTone })
   const mark = PRIORITY_MARK[task.priority];
 
   return (
-    <li className="zk-task flex items-center gap-3 rounded-xl px-1.5 py-2.5 transition-colors hover:bg-surface-2">
+    <li className="flex items-center gap-1">
       {task.editable ? (
         <button
           type="button"
           onClick={complete}
           disabled={done}
           aria-label={t("today.done_aria", { title: task.title })}
-          className="group/done grid size-11 shrink-0 place-items-center rounded-full"
+          className="group/done flex size-11 shrink-0 items-center justify-center rounded-full"
         >
-          <span className={cn("zk-check", done && "zk-check-done")}>
-            <span
-              aria-hidden="true"
-              className={cn(
-                "zk-star size-[18px] text-accent-2 transition-transform duration-300 motion-reduce:transition-none",
-                done ? "scale-100" : "scale-0 group-hover/done:scale-100",
-              )}
-            />
+          <span
+            className={cn(
+              "flex size-6 items-center justify-center rounded-full border-2 transition-colors motion-reduce:transition-none",
+              done ? "border-ok bg-ok text-ok-fg" : "border-muted text-muted/80 group-hover/done:border-ok group-hover/done:text-ok",
+            )}
+          >
+            <Check className="size-3.5" aria-hidden="true" />
           </span>
         </button>
-      ) : (
-        <span aria-hidden="true" className="size-11 shrink-0" />
-      )}
+      ) : null}
       <Link
         href={`/tasks/${task.id}`}
         prefetch={false}
-        className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-lg py-0.5"
+        className={cn("flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-lg py-2 transition-colors hover:bg-surface-2", task.editable ? "pe-2 ps-1" : "px-3")}
       >
-        <span className={cn("truncate text-[15px] font-semibold leading-6", done ? "text-muted line-through decoration-accent-2" : "text-fg")}>
+        <span className={cn("line-clamp-2 break-words text-[15px] font-medium leading-6", done ? "text-fg-muted line-through" : "text-fg")}>
           <bdi>{task.title}</bdi>
         </span>
-        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-5 text-muted">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-fg-muted">
           <span className="min-w-0 max-w-full truncate">
             <bdi>{task.projectName}</bdi>
           </span>
@@ -92,7 +90,7 @@ export function TodayTaskRow({ task, tone }: { task: TodayTask; tone: RowTone })
               <span className={tone === "overdue" ? "text-danger" : undefined}>{task.dueLabel}</span>
             </>
           ) : null}
-          {mark ? <span className={cn("rounded-md border border-border px-2 text-xs font-medium", mark)}>{task.priorityLabel}</span> : null}
+          {mark ? <span className={cn("rounded-full border px-2 text-xs font-medium", mark)}>{task.priorityLabel}</span> : null}
         </span>
       </Link>
     </li>

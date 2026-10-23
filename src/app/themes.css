@@ -6,102 +6,35 @@
  */
 
 :root {
-  color-scheme: dark;
-  --surface: 5 15 31;
-  --surface-1: 10 26 46;
-  --surface-2: 15 36 56;
-  --border: 28 58 82;
-  --muted: 159 182 194;
-  --fg: 230 241 244;
-  --fg-muted: 175 196 206;
-  --accent: 54 181 204;
-  --accent-fg: 4 24 43;
-  --accent-2: 227 176 75;
-  --ok: 36 219 112;
-  --warn: 233 142 63;
-  --danger: 245 123 126;
-  --info: 143 168 255;
-  --ok-fg: 4 24 43;
-  --warn-fg: 4 24 43;
-  --danger-fg: 4 24 43;
-  --info-fg: 4 24 43;
-  --scrim: 3 8 18;
-  --cat-1: 174 124 240;
-  --cat-2: 223 103 203;
-  --cat-3: 244 134 173;
-  --cat-4: 98 198 218;
-  --cat-5: 174 213 97;
-  --cat-6: 117 141 248;
-  --on-photo: 255 255 255;
-  --font-display: var(--font-reem, "Reem Kufi"), var(--font-plex, "IBM Plex Sans Arabic"), "Segoe UI", Tahoma, sans-serif;
-  --radius-card: 1.125rem;
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.52), 0 1px 3px rgb(0 0 0 / 0.30);
-}
-
-[data-theme="islamic-epic"] {
-  color-scheme: dark;
-  --surface: 5 15 31;
-  --surface-1: 10 26 46;
-  --surface-2: 15 36 56;
-  --border: 28 58 82;
-  --muted: 159 182 194;
-  --fg: 230 241 244;
-  --fg-muted: 175 196 206;
-  --accent: 54 181 204;
-  --accent-fg: 4 24 43;
-  --accent-2: 227 176 75;
-  --ok: 36 219 112;
-  --warn: 233 142 63;
-  --danger: 245 123 126;
-  --info: 143 168 255;
-  --ok-fg: 4 24 43;
-  --warn-fg: 4 24 43;
-  --danger-fg: 4 24 43;
-  --info-fg: 4 24 43;
-  --scrim: 3 8 18;
-  --cat-1: 174 124 240;
-  --cat-2: 223 103 203;
-  --cat-3: 244 134 173;
-  --cat-4: 98 198 218;
-  --cat-5: 174 213 97;
-  --cat-6: 117 141 248;
-  --on-photo: 255 255 255;
-  --font-display: var(--font-reem, "Reem Kufi"), var(--font-plex, "IBM Plex Sans Arabic"), "Segoe UI", Tahoma, sans-serif;
-  --radius-card: 1.125rem;
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.52), 0 1px 3px rgb(0 0 0 / 0.30);
-}
-
-[data-theme="day"] {
   color-scheme: light;
-  --surface: 246 242 234;
-  --surface-1: 255 253 248;
-  --surface-2: 239 233 222;
-  --border: 216 206 188;
-  --muted: 94 107 114;
-  --fg: 12 50 82;
-  --fg-muted: 78 90 96;
-  --accent: 26 99 130;
+  --surface: 246 241 231;
+  --surface-1: 255 255 255;
+  --surface-2: 242 242 242;
+  --border: 219 219 219;
+  --muted: 85 113 110;
+  --fg: 29 42 41;
+  --fg-muted: 63 99 94;
+  --accent: 14 94 85;
   --accent-fg: 255 255 255;
-  --accent-2: 168 118 31;
-  --ok: 26 115 54;
-  --warn: 144 86 14;
-  --danger: 180 35 24;
-  --info: 9 73 130;
+  --accent-2: 162 130 42;
+  --ok: 2 117 57;
+  --warn: 137 92 10;
+  --danger: 193 34 21;
+  --info: 40 99 171;
   --ok-fg: 255 255 255;
   --warn-fg: 255 255 255;
   --danger-fg: 255 255 255;
   --info-fg: 255 255 255;
-  --scrim: 12 26 43;
-  --cat-1: 98 79 145;
-  --cat-2: 157 61 141;
-  --cat-3: 143 74 98;
-  --cat-4: 10 107 122;
-  --cat-5: 86 102 26;
-  --cat-6: 56 77 184;
-  --on-photo: 255 255 255;
+  --scrim: 15 26 25;
+  --cat-1: 96 41 174;
+  --cat-2: 174 41 151;
+  --cat-3: 182 40 91;
+  --cat-4: 10 111 129;
+  --cat-5: 89 109 8;
+  --cat-6: 41 41 174;
   --font-display: var(--font-reem, "Reem Kufi"), var(--font-plex, "IBM Plex Sans Arabic"), "Segoe UI", Tahoma, sans-serif;
-  --radius-card: 1.125rem;
-  --shadow-card: 0 1px 2px rgb(12 50 82 / 0.06), 0 1px 3px rgb(12 50 82 / 0.08);
+  --radius-card: 0.75rem;
+  --shadow-card: 0 1px 2px rgb(29 42 41 / 0.06), 0 1px 3px rgb(29 42 41 / 0.08);
 }
 
 [data-theme="islamic-calm"] {
@@ -131,10 +64,41 @@
   --cat-4: 10 111 129;
   --cat-5: 89 109 8;
   --cat-6: 41 41 174;
-  --on-photo: 255 255 255;
   --font-display: var(--font-reem, "Reem Kufi"), var(--font-plex, "IBM Plex Sans Arabic"), "Segoe UI", Tahoma, sans-serif;
   --radius-card: 0.75rem;
   --shadow-card: 0 1px 2px rgb(29 42 41 / 0.06), 0 1px 3px rgb(29 42 41 / 0.08);
+}
+
+[data-theme="islamic-epic"] {
+  color-scheme: dark;
+  --surface: 10 20 48;
+  --surface-1: 16 28 64;
+  --surface-2: 33 44 77;
+  --border: 64 73 102;
+  --muted: 167 159 139;
+  --fg: 238 236 231;
+  --fg-muted: 195 185 162;
+  --accent: 212 175 90;
+  --accent-fg: 10 10 10;
+  --accent-2: 92 198 185;
+  --ok: 36 219 112;
+  --warn: 233 142 63;
+  --danger: 245 123 126;
+  --info: 98 168 218;
+  --ok-fg: 10 20 48;
+  --warn-fg: 10 20 48;
+  --danger-fg: 10 20 48;
+  --info-fg: 10 20 48;
+  --scrim: 5 11 28;
+  --cat-1: 174 124 240;
+  --cat-2: 223 103 203;
+  --cat-3: 244 134 173;
+  --cat-4: 98 198 218;
+  --cat-5: 174 213 97;
+  --cat-6: 117 141 248;
+  --font-display: var(--font-reem, "Reem Kufi"), var(--font-plex, "IBM Plex Sans Arabic"), "Segoe UI", Tahoma, sans-serif;
+  --radius-card: 0.75rem;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.52), 0 1px 3px rgb(0 0 0 / 0.30);
 }
 
 [data-theme="neon-coast"] {
@@ -164,8 +128,39 @@
   --cat-4: 77 217 219;
   --cat-5: 179 220 94;
   --cat-6: 142 148 240;
-  --on-photo: 255 255 255;
   --font-display: var(--font-plex, "IBM Plex Sans Arabic"), "Segoe UI", Tahoma, sans-serif;
   --radius-card: 0.875rem;
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.66), 0 1px 3px rgb(0 0 0 / 0.44);
+}
+
+[data-theme="day"] {
+  color-scheme: light;
+  --surface: 255 255 255;
+  --surface-1: 244 248 250;
+  --surface-2: 233 240 243;
+  --border: 213 225 230;
+  --muted: 95 108 117;
+  --fg: 12 50 82;
+  --fg-muted: 74 98 114;
+  --accent: 26 99 130;
+  --accent-fg: 255 255 255;
+  --accent-2: 46 154 173;
+  --ok: 26 115 54;
+  --warn: 144 86 14;
+  --danger: 180 35 24;
+  --info: 9 73 130;
+  --ok-fg: 255 255 255;
+  --warn-fg: 255 255 255;
+  --danger-fg: 255 255 255;
+  --info-fg: 255 255 255;
+  --scrim: 7 26 43;
+  --cat-1: 112 94 162;
+  --cat-2: 157 61 141;
+  --cat-3: 154 82 107;
+  --cat-4: 12 115 131;
+  --cat-5: 95 112 25;
+  --cat-6: 56 77 184;
+  --font-display: var(--font-plex, "IBM Plex Sans Arabic"), "Segoe UI", Tahoma, sans-serif;
+  --radius-card: 0.75rem;
+  --shadow-card: 0 1px 2px rgb(12 50 82 / 0.06), 0 1px 3px rgb(12 50 82 / 0.08);
 }

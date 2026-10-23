@@ -94,14 +94,7 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar
-          nav={nav}
-          pathname={pathname}
-          audience={audience}
-          user={user}
-          rank={rank}
-          title={place?.key === "today" ? t(place.labelKey) : undefined}
-        />
+        <TopBar nav={nav} pathname={pathname} audience={audience} user={user} rank={rank} />
         <PlaceTabs
           place={place}
           tab={tab}
