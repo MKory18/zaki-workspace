@@ -98,7 +98,7 @@ async function orgZone(orgId: string): Promise<string> {
 }
 
 export async function createGoal(ctx: { orgId: string; userId: string }, input: z.infer<typeof goalSchema>) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
 	const anchor = parseAnchor(input.anchorDate);
 	// the period is the company's week / month, cut in its zone
 	const win = periodWindow(input.period, anchor, await orgZone(ctx.orgId));
@@ -124,7 +124,7 @@ export const goalPatchSchema = goalSchema.partial().refine((v) => Object.keys(v)
 export type GoalPatch = z.infer<typeof goalPatchSchema>;
 
 export async function updateGoal(ctx: { orgId: string; userId: string }, id: string, input: GoalPatch) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
 	const existing = await db.goal.findFirst({ where: { id, orgId: ctx.orgId }, select: { id: true, periodStart: true, periodEnd: true, period: true } });
 	if (!existing) throw new NotFoundError("goal.not_found");
 	let data: Record<string, unknown> = {
@@ -148,7 +148,7 @@ export async function updateGoal(ctx: { orgId: string; userId: string }, id: str
 }
 
 export async function deleteGoal(ctx: { orgId: string; userId: string }, id: string) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("orgm.role_denied");
+	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
 	const existing = await db.goal.findFirst({ where: { id, orgId: ctx.orgId }, select: { id: true } });
 	if (!existing) throw new NotFoundError("goal.not_found");
 	await db.goal.delete({ where: { id } });

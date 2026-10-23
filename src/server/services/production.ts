@@ -207,7 +207,7 @@ export async function deleteRoutine(ctx: { orgId: string; userId: string }, id: 
 async function assertCanManageRoutines(ctx: { orgId: string; userId: string }): Promise<void> {
 	const role = await orgRoleOf(ctx.orgId, ctx.userId);
 	assertCanWrite({ orgRole: role });
-	if (!canManageOrg(role)) throw new ForbiddenError("orgm.role_denied");
+	if (!canManageOrg(role)) throw new ForbiddenError("production.routines_role_denied");
 }
 
 /** Toggle (or force) one routine's completion for one day. Any org member except a guest may check off. */

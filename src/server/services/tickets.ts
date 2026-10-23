@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { TicketStatus } from "@prisma/client";
+import { AR } from "@/lib/i18n/dict";
+import { enumLabel } from "@/lib/i18n/enums";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { nextTaskNumber, type Tx } from "@/server/services/tasks";
@@ -174,8 +176,8 @@ export async function createTicket(
     const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
     await pushNotificationToMany([input.assigneeId], {
       type: "ticket_assigned",
-      title: `${org?.keyPrefix ?? "ZK"}-T${ticket.number}`,
-      body: ticket.title,
+      title: AR["notif.type.ticket_assigned"] ?? "إشعار",
+      body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title}`,  // the label is machine text; the title is what the bell prints
       linkUrl: "/departments",
     });
   }
@@ -238,8 +240,8 @@ export async function addTicketComment(ctx: OrgAccessContext, ticketId: string, 
     const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
     await pushNotificationToMany([...new Set(watchers)], {
       type: "ticket_comment",
-      title: `${org?.keyPrefix ?? "ZK"}-T${ticket.number}`,
-      body: `${ctx.userId === ticket.assigneeId ? "" : ""}${body.slice(0, 120)}`,
+      title: AR["notif.type.ticket_comment"] ?? "إشعار",
+      body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${body.slice(0, 120)}`,  // the label rides in the body
       linkUrl: "/departments",
     });
   }
@@ -356,8 +358,8 @@ export async function updateTicket(
     const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
     await pushNotificationToMany([input.assigneeId], {
       type: "ticket_assigned",
-      title: `${org?.keyPrefix ?? "ZK"}-T${ticket.number}`,
-      body: ticket.title,
+      title: AR["notif.type.ticket_assigned"] ?? "إشعار",
+      body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title}`,  // the label is machine text; the title is what the bell prints
       linkUrl: "/departments",
     });
   }
@@ -370,8 +372,9 @@ export async function updateTicket(
       const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
       await pushNotificationToMany([...new Set(watchers)], {
         type: "ticket_status",
-        title: `${org?.keyPrefix ?? "ZK"}-T${ticket.number}`,
-        body: `${ticket.title} → ${input.status}`,
+        title: AR["notif.type.ticket_status"] ?? "إشعار",
+        // the status is an English enum on the wire; the bell gets its Arabic name from the dictionary
+        body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title} → ${enumLabel("TicketStatus", input.status)}`,
         linkUrl: "/departments",
       });
     }

@@ -1,3 +1,4 @@
+import { AR } from "@/lib/i18n/dict";
 import { db } from "./db";
 
 /**
@@ -69,11 +70,13 @@ export async function notifyAssignment(input: {
   taskId: string;
   title: string;
 }): Promise<void> {
+  // the bell prints the stored title VERBATIM (notification-bell.tsx), so the title is the Arabic
+  // phrase and the machine label goes in the body (WP-ARABIC2 (a): nothing English on screen)
   await pushNotification({
     userId: input.assigneeId,
     type: "task_assigned",
-    title: `${input.orgPrefix}-${input.taskNumber}`,
-    body: input.title,
+    title: AR["notif.type.task_assigned"] ?? "إشعار",
+    body: `${input.orgPrefix}-${input.taskNumber} · ${input.title}`,
     taskId: input.taskId,
     linkUrl: `/tasks/${input.taskId}`,
   });
@@ -91,8 +94,8 @@ export async function notifyComment(input: {
 }): Promise<void> {
   await pushNotificationToMany(input.watcherIds.filter((id) => id !== input.authorId), {
     type: "comment",
-    title: `${input.orgPrefix}-${input.taskNumber}`,
-    body: `${input.authorName}: ${input.body.slice(0, 140)}`,
+    title: AR["notif.type.comment"] ?? "إشعار",
+    body: `${input.authorName}: ${input.body.slice(0, 140)}`,  // the task label rides in the link
     taskId: input.taskId,
     linkUrl: `/tasks/${input.taskId}`,
   });
