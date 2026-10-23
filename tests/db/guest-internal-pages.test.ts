@@ -33,6 +33,7 @@ import AnalyticsPage from "@/app/(app)/analytics/page";
 import AutomationPage from "@/app/(app)/automation/page";
 import TelegramPage from "@/app/(app)/telegram/page";
 import SettingsPage from "@/app/(app)/settings/page";
+import ArchivePage from "@/app/(app)/archive/page";
 import * as goalsRoute from "@/app/api/goals/route";
 import * as goalRoute from "@/app/api/goals/[id]/route";
 import * as ideasRoute from "@/app/api/ideas/route";
@@ -372,6 +373,7 @@ const TAB_PAGES: Record<TabKey, PageCall> = {
   automation: () => AutomationPage(),
   telegram: () => TelegramPage(),
   settings: () => SettingsPage(),
+  archive: () => ArchivePage(),
 };
 
 /** The places that are one page and have no tabs (Today, the chat). */
@@ -492,10 +494,11 @@ describe("every tab of PLACES × the five ranks: a tab not offered to a guest re
       const file = path.resolve(__dirname, "../../src/app/(app)", `.${entry.href}`, "page.tsx");
       expect(existsSync(file), `${entry.label}: ${file}`).toBe(true);
     }
-    // the guest is offered Today and the four tabs about their own work, nothing else
+    // guests also get Chat for the spaces/topics explicitly shared with them.
     const guest = { role: "GUEST" as const, caps: [] };
     expect(ENTRIES.filter((entry) => entry.offered(guest)).map((entry) => entry.href)).toEqual([
       "/",
+      "/chat",
       "/my-work",
       "/projects",
       "/list",

@@ -76,6 +76,7 @@ export interface SpaceSummaryDto {
   emoji: string | null;
   kind: string;
   hasExternal: boolean;
+  canModerate: boolean;
   unread: number;
   topics: TopicSummaryDto[];
 }

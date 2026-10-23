@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MAX_SIDE, QUALITY, SKIP_BELOW_BYTES, compressImage } from "../src/lib/chat/compress-image";
 
 /**
@@ -21,6 +21,29 @@ describe("compress-image decisions", () => {
 
   it("returns null (send as-is) when the browser cannot decode", async () => {
     expect(await compressImage(BLOB("image/heic", 400 * 1024), "photo.heic")).toBeNull();
+  });
+
+  it("reports the MIME type the canvas actually produced", async () => {
+    const requested: string[] = [];
+    class FakeCanvas {
+      constructor(_width: number, _height: number) {}
+      getContext() { return { drawImage() {} }; }
+      async convertToBlob(options: { type: string }) {
+        requested.push(options.type);
+        // Simulate a browser that falls back when WebP encoding is unavailable.
+        return new Blob(["compressed"], { type: options.type === "image/webp" ? "image/png" : options.type });
+      }
+    }
+    vi.stubGlobal("createImageBitmap", async () => ({ width: 3200, height: 1800, close() {} }));
+    vi.stubGlobal("OffscreenCanvas", FakeCanvas);
+    try {
+      const result = await compressImage(new Blob([new Uint8Array(400 * 1024)], { type: "image/jpeg" }), "large.jpg");
+      expect(requested).toEqual(["image/webp"]);
+      expect(result?.mime).toBe("image/png");
+      expect(result?.blob.type).toBe(result?.mime);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("constants: longest side 1600 px, quality ~0.8", () => {

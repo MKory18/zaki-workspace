@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { KIND_LIMIT_BYTES, classifyFile, exceedsKindLimit } from "../src/lib/chat/file-kinds";
+import { KIND_LIMIT_BYTES, MAX_ATTACHMENTS_PER_MESSAGE, classifyFile, exceedsKindLimit } from "../src/lib/chat/file-kinds";
 
 describe("file-kind classifier (deliverable 5)", () => {
   it("classifies by mime first, then extension", () => {
@@ -14,6 +14,7 @@ describe("file-kind classifier (deliverable 5)", () => {
   });
 
   it("kind limits mirror the server", () => {
+    expect(MAX_ATTACHMENTS_PER_MESSAGE).toBe(10);
     expect(KIND_LIMIT_BYTES.IMAGE).toBe(15 * 1024 * 1024);
     expect(KIND_LIMIT_BYTES.VIDEO).toBe(100 * 1024 * 1024);
     expect(KIND_LIMIT_BYTES.AUDIO).toBe(10 * 1024 * 1024);

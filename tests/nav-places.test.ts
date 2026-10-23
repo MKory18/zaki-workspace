@@ -42,13 +42,14 @@ const WORK_ALL: TabKey[] = ["my-work", "projects", "list", "calendar", "goals", 
 // goals and ideas are the team's own (docs/PHASE0-AUDIT.md R10): a guest is offered the four tabs about their own work
 const WORK_GUEST: TabKey[] = ["my-work", "projects", "list", "calendar"];
 const ADMIN_ALL: TabKey[] = ["team", "reports", "automation", "telegram", "settings"];
+const ADMIN_OWNER: TabKey[] = [...ADMIN_ALL, "archive"];
 
 describe("the five places, for each kind of person", () => {
-  it("OWNER: the five places; the work place has its nine tabs and the admin place all five, labelled «الإدارة»", () => {
+  it("OWNER: the five places; the work place has its nine tabs and the admin place includes the owner-only archive tab", () => {
     const nav = buildNav(who("OWNER"));
     expect(keys(nav)).toEqual(["today", "chat", "work", "library", "admin"]);
     expect(tabs(nav, "work")).toEqual(WORK_ALL);
-    expect(tabs(nav, "admin")).toEqual(ADMIN_ALL);
+    expect(tabs(nav, "admin")).toEqual(ADMIN_OWNER);
     expect(place(nav, "admin")).toMatchObject({ labelKey: "nav.place.admin", href: "/members", icon: "admin" });
   });
 
@@ -119,21 +120,21 @@ describe("the five places, for each kind of person", () => {
     expect(tabs(nav, "work")).toEqual(WORK_ALL.filter((t) => t !== "crm"));
   });
 
-  it("GUEST (external partner): Today and Work only — no chat, no library, no admin — and four work tabs (no goals, no ideas)", () => {
+  it("GUEST (external partner): Today, Chat and Work only — no library/admin — and four work tabs", () => {
     const nav = buildNav(who("GUEST"));
-    expect(keys(nav)).toEqual(["today", "work"]);
+    expect(keys(nav)).toEqual(["today", "chat", "work"]);
     expect(tabs(nav, "work")).toEqual(WORK_GUEST);
   });
 
   it("GUEST: a capability somebody stored for them changes nothing (a guest holds none)", () => {
     const nav = buildNav({ role: "GUEST", caps: ["crm.view", "directory.view", "users.manage", "integrations.manage"] });
-    expect(keys(nav)).toEqual(["today", "work"]);
+    expect(keys(nav)).toEqual(["today", "chat", "work"]);
     expect(tabs(nav, "work")).toEqual(WORK_GUEST);
   });
 
   it("an unknown rank is treated like an outsider, never like staff", () => {
     const nav = buildNav({ role: "SUPERUSER" as unknown as NavSubject["role"], caps: ["crm.view", "directory.view", "users.manage"] });
-    expect(keys(nav)).toEqual(["today", "work"]);
+    expect(keys(nav)).toEqual(["today", "chat", "work"]);
   });
 
   it("every place lands on a page: Today on /, chat on /chat, work on /my-work, the library on /files", () => {
@@ -188,9 +189,9 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
     ["an unknown rank with every capability", { role: "SUPERUSER" as unknown as NavSubject["role"], caps: [...CAPABILITIES] }],
   ];
 
-  it("the tabs are the fifteen of the map, each once", () => {
-    expect(ALL_TABS).toHaveLength(15);
-    expect(new Set(ALL_TABS).size).toBe(15);
+  it("the tabs are the sixteen of the map, each once", () => {
+    expect(ALL_TABS).toHaveLength(16);
+    expect(new Set(ALL_TABS).size).toBe(16);
   });
 
   it("agrees with buildNav for every tab and every kind of person: a tab is open exactly when the map draws it", () => {
@@ -213,7 +214,7 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
   it("offeredToGuests: exactly my work, projects, list and calendar", () => {
     expect(ALL_TABS.filter((key) => offeredToGuests(key))).toEqual(WORK_GUEST);
     expect(ALL_TABS.filter((key) => !offeredToGuests(key))).toEqual(
-      ["goals", "ideas", "production", "departments", "crm", "files", "team", "reports", "automation", "telegram", "settings"],
+      ["goals", "ideas", "production", "departments", "crm", "files", "team", "reports", "automation", "telegram", "settings", "archive"],
     );
   });
 
@@ -343,7 +344,8 @@ describe("the words", () => {
       reports: "التقارير",
       automation: "الأتمتة والتكاملات",
       telegram: "تيليجرام",
-      settings: "الإعدادات",
+      "settings": "الإعدادات",
+      "archive": "الأرشيف",
     });
   });
 

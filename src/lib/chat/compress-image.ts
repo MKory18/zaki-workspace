@@ -36,8 +36,9 @@ export async function compressImage(file: Blob, fileName = ""): Promise<Compress
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     ctx.drawImage(source, 0, 0, width, height);
-    const mime = supportsWebP() ? "image/webp" : "image/jpeg";
-    const blob = await canvas.convertToBlob({ type, quality: QUALITY });
+    const targetMime = supportsWebP() ? "image/webp" : "image/jpeg";
+    const blob = await canvas.convertToBlob({ type: targetMime, quality: QUALITY });
+    const mime = blob.type || targetMime;
     return { blob, width, height, mime };
   } catch {
     return null;

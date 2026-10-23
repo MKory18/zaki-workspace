@@ -29,6 +29,13 @@ export async function chatHome(ctx: OrgAccessContext): Promise<HomeDto> {
       name: true,
       emoji: true,
       kind: true,
+      members: {
+        where: {
+          role: "GUEST",
+          user: { memberships: { some: { organizationId: ctx.orgId, role: "GUEST", status: "ACTIVE" } } },
+        },
+        select: { id: true },
+      },
       conversations: {
         where: { kind: "TOPIC" },
         orderBy: { position: "asc" },
@@ -109,7 +116,8 @@ export async function chatHome(ctx: OrgAccessContext): Promise<HomeDto> {
       name: s.name,
       emoji: s.emoji,
       kind: s.kind,
-      hasExternal: false,
+      hasExternal: s.members.length > 0,
+      canModerate: isOwner || isSpaceAdmin(spaceRole),
       unread: spaceUnread,
       topics,
     });

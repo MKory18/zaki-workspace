@@ -6,6 +6,9 @@
  */
 export type FileKind = "IMAGE" | "VIDEO" | "AUDIO" | "FILE";
 
+/** Must stay aligned with MAX_ATTACHMENTS_PER_MESSAGE on the server. */
+export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
+
 const IMAGE_EXT = /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i;
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v|mkv)$/i;
 const AUDIO_EXT = /\.(mp3|wav|ogg|oga|m4a|webm|opus|aac)$/i;

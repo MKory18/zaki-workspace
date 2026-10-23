@@ -12,6 +12,7 @@
   "nav.automation": "الأتمتة",
   "nav.analytics": "التقارير",
   "nav.settings": "الإعدادات",
+  "nav.archive": "الأرشيف",
   "auth.login": "تسجيل الدخول",
   "auth.too_many_attempts": "محاولات كثيرة. انتظر قليلًا ثم جرّب من جديد.",
   "guest.no_access": "هذا القسم غير متاح للزوار",

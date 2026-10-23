@@ -63,10 +63,10 @@ describe("the palette's places and tabs come from the person's map", () => {
     expect(new Set(owner).size).toBe(owner.length);
   });
 
-  it("a guest is offered only what their map has: no chat, no files, no team, no customers, no goals, no ideas", () => {
+  it("a guest is offered chat and their own work, but no other internal areas", () => {
     const guest = hrefs("GUEST");
-    for (const href of ["/", "/my-work", "/projects", "/list", "/calendar", "/guide", "/profile"]) expect(guest, href).toContain(href);
-    for (const href of ["/chat", "/files", "/members", "/crm", "/production", "/departments", "/goals", "/ideas", "/settings", "/analytics"]) expect(guest, href).not.toContain(href);
+    for (const href of ["/", "/chat", "/my-work", "/projects", "/list", "/calendar", "/guide", "/profile"]) expect(guest, href).toContain(href);
+    for (const href of ["/files", "/members", "/crm", "/production", "/departments", "/goals", "/ideas", "/settings", "/analytics"]) expect(guest, href).not.toContain(href);
   });
 
   it("a plain member is offered the goals and the ideas (the tabs are for staff)", () => {
@@ -119,10 +119,11 @@ describe("the palette on screen", () => {
     expect(html).toContain("bg-scrim/60");
   });
 
-  it("open for a guest: none of the places a guest does not have", () => {
+  it("open for a guest: chat and their own work are present; internal areas stay hidden", () => {
     const html = open("GUEST");
     expect(html).toContain(AR["nav.tab.myWork"]);
-    for (const key of ["nav.place.chat", "nav.files", "nav.tab.team", "nav.crm", "nav.goals", "nav.ideas"]) expect(html, key).not.toContain(`>${AR[key]}<`);
+    expect(html).toContain(`>${AR["nav.place.chat"]}<`);
+    for (const key of ["nav.files", "nav.tab.team", "nav.crm", "nav.goals", "nav.ideas"]) expect(html, key).not.toContain(`>${AR[key]}<`);
   });
 
   it("theme tokens only, logical CSS only, no English word, every option and button named in Arabic", () => {

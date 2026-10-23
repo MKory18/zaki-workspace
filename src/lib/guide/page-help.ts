@@ -45,8 +45,16 @@ export const PAGE_HELP: readonly PageHelp[] = [
     pattern: "/chat",
     whatKey: "guide.page.chat.what",
     nextKey: "guide.page.chat.next",
-    guestNextKey: INTERNAL,
+    guestNextKey: "guide.page.chat.next_guest",
     tour: "shell",
+    article: "places",
+  },
+  {
+    id: "archive",
+    pattern: "/archive",
+    whatKey: "guide.page.archive.what",
+    nextKey: "guide.page.archive.next",
+    guestNextKey: INTERNAL,
     article: "places",
   },
   {

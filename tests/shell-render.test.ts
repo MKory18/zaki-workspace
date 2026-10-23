@@ -245,10 +245,10 @@ describe("the frame for a plain member", () => {
 describe("the frame for an external partner (guest)", () => {
   const html = shell("GUEST", "/my-work");
 
-  it("Today and Work only, and no link anywhere to the chat, the files, the team, the customers, the goals or the ideas", () => {
-    expect(hrefs(bottomBar(html))).toEqual(["/", "/my-work"]);
-    expect(hrefs(sidebarPlaces(html))).toEqual(["/", "/my-work"]);
-    for (const href of ["/chat", "/files", "/members", "/crm", "/departments", "/production", "/settings", "/analytics", "/goals", "/ideas"]) {
+  it("Today, Chat and Work are visible to a guest; company-only areas stay hidden", () => {
+    expect(hrefs(bottomBar(html))).toEqual(["/", "/chat", "/my-work"]);
+    expect(hrefs(sidebarPlaces(html))).toEqual(["/", "/chat", "/my-work"]);
+    for (const href of ["/files", "/members", "/crm", "/departments", "/production", "/settings", "/analytics", "/goals", "/ideas"]) {
       expect(hrefs(html), href).not.toContain(href);
     }
   });

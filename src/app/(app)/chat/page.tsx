@@ -1,21 +1,10 @@
 import { pageActor } from "@/app/(app)/_access";
-import { getServerT } from "@/lib/i18n/server";
-import { ChatView } from "@/components/chat-view";
+import { ChatHomeClient } from "@/components/chat/home/chat-home-client";
 
-/** Internal chat — conversations the user belongs to; nothing outside the org. */
+/** The chat list is scoped again by the server API for this authenticated actor. */
 export default async function ChatPage() {
-  const { t } = getServerT();
   const { actor } = await pageActor();
-
-  if (actor.isExternal) {
-    return (
-      <div className="mx-auto max-w-2xl p-10 text-center text-sm text-muted">
-        {t("chat.guest_forbidden")}
-      </div>
-    );
-  }
-
-  return <ChatView ctx={{ orgId: actor.orgId, orgRole: actor.role }} />;
+  return <ChatHomeClient guest={actor.isExternal} />;
 }
 
 export const dynamic = "force-dynamic";

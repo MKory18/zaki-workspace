@@ -10,6 +10,7 @@ import { TOURS } from "@/lib/guide/tours";
 const PAGES: [string, string][] = [
   ["/", "home"],
   ["/chat", "chat"],
+  ["/archive", "archive"],
   ["/my-work", "my-work"],
   ["/projects", "projects"],
   ["/projects/ckabc123", "project"],
@@ -254,11 +255,13 @@ describe("helpArticleHref: the link to the guide never leads to a 404", () => {
 
 
 describe("helpWhatKey: the «what this page is» line a viewer gets", () => {
-  it("a guest whose page the server refuses gets the internal-page line instead of the page's own", () => {
+  it("a guest sees the chat's partner-appropriate explanation, and private pages get the internal line", () => {
     const chat = PAGE_HELP.find((h) => h.id === "chat")!;
-    expect(helpWhatKey(chat, "everyone")).toBe(INTERNAL_WHAT_KEY);
+    const archive = PAGE_HELP.find((h) => h.id === "archive")!;
+    expect(helpWhatKey(chat, "everyone")).toBe(chat.whatKey);
     expect(helpWhatKey(chat, "staff")).toBe(chat.whatKey);
-    expect(helpWhatKey(chat, "managers")).toBe(chat.whatKey);
+    expect(helpWhatKey(archive, "everyone")).toBe(INTERNAL_WHAT_KEY);
+    expect(helpWhatKey(archive, "staff")).toBe(archive.whatKey);
   });
 
   it("every other page keeps its own line, for every viewer", () => {

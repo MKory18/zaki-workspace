@@ -58,7 +58,8 @@ export type TabKey =
   | "reports"
   | "automation"
   | "telegram"
-  | "settings";
+  | "settings"
+  | "archive";
 
 /** An icon by NAME: the shell maps it to a drawing (src/components/shell/nav-icons.tsx). Data only, so it crosses from server to browser. */
 export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings";
@@ -106,8 +107,8 @@ export interface PlaceDef {
 
 export const PLACES: readonly PlaceDef[] = [
   { key: "today", href: "/", labelKey: "nav.place.today", icon: "today", requires: "everyone", tabs: [] },
-  // The server refuses guests every chat route until Phase 3 (chat with partners): not offered to them.
-  { key: "chat", href: "/chat", labelKey: "nav.place.chat", icon: "chat", requires: "staff", tabs: [] },
+  // Chat is available to guests; server-side topic policy limits what they can read.
+  { key: "chat", href: "/chat", labelKey: "nav.place.chat", icon: "chat", requires: "everyone", tabs: [] },
   {
     key: "work",
     href: "/my-work",
@@ -167,6 +168,7 @@ export const PLACES: readonly PlaceDef[] = [
         icon: "settings",
         requires: { anyOf: [{ capability: "users.manage" }, { rankAtLeast: "OWNER" }] },
       },
+      { key: "archive", href: "/archive", labelKey: "nav.archive", requires: { capability: "archive.view" } },
     ],
   },
 ];
