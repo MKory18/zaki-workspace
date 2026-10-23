@@ -21,5 +21,20 @@
   "shell.spaces.empty": "لست في أي مساحة بعد",
   "shell.spaces.error": "ما قدرنا نجيب قائمة المساحات",
   "shell.spaces.retry": "حاول من جديد",
-  "shell.inbox_unread": "الإشعارات: {count} غير مقروءة"
+  "shell.inbox_unread": "الإشعارات: {count} غير مقروءة",
+  "shell.new": "جديد",
+  "shell.new.title": "شو بدك تضيف؟",
+  "shell.new.close_hint": "الإغلاق بمفتاح الهروب",
+  "shell.new.task": "مهمّة",
+  "shell.new.project": "مشروع",
+  "shell.new.doc": "مستند",
+  "shell.new.msg": "رسالة",
+  "shell.new.team": "فريق",
+  "shell.new.member": "عضو",
+  "shell.theme.aria": "الثيم",
+  "shell.theme.night": "ليل",
+  "shell.theme.day": "نهار",
+  "shell.guide": "دليل زاكي",
+  "shell.guide.open": "افتح دليل زاكي",
+  "shell.workspace.switch": "تبديل"
 }
