@@ -60,13 +60,14 @@ const WORK_GUEST = ["my-work", "projects", "list", "calendar"];
 beforeEach(() => logout());
 
 describe("the layout draws each person's own places", () => {
-  it("the owner: the five places, every work tab, «الإدارة» with all five tabs; the managers' guide", async () => {
+  it("the owner: the five places, every work tab, «الإدارة» with all six tabs (the archive is his alone); the managers' guide", async () => {
     const { owner } = await makeTeam();
     await loginAs(owner.id);
     const shell = await frame();
     expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin"]);
     expect(tabs(shell, "work")).toEqual(WORK_ALL);
-    expect(tabs(shell, "admin")).toEqual(["team", "reports", "automation", "telegram", "settings"]);
+    // Phase 3: «الأرشيف» (archive.view, the owner's alone) joined the admin place
+    expect(tabs(shell, "admin")).toEqual(["team", "reports", "automation", "telegram", "settings", "archive"]);
     expect(placeOf(shell, "admin")?.labelKey).toBe("nav.place.admin");
     expect(shell.props).toMatchObject({ rank: "OWNER", isGuest: false, audience: "managers" });
     // the shell gets the three fields it draws, never the session facts (WP-ARABIC2 (g))
@@ -106,11 +107,12 @@ describe("the layout draws each person's own places", () => {
     expect(shell.props).toMatchObject({ rank: "MEMBER", isGuest: false, audience: "staff" });
   });
 
-  it("a guest (external partner): Today and Work, four tabs (no goals, no ideas), no space creation; the guide for everyone", async () => {
+  it("a guest (external partner): Today, Chat and Work, four work tabs (no goals, no ideas), no space creation; the guide for everyone", async () => {
     const { guest } = await makeTeam();
     await loginAs(guest.id);
     const shell = await frame();
-    expect(places(shell)).toEqual(["today", "work"]);
+    // Phase 3: a guest reads the topics of the spaces they are in (the policy decides what), so «الدردشة» is theirs too
+    expect(places(shell)).toEqual(["today", "chat", "work"]);
     expect(tabs(shell, "work")).toEqual(WORK_GUEST);
     expect(shell.props).toMatchObject({ rank: "GUEST", isGuest: true, audience: "everyone" });
   });
