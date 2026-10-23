@@ -153,6 +153,8 @@ export class ConcurrencyGate {
 }
 
 export const REGISTER_LIMIT: LimiterOptions = { limit: 10, windowMs: 60 * 60_000 };
+/** Confirming a registration link: a token is 256 random bits, this only keeps the endpoint quiet. */
+export const REGISTER_CONFIRM_LIMIT: LimiterOptions = { limit: 20, windowMs: 60 * 60_000 };
 
 /**
  * The caller's address as seen by the trusted reverse proxy.

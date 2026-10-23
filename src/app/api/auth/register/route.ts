@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { startSession } from "@/server/auth";
 import { apiError, withApi } from "@/server/api";
 import { registerSchema } from "@/server/validation";
-import { registerOrganization } from "@/server/services/orgs";
+import { RegistrationUnavailableError, requestRegistration } from "@/server/services/registration";
 import { FixedWindowLimiter, REGISTER_LIMIT, RateLimitedError, clientIp } from "@/server/rate-limit";
 
 const registerLimiter = new FixedWindowLimiter(REGISTER_LIMIT);
@@ -13,8 +12,10 @@ function gone(): NextResponse {
 }
 
 /**
- * Create a new organisation with its OWNER. Rate-limited per IP.
- * Joining via code is retired (410).
+ * Ask to open a new company: stores the request and mails a confirmation link (the company and its
+ * OWNER are created by /api/auth/register/confirm). Every valid request gets the same 202, whether
+ * or not the address already has an account. Rate-limited per IP here, and for the whole server in
+ * the service. 503 when this server cannot send mail. Joining via code is retired (410).
  */
 export async function POST(req: Request) {
   return withApi(async () => {
@@ -40,8 +41,14 @@ export async function POST(req: Request) {
       );
     }
     if (parsed.data.mode === "join") return gone();
-    const result = await registerOrganization(parsed.data);
-    await startSession(result.userId);
-    return NextResponse.json({ ok: true, next: "/" }, { status: 201 });
+    try {
+      await requestRegistration(parsed.data);
+    } catch (err) {
+      if (err instanceof RegistrationUnavailableError) {
+        return NextResponse.json({ error: "unavailable", message: err.message }, { status: 503 });
+      }
+      throw err;
+    }
+    return NextResponse.json({ ok: true, next: "/register/check-email" }, { status: 202 });
   });
 }

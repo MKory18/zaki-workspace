@@ -218,7 +218,11 @@ other way is a bug.
   screen (`/api/organizations/[id]/members`): username, optional e-mail, a temporary password the
   person must change at the first sign-in, and the transparency notice they must accept once
   (`/onboarding`; bump `Organization.settings.transparencyVersion` to ask everybody again).
-  `/register` only works for the very first company on an empty database. Everybody manages only
+  `/register` opens a NEW company (its asker becomes the OWNER) — anyone may ask, by the owner's
+  decision of 2026-10-23, behind `src/server/services/registration.ts`: the company exists only once
+  the e-mailed one-time link is confirmed (`PendingRegistration`, 24 h), every address gets the same
+  202 (no enumeration), and a server-wide cap sits on top of the per-address limit. It never joins
+  an existing company: team accounts still come from the People screen. Everybody manages only
   people STRICTLY BELOW their own rank (`member-rules.ts`); only the owner manages admins.
   ⚠️ A person holding `users.manage` can reset the password of anybody below them, which means they
   can sign in as them. 🔧 Give the switch only to somebody the owner trusts; every reset is audited.

@@ -19,7 +19,15 @@ import { safeNextPath } from "@/lib/safe-next";
  *    somebody who has not finished the onboarding).
  */
 const MACHINE_PATHS = ["/api/integrations/n8n/inbound", "/api/v1", "/api/health"];
-const PUBLIC_PATHS = ["/login", "/register", "/api/auth/login", "/api/auth/register"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/register",
+  "/register/check-email",
+  "/register/confirm",
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/register/confirm",
+];
 const COOKIE = "zaki_session";
 
 /**

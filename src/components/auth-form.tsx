@@ -10,8 +10,8 @@ import { useI18n } from "@/lib/i18n";
 import { safeNextPath } from "@/lib/safe-next";
 
 /**
- * Sign-in (username or e-mail + password) and create a new organisation.
- * Everyone can register and start their own workspace.
+ * Sign-in (username or e-mail + password) and opening a new company. Anyone can ask to open one;
+ * it exists once the e-mailed link is confirmed (services/registration.ts).
  *
  * Both sit on the door (`DoorShell`): the Zaki Workspace mark and wordmark, the decoration of the active theme
  * behind, and the form on an opaque card. Phone first: 375 px, 16 px gutters, fields and buttons 44 px tall.
@@ -40,14 +40,15 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             ? `/onboarding${wanted === "/" ? "" : `?next=${encodeURIComponent(wanted)}`}`
             : wanted;
       } else {
-        await apiPost("/api/auth/register", {
+        // the company is opened only after the mailed link is confirmed: next is «شوف بريدك»
+        const res = await apiPost<{ ok: true; next?: string }>("/api/auth/register", {
           email: data.email,
           name: data.name,
           password: data.password,
           jobTitle: data.jobTitle,
           orgName: data.orgName,
         });
-        window.location.href = "/";
+        window.location.href = res.next ?? "/register/check-email";
       }
     } catch (err) {
       // show the server's known error keys in Arabic; unknown → generic message

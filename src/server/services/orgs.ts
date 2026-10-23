@@ -36,7 +36,9 @@ export function generateJoinCode(): string {
 }
 
 /**
- * Whether any organisation exists yet. Used by tests; registration is always open.
+ * Whether any organisation exists yet. Used by tests. Registration is open to anyone, behind the
+ * e-mail check of `services/registration.ts`: `registerOrganization` below runs only for a
+ * confirmed request (and in tests).
  */
 export async function registrationOpen(): Promise<boolean> {
   return (await db.organization.findFirst({ select: { id: true } })) === null;
@@ -49,10 +51,12 @@ const BOOTSTRAP_LOCK = 724_310_051;
  * Create a new organisation with its OWNER under an advisory lock, so two simultaneous
  * registrations with the same email cannot both succeed — the second one finds the email taken.
  */
-export async function registerOrganization(input: RegisterOrgInput & ProfileFields): Promise<{ userId: string }> {
+export async function registerOrganization(
+  input: (RegisterOrgInput | (Omit<RegisterOrgInput, "password"> & { passwordHash: string })) & ProfileFields,
+): Promise<{ userId: string }> {
   const email = input.email.toLowerCase().trim();
-  // the slow part (bcrypt) happens before the lock is taken
-  const passwordHash = await hashPassword(input.password);
+  // the slow part (bcrypt) happens before the lock is taken; a confirmed registration brings its hash
+  const passwordHash = "passwordHash" in input ? input.passwordHash : await hashPassword(input.password);
   const base = slugify(input.orgName) || "org";
   const slug = `${base}-${crypto.randomBytes(3).toString("hex")}`;
 

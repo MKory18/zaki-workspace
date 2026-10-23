@@ -45,6 +45,8 @@ import GuidePage from "@/app/(app)/guide/page";
 import GuideArticlePage from "@/app/(app)/guide/[slug]/page";
 import LoginPage from "@/app/login/page";
 import RegisterPage from "@/app/register/page";
+import RegisterCheckEmailPage from "@/app/register/check-email/page";
+import RegisterConfirmPage from "@/app/register/confirm/page";
 import OnboardingPage from "@/app/onboarding/page";
 import { ARTICLES } from "@/lib/guide/articles";
 import { LEGACY_ROUTES, type NavRole } from "@/lib/nav/places";
@@ -77,8 +79,11 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
 
 /** The pages of the shell that are not an old address: the in-app guide (Phase 2), reached from the help button. */
 const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]"] as const;
-/** The pages outside the shell: sign-in, the first-run set-up (first company only) and the one-time onboarding. */
-const DOOR_PAGES = ["/login", "/register", "/onboarding"] as const;
+/**
+ * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
+ * link's confirmation) and the one-time onboarding.
+ */
+const DOOR_PAGES = ["/login", "/register", "/register/check-email", "/register/confirm", "/onboarding"] as const;
 
 interface PageOnDisk {
   route: string;
@@ -147,6 +152,8 @@ const PAGES: Record<string, PageCall> = {
   "/guide/[slug]": ({ params }) => GuideArticlePage({ params: { slug: params["slug"] ?? "" } }),
   "/login": () => LoginPage(),
   "/register": () => RegisterPage(),
+  "/register/check-email": () => RegisterCheckEmailPage(),
+  "/register/confirm": ({ searchParams }) => RegisterConfirmPage({ searchParams }),
   "/onboarding": ({ searchParams }) => OnboardingPage({ searchParams }),
 };
 

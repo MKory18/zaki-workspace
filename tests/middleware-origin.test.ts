@@ -98,10 +98,10 @@ describe("middleware", () => {
   });
 
   it("the sign-in pages and their API stay public", async () => {
-    for (const path of ["/login", "/register"]) {
+    for (const path of ["/login", "/register", "/register/check-email", "/register/confirm"]) {
       expect((await middleware(req(path))).headers.get("x-middleware-next"), path).toBe("1");
     }
-    for (const path of ["/api/auth/login", "/api/auth/register"]) {
+    for (const path of ["/api/auth/login", "/api/auth/register", "/api/auth/register/confirm"]) {
       const res = await middleware(req(path, { method: "POST", headers: { origin: "http://localhost:3000" } }));
       expect(res.headers.get("x-middleware-next"), path).toBe("1");
     }
