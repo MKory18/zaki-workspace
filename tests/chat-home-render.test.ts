@@ -10,6 +10,17 @@ describe("chat home audience sections", () => {
     expect(html).toContain("عام");
     expect(html).not.toContain("خاص");
   });
+  it("«رسالة جديدة» is a button that opens the people picker, not a link the page ignores", () => {
+    const html = renderToStaticMarkup(createElement(ChatHome, { guest: false, home: { canOversee: false, spaces: [], dms: [] } }));
+    expect(html).toMatch(/<button[^>]*>رسالة جديدة<\/button>/);
+    expect(html).not.toContain("new=dm");
+  });
+  it("«افتح مساحة» never links to the missing /workspaces page, and waits for the server's answer", () => {
+    const html = renderToStaticMarkup(createElement(ChatHome, { guest: false, home: { canOversee: false, spaces: [], dms: [] } }));
+    expect(html).not.toContain("href=\"/workspaces\"");
+    // before /api/workspaces says the person may open a space, there is no button at all
+    expect(html).not.toContain("افتح مساحة");
+  });
   it("shows the owner oversight switch", () => {
     const html = renderToStaticMarkup(createElement(ChatHome, { guest: false, home: { canOversee: true, spaces: [], dms: [] } }));
     expect(html).toContain("كل الشركة");

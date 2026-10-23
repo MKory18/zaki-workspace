@@ -1,0 +1,58 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+type Person = { userId: string; user: { name: string; jobTitle: string | null } };
+
+/**
+ * «رسالة جديدة»: pick a colleague and land in the DM with them (opened or found by the server).
+ * The list is the chat directory (ACTIVE non-guests, the viewer excluded); the server decides again.
+ */
+export function NewDmDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [people, setPeople] = useState<Person[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!open || people) return;
+    let alive = true;
+    fetch("/api/chat/directory", { cache: "no-store" })
+      .then((r) => { if (!r.ok) throw new Error("directory"); return r.json() as Promise<{ people: Person[] }>; })
+      .then((data) => { if (alive) setPeople(data.people); })
+      .catch(() => { if (alive) setError("تعذّر تحميل قائمة الزملاء."); });
+    return () => { alive = false; };
+  }, [open, people]);
+  async function start(userId: string) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const r = await fetch("/api/chat/conversations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "DM", userId }) });
+      if (!r.ok) throw new Error("dm");
+      const { id } = await r.json() as { id: string };
+      window.location.assign(`/chat/${encodeURIComponent(id)}`);
+    } catch {
+      setError("تعذّر فتح المحادثة. حاول مرة أخرى.");
+      setBusy(false);
+    }
+  }
+  const q = query.trim().toLowerCase();
+  const shown = (people ?? []).filter((p) => !q || p.user.name.toLowerCase().includes(q) || (p.user.jobTitle ?? "").toLowerCase().includes(q));
+  return <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent size="md">
+      <DialogHeader><DialogTitle>رسالة جديدة</DialogTitle></DialogHeader>
+      <DialogBody>
+        <label htmlFor="new-dm-search" className="sr-only">ابحث عن زميل</label>
+        <input id="new-dm-search" type="search" value={query} onChange={(e) => setQuery(e.currentTarget.value)} placeholder="ابحث بالاسم أو المسمّى" className="h-11 w-full rounded-lg border border-muted bg-surface px-3 text-base md:h-9 md:text-sm" />
+        {error && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
+        {!people && !error && <p role="status" className="mt-3 text-sm text-fg-muted">جارٍ التحميل…</p>}
+        {people && !shown.length && <p className="mt-3 text-sm text-fg-muted">لا يوجد زملاء بهذا الاسم.</p>}
+        <ul className="mt-3 divide-y divide-border">{shown.map((p) => <li key={p.userId}><button type="button" disabled={busy} onClick={() => void start(p.userId)} className="flex min-h-12 w-full items-center gap-3 py-2 text-start hover:bg-surface-2 disabled:opacity-60">
+          <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-accent/10">{p.user.name.slice(0, 1)}</span>
+          <span className="min-w-0 flex-1 truncate"><bdi>{p.user.name}</bdi>{p.user.jobTitle && <small className="block truncate text-fg-muted"><bdi>{p.user.jobTitle}</bdi></small>}</span>
+        </button></li>)}</ul>
+      </DialogBody>
+    </DialogContent>
+  </Dialog>;
+}
