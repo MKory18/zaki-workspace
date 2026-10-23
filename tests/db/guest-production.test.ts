@@ -63,20 +63,27 @@ describe("production: a GUEST is read-only", () => {
     expect(row.active).toBe(true);
   });
 
-  it("can still read the daily checklist and the routine list", async () => {
+  it("cannot read the daily checklist or the routine list either: they name the staff (review C6)", async () => {
     const w = await productionWorld();
     await makeRoutineLog(w.routine.id, DAY, w.member.id);
     await loginAs(w.guest.id);
 
     const day = await call(productionRoute.GET, { url: `http://localhost/api/production?day=${DAY}` });
-    expect(day.status).toBe(200);
-    const items = day.json?.["items"] as { title: string; doneAt: string | null }[];
-    expect(items.map((i) => i.title)).toEqual(["Cut the fabric"]);
-    expect(items[0]?.doneAt).not.toBeNull();
+    expect(day.status).toBe(403);
+    expect(day.json?.["message"]).toBe("guest.no_access");
+    expect(day.text).not.toContain("Cut the fabric");
+    expect(day.text).not.toContain(w.member.name);
 
     const list = await call(routinesRoute.GET);
-    expect(list.status).toBe(200);
-    expect((list.json?.["routines"] as { title: string }[]).map((r) => r.title)).toEqual(["Cut the fabric"]);
+    expect(list.status).toBe(403);
+    expect(list.text).not.toContain("Cut the fabric");
+  });
+
+  it("a MEMBER still reads the checklist and the routine list", async () => {
+    const w = await productionWorld();
+    await loginAs(w.member.id);
+    expect((await call(productionRoute.GET, { url: `http://localhost/api/production?day=${DAY}` })).status).toBe(200);
+    expect((await call(routinesRoute.GET)).status).toBe(200);
   });
 });
 

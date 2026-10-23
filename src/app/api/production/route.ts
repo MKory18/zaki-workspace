@@ -4,6 +4,7 @@ import { withApi } from "@/server/api";
 import { dayChecklist, dayIso } from "@/server/services/production";
 import { db } from "@/server/db";
 import { resolveTimeZone } from "@/lib/zoned-time";
+import { assertNotGuest } from "@/server/services/guest-guard";
 
 /**
  * GET /api/production?day=YYYY-MM-DD — the daily production checklist for the
@@ -13,6 +14,8 @@ import { resolveTimeZone } from "@/lib/zoned-time";
 export async function GET(req: Request) {
 	return withApi(async () => {
 		const actor = await requireActor();
+		// the checklist names who did what: staff only, never an external partner (review C6)
+		assertNotGuest({ orgRole: actor.role });
 		const url = new URL(req.url);
 		const raw = url.searchParams.get("day");
 		if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
