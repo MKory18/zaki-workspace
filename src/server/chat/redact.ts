@@ -107,8 +107,10 @@ export function presentMessage(
     createdAt: row.createdAt.toISOString(),
     clientId: row.clientId ?? null,
     mentions: (Array.isArray(row.mentions) ? (row.mentions as string[]) : []),
-    attachments: attachmentDtos(row.attachments),
-    reactions: groupReactions(row.reactions, viewer.userId),
+    // a deleted message takes its files and reactions with it, for everybody but the OWNER
+    // (he reads the original, files included); the attachment route refuses the bytes the same way
+    attachments: deleted && !isOwner ? [] : attachmentDtos(row.attachments),
+    reactions: deleted && !isOwner ? [] : groupReactions(row.reactions, viewer.userId),
     system: systemMeta(row),
   };
 

@@ -16,6 +16,7 @@ export async function notifyMessageToAudience(opts: {
   kind: "DM" | "GROUP" | "TOPIC";
   title: string; // the conversation title (or the DM peer's name)
   preview: string; // the body preview (attachments -> an Arabic «أرسل مرفقًا»)
+  messageId: string; // in the link, so an edit or a delete can reach the preview again
 }): Promise<void> {
   const targets = new Set(opts.audienceIds);
   for (const userId of targets) {
@@ -32,9 +33,33 @@ export async function notifyMessageToAudience(opts: {
       type: "chat_message",
       title: opts.title,
       body: opts.preview,
-      linkUrl: `/chat/${opts.conversationId}`,
+      linkUrl: messageLink(opts.conversationId, opts.messageId),
     });
   }
+}
+
+/** The link a chat notification carries: the conversation, and the message it was about. */
+export function messageLink(conversationId: string, messageId: string): string {
+  return `/chat/${conversationId}?m=${messageId}`;
+}
+
+/** The text shown in place of a deleted message's preview (the bell never keeps it). */
+export const DELETED_PREVIEW = "حُذفت الرسالة";
+
+/**
+ * An edited or deleted message: every notification that still carries its old preview gets the new
+ * one (the edited text, or «حُذفت الرسالة»). Runs inside the edit/delete transaction.
+ */
+export async function rewriteMessagePreviews(
+  tx: Pick<typeof db, "notification">,
+  conversationId: string,
+  messageId: string,
+  preview: string,
+): Promise<void> {
+  await tx.notification.updateMany({
+    where: { type: "chat_message", linkUrl: messageLink(conversationId, messageId) },
+    data: { body: preview },
+  });
 }
 
 /** The audience of a facts object that should be notified (members minus the author). */
