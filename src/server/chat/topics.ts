@@ -154,7 +154,8 @@ export async function conversationDetail(
   opts: { before?: string; limit?: number } = {},
 ): Promise<ConversationDto> {
   const facts = await loadConversationFacts(ctx.userId, conversationId);
-  if (!facts) throw new NotFoundError("chat.e.not_found");
+  // another company's conversation does not exist for this viewer, whatever their rank at home
+  if (!facts || facts.orgId !== ctx.orgId) throw new NotFoundError("chat.e.not_found");
   const org = await loadOrgFacts(ctx.userId, ctx.orgId);
   if (!canRead(facts, org)) throw new NotFoundError("chat.e.not_found");
 

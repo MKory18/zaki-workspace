@@ -36,6 +36,8 @@ export type ConversationFacts = {
 };
 
 export type OrgFacts = {
+  /** the organization these facts were loaded for: a viewer's rank counts only in THAT org */
+  orgId: string;
   role: "OWNER" | "ADMIN" | "LEAD" | "MEMBER" | "GUEST";
   status: "ACTIVE" | "SUSPENDED" | "OFFBOARDED";
 };
@@ -55,9 +57,17 @@ export function isOrgAdminOf(org: OrgFacts | null): boolean {
   return isActiveOf(org) && org!.role === "ADMIN";
 }
 
+/**
+ * The viewer's org facts are of the conversation's own org. A rank held in another company
+ * (an OWNER there included) never reaches this conversation: every `can*` below starts here.
+ */
+export function isOrgOf(facts: ConversationFacts | null, org: OrgFacts | null): boolean {
+  return !!facts && !!org && facts.orgId === org.orgId;
+}
+
 /** May the viewer READ the conversation (they exist in the audience, or the OWNER silently)? */
 export function canRead(facts: ConversationFacts | null, org: OrgFacts | null): boolean {
-  if (!facts || !isActiveOf(org)) return false;
+  if (!facts || !isActiveOf(org) || !isOrgOf(facts, org)) return false;
   if (isOwnerOf(org)) return true; // the owner's silent eye reads everything
   if (facts.kind === "DM") return facts.viewerIsMember && facts.dmOtherActive;
   if (facts.kind === "GROUP") return facts.viewerIsMember && org!.role !== "GUEST";
@@ -87,7 +97,7 @@ export function canPost(
 
 /** May the viewer moderate this conversation (mute, delete others, pin, close, settings, notes)? */
 export function canModerate(facts: ConversationFacts | null, org: OrgFacts | null): boolean {
-  if (!facts || !isActiveOf(org)) return false;
+  if (!facts || !isActiveOf(org) || !isOrgOf(facts, org)) return false;
   if (isOwnerOf(org)) return true;
   if (facts.kind === "GROUP") return facts.viewerIsMember && facts.viewerGroupRole === "admin";
   if (org!.role === "ADMIN") return facts.kind !== "DM"; // org admins moderate topics, never DMs
@@ -96,7 +106,7 @@ export function canModerate(facts: ConversationFacts | null, org: OrgFacts | nul
 
 /** May the viewer PIN this message's conversation? Topics: moderators; DMs: either participant. */
 export function canPin(facts: ConversationFacts | null, org: OrgFacts | null): boolean {
-  if (!facts || !isActiveOf(org)) return false;
+  if (!facts || !isActiveOf(org) || !isOrgOf(facts, org)) return false;
   if (facts.kind === "DM") return facts.viewerIsMember && (isOwnerOf(org) || org!.role !== "GUEST");
   return canModerate(facts, org);
 }
@@ -108,7 +118,7 @@ export function canModifyMessage(opts: {
   facts: ConversationFacts | null;
   org: OrgFacts | null;
 }): boolean {
-  if (!opts.facts || !isActiveOf(opts.org)) return false;
+  if (!opts.facts || !isActiveOf(opts.org) || !isOrgOf(opts.facts, opts.org)) return false;
   if (opts.authorId === opts.viewerId) return canRead(opts.facts, opts.org);
   return canModerate(opts.facts, opts.org);
 }
@@ -140,7 +150,7 @@ export async function loadOrgFacts(userId: string, orgId: string): Promise<OrgFa
     where: { organizationId_userId: { organizationId: orgId, userId } },
     select: { role: true, status: true },
   });
-  return m ? { role: m.role, status: m.status } : null;
+  return m ? { orgId, role: m.role, status: m.status } : null;
 }
 
 /**
