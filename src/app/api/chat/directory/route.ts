@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
 import { directoryContext } from "@/app/api/_access";
-import { chatDirectory } from "@/server/services/chat";
+import { chatDirectory } from "@/server/chat/directory";
 
 /**
  * GET: chatable org members (recipients picker). It is the staff directory, so it follows the
@@ -12,7 +12,13 @@ export async function GET() {
     const ctx = await directoryContext("chat.guest_forbidden");
     const people = await chatDirectory(ctx.orgId);
     return NextResponse.json({
-      people: people.filter((p) => p.userId !== ctx.userId),
+      people: people
+        .filter((p) => p.userId !== ctx.userId)
+        .map((p) => ({
+          userId: p.userId,
+          role: p.role,
+          user: { id: p.userId, name: p.name, jobTitle: p.jobTitle },
+        })),
     });
   });
 }

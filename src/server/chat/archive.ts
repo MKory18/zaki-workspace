@@ -23,7 +23,7 @@ const PAGE = 40;
 
 export async function readArchive(
   ctx: OrgAccessContext,
-  opts: { type?: ArchiveType; spaceId?: string; cursor?: string; limit?: number } = {},
+  opts: { type?: ArchiveType; spaceId?: string; personId?: string; from?: string; to?: string; cursor?: string; limit?: number } = {},
 ): Promise<ArchivePageDto> {
   const role = await db.organizationMember.findUnique({
     where: {
@@ -36,6 +36,9 @@ export async function readArchive(
 
   const limit = Math.min(Math.max(opts.limit ?? PAGE, 1), 100);
   const cursor = parseCursor(opts.cursor);
+  const from = opts.from ? new Date(`${opts.from}T00:00:00.000Z`) : undefined;
+  const to = opts.to ? new Date(`${opts.to}T23:59:59.999Z`) : undefined;
+  const eventRange = from || to ? { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } : undefined;
 
   const wantDeleted = !opts.type || opts.type === "deleted";
   const wantEdited = !opts.type || opts.type === "edited";
@@ -48,7 +51,8 @@ export async function readArchive(
     const rows = await db.chatMessage.findMany({
       where: {
         orgId: ctx.orgId,
-        deletedAt: { not: null },
+        deletedAt: { not: null, ...(eventRange ?? {}) },
+        ...(opts.personId ? { authorId: opts.personId } : {}),
         ...(opts.spaceId ? { conversation: { spaceId: opts.spaceId } } : {}),
         ...(cursor && cursor.kind === "deleted" ? { id: { lt: cursor.id } } : {}),
       },
@@ -87,7 +91,8 @@ export async function readArchive(
     const rows = await db.chatMessage.findMany({
       where: {
         orgId: ctx.orgId,
-        editedAt: { not: null },
+        editedAt: { not: null, ...(eventRange ?? {}) },
+        ...(opts.personId ? { authorId: opts.personId } : {}),
         deletedAt: null,
         ...(opts.spaceId ? { conversation: { spaceId: opts.spaceId } } : {}),
         ...(cursor && cursor.kind === "edited" ? { id: { lt: cursor.id } } : {}),
@@ -128,6 +133,8 @@ export async function readArchive(
         orgId: ctx.orgId,
         action: { startsWith: "chat." },
         ...(opts.spaceId ? { workspaceId: opts.spaceId } : {}),
+        ...(opts.personId ? { OR: [{ actorId: opts.personId }, { target: opts.personId }] } : {}),
+        ...(eventRange ? { createdAt: eventRange } : {}),
         ...(cursor && cursor.kind === "moderation" ? { id: { lt: cursor.id } } : {}),
       },
       orderBy: { id: "desc" },
@@ -153,11 +160,12 @@ export async function readArchive(
     }
   }
 
-  if (wantClosed) {
+  if (wantClosed && !opts.personId) {
     const rows = await db.conversation.findMany({
       where: {
         orgId: ctx.orgId,
-        closedAt: { not: null },
+        kind: "TOPIC",
+        closedAt: { not: null, ...(eventRange ?? {}) },
         ...(opts.spaceId ? { spaceId: opts.spaceId } : {}),
         ...(cursor && cursor.kind === "closed" ? { id: { lt: cursor.id } } : {}),
       },

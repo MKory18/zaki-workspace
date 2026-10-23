@@ -23,7 +23,7 @@ export async function openDm(ctx: OrgAccessContext, otherId: string): Promise<{ 
     loadOrgFacts(otherId, ctx.orgId),
   ]);
   if (!me || !other || me.status !== "ACTIVE" || other.status !== "ACTIVE") throw new NotFoundError("chat.e.not_found");
-  if (me.role === "GUEST" || other.role === "GUEST") throw new ForbiddenError("chat.e.guest_no_dm");
+  if (me.role === "GUEST" || other.role === "GUEST") throw new ForbiddenError("chat.guest_forbidden");
 
   const dmKey = dmKeyOf(ctx.userId, otherId);
   const existing = await db.conversation.findFirst({
@@ -52,10 +52,12 @@ export async function openDm(ctx: OrgAccessContext, otherId: string): Promise<{ 
 
 /** The DM list of a person: peers, last message, unread count. */
 export async function listDms(ctx: OrgAccessContext) {
+  const org = await loadOrgFacts(ctx.userId, ctx.orgId);
+  if (org?.role === "GUEST") throw new ForbiddenError("chat.guest_forbidden");
   const rows = await db.conversation.findMany({
     where: {
       orgId: ctx.orgId,
-      kind: "DM",
+      kind: { in: ["DM", "GROUP"] },
       members: { some: { userId: ctx.userId } },
     },
     include: {
@@ -95,7 +97,7 @@ export async function listDms(ctx: OrgAccessContext) {
 export async function createGroup(ctx: OrgAccessContext, opts: { title: string; memberIds: string[]; emoji?: string | null }): Promise<{ id: string }> {
   const org = await loadOrgFacts(ctx.userId, ctx.orgId);
   if (!org || org.status !== "ACTIVE") throw new NotFoundError("chat.e.not_found");
-  if (org.role === "GUEST") throw new ForbiddenError("chat.e.guest_no_group");
+  if (org.role === "GUEST") throw new ForbiddenError("chat.guest_forbidden");
 
   const ids = [...new Set([ctx.userId, ...opts.memberIds])];
   const people = await db.organizationMember.findMany({

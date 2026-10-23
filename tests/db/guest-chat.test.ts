@@ -61,6 +61,21 @@ function expectClosed(res: { status: number; json: Record<string, unknown> | nul
 }
 
 describe("chat: a member demoted to GUEST loses every thread", () => {
+  it("active group members can read and post in their group", async () => {
+    const team = await makeTeam();
+    await loginAs(team.member.id);
+    const created = await call(conversationsRoute.POST, {
+      body: { kind: "GROUP", title: GROUP_TITLE, memberIds: [team.owner.id, team.admin.id] },
+    });
+    expect(created.status).toBe(201);
+    const groupId = created.json?.["id"] as string;
+
+    expect((await call(conversationRoute.GET, { params: { id: groupId } })).status).toBe(200);
+    expect(
+      (await call(conversationMessagesRoute.POST, { params: { id: groupId }, body: { body: GROUP_SECRET } })).status,
+    ).toBe(201);
+  });
+
   it("before the demotion the member reads the list, both threads and marks them read", async () => {
     const w = await chatWorld();
     await loginAs(w.member.id);
@@ -97,6 +112,7 @@ describe("chat: a member demoted to GUEST loses every thread", () => {
     await demoteMember(w);
     await loginAs(w.member.id);
 
+    const initialGroupMessageCount = await db.chatMessage.count({ where: { conversationId: w.groupId } });
     const attempts = [
       await call(conversationMessagesRoute.POST, { params: { id: w.groupId }, body: { body: "still here" } }),
       await call(messageRoute.PATCH, { method: "PATCH", params: { id: w.groupMessageId }, body: { body: "rewritten" } }),
@@ -119,7 +135,7 @@ describe("chat: a member demoted to GUEST loses every thread", () => {
     expect(message.body).toBe(GROUP_SECRET);
     expect(message.deletedAt).toBeNull();
     expect(message.pinned).toBe(false);
-    expect(await db.chatMessage.count({ where: { conversationId: w.groupId } })).toBe(1);
+    expect(await db.chatMessage.count({ where: { conversationId: w.groupId } })).toBe(initialGroupMessageCount);
     expect(await db.chatReaction.count({ where: { messageId: w.groupMessageId } })).toBe(0);
     const group = await db.conversation.findUniqueOrThrow({
       where: { id: w.groupId },

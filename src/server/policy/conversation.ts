@@ -24,6 +24,8 @@ export type ConversationFacts = {
   topicType: string; // DISCUSSION | ANNOUNCEMENTS | ...
   /** of the viewer's ConversationMember row, when one exists */
   viewerIsMember: boolean;
+  /** role of the viewer's group row, when this is a GROUP */
+  viewerGroupRole: string | null;
   /** the space member row of the viewer (topics), with the moderators' mute */
   viewerSpaceRole: "ADMIN" | "MEMBER" | "GUEST" | null;
   mutedUntil: Date | null;
@@ -58,6 +60,7 @@ export function canRead(facts: ConversationFacts | null, org: OrgFacts | null): 
   if (!facts || !isActiveOf(org)) return false;
   if (isOwnerOf(org)) return true; // the owner's silent eye reads everything
   if (facts.kind === "DM") return facts.viewerIsMember && facts.dmOtherActive;
+  if (facts.kind === "GROUP") return facts.viewerIsMember && org!.role !== "GUEST";
   if (!facts.viewerSpaceRole) return false; // not in the space, not in the topic
   if (!facts.restricted) return true; // the space's people are the audience
   return facts.viewerIsMember; // a restricted topic takes its own rows
@@ -71,6 +74,7 @@ export function canPost(
 ): boolean {
   if (!canRead(facts, org)) return false;
   if (facts.kind === "DM") return facts.viewerIsMember && facts.dmOtherActive;
+  if (facts.kind === "GROUP") return facts.viewerIsMember && org!.role !== "GUEST";
   if (facts.closedAt) return false; // a closed topic takes no messages until an admin reopens it
   const role = org!.role;
   if (role === "OWNER") return opts.ownerJoined; // the owner posts only where he joined
@@ -85,6 +89,7 @@ export function canPost(
 export function canModerate(facts: ConversationFacts | null, org: OrgFacts | null): boolean {
   if (!facts || !isActiveOf(org)) return false;
   if (isOwnerOf(org)) return true;
+  if (facts.kind === "GROUP") return facts.viewerIsMember && facts.viewerGroupRole === "admin";
   if (org!.role === "ADMIN") return facts.kind !== "DM"; // org admins moderate topics, never DMs
   return isSpaceAdmin(facts.viewerSpaceRole) && facts.kind !== "DM";
 }
@@ -180,7 +185,7 @@ export async function loadConversationFacts(userId: string, conversationId: stri
       : Promise.resolve(null),
     db.conversationMember.findUnique({
       where: { conversationId_userId: { conversationId, userId } },
-      select: { userId: true },
+      select: { userId: true, role: true },
     }),
   ]);
 
@@ -193,6 +198,7 @@ export async function loadConversationFacts(userId: string, conversationId: stri
     postingPolicy: conv.postingPolicy,
     topicType: conv.topicType,
     viewerIsMember: !!convRow,
+    viewerGroupRole: convRow?.role ?? null,
     viewerSpaceRole: spaceRow?.role ?? null,
     mutedUntil: spaceRow?.mutedUntil ?? null,
     dmOtherActive,

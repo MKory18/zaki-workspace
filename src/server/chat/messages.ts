@@ -55,6 +55,7 @@ async function guard(ctx: OrgAccessContext, conversationId: string) {
     loadOrgFacts(ctx.userId, ctx.orgId),
   ]);
   if (!facts || !org || facts.orgId !== ctx.orgId) throw new NotFoundError("chat.e.not_found");
+  if (org.role === "GUEST" && facts.kind !== "TOPIC") throw new ForbiddenError("chat.guest_forbidden");
   return { facts, org };
 }
 
