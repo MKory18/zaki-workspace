@@ -168,6 +168,7 @@ export async function loadConversationFacts(userId: string, conversationId: stri
       closedAt: true,
       postingPolicy: true,
       topicType: true,
+      dmKey: true,
       members: { select: { userId: true } },
     },
   });
@@ -175,7 +176,10 @@ export async function loadConversationFacts(userId: string, conversationId: stri
 
   let dmOtherActive = false;
   if (conv.kind === "DM") {
-    const otherId = conv.members.map((m) => m.userId).find((id) => id !== userId);
+    // the pair comes from the DM's key when it has one, not from the rows that happen to be left:
+    // a lost row on one side must not turn the other side into "nobody" (review A7)
+    const pair = conv.dmKey ? conv.dmKey.split("|") : conv.members.map((m) => m.userId);
+    const otherId = pair.find((id) => id !== userId);
     if (otherId) {
       const other = await db.organizationMember.findUnique({
         where: { organizationId_userId: { organizationId: conv.orgId, userId: otherId } },
