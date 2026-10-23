@@ -37,6 +37,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       ? await canReadConversation(actor.userId, att.attachment.message!.conversationId)
       : att.file.uploaderId === actor.userId;
     if (!mayRead) return notFound();
+    // the file of a deleted message is gone for everybody but the OWNER (redact.ts drops it from the DTO too)
+    if (att.attachment.message?.deletedAt && !actor.isOwner) return notFound();
 
     return bytesResponse(req, att.buffer, att.mimeType, att.file.name);
   });
