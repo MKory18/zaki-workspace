@@ -36,8 +36,8 @@ export const hqSpaceIdOf = (orgId: string): string => `ws_hq_${orgId}`;
 export const hqTopicIdOf = (orgId: string, key: string): string => `cv_hq_${key}_${orgId}`;
 
 /** The HQ space id of the org (key "hq"), or null when the org has none. */
-export async function hqSpaceId(orgId: string): Promise<string | null> {
-  const ws = await db.workspace.findFirst({
+export async function hqSpaceId(orgId: string, client: Pick<typeof db, "workspace"> = db): Promise<string | null> {
+  const ws = await client.workspace.findFirst({
     where: { organizationId: orgId, systemKey: HQ_SYSTEM_KEY },
     select: { id: true },
   });
@@ -150,9 +150,14 @@ export async function removePersonFromHq(
 }
 
 /** The audit row of a chat removal from HQ (an action of its own, so the archive can find it). */
-export async function removePersonAudit(orgId: string, actorId: string, userId: string): Promise<void> {
-  const spaceId = await hqSpaceId(orgId);
-  await db.auditLog.create({
+export async function removePersonAudit(
+  orgId: string,
+  actorId: string,
+  userId: string,
+  client: Pick<typeof db, "workspace" | "auditLog"> = db,
+): Promise<void> {
+  const spaceId = await hqSpaceId(orgId, client);
+  await client.auditLog.create({
     data: {
       action: "org.member_offboarded_chat",
       actorId,
