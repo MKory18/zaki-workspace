@@ -2,11 +2,18 @@ import { db } from "@/server/db";
 
 /**
  * Presence is in-memory per server process in Phase 3: a single Next.js instance serves
- * the whole workspace, so a module-level map is enough (no Redis in the stack). A user
- * is "online" from the moment one of their SSE clients connects until 30 s after the
- * last one disconnects.
+ * the whole workspace (no Redis in the stack). A user is "online" from the moment one of
+ * their SSE clients connects until 30 s after the last one disconnects.
+ *
+ * The map lives on `globalThis`, like the hub's registry: `/api/rt` writes it and other routes
+ * (sending a message decides who gets a bell) read it, and Next may load this module more
+ * than once in one process. A module-level map gave each copy its own, mostly empty view.
  */
-const lastSeen = new Map<string, number>();
+declare global {
+  // eslint-disable-next-line no-var
+  var __zkRtPresence: Map<string, number> | undefined;
+}
+const lastSeen: Map<string, number> = (globalThis.__zkRtPresence ??= new Map<string, number>());
 
 const ONLINE_WINDOW_MS = 30_000;
 

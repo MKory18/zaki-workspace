@@ -40,30 +40,50 @@ export const TYPING_TTL_MS = 6_000;
 /** Postgres advisory lock key for the hourly purge job (any constant bigint). */
 export const PURGE_LOCK_KEY = 742271;
 
-let registry: RegistryEntry[] = [];
-let nextCid = 1;
-const typingUntil = new Map<string, { userId: string; name: string; until: number }>();
-const typingLastSent = new Map<string, number>();
+/**
+ * The hub's state lives on `globalThis`, like the LISTEN client (listener.ts). Next loads this module
+ * more than once in one process: the listener is started from `instrumentation.ts` and the streams
+ * register through `/api/rt`, each with its own copy of the module. With module-level state the
+ * listener handed every event to its own, EMPTY registry, and nothing ever reached a browser.
+ */
+interface HubState {
+  registry: RegistryEntry[];
+  nextCid: number;
+  typingUntil: Map<string, { userId: string; name: string; until: number }>;
+  typingLastSent: Map<string, number>;
+}
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __zkRtHub: HubState | undefined;
+}
+
+function hub(): HubState {
+  if (!globalThis.__zkRtHub) {
+    globalThis.__zkRtHub = { registry: [], nextCid: 1, typingUntil: new Map(), typingLastSent: new Map() };
+  }
+  return globalThis.__zkRtHub;
+}
 
 /** Test hook: clears the registry and typing state (never call from server code). */
 export function resetHubForTests(): void {
-  registry = [];
-  typingUntil.clear();
-  typingLastSent.clear();
+  hub().registry = [];
+  hub().typingUntil.clear();
+  hub().typingLastSent.clear();
 }
 
 export function clientCount(): number {
-  return registry.length;
+  return hub().registry.length;
 }
 
 export function clientsOfOrg(orgId: string): RtClient[] {
-  return registry.filter((r) => r.client.orgId === orgId).map((r) => r.client);
+  return hub().registry.filter((r) => r.client.orgId === orgId).map((r) => r.client);
 }
 
 export function addClient(client: Omit<RtClient, "cid">): RtClient {
-  const full: RtClient = { ...client, cid: nextCid++ };
+  const full: RtClient = { ...client, cid: hub().nextCid++ };
   // A user holds at most MAX_STREAMS_PER_USER streams; a newer connection closes the oldest.
-  const mine = registry.filter((r) => r.client.userId === client.userId);
+  const mine = hub().registry.filter((r) => r.client.userId === client.userId);
   if (mine.length >= MAX_STREAMS_PER_USER) {
     const oldest = mine.reduce((a, b) => (a.client.cid <= b.client.cid ? a : b));
     removeClient(oldest.client);
@@ -73,34 +93,34 @@ export function addClient(client: Omit<RtClient, "cid">): RtClient {
       // already gone
     }
   }
-  registry.push({ client: full, cache: new Map() });
+  hub().registry.push({ client: full, cache: new Map() });
   touchPresence(client.userId);
   return full;
 }
 
 export function removeClient(client: RtClient): void {
-  registry = registry.filter((r) => r.client !== client && r.client.cid !== client.cid);
-  if (!registry.some((r) => r.client.userId === client.userId)) dropPresence(client.userId);
+  hub().registry = hub().registry.filter((r) => r.client !== client && r.client.cid !== client.cid);
+  if (!hub().registry.some((r) => r.client.userId === client.userId)) dropPresence(client.userId);
 }
 
 /** The per-user throttle of POST /api/rt/typing: one emission per 2 s per user+conversation. */
 export function allowTyping(key: string, now: number = Date.now()): boolean {
-  const last = typingLastSent.get(key);
+  const last = hub().typingLastSent.get(key);
   if (typeof last === "number" && now - last < 2000) return false;
-  typingLastSent.set(key, now);
+  hub().typingLastSent.set(key, now);
   return true;
 }
 
 /** Records an in-memory typing state (6 s expiry); never stored anywhere. */
 export function setTyping(conversationId: string, userId: string, name: string, now: number = Date.now()): void {
-  typingUntil.set(`${conversationId}|${userId}`, { userId, name, until: now + TYPING_TTL_MS });
+  hub().typingUntil.set(`${conversationId}|${userId}`, { userId, name, until: now + TYPING_TTL_MS });
 }
 
 export function typingIn(conversationId: string, now: number = Date.now()): { userId: string; name: string }[] {
   const out: { userId: string; name: string }[] = [];
-  for (const [key, v] of typingUntil) {
+  for (const [key, v] of hub().typingUntil) {
     if (v.until <= now) {
-      typingUntil.delete(key);
+      hub().typingUntil.delete(key);
       continue;
     }
     if (key.startsWith(`${conversationId}|`)) out.push({ userId: v.userId, name: v.name });
@@ -120,10 +140,10 @@ export function frameOf(event: RtEvent, extra: Record<string, unknown> = {}): st
 
 function invalidateCache(event: RtEvent): void {
   if (event.kind === "membership.changed") {
-    for (const r of registry) r.cache.clear();
+    for (const r of hub().registry) r.cache.clear();
   } else if (event.kind === "conversation.changed" && event.ids.conversationId) {
     const cv = event.ids.conversationId;
-    for (const r of registry) r.cache.delete(cv);
+    for (const r of hub().registry) r.cache.delete(cv);
   }
 }
 
@@ -155,7 +175,7 @@ export async function deliverEvent(event: RtEvent): Promise<void> {
   // it goes to everybody allowed to see the conversation, so the OTHER side's ticks and reader
   // avatars move live. Only `targetUserId` narrows an event to one person.
   const target = event.ids.targetUserId;
-  const targets = registry.filter((r) => r.client.orgId === event.orgId && (target === undefined || target === r.client.userId));
+  const targets = hub().registry.filter((r) => r.client.orgId === event.orgId && (target === undefined || target === r.client.userId));
   const delivered = new Set<string>();
   const isDm = event.kind === "message.created" && !!event.ids.conversationId && (await isDmConversation(event.ids.conversationId));
   for (const entry of targets) {
@@ -203,7 +223,7 @@ export async function broadcastTyping(
 ): Promise<number> {
   const event: RtEvent = { id: "", orgId, kind: "typing", ids: { conversationId, userId } };
   let sent = 0;
-  const targets = registry.filter((r) => r.client.orgId === orgId && r.client.userId !== userId);
+  const targets = hub().registry.filter((r) => r.client.orgId === orgId && r.client.userId !== userId);
   for (const entry of targets) {
     if (!(await maySee(entry, event))) continue;
     try {
