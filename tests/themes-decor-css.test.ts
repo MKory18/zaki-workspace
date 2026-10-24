@@ -5,13 +5,15 @@ import {
   CAPS,
   COMPOSED,
   DECOR_KINDS,
-  FAINT,
   MOTION,
+  PATTERN,
   PHOTOGRAPHIC,
   SCRIM,
   WASH,
   allDecorFiles,
   decorFilesOf,
+  patternTileSvg,
+  patternTileUrl,
   renderDecorCss,
 } from "@/lib/themes/decor";
 import { DECOR_CSS_FILE, ROOT, normalizeText, parseCss, read, valueOf, type CssRule } from "./themes-decor-helpers";
@@ -47,8 +49,10 @@ const one = (list: CssRule[], what: string): CssRule => {
   return list[0] as CssRule;
 };
 const urlsIn = (value: string): string[] => [...value.matchAll(/url\(([^)]+)\)/g)].map((m) => (m[1] as string).replace(/["']/g, ""));
+/** The files a set of rules asks for (the star tile is drawn in code: a data: URL, no file). */
 const filesOfRules = (list: CssRule[]): string[] =>
-  list.flatMap((r) => r.decls.flatMap(([, v]) => urlsIn(v))).map((u) => u.replace("/brand/decor/", ""));
+  list.flatMap((r) => r.decls.flatMap(([, v]) => urlsIn(v))).filter((u) => !u.startsWith("data:")).map((u) => u.replace("/brand/decor/", ""));
+const PATTERN_KEYS = Object.keys(PATTERN) as Array<keyof typeof PATTERN>;
 
 describe("the stylesheet is generated, and the committed file is what the generator makes", () => {
   it("decor.css equals renderDecorCss() — no hand edit, no stale copy", () => {
@@ -85,9 +89,9 @@ describe("it names no colour of its own: every colour is a variable of the theme
     for (const call of code.matchAll(/\brgb\([^;]{0,24}/g)) expect(call[0], call[0]).toMatch(/^rgb\(var\(--[a-z0-9-]+\)/);
   });
 
-  it("— and only the two the decoration is built from: accent and surface", () => {
+  it("— and only the three the decoration is built from: accent, the star's gold (accent-2) and surface", () => {
     const names = new Set([...code.matchAll(/var\(--([a-z0-9-]+)\)/g)].map((m) => m[1]));
-    expect([...names].sort()).toEqual(["accent", "surface"]);
+    expect([...names].sort()).toEqual(["accent", "accent-2", "surface"]);
   });
 });
 
@@ -139,11 +143,8 @@ describe("«light» is still, «full» moves slowly — and it can always be sto
     const drift = moving.filter((m) => m.v.startsWith(`zk-decor-drift ${MOTION.drift}s`));
     const turn = moving.filter((m) => m.v.startsWith(`zk-decor-turn ${MOTION.turn}s`));
     const zoom = moving.filter((m) => m.v.startsWith(`zk-decor-zoom ${MOTION.zoom}s`));
-    expect(drift.map((m) => m.selector)).toEqual(['[data-decor="full"][data-theme="day"] .zk-decor']);
-    expect(turn.map((m) => m.selector).sort()).toEqual([
-      '[data-decor="full"][data-theme="islamic-calm"] .zk-decor-door::before',
-      '[data-decor="full"][data-theme="islamic-epic"] .zk-decor-door::before',
-    ]);
+    expect(drift.map((m) => m.selector)).toEqual(['[data-decor="full"][data-theme="night"] .zk-decor', '[data-decor="full"][data-theme="day"] .zk-decor']);
+    expect(turn.map((m) => m.selector).sort()).toEqual(['[data-decor="full"][data-theme="islamic-epic"] .zk-decor-door::before']);
     expect(zoom.map((m) => m.selector)).toEqual(['[data-decor="full"][data-theme="neon-coast"] .zk-decor-door']);
     expect(keyframes.map((k) => k.name).sort()).toEqual(["zk-decor-drift", "zk-decor-turn", "zk-decor-zoom"]);
   });
@@ -154,7 +155,7 @@ describe("«light» is still, «full» moves slowly — and it can always be sto
     const neon = animated.filter((r) => r.selector.includes('data-theme="neon-coast"'));
     for (const r of neon) expect(valueOf(r, "animation") ?? "", r.selector).toContain("zk-decor-zoom");
     // the corners and the skyline are anchored to the edges: the Islamic themes turn the rosette and nothing else
-    const islamic = animated.filter((r) => /data-theme="islamic-(calm|epic)"/.test(r.selector));
+    const islamic = animated.filter((r) => /data-theme="islamic-epic"/.test(r.selector));
     for (const r of islamic) expect(valueOf(r, "animation") ?? "", r.selector).toContain("zk-decor-turn");
   });
 
@@ -201,7 +202,7 @@ describe("every theme draws every place — and only its own files", () => {
 describe("a mask carries no colour of its own: the colour is the theme's accent, painted through it", () => {
   const masked = rules.filter((r) => r.decls.some(([p]) => p === "mask" || p === "-webkit-mask"));
 
-  it("— there are masks (the two Islamic themes and «نهاري»), and each is written for both Safari and the standard", () => {
+  it("— there are masks («إسلامي ملحمي», «ليل» and «نهار»), and each is written for both Safari and the standard", () => {
     expect(masked.length).toBeGreaterThan(15);
     for (const r of masked) {
       const std = valueOf(r, "mask");
@@ -218,8 +219,16 @@ describe("a mask carries no colour of its own: the colour is the theme's accent,
     }
   });
 
-  it("— the files of a mask are .webp under /brand/decor, nothing else", () => {
-    for (const r of rules) for (const [, v] of r.decls) for (const u of urlsIn(v)) expect(u, r.selector).toMatch(/^\/brand\/decor\/[a-z.-]+\.webp$/);
+  it("— the files of a mask are .webp under /brand/decor, or the star tile drawn in code — nothing else, nothing from another site", () => {
+    const tiles = new Set(PATTERN_KEYS.map((k) => patternTileUrl(PATTERN[k].tile)));
+    for (const r of rules) {
+      for (const [, v] of r.decls) {
+        for (const u of urlsIn(v)) {
+          if (u.startsWith("data:")) expect(tiles.has(u), r.selector).toBe(true);
+          else expect(u, r.selector).toMatch(/^\/brand\/decor\/[a-z.-]+\.webp$/);
+        }
+      }
+    }
   });
 });
 
@@ -235,9 +244,13 @@ describe("how loud each layer is has a number, and the number has a ceiling", ()
     expect(CAPS).toMatchObject({ rosette: 0.2, corner: 0.3, skyline: 0.3 });
   });
 
-  it("— «نهاري» is the highest-contrast pair, so its ornament is barely there", () => {
-    expect(FAINT.day.ink).toBeLessThanOrEqual(CAPS.faint);
-    expect(CAPS.faint).toBeLessThanOrEqual(0.1);
+  it("— the field of stars of «ليل» and «نهار» is quiet (it is behind words): at most 0.12, day no louder than night", () => {
+    expect(CAPS.pattern).toBeLessThanOrEqual(0.12);
+    for (const key of PATTERN_KEYS) {
+      expect(PATTERN[key].ink, key).toBeLessThanOrEqual(CAPS.pattern);
+      expect(PATTERN[key].ink, key).toBeGreaterThan(0.03);
+    }
+    expect(PATTERN.day.ink).toBeLessThanOrEqual(PATTERN.night.ink);
   });
 
   it("— the photographs: the empty-list picture ≤ 0.2, the panel under the words at least 0.75", () => {
@@ -250,7 +263,7 @@ describe("how loud each layer is has a number, and the number has a ceiling", ()
   });
 
   it("— and the stylesheet says exactly the numbers the tables hold (the numbers that tests below check)", () => {
-    for (const [theme, c] of Object.entries(COMPOSED) as Array<[ThemeKey, (typeof COMPOSED)["islamic-calm"]]>) {
+    for (const [theme, c] of Object.entries(COMPOSED) as Array<[ThemeKey, (typeof COMPOSED)["islamic-epic"]]>) {
       const rosette = one(rulesOf(theme, ".zk-decor-door::before"), `${theme} door rosette`);
       const corner = one(rulesOf(theme, ".zk-decor-door::after"), `${theme} door corner`);
       const skyline = one(rulesOf(theme, ".zk-decor-door .zk-decor-b"), `${theme} door skyline`);
@@ -258,13 +271,15 @@ describe("how loud each layer is has a number, and the number has a ceiling", ()
       expect(valueOf(corner, "opacity")).toBe(String(c.corner));
       expect(valueOf(skyline, "opacity")).toBe(String(c.skyline));
     }
-    const day = forTheme("day").filter((r) => valueOf(r, "opacity"));
-    expect(day.length).toBeGreaterThan(0);
-    for (const r of day) expect(valueOf(r, "opacity"), r.selector).toBe(String(FAINT.day.ink));
+    for (const key of PATTERN_KEYS) {
+      const drawn = forTheme(key).filter((r) => valueOf(r, "opacity"));
+      expect(drawn.length).toBe(4);
+      for (const r of drawn) expect(valueOf(r, "opacity"), r.selector).toBe(String(PATTERN[key].ink));
+    }
   });
 });
 
-describe("the two Islamic themes wear three drawings, each in its own place", () => {
+describe("«إسلامي ملحمي» wears three drawings, each in its own place", () => {
   const themes = Object.keys(COMPOSED) as Array<keyof typeof COMPOSED>;
 
   it("— the door: a rosette, a corner at each top corner (the left one is the right one turned), and the skyline", () => {
@@ -326,19 +341,34 @@ describe("the two Islamic themes wear three drawings, each in its own place", ()
   });
 });
 
-describe("«نهاري» wears one faint mask, in the same places", () => {
-  it("— the door, an empty list, the header and the strip, each at the one ink", () => {
-    for (const tail of [".zk-decor-door::after", ".zk-decor-empty::after", ".zk-decor-sidebar::after", ".zk-decor-strip::after"]) {
-      const r = one(rulesOf("day", tail), `day ${tail}`);
-      expect(valueOf(r, "mask")).toContain(`/brand/decor/${FAINT.day.file}`);
-      expect(valueOf(r, "opacity")).toBe(String(FAINT.day.ink));
+describe("«ليل» and «نهار» wear a field of eight-pointed stars, drawn in code, in the star's gold", () => {
+  it("— the door, an empty list, the header and the strip: the tile, repeated, painted in accent-2 at the one ink", () => {
+    for (const key of PATTERN_KEYS) {
+      const { ink, tile } = PATTERN[key];
+      for (const tail of [".zk-decor-door::after", ".zk-decor-empty::after", ".zk-decor-sidebar::after", ".zk-decor-strip::after"]) {
+        const r = one(rulesOf(key, tail), `${key} ${tail}`);
+        expect(valueOf(r, "mask")).toBe(`url(${patternTileUrl(tile)}) 0 0 / ${tile}px ${tile}px repeat`);
+        expect(valueOf(r, "-webkit-mask")).toBe(valueOf(r, "mask"));
+        expect(valueOf(r, "background-color")).toBe("rgb(var(--accent-2))");
+        expect(valueOf(r, "opacity")).toBe(String(ink));
+      }
+      const empty = one(rulesOf(key, ".zk-decor-empty::after"), `${key} empty`);
+      expect(valueOf(empty, "width")).toBe("min(320px, 100%)");
     }
   });
 
-  it("— and at the full level it is the one that drifts", () => {
+  it("— the tile is an eight-pointed star in the middle and a quarter star at each corner, and asks for nothing", () => {
+    const svg = patternTileSvg(56);
+    const polygons = [...svg.matchAll(/<polygon points="([^"]+)"\/>/g)].map((m) => (m[1] as string).split(" "));
+    expect(polygons).toHaveLength(5);
+    for (const points of polygons) expect(points).toHaveLength(16);
+    expect(svg).not.toMatch(/href|<image|<script|url\(/);
+    expect(patternTileUrl(56)).toBe(`data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`);
+  });
+
+  it("— and at the full level these two are the ones that drift (a tile has no edge to uncover)", () => {
     const drift = rules.filter((r) => valueOf(r, "animation")?.startsWith("zk-decor-drift"));
-    expect(drift).toHaveLength(1);
-    expect(drift[0]?.selector).toContain('data-theme="day"');
+    expect(drift.map((r) => r.selector)).toEqual(PATTERN_KEYS.map((k) => `[data-decor="full"][data-theme="${k}"] .zk-decor`));
   });
 });
 
@@ -424,7 +454,7 @@ describe("text over a picture sits on a scrim; a picture the owner adds later is
     expect(valueOf(hidden, "display")).toBe("none");
     const shown = rules.filter((r) => valueOf(r, "display") === "block" && r.selector.includes("[data-art-slot="));
     const themesShown = new Set(shown.flatMap((r) => [...r.selector.matchAll(/data-theme="([a-z-]+)"/g)].map((m) => m[1])));
-    expect([...themesShown].sort()).toEqual(["islamic-calm", "islamic-epic"]);
+    expect([...themesShown].sort()).toEqual(["islamic-epic"]);
     const off = rules.filter((r) => r.selector.startsWith('[data-decor="off"] [data-art-slot='));
     expect(off.map((r) => r.selector).sort()).toEqual(['[data-decor="off"] [data-art-slot="login-door"]', '[data-decor="off"] [data-art-slot="today-strip"]']);
   });

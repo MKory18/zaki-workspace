@@ -7,7 +7,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { THEME_KEYS, type ThemeKey } from "@/lib/themes/registry";
+import { DEFAULT_THEME, THEME_KEYS, type ThemeKey } from "@/lib/themes/registry";
 
 export const ROOT = path.resolve(__dirname, "..");
 export const SRC = path.join(ROOT, "src");
@@ -69,26 +69,28 @@ export interface Tokens {
   muted: Rgb;
   accent: Rgb;
   "accent-fg": Rgb;
+  "accent-2": Rgb;
 }
 
 /**
- * The four palettes, mapped the way the briefing maps the OMS palettes onto the Workspace tokens
- * (surface <- background, surface-1 <- card, surface-2 <- surface, fg <- foreground, fg-muted <-
- * muted-foreground, accent <- primary). Source: the OMS `system-themes.ts` (read-only).
+ * The four palettes: «ليل» and «نهار» from the «نجمة وطريق» mock-up, the other two mapped the way the
+ * briefing maps the OMS palettes onto the Workspace tokens (surface <- background, surface-1 <- card,
+ * surface-2 <- surface, fg <- foreground, fg-muted <- muted-foreground, accent <- primary).
  *
  * It is only the FALLBACK: `themeTokens()` reads the real values from the generated theme stylesheet
  * as soon as it exists, so a palette that the theme agent tunes is what these tests judge.
  */
 const FALLBACK: Record<ThemeKey, Record<keyof Tokens, string>> = {
-  "islamic-calm": {
-    surface: "#F6F1E7",
-    "surface-1": "#FFFFFF",
-    "surface-2": "#F2F2F2",
-    fg: "#1D2A29",
-    "fg-muted": "#3F635E",
-    muted: "#55716E",
-    accent: "#0E5E55",
-    "accent-fg": "#FFFFFF",
+  night: {
+    surface: "#050F1F",
+    "surface-1": "#0A1A2E",
+    "surface-2": "#0F2438",
+    fg: "#E6F1F4",
+    "fg-muted": "#AFC4CE",
+    muted: "#9FB6C2",
+    accent: "#36B5CC",
+    "accent-fg": "#04182B",
+    "accent-2": "#E3B04B",
   },
   "islamic-epic": {
     surface: "#0A1430",
@@ -99,6 +101,7 @@ const FALLBACK: Record<ThemeKey, Record<keyof Tokens, string>> = {
     muted: "#A79F8B",
     accent: "#D4AF5A",
     "accent-fg": "#0A0A0A",
+    "accent-2": "#5CC6B9",
   },
   "neon-coast": {
     surface: "#061C28",
@@ -109,20 +112,22 @@ const FALLBACK: Record<ThemeKey, Record<keyof Tokens, string>> = {
     muted: "#7FA7B8",
     accent: "#4DD9DB",
     "accent-fg": "#05222E",
+    "accent-2": "#F067AE",
   },
   day: {
-    surface: "#FFFFFF",
-    "surface-1": "#F4F8FA",
-    "surface-2": "#E9F0F3",
+    surface: "#F6F2EA",
+    "surface-1": "#FFFDF8",
+    "surface-2": "#EFE9DE",
     fg: "#0C3252",
-    "fg-muted": "#4A6272",
-    muted: "#5F6C75",
+    "fg-muted": "#4E5A60",
+    muted: "#5E6B72",
     accent: "#1A6382",
     "accent-fg": "#FFFFFF",
+    "accent-2": "#A8761F",
   },
 };
 
-const TOKEN_NAMES = Object.keys(FALLBACK["islamic-calm"]) as Array<keyof Tokens>;
+const TOKEN_NAMES = Object.keys(FALLBACK[DEFAULT_THEME]) as Array<keyof Tokens>;
 
 /** `--name: R G B;` declarations of one block, by token name. */
 function triplets(body: string): Partial<Record<keyof Tokens, Rgb>> {
@@ -152,7 +157,7 @@ export function themeTokens(): { source: "themes.css" | "fallback"; byTheme: Rec
     for (const key of THEME_KEYS) {
       const named = new RegExp(`data-theme\\s*=\\s*["']?${key}["']?`).test(selector);
       // the default theme may be declared under `:root` / `html`
-      const isRoot = key === "islamic-calm" && /(^|,)\s*(:root|html)\s*(,|$)/.test(selector.trim());
+      const isRoot = key === DEFAULT_THEME && /(^|,)\s*(:root|html)\s*(,|$)/.test(selector.trim());
       if (named || isRoot) {
         found[key] = { ...(found[key] ?? {}), ...values };
         hit = true;

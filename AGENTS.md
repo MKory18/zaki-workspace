@@ -289,8 +289,8 @@ other way is a bug.
   digits); `tests/arabic-ui.test.ts` fails on a raw enum, a Latin word or a French/English date.
 - **Colours come from the theme tokens**, never from Tailwind's default palette or a hex value:
   `text-danger`, `bg-ok/10`, `border-warn/40`, `text-info`, `bg-cat-3/10` (and `bg-surface-1`,
-  `text-fg-muted`, `border-border`, `bg-accent` ...). Four themes (`islamic-calm` default,
-  `islamic-epic`, `neon-coast`, `day`) define the tokens in `src/lib/themes/palettes.ts`;
+  `text-fg-muted`, `border-border`, `bg-accent` ...). Four themes (`night` default,
+  `day`, `islamic-epic`, `neon-coast`; the retired `islamic-calm` is read as `night` by `themeOf`) define the tokens in `src/lib/themes/palettes.ts`;
   `src/app/themes.css` and `src/components/theme/decor.css` are generated
   (`node scripts/build-themes-css.mjs`, `node scripts/build-decor-css.mjs`) and a test fails when
   they drift. Decoration (ornament, photographs) appears only on the login door, empty states, the

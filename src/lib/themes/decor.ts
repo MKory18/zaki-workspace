@@ -32,21 +32,23 @@
  *   off    draws nothing: the layer is `display: none`, so no picture is even requested.
  *   light  (the default) static washes and ornament. Nothing moves, so there is nothing for reduced motion to
  *          switch off and nothing for a hidden tab to waste a frame on.
- *   full   adds one slow motion: a 24 s drift (day), a 420 s turn of the door's rosette (the Islamic themes), a
+ *   full   adds one slow motion: a 24 s drift (night, day), a 420 s turn of the door's rosette (epic), a
  *          70 s zoom of the door photograph (neon coast). `prefers-reduced-motion` REMOVES it (not slows it), and
  *          a hidden tab pauses it (`watchDecorVisibility`, a `data-decor-hidden` attribute the stylesheet reads).
  *
  * ── WHAT EACH THEME WEARS ──
  *
- *   islamic-calm, islamic-epic   three MASKS — rosette, corner, skyline — white on transparent, painted in the
+ *   night, day                   a PATTERN of eight-pointed stars, drawn in code (an SVG tile written into the
+ *                                sheet, no file on the disk), painted in the star's gold (`accent-2`) through a
+ *                                CSS mask: «نجمة وطريق», the owner's adopted look. A tile repeats without an edge,
+ *                                so the layer may drift.
+ *   islamic-epic                 three MASKS — rosette, corner, skyline — white on transparent, painted in the
  *                                theme's accent through CSS `mask`: shape only, never a colour of its own. A
  *                                composed theme turns its rosette; it does not drift (a drift would show a seam of
  *                                background along the edges the corners and the roofline are anchored to).
  *   neon-coast                   three opaque PHOTOGRAPHS (the owner's own generations) under a veil made of the
  *                                theme's surface colour. A photograph does not drift either; the door zooms from
  *                                its centre, which cannot uncover an edge. The door's text column becomes a panel.
- *   day                          one very faint mask: «نهاري» is the highest-contrast pair, so its ornament is
- *                                barely there.
  *
  * ── RTL ──
  *
@@ -92,7 +94,6 @@ export interface Composition {
   readonly skyline: number;
 }
 export const COMPOSED = {
-  "islamic-calm": { rosette: 0.14, corner: 0.24, skyline: 0.16 },
   "islamic-epic": { rosette: 0.15, corner: 0.28, skyline: 0.17 },
 } satisfies Record<string, Composition>;
 
@@ -100,12 +101,53 @@ export const COMPOSED = {
 export const PIECES = ["rosette", "corner", "skyline"] as const;
 
 /**
- * «نهاري» — one faint mask. Its opacity is the OMS's measured one: the mask moves almost no light against a
- * white page, and a louder one would be the loudest pair in the set.
+ * ── «نجمة وطريق» — A FIELD OF STARS, DRAWN IN CODE ──
+ *
+ * «ليل» and «نهار» wear one pattern: an eight-pointed star on a square tile, with a quarter star in each corner
+ * so the tiles meet as a staggered field. It is vector, written into the sheet as an SVG `data:` URL
+ * (`patternTileUrl`), so there is no file to download, nothing to license and nothing to go stale. It is painted
+ * in `accent-2`, the star's gold, through the mask: shape only, the colour is the theme's.
+ *
+ * `ink` is the field's opacity (it is behind words, so the readability test holds it like a rosette); `tile` is
+ * the tile's size in px. Night carries a little more than day: gold on paper is the louder pair.
  */
-export const FAINT = {
-  day: { file: "day.webp", ink: 0.031 },
-} satisfies Record<string, { file: string; ink: number }>;
+export interface Pattern {
+  readonly ink: number;
+  readonly tile: number;
+}
+export const PATTERN = {
+  night: { ink: 0.08, tile: 56 },
+  day: { ink: 0.035, tile: 56 }, // a hover row of paper (surface-2) takes the accent link to 4.5:1 at this ink
+} satisfies Record<string, Pattern>;
+
+/** The 16 corners of an eight-pointed star of outer radius `r` around (cx, cy), as an SVG polygon's points. */
+function starPoints(cx: number, cy: number, r: number): string {
+  const inner = (r * Math.cos(Math.PI / 4)) / Math.cos(Math.PI / 8);
+  const pts: string[] = [];
+  for (let i = 0; i < 16; i++) {
+    const radius = i % 2 === 0 ? r : inner;
+    const angle = (i * Math.PI) / 8 - Math.PI / 2;
+    pts.push(`${+(cx + radius * Math.cos(angle)).toFixed(2)},${+(cy + radius * Math.sin(angle)).toFixed(2)}`);
+  }
+  return pts.join(" ");
+}
+
+/** The tile of the star field: a star in the middle and a quarter star in each corner, opaque on transparent. */
+export function patternTileSvg(size: number): string {
+  const r = size * 0.18;
+  const at: Array<[number, number]> = [
+    [size / 2, size / 2],
+    [0, 0],
+    [size, 0],
+    [0, size],
+    [size, size],
+  ];
+  const stars = at.map(([x, y]) => `<polygon points="${starPoints(x, y, r)}"/>`).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${stars}</svg>`;
+}
+
+/** The tile as the `data:` URL the mask uses (base64: the sheet then holds no quote, no colour word, no `#`). */
+export const patternTileUrl = (size: number): string => `data:image/svg+xml;base64,${btoa(patternTileSvg(size))}`;
 
 /**
  * ── A THEME THAT WEARS PHOTOGRAPHS — THE ONE PLACE «MASKS ONLY» IS BROKEN, AND WHAT HOLDS IN ITS PLACE ──
@@ -172,7 +214,7 @@ export const CAPS = {
   rosette: 0.2,
   corner: 0.3,
   skyline: 0.3,
-  faint: 0.1,
+  pattern: 0.12,
   empty: 0.2,
   wash: 0.2,
   /** A panel under words over a picture is at least this opaque. */
@@ -183,11 +225,10 @@ export const CAPS = {
 
 type ComposedKey = keyof typeof COMPOSED;
 type PhotographicKey = keyof typeof PHOTOGRAPHIC;
-type FaintKey = keyof typeof FAINT;
+type PatternKey = keyof typeof PATTERN;
 
 const isComposed = (key: ThemeKey): key is ComposedKey & ThemeKey => key in COMPOSED;
 const isPhotographic = (key: ThemeKey): key is PhotographicKey & ThemeKey => key in PHOTOGRAPHIC;
-const isFaint = (key: ThemeKey): key is FaintKey & ThemeKey => key in FAINT;
 
 /** The files (names under public/brand/decor) a theme draws with. */
 export function decorFilesOf(theme: ThemeKey): string[] {
@@ -196,8 +237,7 @@ export function decorFilesOf(theme: ThemeKey): string[] {
     const p = PHOTOGRAPHIC[theme];
     return [p.door, p.doorTall, p.strip];
   }
-  if (isFaint(theme)) return [FAINT[theme].file];
-  return [];
+  return []; // a pattern theme draws in code: no file
 }
 
 /** Every file of every theme: exactly what public/brand/decor must hold. */
@@ -233,12 +273,12 @@ export const ART_SLOTS = [
 export type ArtSlotName = (typeof ART_SLOTS)[number];
 
 /**
- * The two slots that are SCENES painted in the Islamic palettes (deep emerald, gold). They belong to the two
- * Islamic themes: «ساحل النيون» has its own photographs and «نهاري» is plain. The stylesheet hides them elsewhere
- * (and when decoration is off), so no other theme ever downloads them.
+ * The two slots that are SCENES painted in the Islamic palette (night navy, gold). They belong to «إسلامي ملحمي»:
+ * «ساحل النيون» has its own photographs, and «ليل» and «نهار» their field of stars. The stylesheet hides them
+ * elsewhere (and when decoration is off), so no other theme ever downloads them.
  */
 export const ART_SCENES = ["login-door", "today-strip"] as const satisfies readonly ArtSlotName[];
-const SCENE_THEMES = ["islamic-calm", "islamic-epic"] as const satisfies readonly ThemeKey[];
+const SCENE_THEMES = ["islamic-epic"] as const satisfies readonly ThemeKey[];
 
 export function isArtSlot(value: unknown): value is ArtSlotName {
   return typeof value === "string" && (ART_SLOTS as readonly string[]).includes(value);
@@ -438,18 +478,25 @@ function composedRules(key: ComposedKey): string[] {
   ];
 }
 
-/** «نهاري»: one faint mask in the same places. */
-function faintRules(): string[] {
-  const P = theme("day");
-  const { file, ink: opacity } = FAINT.day;
-  const bled = (): Decl[] => [...pseudo, ...ink(opacity), ...maskOf(file, "left -40px top -64px", "200px")];
+/** «ليل» and «نهار»: the field of stars, in the star's gold, in the four places. */
+function patternRules(key: PatternKey): string[] {
+  const { ink: opacity, tile } = PATTERN[key];
+  const P = theme(key);
+  const stars: Decl[] = [
+    ...pseudo,
+    d("background-color", "rgb(var(--accent-2))"),
+    d("opacity", opacity),
+    ...mask(`url(${patternTileUrl(tile)}) 0 0 / ${tile}px ${tile}px repeat`),
+  ];
   return [
-    banner("DAY — one faint mask, barely there"),
-    rule(`${P} .${DECOR_CLASS}-door::after`, [...pseudo, ...ink(opacity), ...maskOf(file, "center", "min(96vmin, 1020px)")]),
-    rule(`${P} .${DECOR_CLASS}-empty::after`, [...pseudo, ...square, ...ink(opacity), ...maskOf(file, "center", "contain")]),
-    comment("A corner, bled off the top edge, so the strip carries a hint of the ornament rather than a small complete copy of it."),
-    rule(`${P} .${DECOR_CLASS}-sidebar::after`, bled()),
-    rule(`${P} .${DECOR_CLASS}-strip::after`, bled()),
+    banner(`${key.toUpperCase()} — a field of eight-pointed stars, in the star's gold`),
+    comment("Door: the field over the whole screen, behind the opaque card."),
+    rule(`${P} .${DECOR_CLASS}-door::after`, stars),
+    comment("An empty list: the field in a square of at most 320 px centred behind the sentence."),
+    rule(`${P} .${DECOR_CLASS}-empty::after`, [...stars, ...square]),
+    comment("The 72 px header and the Today strip: the same field."),
+    rule(`${P} .${DECOR_CLASS}-sidebar::after`, stars),
+    rule(`${P} .${DECOR_CLASS}-strip::after`, stars),
   ];
 }
 
@@ -500,7 +547,11 @@ function motionRules(): string[] {
     `@keyframes zk-decor-turn {\n  to { transform: rotate(1turn); }\n}`,
     `@keyframes zk-decor-zoom {\n  to { transform: scale(1.06); }\n}`,
     comment("A wash and a glow may wander; a corner and a roofline anchored to the edges may not, and neither may a photograph."),
-    rule(`${full("day")} .${DECOR_CLASS}`, [d("animation", `zk-decor-drift ${MOTION.drift}s ease-in-out infinite alternate`), d("will-change", "transform")]),
+    comment("The field of stars repeats without an edge, so a pattern theme's layer may drift."),
+    rule(
+      (Object.keys(PATTERN) as PatternKey[]).map((key) => `${full(key)} .${DECOR_CLASS}`),
+      [d("animation", `zk-decor-drift ${MOTION.drift}s ease-in-out infinite alternate`), d("will-change", "transform")],
+    ),
     comment("A composed theme turns its rosette, once round in seven minutes: slow enough that nobody sees it turn and everybody sees that it did."),
     rule(composed, [d("animation", `zk-decor-turn ${MOTION.turn}s linear infinite`)]),
     comment("The photograph of the door zooms from its centre, 6% over seventy seconds: a transform that cannot uncover an edge."),
@@ -547,7 +598,7 @@ function artRules(): string[] {
       d("object-position", "center"),
       d("pointer-events", "none"),
     ]),
-    comment("The two scenes are painted in the Islamic palettes: they belong to those two themes, and «off» hides them."),
+    comment("The two scenes are painted in the Islamic palette: they belong to that theme, and «off» hides them."),
     rule(ART_SCENES.map(scene), [d("display", "none")]),
     rule(shown, [d("display", "block")]),
     rule(hiddenOff, [d("display", "none")]),
@@ -583,12 +634,12 @@ export function renderDecorCss(): string {
       " *",
       " * The decoration layer: an aria-hidden div with the classes zk-decor and zk-decor-door, -empty, -sidebar or -strip.",
       " * Everything here is keyed on <html data-theme=... data-decor=off|light|full> and draws with the theme's own",
-      " * variables (--accent, --surface) and nothing else. The four places are the only places; see the module.",
+      " * variables (--accent, --accent-2, --surface) and nothing else. The four places are the only places; see the module.",
       " */",
     ].join("\n"),
     ...layerRules(),
     ...(Object.keys(COMPOSED) as ComposedKey[]).flatMap((key) => composedRules(key)),
-    ...faintRules(),
+    ...(Object.keys(PATTERN) as PatternKey[]).flatMap((key) => patternRules(key)),
     ...(Object.keys(PHOTOGRAPHIC) as PhotographicKey[]).flatMap((key) => photographicRules(key)),
     ...motionRules(),
     ...artRules(),

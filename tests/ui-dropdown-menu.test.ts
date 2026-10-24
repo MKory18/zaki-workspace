@@ -24,9 +24,9 @@ function items(): ReactElement[] {
     createElement(DropdownMenuCheckboxItem, { key: "c2", checked: false }, "إخفاء الأرشيف"),
     createElement(
       DropdownMenuRadioGroup,
-      { key: "r", value: "calm" },
-      createElement(DropdownMenuRadioItem, { value: "calm" }, "إسلامي هادي"),
-      createElement(DropdownMenuRadioItem, { value: "day" }, "نهاري"),
+      { key: "r", value: "night" },
+      createElement(DropdownMenuRadioItem, { value: "night" }, "ليل"),
+      createElement(DropdownMenuRadioItem, { value: "day" }, "نهار"),
     ),
     createElement(DropdownMenuItem, { key: "d", tone: "danger" }, "تسجيل الخروج"),
   ];
@@ -62,7 +62,7 @@ describe("DropdownMenu: a keyboard-accessible menu built on Radix", () => {
 
   it("shows the label, every item and the check / dot indicators", () => {
     const markup = menu();
-    for (const text of ["حسابي", "الملف الشخصي", "إظهار المكتملة", "إخفاء الأرشيف", "إسلامي هادي", "نهاري", "تسجيل الخروج"]) {
+    for (const text of ["حسابي", "الملف الشخصي", "إظهار المكتملة", "إخفاء الأرشيف", "ليل", "نهار", "تسجيل الخروج"]) {
       expect(markup, text).toContain(text);
     }
     // an indicator is drawn for the checked box and the selected radio only

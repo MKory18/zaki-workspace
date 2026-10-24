@@ -24,7 +24,7 @@ describe("every theme defines the whole token set", () => {
     expect([...COLOR_TOKENS]).toEqual([
       "surface", "surface-1", "surface-2", "border", "muted", "fg", "fg-muted", "accent", "accent-fg",
       "accent-2", "ok", "warn", "danger", "info", "ok-fg", "warn-fg", "danger-fg", "info-fg", "scrim",
-      "cat-1", "cat-2", "cat-3", "cat-4", "cat-5", "cat-6",
+      "cat-1", "cat-2", "cat-3", "cat-4", "cat-5", "cat-6", "on-photo",
     ]);
     expect([...CAT_TOKENS]).toEqual(["cat-1", "cat-2", "cat-3", "cat-4", "cat-5", "cat-6"]);
     expect([...STYLE_TOKENS]).toEqual(["font-display", "radius-card", "shadow-card"]);
@@ -44,9 +44,9 @@ describe("every theme defines the whole token set", () => {
   }
 
   it("each theme becomes CSS variables: colours as `R G B` triplets, then the style values", () => {
-    const vars = themeVariables("islamic-calm");
+    const vars = themeVariables("night");
     expect(vars.map(([name]) => name)).toEqual([...COLOR_TOKENS.map((t) => `--${t}`), ...STYLE_TOKENS.map((t) => `--${t}`)]);
-    expect(Object.fromEntries(vars)["--surface"]).toBe(hexToTriplet(PALETTES["islamic-calm"].colors.surface));
+    expect(Object.fromEntries(vars)["--surface"]).toBe(hexToTriplet(PALETTES.night.colors.surface));
     for (const [, value] of vars.slice(0, COLOR_TOKENS.length)) expect(value).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
   });
 
@@ -56,21 +56,26 @@ describe("every theme defines the whole token set", () => {
 });
 
 describe("each theme keeps its character", () => {
-  const { colors: calm } = PALETTES["islamic-calm"];
+  const { colors: night } = PALETTES.night;
   const { colors: epic } = PALETTES["islamic-epic"];
   const { colors: neon } = PALETTES["neon-coast"];
   const { colors: day } = PALETTES.day;
 
-  it("the default is the OMS «إسلامي هادي»: ivory paper, emerald action, a gold second accent", () => {
-    expect(PALETTES[DEFAULT_THEME]).toBe(PALETTES["islamic-calm"]);
-    expect(calm.surface).toBe("#F6F1E7");
-    expect(calm.accent).toBe("#0E5E55");
-    expect(calm.fg).toBe("#1D2A29");
+  it("the default is «ليل» of «نجمة وطريق»: deep navy, a cyan action, the star's gold as the second accent", () => {
+    expect(PALETTES[DEFAULT_THEME]).toBe(PALETTES.night);
+    expect(night.surface).toBe("#050F1F");
+    expect(night.accent).toBe("#36B5CC");
+    expect(night["accent-2"]).toBe("#E3B04B");
+    expect(night.fg).toBe("#E6F1F4");
   });
 
-  it("«إسلامي ملحمي» is the OMS navy and gold", () => {
+  it("«إسلامي ملحمي» is the OMS navy and gold — its identity untouched by «نجمة وطريق»", () => {
     expect(epic.surface).toBe("#0A1430");
+    expect(epic["surface-1"]).toBe("#101C40");
+    expect(epic["surface-2"]).toBe("#212C4D");
     expect(epic.accent).toBe("#D4AF5A");
+    expect(epic["accent-2"]).toBe("#5CC6B9");
+    expect(epic.fg).toBe("#EEECE7");
   });
 
   it("«ساحل النيون» is the OMS teal-black with the aqua neon and the rose neon", () => {
@@ -79,9 +84,15 @@ describe("each theme keeps its character", () => {
     expect(deltaEOK(neon["accent-2"], "#E75FA6")).toBeLessThan(0.05);
   });
 
-  it("«نهاري» is the OMS white and petrol blue", () => {
-    expect(day.surface).toBe("#FFFFFF");
+  it("«نهار» is «نجمة وطريق» by day: warm paper, petrol blue, a gold dark enough to see on paper", () => {
+    expect(day.surface).toBe("#F6F2EA");
     expect(day.accent).toBe("#1A6382");
+    expect(day["accent-2"]).toBe("#A8761F");
+    expect(day.fg).toBe("#0C3252");
+  });
+
+  it("a caption over a picture (`on-photo`) is white in every theme", () => {
+    for (const key of THEME_KEYS) expect(PALETTES[key].colors["on-photo"], key).toBe("#FFFFFF");
   });
 
   it("dark themes have dark pages and light text, light themes the other way round", () => {
@@ -110,7 +121,7 @@ describe("the contrast gate", () => {
   }
 
   it("the gate is not vacuous: it catches each kind of failure", () => {
-    const base = PALETTES["islamic-calm"].colors;
+    const base = PALETTES.day.colors;
     const broken = (patch: Partial<typeof base>) => checkPalette({ ...base, ...patch }).map((p) => p.rule);
     // grey text that is too pale on the page
     expect(broken({ "fg-muted": "#9A9A9A" })).toContain("text");
@@ -118,6 +129,11 @@ describe("the contrast gate", () => {
     expect(broken({ accent: "#7FC7BF" })).toContain("text");
     // a status colour that reads on the page but not inside its own tinted chip
     expect(broken({ ok: "#147D40" })).toContain("chip");
+    // a chip that passes on the page and a card but not on a hover row (surface-2): review C item 15
+    const onHoverRow = checkPalette({ ...base, ok: "#1A7336" });
+    expect(onHoverRow.map((p) => p.pair)).toEqual(["ok on ok/10 over surface-2"]);
+    // a caption colour over a picture that is not light enough
+    expect(broken({ "on-photo": "#7A7A7A" })).toContain("scrim");
     // a second accent too pale to see as a shape
     expect(broken({ "accent-2": "#E8DDC0" })).toContain("ui");
     // two categories nobody can tell apart

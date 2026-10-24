@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
-import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import { IBM_Plex_Sans_Arabic, Lalezar } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -16,7 +16,7 @@ const plex = IBM_Plex_Sans_Arabic({
 });
 
 /**
- * The title face of the two Islamic themes (h1-h3 through --font-display, see palettes.ts).
+ * The title face of «ليل», «نهار» and «إسلامي ملحمي» (h1-h3 through --font-display, see palettes.ts).
  * Self-hosted (public/fonts, SIL OFL — reem-kufi-OFL.txt beside it). Preloaded (WP-UI2 item 6):
  * when somebody opens the app on an Islamic theme the titles are the first thing painted, and a
  * late display face swaps visibly; 24 KB preloaded is cheaper than the flash. No size-adjusted
@@ -29,6 +29,19 @@ const reem = localFont({
   preload: true,
   variable: "--font-reem",
   adjustFontFallback: false,
+});
+
+/**
+ * The wordmark face of «نجمة وطريق»: «زاكي» in a heavy Arabic display face (SIL OFL). Like Plex it is
+ * fetched once at BUILD time by next/font and served from this site: a visitor's browser never asks Google.
+ * Not preloaded: only the wordmark wears it (`font-brand`).
+ */
+const lalezar = Lalezar({
+  subsets: ["arabic"],
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-lalezar",
 });
 
 export const metadata: Metadata = {
@@ -63,7 +76,7 @@ export function generateViewport(): Viewport {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const { theme, decor } = chosen();
   const attrs = rootThemeAttributes(theme, decor);
-  const className = [plex.variable, reem.variable, attrs.dark ? "dark" : ""].filter(Boolean).join(" ");
+  const className = [plex.variable, reem.variable, lalezar.variable, attrs.dark ? "dark" : ""].filter(Boolean).join(" ");
   return (
     <html lang="ar" dir="rtl" data-theme={attrs["data-theme"]} data-decor={attrs["data-decor"]} className={className} suppressHydrationWarning>
       <body>

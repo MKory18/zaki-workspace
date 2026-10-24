@@ -119,9 +119,9 @@ describe("choosing a theme in the browser", () => {
     expect(() => chooseTheme("day")).not.toThrow();
     await expect(savedPreferences()).resolves.toBeUndefined();
     dom.fetch.mockImplementation(async () => new Response("{}", { status: 401 }));
-    chooseTheme("islamic-calm");
+    chooseTheme("night");
     await expect(savedPreferences()).resolves.toBeUndefined();
-    expect(dom.attrs.get("data-theme")).toBe("islamic-calm");
+    expect(dom.attrs.get("data-theme")).toBe("night");
   });
 
   it("saves one choice after another, in order, so a slow answer cannot bring back an older theme", async () => {
@@ -187,13 +187,13 @@ describe("ThemeProvider / useTheme", () => {
 
   it("a garbage initial value from a forged cookie is the default", () => {
     const ctx = capture("system", "loud");
-    expect(ctx.theme).toBe("islamic-calm");
+    expect(ctx.theme).toBe("night");
     expect(ctx.decor).toBe("light");
   });
 
   it("setTheme and setDecor apply, remember and save", async () => {
     const dom = installBrowser();
-    const ctx = capture("islamic-calm", "light");
+    const ctx = capture("night", "light");
     ctx.setTheme("neon-coast");
     ctx.setDecor("full");
     expect(dom.attrs.get("data-theme")).toBe("neon-coast");
@@ -211,7 +211,7 @@ describe("ThemeProvider / useTheme", () => {
       return null;
     };
     renderToStaticMarkup(createElement(Probe));
-    expect(seen).toMatchObject({ theme: "islamic-calm", decor: "light" });
+    expect(seen).toMatchObject({ theme: "night", decor: "light" });
   });
 });
 
@@ -249,10 +249,12 @@ describe("ThemePicker", () => {
   });
 
   it("shows each theme's Arabic name and mood", () => {
-    expect(AR[themeLabelKey("islamic-calm")]).toBe("إسلامي هادي");
+    expect(AR[themeLabelKey("night")]).toBe("ليل");
+    expect(AR[themeLabelKey("day")]).toBe("نهار");
     expect(AR[themeLabelKey("islamic-epic")]).toBe("إسلامي ملحمي");
     expect(AR[themeLabelKey("neon-coast")]).toBe("ساحل النيون");
-    expect(AR[themeLabelKey("day")]).toBe("نهاري");
+    // the retired theme's strings left with it
+    expect(AR["theme.islamic-calm"]).toBeUndefined();
     for (const key of THEME_KEYS) {
       expect(markup).toContain(AR[themeLabelKey(key)]!);
       expect(AR[themeMoodKey(key)], key).toMatch(/[؀-ۿ]/);

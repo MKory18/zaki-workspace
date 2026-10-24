@@ -135,7 +135,7 @@ export const SCRIM_BACKDROP_ALPHA = 0.6;
  *  - text  >= 4.5:1  fg, fg-muted and muted on the page, a card and a hover row; every colour that is
  *                    also used as text (accent, ok, warn, danger, info, cat-1..6) on the same three;
  *                    the label colour on each solid meaning (accent-fg on accent, ok-fg on ok, ...).
- *  - chip  >= 4.5:1  the same text colours on their OWN 10% tint over the page and a card
+ *  - chip  >= 4.5:1  the same text colours on their OWN 10% tint over the page, a card and a hover row
  *                    (`bg-ok/10 text-ok` is how the code draws a status chip).
  *  - ui    >= 3:1    accent and accent-2 as shapes on the page and a card.
  *  - distinct        the six categorical colours, and the five meanings, pairwise >= DISTINCT_MIN.
@@ -158,11 +158,14 @@ export function checkPalette(colors: Readonly<Record<ColorToken, string>>): Gate
   }
   for (const [text, ground] of ON) need("text", `${text} on ${ground}`, contrastRatio(colors[text], colors[ground]), AA_TEXT);
 
-  for (const ground of ["surface", "surface-1"] as const) {
+  // a chip sits on every ground text does, a hover row (surface-2) included (review C item 15)
+  for (const ground of GROUNDS) {
     for (const text of TEXT_COLOURS) {
       const tint = blend(colors[text], CHIP_TINT, colors[ground]);
       need("chip", `${text} on ${text}/10 over ${ground}`, contrastRatio(colors[text], tint), AA_TEXT);
     }
+  }
+  for (const ground of ["surface", "surface-1"] as const) {
     for (const shape of ["accent", "accent-2"] as const) {
       need("ui", `${shape} on ${ground}`, contrastRatio(colors[shape], colors[ground]), AA_UI);
     }
@@ -197,6 +200,8 @@ export function checkPalette(colors: Readonly<Record<ColorToken, string>>): Gate
   }
   const caption = blend(colors.scrim, SCRIM_PANEL_ALPHA, "#FFFFFF");
   need("scrim", "white caption on scrim over a white picture", contrastRatio("#FFFFFF", caption), AA_TEXT);
+  // `on-photo` is the caption colour a screen writes over a picture (on its scrim panel)
+  need("scrim", "on-photo on scrim over a white picture", contrastRatio(colors["on-photo"], caption), AA_TEXT);
   if (dark) {
     need("scrim", "fg on scrim over a white picture", contrastRatio(colors.fg, caption), AA_TEXT);
     // a dark theme's panel cannot be separated from the dimmed page by its FILL (the two hues

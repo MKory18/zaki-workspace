@@ -101,9 +101,9 @@ describe("POST /api/me/theme: the decoration level", () => {
   it("theme and level together set both cookies", async () => {
     const { member } = await makeTeam();
     await loginAs(member.id);
-    const res = await post({ theme: "islamic-calm", decor: "full" });
-    expect(res.json).toEqual({ ok: true, theme: "islamic-calm", decor: "full" });
-    expect(setCookie(res.headers, "zaki_theme")).toMatch(/^zaki_theme=islamic-calm;/);
+    const res = await post({ theme: "night", decor: "full" });
+    expect(res.json).toEqual({ ok: true, theme: "night", decor: "full" });
+    expect(setCookie(res.headers, "zaki_theme")).toMatch(/^zaki_theme=night;/);
     expect(setCookie(res.headers, "zk-decor")).toMatch(/^zk-decor=full;/);
   });
 
@@ -120,8 +120,18 @@ describe("POST /api/me/theme: the decoration level", () => {
   it("answers with the default theme for somebody who never chose one", async () => {
     const { member } = await makeTeam();
     await loginAs(member.id);
-    expect((await post({ decor: "light" })).json).toEqual({ ok: true, theme: "islamic-calm", decor: "light" });
+    expect((await post({ decor: "light" })).json).toEqual({ ok: true, theme: "night", decor: "light" });
     expect(await storedTheme(member.id)).toBe("system");
+  });
+
+  it("a retired theme («إسلامي هادي») is no new choice (422), and one still stored answers as «ليل»", async () => {
+    const { member } = await makeTeam();
+    await loginAs(member.id);
+    const refused = await post({ theme: "islamic-calm" });
+    expect(refused.status).toBe(422);
+    expect(setCookie(refused.headers, "zaki_theme")).toBeUndefined();
+    await db.user.update({ where: { id: member.id }, data: { theme: "islamic-calm" } });
+    expect((await post({ decor: "off" })).json).toEqual({ ok: true, theme: "night", decor: "off" });
   });
 });
 
