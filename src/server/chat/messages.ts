@@ -388,14 +388,24 @@ export async function forwardMessage(ctx: OrgAccessContext, messageId: string, i
 
 // ---------- read / delivered ----------
 
-/** Never backwards: lastReadAt only moves forward. */
+/**
+ * Never backwards: lastReadAt only moves forward.
+ *
+ * - The OWNER's reading is silent, always: in oversight nothing is written at all; where he joined,
+ *   his mark is kept for his own unread counts only and emits nothing (nobody's ticks or reader
+ *   avatars ever show him; `dmStatusFor` and `readersOf` leave him out).
+ * - A space person reading an open topic they have no row in (the company's topics, every topic
+ *   before they wrote in it) gets their row here, instead of a 404 that kept their count stuck.
+ */
 export async function markRead(ctx: OrgAccessContext, conversationId: string, upToMessageId?: string): Promise<{ ok: boolean }> {
   const { facts, org } = await guard(ctx, conversationId);
-  if (org.role === "OWNER" && !facts.viewerIsMember) {
+  const isOwner = org.role === "OWNER";
+  if (isOwner && !facts.viewerIsMember) {
     // oversight: 204 and nothing written — no read mark, no event, nothing
     return { ok: true };
   }
-  if (!facts.viewerIsMember) throw new NotFoundError("chat.e.not_found");
+  const openTopicReader = !facts.viewerIsMember && facts.kind === "TOPIC" && !facts.restricted && canRead(facts, org);
+  if (!facts.viewerIsMember && !openTopicReader) throw new NotFoundError("chat.e.not_found");
   let when = new Date();
   if (upToMessageId) {
     const target = await db.chatMessage.findFirst({ where: { id: upToMessageId, conversationId }, select: { createdAt: true } });
@@ -408,11 +418,14 @@ export async function markRead(ctx: OrgAccessContext, conversationId: string, up
   });
   if (member && member.lastReadAt >= when) return { ok: true };
   await db.$transaction(async (tx) => {
-    await tx.conversationMember.update({
+    await tx.conversationMember.upsert({
       where: { conversationId_userId: { conversationId, userId: ctx.userId } },
-      data: { lastReadAt: when },
+      create: { conversationId, userId: ctx.userId, lastReadAt: when },
+      update: { lastReadAt: when },
     });
-    await emitRealtime(tx, ctx.orgId, "conversation.read", { conversationId, userId: ctx.userId, spaceId: facts.spaceId ?? undefined });
+    if (!isOwner) {
+      await emitRealtime(tx, ctx.orgId, "conversation.read", { conversationId, userId: ctx.userId, spaceId: facts.spaceId ?? undefined });
+    }
   });
   return { ok: true };
 }

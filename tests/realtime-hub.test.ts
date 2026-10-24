@@ -29,6 +29,7 @@ vi.mock("@/server/db", () => ({
 }));
 vi.mock("@/server/chat/read-state", () => ({ markDeliveredForUser: vi.fn().mockResolvedValue(undefined) }));
 import { markDeliveredForUser } from "@/server/chat/read-state";
+import { db } from "@/server/db";
 
 type Reads = Record<string, boolean>;
 function stubReads(map: Reads) {
@@ -158,14 +159,26 @@ describe("hub fan-out", () => {
     expect(clientCount()).toBe(3);
   });
 
-  it("a message.created for a DM also marks the connected recipients as delivered", async () => {
-    stubReads({ "u1|cv1": true, "u2|cv1": true });
-    connect("u1"); // the author's other tab
+  it("a message.created for a DM marks the connected people who may see it as delivered, once each, for that DM only", async () => {
+    stubReads({ "u1|cv1": true, "u2|cv1": true, "u3|cv1": false });
+    connect("u1"); // the author's other tab (read-state leaves the author's own message alone)
     connect("u2"); // the recipient
+    connect("u2"); // ... in a second tab
+    connect("u3"); // may not see it
     await deliverEvent(asEvent(ev("1", "message.created", { conversationId: "cv1", messageId: "m1" })));
 
-    expect(markDeliveredForUser).toHaveBeenCalledWith("u1");
-    expect(markDeliveredForUser).toHaveBeenCalledWith("u2");
+    expect(markDeliveredForUser).toHaveBeenCalledWith("u1", "cv1");
+    expect(markDeliveredForUser).toHaveBeenCalledWith("u2", "cv1");
+    expect(markDeliveredForUser).toHaveBeenCalledTimes(2);
+  });
+
+  it("a topic's message marks nothing delivered (ticks are for DMs)", async () => {
+    vi.mocked(db.conversation.findUnique).mockResolvedValueOnce({ kind: "TOPIC" } as never);
+    stubReads({ "u2|cv1": true });
+    connect("u2");
+    await deliverEvent(asEvent(ev("1", "message.created", { conversationId: "cv1", messageId: "m1" })));
+
+    expect(markDeliveredForUser).not.toHaveBeenCalled();
   });
 });
 

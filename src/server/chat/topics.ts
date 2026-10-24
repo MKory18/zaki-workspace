@@ -5,7 +5,7 @@ import { canModerate, canPost, canRead, loadConversationFacts, loadOrgFacts } fr
 import { emitRealtime } from "@/server/realtime/emit";
 import { isSpaceAdmin } from "@/server/policy/conversation";
 import { writeSystemMessage } from "@/server/chat/system";
-import type { ConversationDto, MemberDto, MessageDto } from "@/server/chat/dto";
+import type { ConversationDto, MemberDto, MessageDto, ReaderDto } from "@/server/chat/dto";
 import { presentMessage, type Viewer } from "@/server/chat/redact";
 import { messageInclude, dmStatusFor } from "@/server/chat/messages";
 import type { Prisma } from "@prisma/client";
@@ -189,10 +189,21 @@ export async function conversationDetail(
   const canModerateHere = canModerate(facts, org!);
   const viewer: Viewer = { userId: ctx.userId, role: org!.role, canModerateHere };
 
+  // the OWNER's reading is silent: his read mark never shows, in ticks or reader avatars
+  const ownerIds = new Set(
+    (
+      await db.organizationMember.findMany({ // all-statuses: the owner's silence holds whatever his status
+        where: { organizationId: ctx.orgId, role: "OWNER", userId: { in: conv.members.map((m) => m.userId) } },
+        select: { userId: true },
+      })
+    ).map((o) => o.userId),
+  );
+
   // DM ticks: the OTHER person's marks decide my own messages' status
   let otherMember: { lastDeliveredAt: Date | null; lastReadAt: Date | null } | null = null;
   if (facts.kind === "DM") {
-    otherMember = conv.members.find((m) => m.userId !== ctx.userId) ?? null;
+    const other = conv.members.find((m) => m.userId !== ctx.userId) ?? null;
+    otherMember = other && ownerIds.has(other.userId) ? { lastDeliveredAt: other.lastDeliveredAt, lastReadAt: null } : other;
   }
 
   const messages: MessageDto[] = page.map((row) =>
@@ -233,9 +244,35 @@ export async function conversationDetail(
     },
     members,
     messages: messages.reverse(), // oldest first in the payload
-    readers: [], // the UI shows readers from the realtime read receipts, not a list here
+    // topics and groups: each person's avatar sits under the last message they read (DMs have ticks)
+    readers:
+      facts.kind === "DM"
+        ? []
+        : readersOf(
+            page,
+            conv.members.filter((m) => m.userId !== ctx.userId && !ownerIds.has(m.userId)).map((m) => ({ userId: m.userId, name: m.user.name, lastReadAt: m.lastReadAt })),
+          ),
     oldestId: hasOlder ? (messages[0]?.id ?? null) : null,
   };
+}
+
+/**
+ * Who read up to where: for each person, the newest message on the page that they have read (a
+ * system line or a deleted message is no place for an avatar). A person whose mark is older than
+ * the whole page, or who never read, has no avatar here. The caller leaves out the viewer and the OWNER.
+ */
+export function readersOf(
+  page: { id: string; createdAt: Date; kind: string; deletedAt: Date | null }[],
+  people: { userId: string; name: string; lastReadAt: Date }[],
+): ReaderDto[] {
+  const visible = page.filter((m) => m.kind !== "SYSTEM" && !m.deletedAt);
+  const out: ReaderDto[] = [];
+  for (const p of people) {
+    // `page` is newest first: the first one at or before the mark is the newest they read
+    const at = visible.find((m) => m.createdAt <= p.lastReadAt);
+    if (at) out.push({ userId: p.userId, name: p.name, messageId: at.id });
+  }
+  return out;
 }
 
 /**

@@ -113,6 +113,10 @@ async function sse(req: NextRequest): Promise<Response> {
           send,
           close: cleanup,
         });
+        // a stream that opens counts the DMs that reached this person while away as delivered (✓✓)
+        void import("@/server/chat/read-state")
+          .then(({ markDeliveredForUser }) => markDeliveredForUser(actor.userId))
+          .catch(() => undefined);
 
         try {
           // Replay: the events of the last 48 h this person may see. An id older

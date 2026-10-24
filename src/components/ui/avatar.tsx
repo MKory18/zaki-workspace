@@ -1,3 +1,4 @@
+import React from "react";
 import { avatarHue, initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
