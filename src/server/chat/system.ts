@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { emitRealtime } from "@/server/realtime/emit";
 
 /**
  * System messages: no body of their own — the client composes the Arabic sentence from the
@@ -9,12 +10,15 @@ export function systemMessage(k: string, p: Record<string, string | number> = {}
   return JSON.stringify({ k, p });
 }
 
-/** Writes a system message row for the given conversation. */
+/**
+ * Writes a system message row for the given conversation, and its `message.created` event in the
+ * same transaction, so the line («انضم»، «ثبّت»، «أُغلق») appears live for everybody, like any message.
+ */
 export async function writeSystemMessage(
   tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
-  opts: { orgId: string; conversationId: string; authorId: string; k: string; p?: Record<string, string | number> },
+  opts: { orgId: string; conversationId: string; authorId: string; k: string; p?: Record<string, string | number>; spaceId?: string | null },
 ): Promise<void> {
-  await tx.chatMessage.create({
+  const msg = await tx.chatMessage.create({
     data: {
       orgId: opts.orgId,
       conversationId: opts.conversationId,
@@ -22,5 +26,11 @@ export async function writeSystemMessage(
       body: systemMessage(opts.k, opts.p ?? {}),
       kind: "SYSTEM",
     },
+    select: { id: true },
+  });
+  await emitRealtime(tx, opts.orgId, "message.created", {
+    conversationId: opts.conversationId,
+    messageId: msg.id,
+    ...(opts.spaceId ? { spaceId: opts.spaceId } : {}),
   });
 }

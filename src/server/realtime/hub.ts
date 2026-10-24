@@ -151,9 +151,11 @@ async function maySee(entry: RegistryEntry, event: RtEvent): Promise<boolean> {
  */
 export async function deliverEvent(event: RtEvent): Promise<void> {
   invalidateCache(event);
-  const targets = registry.filter(
-    (r) => r.client.orgId === event.orgId && (event.ids.userId === undefined || event.ids.userId === r.client.userId),
-  );
+  // `userId` says who the event is ABOUT (the reader of `conversation.read`, the person who joined):
+  // it goes to everybody allowed to see the conversation, so the OTHER side's ticks and reader
+  // avatars move live. Only `targetUserId` narrows an event to one person.
+  const target = event.ids.targetUserId;
+  const targets = registry.filter((r) => r.client.orgId === event.orgId && (target === undefined || target === r.client.userId));
   // DM delivery ticks: a connected recipient of a DM counts the message as delivered at once.
   if (event.kind === "message.created" && event.ids.conversationId) {
     const { markDeliveredForUser } = await import("@/server/chat/read-state");
@@ -204,9 +206,9 @@ export async function broadcastTyping(
 
 /**
  * Filters replay rows down to what this person may see, used by GET /api/rt for
- * Last-Event-ID replay: conversation events by canReadConversation, userId events
+ * Last-Event-ID replay: conversation events by canReadConversation, targetUserId events
  * only for that user, everything else by organization membership (the route only
- * serves the person's own org).
+ * serves the person's own org). The same rules as live delivery (deliverEvent).
  */
 export async function filterVisible(
   userId: string,
@@ -215,6 +217,7 @@ export async function filterVisible(
   const out: { id: string; kind: string; ids: RealtimeIds }[] = [];
   const cache = new Map<string, boolean>();
   for (const row of rows) {
+    if (row.ids.targetUserId && row.ids.targetUserId !== userId) continue;
     if (row.ids.conversationId) {
       const cv = row.ids.conversationId;
       let ok = cache.get(cv);
@@ -227,8 +230,6 @@ export async function filterVisible(
         cache.set(cv, ok);
       }
       if (!ok) continue;
-    } else if (row.ids.userId && row.ids.userId !== userId) {
-      continue;
     }
     out.push(row);
   }

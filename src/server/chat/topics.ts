@@ -130,15 +130,7 @@ export async function setTopicClosed(ctx: OrgAccessContext, conversationId: stri
   if (!canModerate(facts, org)) throw new ForbiddenError("chat.e.moderator_only");
   await db.$transaction(async (tx) => {
     await tx.conversation.update({ where: { id: conversationId }, data: { closedAt: closed ? new Date() : null } });
-    await tx.chatMessage.create({
-      data: {
-        orgId: ctx.orgId,
-        conversationId,
-        authorId: ctx.userId,
-        body: JSON.stringify({ k: closed ? "close" : "reopen", p: {} }),
-        kind: "SYSTEM",
-      },
-    });
+    await writeSystemMessage(tx, { orgId: ctx.orgId, conversationId, authorId: ctx.userId, k: closed ? "close" : "reopen", spaceId: facts.spaceId });
     await emitRealtime(tx, ctx.orgId, "conversation.changed", { conversationId, spaceId: facts.spaceId ?? undefined });
   });
 }

@@ -114,10 +114,33 @@ describe("hub fan-out", () => {
     expect(canRead).toHaveBeenCalledTimes(3); // cv1 entry was NOT cleared by cv2's change
   });
 
-  it("an event without a conversation but with a userId goes only to that user", async () => {
+  it("an event with a targetUserId goes only to that user", async () => {
     const a = connect("u1");
     const b = connect("u2");
-    await deliverEvent(asEvent(ev("1", "membership.changed", { userId: "u2" })));
+    await deliverEvent(asEvent(ev("1", "membership.changed", { userId: "u2", targetUserId: "u2" })));
+
+    expect(a.sends).toHaveLength(0);
+    expect(b.sends).toHaveLength(1);
+  });
+
+  it("a read mark reaches the OTHER people of the conversation, not only the reader (live ticks)", async () => {
+    stubReads({ "u1|cv1": true, "u2|cv1": true, "u3|cv1": false });
+    const reader = connect("u1");
+    const sender = connect("u2");
+    const outsider = connect("u3");
+    await deliverEvent(asEvent(ev("1", "conversation.read", { conversationId: "cv1", userId: "u1" })));
+
+    expect(sender.sends).toHaveLength(1);
+    expect(payloadOf(sender.sends[0]!)).toMatchObject({ kind: "conversation.read", conversationId: "cv1", userId: "u1" });
+    expect(reader.sends).toHaveLength(1);
+    expect(outsider.sends).toHaveLength(0);
+  });
+
+  it("a targeted event never reaches anybody else, even somebody who may read its conversation", async () => {
+    stubReads({ "u1|cv1": true, "u2|cv1": true });
+    const a = connect("u1");
+    const b = connect("u2");
+    await deliverEvent(asEvent(ev("1", "conversation.changed", { conversationId: "cv1", targetUserId: "u2" })));
 
     expect(a.sends).toHaveLength(0);
     expect(b.sends).toHaveLength(1);
@@ -198,15 +221,16 @@ describe("typing", () => {
 });
 
 describe("replay visibility filter", () => {
-  it("keeps only events the person may read; userId-targeted events only for that person", async () => {
+  it("keeps only events the person may read; targeted events only for their target (the live rules)", async () => {
     stubReads({ "u1|cv1": true });
     const rows = [
       ev("1", "message.created", { conversationId: "cv1" }),
       ev("2", "message.created", { conversationId: "cv2" }),
-      ev("3", "membership.changed", { userId: "u2" }),
+      ev("3", "membership.changed", { userId: "u2", targetUserId: "u2" }),
       ev("4", "conversation.changed", { spaceId: "ws1" }),
+      ev("5", "conversation.read", { conversationId: "cv1", userId: "u2" }),
     ];
     const out = await filterVisible("u1", rows);
-    expect(out.map((r) => r.id)).toEqual(["1", "4"]);
+    expect(out.map((r) => r.id)).toEqual(["1", "4", "5"]);
   });
 });
