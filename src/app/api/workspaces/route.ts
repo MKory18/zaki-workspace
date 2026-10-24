@@ -38,14 +38,15 @@ export async function GET() {
     const workspaces = wsIds.length
       ? await db.workspace.findMany({
           where: { id: { in: wsIds } },
-          select: { id: true, name: true, slug: true, organizationId: true },
+          select: { id: true, name: true, slug: true, organizationId: true, kind: true },
           orderBy: { name: "asc" },
         })
       : [];
-    const byOrg = new Map<string, { id: string; name: string; slug: string }[]>();
+    const byOrg = new Map<string, { id: string; name: string; slug: string; holdsProjects: boolean }[]>();
     for (const w of workspaces) {
       const list = byOrg.get(w.organizationId) ?? [];
-      list.push({ id: w.id, name: w.name, slug: w.slug });
+      // «الشركة» (HQ) is for announcements and the company's talk: no project is opened there
+      list.push({ id: w.id, name: w.name, slug: w.slug, holdsProjects: w.kind !== "HQ" });
       byOrg.set(w.organizationId, list);
     }
     return NextResponse.json({
@@ -71,8 +72,8 @@ const createSchema = z.object({
 });
 
 /**
- * Opens a space. It needs the capability `spaces.create` (every rank but GUEST has it by default and
- * the owner can switch it off per person); the creator becomes the space ADMIN.
+ * Opens a space. It needs the capability `spaces.create` (the owner and the admins by default; the owner
+ * switches it on for a lead or a member by name, or off for an admin); the creator becomes the space ADMIN.
  */
 export async function POST(req: Request) {
   return withApi(async () => {
