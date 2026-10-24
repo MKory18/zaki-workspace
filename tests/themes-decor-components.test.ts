@@ -388,10 +388,10 @@ describe("the onboarding — a new password, then the notice", () => {
     expect(html).toContain(t("common.logout"));
   });
 
-  it("— only the notice owed: the four points and the one button, no password field", () => {
+  it("— only the notice owed: its three points and the one button, no password field", () => {
     const html = onboarding({ owesPassword: false, owesNotice: true });
     expect(html).toContain(t("onboarding.notice_title"));
-    for (const key of ["onboarding.notice_kept", "onboarding.notice_archive", "onboarding.notice_work", "onboarding.notice_record"]) expect(html, key).toContain(t(key));
+    for (const key of ["onboarding.notice_kept", "onboarding.notice_work", "onboarding.notice_record"]) expect(html, key).toContain(t(key));
     expect(html).toContain(t("onboarding.notice_accept"));
     expect(html).not.toContain('name="currentPassword"');
   });

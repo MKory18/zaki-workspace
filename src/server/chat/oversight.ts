@@ -5,10 +5,10 @@ import { logChat } from "@/server/chat/moderation";
 import type { OversightConversationDto } from "@/server/chat/dto";
 
 /**
- * The OWNER's silent eye: every space and every topic of the company, and the DMs' EXISTENCE only
- * (two names, the message count, the last moment) — never a DM's words, never a DM's detail. Every
- * look is written to the audit trail (`chat.oversight_read`), because reading without being in the
- * room is exactly the act that must leave a trace.
+ * The OWNER's silent eye: every conversation of the company — spaces, topics and private DMs (the
+ * owner's decision D-2, 2026-10-24: he reads everything). His reading stays silent everywhere (no read
+ * mark, no tick, no reader avatar). Every look is written to the audit trail (`chat.oversight_read`),
+ * because reading without being in the room is exactly the act that must leave a trace.
  */
 
 export async function listOversight(
@@ -40,6 +40,8 @@ export async function listOversight(
       space: { select: { name: true } },
       updatedAt: true,
       _count: { select: { members: true } },
+      // a DM is listed by its two people
+      members: { where: { conversation: { kind: "DM" } }, select: { user: { select: { name: true } } }, take: 2 },
       messages: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
     },
     orderBy: { updatedAt: "desc" },
@@ -64,6 +66,7 @@ export async function listOversight(
       spaceId: c.spaceId,
       spaceName: c.space?.name ?? null,
       membersCount: c._count.members,
+      names: c.kind === "DM" ? c.members.map((m) => m.user.name) : undefined,
       lastMessageAt: c.messages[0]?.createdAt.toISOString() ?? null,
     })),
     nextCursor: hasMore ? rows[limit - 1]!.id : null,
@@ -71,8 +74,8 @@ export async function listOversight(
 }
 
 /**
- * Reading one conversation AS the owner: topics and groups are fully readable (he is in no row,
- * he reads everything); a DM's messages are refused — the design does not open that door.
+ * Reading one conversation AS the owner: topics, groups and private DMs alike (he is in no row, he
+ * reads everything, silently).
  */
 export async function assertOversightRead(ctx: OrgAccessContext, conversationId: string): Promise<{ kind: string; spaceId: string | null }> {
   const role = await db.organizationMember.findUnique({
@@ -88,7 +91,6 @@ export async function assertOversightRead(ctx: OrgAccessContext, conversationId:
     select: { id: true, kind: true, spaceId: true },
   });
   if (!conv) throw new ForbiddenError("chat.e.not_found");
-  if (conv.kind === "DM") throw new ForbiddenError("chat.e.oversight_dm_denied");
   await logChat({
     orgId: ctx.orgId,
     actorId: ctx.userId,

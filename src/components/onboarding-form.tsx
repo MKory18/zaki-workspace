@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Archive, Briefcase, CalendarCheck, Eye, EyeOff, KeyRound, ShieldCheck } from "lucide-react";
+import { Briefcase, CalendarCheck, Eye, EyeOff, KeyRound, ShieldCheck } from "lucide-react";
 import { DoorShell } from "@/components/theme/door-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -152,7 +152,6 @@ export function OnboardingForm({
   const inputClass = "h-11 text-base";
   const points = [
     { icon: Eye, text: t("onboarding.notice_kept") },
-    { icon: Archive, text: t("onboarding.notice_archive") },
     { icon: Briefcase, text: t("onboarding.notice_work") },
     { icon: CalendarCheck, text: t("onboarding.notice_record") },
   ];
