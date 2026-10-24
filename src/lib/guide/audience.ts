@@ -61,6 +61,7 @@ export const ARTICLE_AUDIENCE = {
   install: "everyone",
   privacy: "everyone",
   shortcuts: "everyone",
+  credits: "everyone",
 } as const satisfies Record<string, Audience>;
 
 export type ArticleSlug = keyof typeof ARTICLE_AUDIENCE;

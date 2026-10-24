@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   ARTICLES,
   articleText,
@@ -16,7 +18,8 @@ import { ART_SLOTS, isArtSlot } from "@/lib/themes/decor";
 
 const HAS_ARABIC = /[؀-ۿ]/;
 /** The only Latin words an article may show: the names of keys on a keyboard and one example user name. */
-const LATIN_ALLOWED = new Set(["Ctrl", "K", "Esc", "Enter", "ali.m", "n8n", "Google", "Drive"]);
+// "N": the key of «جديد» («نجمة وطريق», the shortcuts article)
+const LATIN_ALLOWED = new Set(["Ctrl", "K", "N", "Esc", "Enter", "ali.m", "n8n", "Google", "Drive"]);
 
 const itemText = (item: string | { text: string }) => (typeof item === "string" ? item : item.text);
 
@@ -405,5 +408,31 @@ describe("the articles: who gets which", () => {
         if (view?.cta) expect(canRead(audience, article.cta?.for ?? "everyone")).toBe(true);
       }
     }
+  });
+});
+
+describe("«الاعتمادات والرخص»: the in-app credits every licence asks for", () => {
+  const credits = ARTICLES.find((a) => a.slug === "credits");
+  const text = credits ? blocksFor(credits, "everyone").map((b) => ("items" in b ? b.items.join(" ") : "text" in b ? b.text : "")).join(" ") : "";
+
+  it("is in the guide, for everybody (a guest sees the photo too)", () => {
+    expect(credits?.audience).toBe("everyone");
+    expect(text.length).toBeGreaterThan(100);
+  });
+
+  it("credits the photograph as CC BY asks: the work, the author, the source, the licence, and that it was changed", () => {
+    for (const part of ["أفق عمّان", "إبراهيم نبيل صالح", "ويكيميديا كومنز", "المشاع الإبداعي", "نَسب المُصنَّف", "التعديل"]) expect(text, part).toContain(part);
+  });
+
+  it("names every font the app ships, each under the open font licence, and the renamed digits", () => {
+    for (const font of ["بلكس", "لاله‌زار", "ريم كوفي", "أرقام زاكي"]) expect(text, font).toContain(font);
+    expect(text.match(/رخصة الخطوط المفتوحة/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("and every file CREDITS.md credits to a third party has its line here", () => {
+    const md = readFileSync(path.join(__dirname, "..", "public", "brand", "CREDITS.md"), "utf8");
+    expect(md).toContain("Ibrahim Nabeel Salah");
+    expect(md).toContain("zaki-digits");
+    expect(md).toContain("Lalezar");
   });
 });
