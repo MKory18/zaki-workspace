@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRealtime } from "@/lib/realtime/use-realtime";
 
@@ -16,8 +16,25 @@ export function badgeText(total: number): string | null {
 export const MOVES_UNREAD = new Set(["message.created", "message.deleted", "conversation.read", "membership.changed", "conversation.changed"]);
 
 /**
+ * "I just read something": the conversation screen says so right after it records a read mark. The
+ * OWNER's reading is silent (no `conversation.read` event reaches anybody, him included), so without
+ * this his own number would wait for the 30-second refresh.
+ */
+const CHAT_READ_EVENT = "zk:chat-read";
+
+export function announceChatRead(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(CHAT_READ_EVENT));
+}
+
+export function onChatRead(handler: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  window.addEventListener(CHAT_READ_EVENT, handler);
+  return () => window.removeEventListener(CHAT_READ_EVENT, handler);
+}
+
+/**
  * The unread total behind «الدردشة»: fetched once, refreshed every 30 s, and at once (folded into one
- * request per 400 ms) when a realtime event that can move it arrives.
+ * request per 400 ms) when a realtime event that can move it arrives, or when this tab marks a read.
  */
 export function useChatUnread(enabled = true): number {
   const qc = useQueryClient();
@@ -40,5 +57,6 @@ export function useChatUnread(enabled = true): number {
       void qc.invalidateQueries({ queryKey: CHAT_UNREAD_KEY });
     }, 400);
   });
+  useEffect(() => onChatRead(() => void qc.invalidateQueries({ queryKey: CHAT_UNREAD_KEY })), [qc]);
   return query.data?.total ?? 0;
 }

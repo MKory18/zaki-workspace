@@ -53,3 +53,20 @@ describe("the unread badge on «الدردشة»", () => {
     expect(MOVES_UNREAD.has("message.reacted")).toBe(false);
   });
 });
+
+describe("the badge after I read", () => {
+  it("the screen announces a read mark, and the badge listens (the owner's silent read sends no live event)", async () => {
+    const { announceChatRead, onChatRead } = await import("@/lib/chat/use-chat-unread");
+    const target = new EventTarget();
+    vi.stubGlobal("window", { addEventListener: target.addEventListener.bind(target), removeEventListener: target.removeEventListener.bind(target), dispatchEvent: target.dispatchEvent.bind(target) });
+    const seen: number[] = [];
+    const off = onChatRead(() => seen.push(1));
+    announceChatRead();
+    off();
+    announceChatRead();
+    expect(seen).toEqual([1]);
+    vi.unstubAllGlobals();
+    const { readFileSync } = await import("node:fs");
+    expect(readFileSync("src/components/chat/conversation/conversation-screen.tsx", "utf8")).toMatch(/\/read\?upTo=.*announceChatRead\(\)/);
+  });
+});

@@ -5,6 +5,7 @@ import { conversationDetailUrl } from "@/lib/chat/conversation/client";
 import { MessageItem } from "@/components/chat/message/message-item";
 import { ChatComposer } from "@/components/chat/composer/chat-composer";
 import { useRealtime } from "@/lib/realtime/use-realtime";
+import { announceChatRead } from "@/lib/chat/use-chat-unread";
 import { Button } from "@/components/ui/button";
 export interface ConversationScreenProps { conversationId: string; onBack: () => void; onOpenSettings?: () => void }
 /**
@@ -27,7 +28,7 @@ export function ConversationScreen({ conversationId, onBack, onOpenSettings }: C
  const [detail,setDetail]=React.useState<ConversationDto|null>(null); const [messages,setMessages]=React.useState<MessageDto[]>([]); const [draft,setDraft]=React.useState(""); const [reply,setReply]=React.useState<MessageDto|null>(null); const [editing,setEditing]=React.useState<MessageDto|null>(null); const [loading,setLoading]=React.useState(true); const [error,setError]=React.useState("");
  const lastMarked=React.useRef<string|null>(null);
  // `silent`: a live update (another person's message, an edit, a reaction) refetches without the loading line
- const refresh=React.useCallback(async(opts:{silent?:boolean}={})=>{if(!opts.silent)setLoading(true);setError("");try{const response=await fetch(conversationDetailUrl(conversationId),{cache:"no-store"});if(!response.ok)throw new Error("تعذّر تحميل المحادثة");const data=await response.json() as ConversationDto;setDetail(data);setMessages(data.messages);const last=data.messages.at(-1);/* mark read only for a message not marked yet: a read mark is itself a live event, and re-marking on it would loop */if(!data.me.oversight&&last&&lastMarked.current!==last.id){lastMarked.current=last.id;void fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/read?upTo=${encodeURIComponent(last.id)}`,{method:"POST"});}}catch(e){setError(e instanceof Error?e.message:"حدث خطأ");}finally{setLoading(false);}},[conversationId]); React.useEffect(()=>{void refresh();},[refresh]);
+ const refresh=React.useCallback(async(opts:{silent?:boolean}={})=>{if(!opts.silent)setLoading(true);setError("");try{const response=await fetch(conversationDetailUrl(conversationId),{cache:"no-store"});if(!response.ok)throw new Error("تعذّر تحميل المحادثة");const data=await response.json() as ConversationDto;setDetail(data);setMessages(data.messages);const last=data.messages.at(-1);/* mark read only for a message not marked yet: a read mark is itself a live event, and re-marking on it would loop */if(!data.me.oversight&&last&&lastMarked.current!==last.id){lastMarked.current=last.id;void fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/read?upTo=${encodeURIComponent(last.id)}`,{method:"POST"}).then(r=>{if(r.ok)announceChatRead();},()=>undefined);}}catch(e){setError(e instanceof Error?e.message:"حدث خطأ");}finally{setLoading(false);}},[conversationId]); React.useEffect(()=>{void refresh();},[refresh]);
  // Live: any event of THIS conversation (or a synthetic one with no conversation: the polling fallback,
  // a reconnect `reload`) refetches it quietly; a burst of events is folded into one refetch.
  const liveTimer=React.useRef<ReturnType<typeof setTimeout>|null>(null);
