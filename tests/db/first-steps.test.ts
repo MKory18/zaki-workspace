@@ -44,12 +44,12 @@ async function world() {
 }
 
 describe("first steps: a new member", () => {
-  it("is shown the five steps that apply to them, none done, the install and guide steps left to the device", async () => {
+  it("is shown the six steps that apply to them (phase 3 adds «ابعت أول رسالة بـ«عام»»), none done, the install and guide steps left to the device", async () => {
     const w = await world();
     const r = await stepsOf(w.member.id);
     expect(r.audience).toBe("staff");
-    expect(idsOf(r)).toEqual(["install", "theme", "first-task", "finish-task", "open-guide"]);
-    expect(Object.values(doneOf(r))).toEqual([false, false, false, false, false]);
+    expect(idsOf(r)).toEqual(["install", "theme", "first-message", "first-task", "finish-task", "open-guide"]);
+    expect(Object.values(doneOf(r))).toEqual([false, false, false, false, false, false]);
     expect(r.steps.filter((s) => s.client).map((s) => s.id)).toEqual(["install", "open-guide"]);
     expect(r.steps.find((s) => s.id === "install")?.manual).toBe(true);
   });
@@ -162,7 +162,7 @@ describe("first steps: the owner and the people managers", () => {
     const w = await world();
     const r = await stepsOf(w.owner.id);
     expect(r.audience).toBe("managers");
-    expect(idsOf(r)).toEqual(["add-person", "review-spaces", "install", "theme", "first-task", "finish-task", "open-guide"]);
+    expect(idsOf(r)).toEqual(["add-person", "review-spaces", "install", "theme", "first-message", "first-task", "finish-task", "open-guide"]);
   });
 
   it("«ضيف أول موظف» needs a second ACTIVE person in the company; the owner alone has not added anyone", async () => {
@@ -216,9 +216,9 @@ describe("first steps: the owner and the people managers", () => {
   it("the switch decides, not the rank: users.manage on gives a member the people steps, off takes them from an admin", async () => {
     const w = await world();
     await setMember(w.org.id, w.member.id, { capabilities: ["users.manage"] });
-    expect(idsOf(await stepsOf(w.member.id))).toEqual(["add-person", "review-spaces", "install", "theme", "first-task", "finish-task", "open-guide"]);
+    expect(idsOf(await stepsOf(w.member.id))).toEqual(["add-person", "review-spaces", "install", "theme", "first-message", "first-task", "finish-task", "open-guide"]);
     await setMember(w.org.id, w.admin.id, { revokedCapabilities: ["users.manage"] });
-    expect(idsOf(await stepsOf(w.admin.id))).toEqual(["install", "theme", "first-task", "finish-task", "open-guide"]);
+    expect(idsOf(await stepsOf(w.admin.id))).toEqual(["install", "theme", "first-message", "first-task", "finish-task", "open-guide"]);
   });
 });
 
@@ -245,10 +245,11 @@ describe("first steps: an external partner (guest)", () => {
 });
 
 describe("first steps: phases", () => {
-  it("nothing is shown before the phase the steps exist in, and today's phase shows them", async () => {
+  it("nothing is shown before the phase the steps exist in, phase 2 lacks only the chat's step, and today's phase shows them all", async () => {
     const w = await world();
     expect((await stepsOf(w.owner.id, { phase: 1 })).steps).toEqual([]);
-    expect(idsOf(await stepsOf(w.owner.id, { phase: 2 }))).toEqual(idsOf(await stepsOf(w.owner.id)));
+    expect(idsOf(await stepsOf(w.owner.id, { phase: 2 }))).toEqual(idsOf(await stepsOf(w.owner.id)).filter((id) => id !== "first-message"));
+    expect(idsOf(await stepsOf(w.owner.id, { phase: 3 }))).toEqual(idsOf(await stepsOf(w.owner.id)));
   });
 
   it("the steps returned are exactly the registry's for that audience", async () => {
@@ -279,5 +280,21 @@ describe("audienceOf on real actors", () => {
     expect(await level(w.lead.id)).toBe("managers");
     await setMember(w.org.id, w.admin.id, { revokedCapabilities: ["users.manage"] });
     expect(await level(w.admin.id)).toBe("staff");
+  });
+});
+
+describe("first steps: «ابعت أول رسالة بـ«عام»»", () => {
+  it("is done once the person wrote a chat message in this company; a system line («انضم») is not one", async () => {
+    const w = await world();
+    const topic = await db.conversation.create({ data: { orgId: w.org.id, kind: "TOPIC", spaceId: w.ws.id, title: "عام" } });
+    expect(doneOf(await stepsOf(w.member.id))["first-message"]).toBe(false);
+
+    await db.chatMessage.create({ data: { orgId: w.org.id, conversationId: topic.id, authorId: w.member.id, body: JSON.stringify({ k: "join", p: {} }), kind: "SYSTEM" } });
+    expect(doneOf(await stepsOf(w.member.id))["first-message"]).toBe(false);
+
+    await db.chatMessage.create({ data: { orgId: w.org.id, conversationId: topic.id, authorId: w.member.id, body: "مرحبا يا فريق" } });
+    expect(doneOf(await stepsOf(w.member.id))["first-message"]).toBe(true);
+    // a colleague's message never counts for someone else
+    expect(doneOf(await stepsOf(w.admin.id))["first-message"]).toBe(false);
   });
 });

@@ -17,10 +17,10 @@ import { canRead, type Audience } from "./audience";
 import type { FirstStepsLocal } from "./storage";
 
 /** The phase this build belongs to. */
-export const CURRENT_PHASE = 2;
+export const CURRENT_PHASE = 3;
 
 /** Things the database can tell about a person. */
-export type Fact = "theme" | "task-created" | "task-completed" | "people" | "spaces";
+export type Fact = "theme" | "task-created" | "task-completed" | "people" | "spaces" | "message-sent";
 
 export interface FirstStepDef {
   id: string;
@@ -70,6 +70,16 @@ export const FIRST_STEPS: readonly FirstStepDef[] = [
     availableFrom: 2,
     audience: "everyone",
     fact: "theme",
+  },
+  {
+    // phase 3 (the chat): say hello in the company's «عام». A guest is not in «الشركة», so staff only
+    id: "first-message",
+    titleKey: "guide.first.first-message.title",
+    hintKey: "guide.first.first-message.hint",
+    href: "/chat",
+    availableFrom: 3,
+    audience: "staff",
+    fact: "message-sent",
   },
   {
     id: "first-task",

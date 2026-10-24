@@ -137,16 +137,17 @@ describe("/guide/[slug] with real accounts: a typed link cannot read what the gu
     }
   });
 
-  it("a shared article reads differently to a guest and to the team (the library and the chat are the team's)", async () => {
+  it("a shared article reads differently to a guest and to the team (the library and private DMs are the team's; the chat is everyone's)", async () => {
     const w = await world();
     await loginAs(w.member.id);
     const staff = await html(GuideArticlePage({ params: { slug: "places" } }));
     await loginAs(w.guest.id);
     const guest = await html(GuideArticlePage({ params: { slug: "places" } }));
     expect(staff).toContain("المكتبة");
-    expect(staff).toContain("الدردشة");
+    expect(staff).toContain("«خاص»");
     expect(guest).not.toContain("المكتبة");
-    expect(guest).not.toContain("الدردشة");
+    expect(guest).not.toContain("«خاص»");
+    expect(guest).toContain("الدردشة");
   });
 });
 
@@ -181,7 +182,7 @@ describe("FirstStepsCard: the server wrapper the Today page mounts", () => {
     const card = (await FirstStepsCard({ actor })) as ReactElement<{ userId: string; steps: { id: string; done: boolean }[] }>;
     expect(card.type).toBe(FirstStepsCardClient);
     expect(card.props.userId).toBe(w.member.id);
-    expect(card.props.steps.map((s) => s.id)).toEqual(["install", "theme", "first-task", "finish-task", "open-guide"]);
+    expect(card.props.steps.map((s) => s.id)).toEqual(["install", "theme", "first-message", "first-task", "finish-task", "open-guide"]);
     expect(card.props.steps.every((s) => !s.done)).toBe(true);
   });
 

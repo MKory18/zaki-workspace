@@ -47,7 +47,15 @@ export const PAGE_HELP: readonly PageHelp[] = [
     nextKey: "guide.page.chat.next",
     guestNextKey: "guide.page.chat.next_guest",
     tour: "shell",
-    article: "places",
+    article: "chat",
+  },
+  {
+    id: "conversation",
+    pattern: "/chat/:id",
+    whatKey: "guide.page.conversation.what",
+    nextKey: "guide.page.conversation.next",
+    guestNextKey: "guide.page.conversation.next_guest",
+    article: "chat",
   },
   {
     id: "archive",
@@ -55,7 +63,7 @@ export const PAGE_HELP: readonly PageHelp[] = [
     whatKey: "guide.page.archive.what",
     nextKey: "guide.page.archive.next",
     guestNextKey: INTERNAL,
-    article: "places",
+    article: "chat",
   },
   {
     id: "my-work",

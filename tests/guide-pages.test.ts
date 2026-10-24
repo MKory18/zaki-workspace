@@ -207,15 +207,16 @@ describe("/guide/[slug]: an article", () => {
     await expect(render(GuideArticlePage({ params: { slug: "team" } }))).resolves.toContain(findArticle("team")!.title);
   });
 
-  it("the same article reads differently to a guest and to staff (the places article keeps the library and the chat for staff)", async () => {
+  it("the same article reads differently to a guest and to staff (the places article keeps the library and private DMs for staff; the chat is everyone's)", async () => {
     as("staff");
     const staff = await render(GuideArticlePage({ params: { slug: "places" } }));
     as("guest");
     const guest = await render(GuideArticlePage({ params: { slug: "places" } }));
     expect(staff).toContain("المكتبة");
-    expect(staff).toContain("الدردشة");
+    expect(staff).toContain("«خاص»");
     expect(guest).not.toContain("المكتبة");
-    expect(guest).not.toContain("الدردشة");
+    expect(guest).not.toContain("«خاص»");
+    expect(guest).toContain("الدردشة");
     expect(guest).toContain("الشغل");
   });
 

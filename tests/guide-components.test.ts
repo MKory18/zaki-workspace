@@ -218,8 +218,9 @@ describe("FirstStepsView: «خطواتك الأولى»", () => {
   });
 
   it("when the next step is done the next one opens (a person moves down the list as they go)", () => {
+    // after the people, the spaces, the app and the theme, the chat's step comes next («ابعت أول رسالة بـ«عام»»)
     const html = view(manager({ people: true, spaces: true, theme: true }), { ...fresh, done: ["install"] });
-    expect(html).toContain(t("guide.first.first-task.hint"));
+    expect(html).toContain(t("guide.first.first-message.hint"));
     expect(html).not.toContain(t("guide.first.add-person.hint"));
     expect((html.match(new RegExp(`>${t("guide.first.go")}<`, "g")) ?? []).length).toBe(1);
   });
@@ -230,10 +231,10 @@ describe("FirstStepsView: «خطواتك الأولى»", () => {
 
   it("shows how far along the person is, as a number and as a bar a screen reader can read", () => {
     const html = view(manager({ theme: true, "task-created": true }));
-    expect(html).toContain(t("guide.first.progress", { done: 2, total: 7 }));
+    expect(html).toContain(t("guide.first.progress", { done: 2, total: 8 }));
     expect(html).toContain('role="progressbar"');
     expect(html).toContain('aria-valuenow="2"');
-    expect(html).toContain('aria-valuemax="7"');
+    expect(html).toContain('aria-valuemax="8"');
   });
 
   it("draws a done step differently — a check, the word «تمّت», no link, no button — and a waiting one with «لسا»", () => {
@@ -279,7 +280,7 @@ describe("FirstStepsView: «خطواتك الأولى»", () => {
   it("collapses to its header: the progress and the way back, but no list", () => {
     const html = view(manager({ theme: true }), { ...fresh, collapsed: true });
     expect(html).toContain(t("guide.first.title"));
-    expect(html).toContain(t("guide.first.progress", { done: 1, total: 7 }));
+    expect(html).toContain(t("guide.first.progress", { done: 1, total: 8 }));
     expect(html).toContain(t("guide.first.expand"));
     expect(html).not.toContain(t("guide.first.first-task.title"));
     expect(html).not.toContain("<li");
@@ -298,7 +299,7 @@ describe("FirstStepsView: «خطواتك الأولى»", () => {
   });
 
   it("is gone when everything is done", () => {
-    const all = toViews(stepsFor("staff"), { theme: true, "task-created": true, "task-completed": true });
+    const all = toViews(stepsFor("staff"), { theme: true, "task-created": true, "task-completed": true, "message-sent": true });
     expect(view(all, { ...fresh, done: ["install", "open-guide"] })).toBe("");
     // one step left and it stays
     expect(view(all, { ...fresh, done: ["install"] })).not.toBe("");

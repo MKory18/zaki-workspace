@@ -8,7 +8,7 @@ import { isThemeKey } from "@/lib/themes/registry";
 /**
  * The first-steps card («خطواتك الأولى») computed from REAL data for the signed-in actor: nothing is
  * stored about "progress" - a step is done because the rows say so (a theme chosen, a task created,
- * a task of theirs finished, a colleague added, a space they can open). A step is never ticked by
+ * a task of theirs finished, a colleague added, a space they can open, a chat message they wrote). A step is never ticked by
  * somebody else's work or by a row the person cannot see: tests/db/first-steps-scope.test.ts.
  *
  *  - Which steps apply is decided by the registry (src/lib/guide/first-steps.ts): by the actor's
@@ -57,6 +57,14 @@ async function check(actor: Who, fact: Fact): Promise<boolean> {
         where: { organizationId: actor.orgId, status: "ACTIVE", role: { not: "GUEST" }, userId: { not: actor.userId } },
       });
       return colleagues >= 1;
+    }
+    case "message-sent": {
+      // a message of their own in this company (a system line «انضم» is not one they wrote)
+      const row = await db.chatMessage.findFirst({
+        where: { orgId: actor.orgId, authorId: actor.userId, kind: { not: "SYSTEM" } },
+        select: { id: true },
+      });
+      return row !== null;
     }
     case "spaces": {
       // a space THEY can open in the company they work in now: the owner opens every one, everybody else
