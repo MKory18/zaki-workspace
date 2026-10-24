@@ -30,7 +30,15 @@ export async function openDm(ctx: OrgAccessContext, otherId: string): Promise<{ 
     where: { orgId: ctx.orgId, dmKey },
     select: { id: true },
   });
-  if (existing) return { id: existing.id, created: false };
+  if (existing) {
+    // a DM is never left (see leaveConversation), but a row lost before that rule (older data) is put
+    // back for both people, so neither is locked out of their own history and the pair can talk again
+    await db.conversationMember.createMany({
+      data: [{ conversationId: existing.id, userId: ctx.userId }, { conversationId: existing.id, userId: otherId }],
+      skipDuplicates: true,
+    });
+    return { id: existing.id, created: false };
+  }
 
   // the OLDEST DM of the pair keeps the key when legacy duplicates exist: only claim it if free
   const created = await db.$transaction(async (tx) => {
@@ -169,10 +177,15 @@ export async function manageGroup(
   });
 }
 
-/** Leaving a group: remove my row; the last person leaving deletes nothing (the group stays for the archive). */
+/**
+ * Leaving a group: remove my row; the last person leaving deletes nothing (the group stays for the archive).
+ * A DM is never left: removing one side's row locked the OTHER person out of their own history (the
+ * policy needs both rows) and, the DM being found again by its pair key, blocked any new DM (review A7).
+ */
 export async function leaveConversation(ctx: OrgAccessContext, conversationId: string): Promise<void> {
   const conv = await db.conversation.findFirst({ where: { id: conversationId, orgId: ctx.orgId }, select: { id: true, kind: true } });
   if (!conv) throw new NotFoundError("chat.e.not_found");
+  if (conv.kind === "DM") throw new ForbiddenError("chat.e.dm_leave_denied");
   const me = await db.conversationMember.findUnique({
     where: { conversationId_userId: { conversationId, userId: ctx.userId } },
     select: { id: true },
