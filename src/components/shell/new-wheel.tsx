@@ -190,6 +190,7 @@ export function NewWheel({ actions, defaultOpen = false, portal = true }: { acti
         <DialogPrimitive.Trigger asChild>
           <button
             type="button"
+            data-tour="new"
             aria-keyshortcuts="N"
             aria-label={t("shell.new.open")}
             className="inline-flex size-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-accent-2 text-sm font-bold text-scrim transition-[filter] hover:brightness-110 sm:w-auto sm:px-4"

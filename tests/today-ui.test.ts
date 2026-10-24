@@ -32,6 +32,8 @@ import { AR } from "@/lib/i18n/dict";
 import { I18nProvider } from "@/lib/i18n";
 import { getServerT } from "@/lib/i18n/server";
 import {
+  dayProgress,
+  missionOf,
   quickTaskBody,
   TODAY_LIMITS,
   type TodayProject,
@@ -74,7 +76,7 @@ const task = (over: Partial<TodayTask> = {}): TodayTask => ({
   ...over,
 });
 
-const counts = (over: Partial<TodayTasks["counts"]> = {}): TodayTasks["counts"] => ({ open: 0, overdue: 0, today: 0, later: 0, ...over });
+const counts = (over: Partial<TodayTasks["counts"]> = {}): TodayTasks["counts"] => ({ open: 0, overdue: 0, today: 0, later: 0, doneToday: 0, ...over });
 
 const tasksOf = (over: Partial<TodayTasks> = {}): TodayTasks => ({ overdue: [], today: [], later: [], counts: counts(), ...over });
 
@@ -114,8 +116,8 @@ const PROJECTS: TodayProject[] = [
 
 // ───────────────────────────────────────── the hero strip ─────────────────────────────────────────
 
-describe("the hero strip", () => {
-  const markup = html(createElement(TodayHero, { greeting: "صباح الخير يا أحمد", date: "الخميس 22 تشرين الأول 2026" }));
+describe("the hero strip, with nothing due: the greeting", () => {
+  const markup = html(createElement(TodayHero, { greeting: "صباح الخير يا أحمد", date: "الخميس 22 تشرين الأول 2026", mission: null }));
 
   it("is the one place of the Today page that draws the strip: the decoration layer and the owner's picture slot", () => {
     expect(markup).toContain('class="zk-decor zk-decor-strip"');
@@ -137,6 +139,77 @@ describe("the hero strip", () => {
     expect(markup).not.toMatch(/<(button|ul|li|table)\b/);
     const dimmer = classTokens(markup).filter((c) => /(^|:)text-muted$/.test(c));
     expect(dimmer, "only fg, fg-muted and accent are held over a picture").toEqual([]);
+  });
+
+  it("says what to do when nothing is due", () => {
+    expect(markup).toContain(t("today.mission.empty_body"));
+    expect(markup).not.toContain(t("today.mission.ribbon"));
+  });
+});
+
+// ───────────────────────────────────────── «المهمّة الجاية» ─────────────────────────────────────────
+
+describe("«المهمّة الجاية»: the mission card («نجمة وطريق»)", () => {
+  const mission = task({ id: "o1", title: "مراجعة العقد", dueLabel: "قبل 3 أيام", priority: "URGENT", priorityLabel: AR["priority.URGENT"] as string });
+  const markup = html(createElement(TodayHero, { greeting: "صباح الخير يا أحمد", date: "الخميس 22 تشرين الأول 2026", mission }));
+
+  it("the mission is the most overdue task, else the first due today, else none", () => {
+    expect(missionOf(FULL)?.id).toBe("o1");
+    expect(missionOf({ overdue: [], today: FULL.today })?.id).toBe("d1");
+    expect(missionOf({ overdue: [], today: [] })).toBeNull();
+  });
+
+  it("its title is the page's ONE heading, in the wordmark face, under the gold ribbon «المهمّة الجاية»", () => {
+    expect([...markup.matchAll(/<h1\b/g)]).toHaveLength(1);
+    expect(markup).toMatch(/<h1 id="today-mission" class="[^"]*\bfont-brand\b[^"]*"><bdi>مراجعة العقد<\/bdi><\/h1>/);
+    expect(markup).toMatch(/class="zk-ribbon[^"]*"><span>المهمّة الجاية<\/span>/);
+    expect(markup).toContain("مشروع الهوية");
+    expect(markup).toContain("قبل 3 أيام");
+    expect(markup).toContain(AR["priority.URGENT"] as string);
+    expect(markup).toContain("صباح الخير يا أحمد · الخميس 22 تشرين الأول 2026");
+  });
+
+  it("«ابدأ المهمّة» opens the task, «خلّصتها» finishes it: both 44px", () => {
+    expect(markup).toMatch(new RegExp(`<a[^>]*href="/tasks/o1"[^>]*>${t("today.mission.start")}</a>`));
+    const done = new RegExp(`<button[^>]*aria-label="${t("today.mission.done_aria", { title: "مراجعة العقد" })}"[^>]*>`).exec(markup)?.[0] ?? "";
+    expect(done).toMatch(/\bmin-h-11\b/);
+    expect(/<a[^>]*href="\/tasks\/o1"[^>]*>/.exec(markup)?.[0]).toMatch(/\bmin-h-11\b/);
+  });
+
+  it("THE RULE, CHANGED ON PURPOSE: the buttons are on the strip, but only inside the scrim panel — never on the picture", () => {
+    // everything of the card before the panel is the picture and its layers: no control there
+    const card = /<section\b[\s\S]*?<\/section>/.exec(markup)?.[0] ?? "";
+    const panelAt = card.indexOf('class="zk-scrim');
+    expect(panelAt).toBeGreaterThan(0);
+    expect(card.slice(0, panelAt)).not.toMatch(/<(a|button)\b/);
+    expect([...card.slice(panelAt).matchAll(/<(a|button)\b/g)]).toHaveLength(2);
+    // still no count, no list, no table over the picture
+    expect(markup).not.toMatch(/<(ul|li|table)\b/);
+  });
+
+  it("the photograph is a theme-scoped CSS background (no request on another theme, nothing at «off»), behind and silent", () => {
+    expect(markup).toMatch(/<div aria-hidden="true" class="zk-hero-photo pointer-events-none absolute inset-0"><\/div>/);
+    const css = readFileSync(path.join(ROOT, "src/app/globals.css"), "utf8");
+    expect(css).toMatch(/\.zk-hero-photo \{\s*display: none;\s*\}/);
+    expect(css).toContain('[data-theme="night"]:not([data-decor="off"]) .zk-hero-photo');
+    expect(css).toContain('[data-theme="day"]:not([data-decor="off"]) .zk-hero-photo');
+    expect(css).toContain('url("/brand/hero/amman-dusk.webp")');
+    const file = path.join(ROOT, "public/brand/hero/amman-dusk.webp");
+    const buf = readFileSync(file);
+    expect(buf.subarray(8, 12).toString("ascii")).toBe("WEBP");
+    expect(statSync(file).size / 1024).toBeLessThanOrEqual(150);
+    expect(readFileSync(path.join(ROOT, "public/brand/CREDITS.md"), "utf8")).toMatch(/brand\/hero\/amman-dusk\.webp[^\n]*CC BY 4\.0/);
+  });
+
+  it("a task the person may not change gets «ابدأ» and no «خلّصتها»", () => {
+    const readOnly = html(createElement(TodayHero, { greeting: "مرحبا", date: "اليوم", mission: { ...mission, editable: false } }));
+    expect(readOnly).toContain(t("today.mission.start"));
+    expect(readOnly).not.toContain(t("today.mission.done"));
+  });
+
+  it("«تمّت المهمّة!» promises no star (the stars are the rewards phase)", () => {
+    expect(AR["today.mission.passed_title"]).toBe("تمّت المهمّة!");
+    expect(AR["today.mission.passed_sub"]).not.toMatch(/نجم|\+/);
   });
 });
 
@@ -320,14 +393,24 @@ describe("completing a task: the existing endpoint, a refusal explained in Arabi
 // ───────────────────────────────────────── the quick add ─────────────────────────────────────────
 
 describe("«إضافة سريعة»", () => {
-  it("is a visible, big button with the tour's hook, once", () => {
+  it("is an inline line at the foot of the list: type, press Enter; the tour's hook on the field, once", () => {
     const markup = html(createElement(TodayQuickAdd, { quickAdd: QUICK, timeZone: "Asia/Damascus" }));
     expect([...markup.matchAll(/data-tour="quick-add"/g)]).toHaveLength(1);
-    const button = /<button\b[^>]*data-tour="quick-add"[^>]*>/.exec(markup)?.[0] ?? "";
-    expect(button).toMatch(/\bmin-h-12\b/);
-    expect(textOf(markup)).toContain(t("today.quick_add"));
-    // the sheet is not on the page until it is opened
-    expect(markup).not.toContain("<form");
+    const field = /<input\b[^>]*data-tour="quick-add"[^>]*>/.exec(markup)?.[0] ?? "";
+    expect(field).toContain(`aria-label="${t("today.quick.inline_aria")}"`);
+    expect(field).toContain(`placeholder="${t("today.quick.inline_placeholder")}"`);
+    expect(field).toMatch(/\bmin-h-11\b/);
+    expect(field).toMatch(/\bborder-dashed\b/);
+    expect(markup).toMatch(/<form\b/);
+    // «المشروع والموعد» opens the full sheet, which is not on the page until then
+    expect(textOf(markup)).toContain(t("today.quick.more"));
+    expect(markup).not.toContain(t("today.quick.submit"));
+  });
+
+  it("with no project that has a board: no field, only the button (its sheet says why), carrying the hook", () => {
+    const markup = html(createElement(TodayQuickAdd, { quickAdd: { ...QUICK, targets: [] }, timeZone: "Asia/Damascus" }));
+    expect(markup).not.toContain("<input");
+    expect(markup).toMatch(/<button\b[^>]*data-tour="quick-add"[^>]*>/);
   });
 
   it("builds the request for the existing POST /api/tasks: the person's own task, due today unless they say otherwise", () => {
@@ -491,8 +574,9 @@ describe("«مشاريعي النشطة»", () => {
 // ───────────────────────────────────────── rules over everything the page renders ─────────────────────────────────────────
 
 const everything = [
-  html(createElement(TodayHero, { greeting: "صباح الخير يا أحمد", date: "الخميس 22 تشرين الأول 2026" })),
-  html(createElement(TodayTasksCard, { tasks: FULL, hasSpaces: true })),
+  html(createElement(TodayHero, { greeting: "صباح الخير يا أحمد", date: "الخميس 22 تشرين الأول 2026", mission: null })),
+  html(createElement(TodayHero, { greeting: "صباح الخير يا أحمد", date: "الخميس 22 تشرين الأول 2026", mission: FULL.overdue[0]! })),
+  html(createElement(TodayTasksCard, { tasks: FULL, hasSpaces: true, quickAdd: QUICK, timeZone: "Asia/Damascus" })),
   html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: true })),
   html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: false })),
   html(createElement(TodayTasksCard, { tasks: tasksOf(), hasSpaces: false, canCreateSpaces: true })),
@@ -676,5 +760,42 @@ describe("the source of the Today page", () => {
     // (WP-UI2 item 1 moved it there on purpose: it must not push the tasks down)
     expect(page.indexOf("<FirstStepsCard")).toBeLessThan(page.indexOf("<TodayTasksCard"));
     expect(page.indexOf("<TodayTasksCard")).toBeLessThan(page.indexOf("<InstallHint"));
+  });
+});
+
+// ───────────────────────────────────────── «نجمة وطريق» in the list ─────────────────────────────────────────
+
+describe("«مهمّاتي اليوم» in the shape of «نجمة وطريق»", () => {
+  it("«x من y خلصت»: what was finished today out of today's work (late + today + finished); later work is not the day's", () => {
+    expect(dayProgress(counts({ overdue: 2, today: 2, later: 2, doneToday: 3 }))).toEqual({ done: 3, total: 7 });
+    expect(dayProgress(counts({ later: 5 }))).toEqual({ done: 0, total: 0 });
+    const markup = html(createElement(TodayTasksCard, { tasks: { ...FULL, counts: counts({ open: 6, overdue: 2, today: 2, later: 2, doneToday: 3 }) }, hasSpaces: true }));
+    expect(markup).toContain(t("today.tasks.progress", { done: "3", total: "7" }));
+    expect(AR["today.tasks.title"]).toBe("مهمّاتي اليوم");
+  });
+
+  it("says no progress on a day with nothing in it", () => {
+    const markup = html(createElement(TodayTasksCard, { tasks: tasksOf({ counts: counts({ open: 1, later: 1 }), later: [task({ id: "l1" })] }), hasSpaces: true }));
+    expect(markup).not.toContain("خلصت");
+  });
+
+  it("the star between two rules under the title, silent", () => {
+    const markup = html(createElement(TodayTasksCard, { tasks: FULL, hasSpaces: true }));
+    expect(markup).toContain('<div aria-hidden="true" class="zk-orn mx-4 mt-2"></div>');
+  });
+
+  it("the finishing circle is 44px around a gold star (hidden until done or hovered)", () => {
+    const markup = html(createElement(TodayTaskRow, { task: task(), tone: "today" }));
+    const button = /<button\b[^>]*>[\s\S]*?<\/button>/.exec(markup)?.[0] ?? "";
+    expect(button).toMatch(/class="[^"]*\bsize-11\b/);
+    expect(button).toMatch(/<span aria-hidden="true" class="zk-star size-3\.5 text-accent-2[^"]*opacity-0/);
+  });
+
+  it("the inline quick add sits at the foot of the list, inside the card, for whoever may add", () => {
+    const markup = html(createElement(TodayTasksCard, { tasks: FULL, hasSpaces: true, quickAdd: QUICK, timeZone: "Asia/Damascus" }));
+    const list = /<div data-tour="today-tasks"[\s\S]*$/.exec(markup)?.[0] ?? "";
+    expect(list).toContain('data-tour="quick-add"');
+    const none = html(createElement(TodayTasksCard, { tasks: FULL, hasSpaces: true, quickAdd: null }));
+    expect(none).not.toContain('data-tour="quick-add"');
   });
 });

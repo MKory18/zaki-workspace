@@ -45,6 +45,8 @@
   "guide.tour.shell.inbox.body": "بيعلمك لما يصير شي بخصّك، مثل لما حدا يعيّن لك مهمة.",
   "guide.tour.shell.avatar.title": "حسابك",
   "guide.tour.shell.avatar.body": "من هون بتختار المظهر، وبتفتح الدليل وحسابك، وبتسجّل الخروج.",
+  "guide.tour.shell.new.title": "جديد",
+  "guide.tour.shell.new.body": "من هون بتضيف أي إشي بضغطة: مهمّة، مشروع، مستند، رسالة، مساحة أو عضو.",
   "guide.tour.shell.theme.title": "الثيم",
   "guide.tour.shell.theme.body": "اختار شكل النظام اللي بيريّح عينك من أربع ثيمات.",
   "guide.tour.today.today-tasks.title": "مهامك لليوم",
@@ -54,7 +56,7 @@
   "guide.tour.today.first-steps.title": "خطواتك الأولى",
   "guide.tour.today.first-steps.body": "بطاقة بتمشّيك على أهم الأشياء، وكل خطوة بتتعلّم لحالها لما تخلّصها.",
 
-  "guide.first.title": "خطواتك الأولى",
+  "guide.first.title": "أول خطواتك",
   "guide.first.progress": "{done} من {total}",
   "guide.first.collapse": "طيّ البطاقة",
   "guide.first.expand": "فتح البطاقة",
@@ -155,5 +157,10 @@
   "guide.page.guide-article.what": "هاي صفحة من الدليل: خطوات قصيرة لموضوع واحد.",
   "guide.page.guide-article.next": "كمّل للمقال اللي بعده، أو ارجع للدليل.",
 
-  "guide.page.internal.what": "هاي صفحة للفريق الداخلي، وما بتنفتح لحساب الشريك الخارجي."
+  "guide.page.internal.what": "هاي صفحة للفريق الداخلي، وما بتنفتح لحساب الشريك الخارجي.",
+
+  "guide.card.title": "أهلين! أنا زاكي، دليلك هون.",
+  "guide.card.body": "بدك جولة سريعة؟ نص دقيقة وبتعرف وين كل إشي.",
+  "guide.card.start": "يلا",
+  "guide.card.later": "بعدين"
 }

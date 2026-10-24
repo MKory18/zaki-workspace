@@ -82,7 +82,10 @@ describe("the home page: «اليوم»", () => {
       return html(HomePage());
     });
 
-    expect(markup).toMatch(/<h1[^>]*>(صباح|مساء) الخير يا سارة<\/h1>/);
+    // «نجمة وطريق»: the most overdue task is the mission, the page's one heading; the greeting is under it
+    expect([...markup.matchAll(/<h1\b/g)]).toHaveLength(1);
+    expect(markup).toMatch(/<h1 id="today-mission"[^>]*><bdi>عقد متأخر<\/bdi><\/h1>/);
+    expect(markup).toMatch(/(صباح|مساء) الخير يا سارة · /);
     expect(markup).toContain(fmtLongDate(zonedStandIn(todayNoon("UTC", now), "UTC")));
 
     for (const [task, title] of [[overdue, "عقد متأخر"], [today, "تقرير اليوم"], [later, "عرض الأسبوع القادم"]] as const) {
@@ -112,7 +115,9 @@ describe("the home page: «اليوم»", () => {
     const markup = await html(HomePage());
     expect([...markup.matchAll(/data-tour="today-tasks"/g)]).toHaveLength(1);
     expect([...markup.matchAll(/data-tour="quick-add"/g)]).toHaveLength(1);
-    expect(markup).toContain(t("today.quick_add"));
+    // the inline line at the foot of the list, and «المشروع والموعد» for the full sheet
+    expect(markup).toContain(`placeholder="${t("today.quick.inline_placeholder")}"`);
+    expect(markup).toContain(t("today.quick.more"));
   });
 
   it("mounts the first-steps card for the person's own actor, then the install hint once, then the tasks", async () => {
@@ -130,7 +135,7 @@ describe("the home page: «اليوم»", () => {
     expect((card?.props as { actor: { userId: string; orgId: string } }).actor).toMatchObject({ userId: w.member.id, orgId: w.org.id });
   });
 
-  it("draws the strip once, with the greeting on a scrim, and no count or link inside it", async () => {
+  it("draws the strip once: the mission and the greeting on a scrim; its only controls are the mission's two, on the panel", async () => {
     const { w } = await busyWorld();
     await loginAs(w.member.id);
     const markup = await html(HomePage());
@@ -139,10 +144,14 @@ describe("the home page: «اليوم»", () => {
     // all (`ArtSlot` returns null while `ART_AVAILABLE` is empty — tests/art-available.test.ts owns that rule)
     expect(markup).not.toContain("data-art-slot");
     expect(readFileSync("src/components/today/today-hero.tsx", "utf8")).toContain('"today-strip"');
-    const hero = /<section[^>]*aria-labelledby="today-greeting"[\s\S]*?<\/section>/.exec(markup)?.[0] ?? "";
+    const hero = /<section[^>]*aria-labelledby="today-mission"[\s\S]*?<\/section>/.exec(markup)?.[0] ?? "";
     expect(hero).toContain("zk-scrim");
     expect(hero).toContain("الخير يا سارة");
-    expect(hero).not.toMatch(/\/tasks\/|<button|<ul|مفتوحة|متأخرة/);
+    const panelAt = hero.indexOf('class="zk-scrim');
+    expect(hero.slice(0, panelAt)).not.toMatch(/<(a|button)\b/);
+    expect([...hero.matchAll(/href="\/tasks\//g)]).toHaveLength(1); // «ابدأ المهمّة», the mission's own page
+    // no count, no list over the picture
+    expect(hero).not.toMatch(/<ul|مفتوحة/);
   });
 
   it("is not a wall of navigation cards: no card grid, no link to a place that has its own tab, no module counters", async () => {

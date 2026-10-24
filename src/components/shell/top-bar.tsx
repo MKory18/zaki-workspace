@@ -24,7 +24,7 @@ import { NewWheel } from "./new-wheel";
  * The place's name is NOT a heading: the one `h1` of a page is the page's own (a screen reader's list of
  * headings starts with what the page is about, not with the frame — GLM's #3 drew two). Every control is
  * a 44px target. `data-tour`: "search" around the palette's button, "inbox" on the bell
- * (notification-bell.tsx), "avatar" on the avatar (avatar-menu.tsx).
+ * (notification-bell.tsx), "new" on «جديد» (new-wheel.tsx), "avatar" on the avatar (avatar-menu.tsx).
  */
 export function TopBar({
   nav,

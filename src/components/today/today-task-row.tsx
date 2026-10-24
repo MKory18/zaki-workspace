@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 import type { TodayTask } from "@/lib/today";
@@ -23,7 +22,7 @@ const PRIORITY_MARK: Partial<Record<string, string>> = {
  * One task of «مهامي اليوم»: the circle at the start finishes it (the guide calls it «الدائرة اللي بأول المهمة»),
  * the rest of the row opens it.
  *
- * - The circle is a 44px target around a 24px drawing, and it is there only when the person may change the
+ * - The circle is a 44px target around a 28px drawing (a gold star fills it when done, «نجمة وطريق»), and it is there only when the person may change the
  *   task. Pressing it is OPTIMISTIC: the row is crossed out at once, `POST /api/tasks/<id>/complete` goes out,
  *   and on success the page is refreshed (the task leaves the list); if the server says no, the row comes back
  *   and the reason is said in Arabic in a toast.
@@ -64,11 +63,15 @@ export function TodayTaskRow({ task, tone }: { task: TodayTask; tone: RowTone })
         >
           <span
             className={cn(
-              "flex size-6 items-center justify-center rounded-full border-2 transition-colors motion-reduce:transition-none",
-              done ? "border-ok bg-ok text-ok-fg" : "border-muted text-muted/80 group-hover/done:border-ok group-hover/done:text-ok",
+              "flex size-7 items-center justify-center rounded-full border-2 transition-colors motion-reduce:transition-none",
+              done ? "border-accent-2 bg-accent-2/15" : "border-muted group-hover/done:border-accent-2",
             )}
           >
-            <Check className="size-3.5" aria-hidden="true" />
+            {/* the gold star of «نجمة وطريق»: there once the task is done, a hint of it under the finger */}
+            <span
+              aria-hidden="true"
+              className={cn("zk-star size-3.5 text-accent-2 transition-opacity", done ? "opacity-100" : "opacity-0 group-hover/done:opacity-60")}
+            />
           </span>
         </button>
       ) : null}

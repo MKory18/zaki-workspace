@@ -8,6 +8,7 @@
  *   tabs         the tab strip of the current place
  *   search       the search / quick-navigation button
  *   inbox        the notification bell
+ *   new          the gold «جديد» button of the top bar (src/components/shell/new-wheel.tsx)
  *   avatar       the avatar menu
  *   theme        the theme picker (inside the avatar menu)
  *   today-tasks  the list of today's tasks on the Today page
@@ -22,6 +23,7 @@ export const TOUR_HOOKS = [
   "tabs",
   "search",
   "inbox",
+  "new",
   "avatar",
   "theme",
   "today-tasks",
@@ -52,6 +54,7 @@ export const TOURS: Record<TourKey, readonly TourStep[]> = {
     { hook: "tabs", titleKey: "guide.tour.shell.tabs.title", bodyKey: "guide.tour.shell.tabs.body", side: "bottom" },
     { hook: "search", titleKey: "guide.tour.shell.search.title", bodyKey: "guide.tour.shell.search.body", side: "bottom" },
     { hook: "inbox", titleKey: "guide.tour.shell.inbox.title", bodyKey: "guide.tour.shell.inbox.body", side: "bottom" },
+    { hook: "new", titleKey: "guide.tour.shell.new.title", bodyKey: "guide.tour.shell.new.body", side: "bottom" },
     { hook: "avatar", titleKey: "guide.tour.shell.avatar.title", bodyKey: "guide.tour.shell.avatar.body", side: "bottom" },
     { hook: "theme", titleKey: "guide.tour.shell.theme.title", bodyKey: "guide.tour.shell.theme.body", side: "bottom" },
   ],

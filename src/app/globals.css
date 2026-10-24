@@ -153,3 +153,114 @@ html {
     transform: rotate(calc(var(--i) * 1turn / var(--n))) translateY(-112px) rotate(calc(var(--i) * -1turn / var(--n)));
   }
 }
+
+/* ── «اليوم» in the shape of «نجمة وطريق» ───────────────────────────────────────────────────────── */
+
+/* «المهمّة الجاية»: Amman at dusk (public/brand/hero, CC BY 4.0 — public/brand/CREDITS.md) behind the
+   mission card, on «ليل» and «نهار» only, and never at the «off» level. It is a CSS background, so a
+   browser on another theme or with decoration off never even asks for the file. Every word on the card
+   sits on a `.zk-scrim` panel in front of it, never on the picture itself. */
+.zk-hero-photo {
+  display: none;
+}
+[data-theme="night"]:not([data-decor="off"]) .zk-hero-photo,
+[data-theme="day"]:not([data-decor="off"]) .zk-hero-photo {
+  display: block;
+  background: url("/brand/hero/amman-dusk.webp") center 58% / cover no-repeat;
+}
+
+/* The skewed gold ribbon over the card: «المهمّة الجاية». */
+.zk-ribbon {
+  display: inline-block;
+  padding: 2px 12px;
+  border-radius: 3px;
+  background-color: rgb(var(--accent-2));
+  color: rgb(var(--scrim));
+  transform: skewX(-14deg);
+}
+.zk-ribbon > span {
+  display: inline-block;
+  transform: skewX(14deg);
+}
+
+/* A star between two thin rules, under a card's title. */
+.zk-orn {
+  position: relative;
+  height: 16px;
+  background-image: linear-gradient(to left, rgb(var(--border)) calc(50% - 16px), transparent calc(50% - 16px), transparent calc(50% + 16px), rgb(var(--border)) calc(50% + 16px));
+  background-position: center;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+}
+.zk-orn::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc(50% - 7px);
+  top: 1px;
+  width: 14px;
+  height: 14px;
+  background-color: rgb(var(--accent-2));
+  -webkit-mask: var(--zk-star-mask) center / contain no-repeat;
+  mask: var(--zk-star-mask) center / contain no-repeat;
+}
+
+/* «أول خطواتك»: a dashed gold road down the start side, threading the steps' marks. */
+.zk-route > li {
+  position: relative;
+}
+.zk-route > li::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  /* through the centre of the 32px marks, which sit 4px in from the start of every row */
+  inset-inline-start: 19px;
+  border-inline-start: 2px dashed rgb(var(--accent-2) / 0.55);
+  pointer-events: none;
+}
+.zk-route > li:first-child::before {
+  top: 50%;
+}
+.zk-route > li:last-child::before {
+  bottom: 50%;
+}
+
+/* The step to do now breathes a gold ring (reduced motion stops it: see the rule above). */
+.zk-ping {
+  animation: zk-ping 1.8s ease-out infinite;
+}
+@keyframes zk-ping {
+  0% {
+    box-shadow: 0 0 0 0 rgb(var(--accent-2) / 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgb(var(--accent-2) / 0);
+  }
+}
+
+/* «تمّت المهمّة!»: the band that plays once over the mission card when it is finished. */
+.zk-passed {
+  animation: zk-passed 1.8s ease forwards;
+}
+@keyframes zk-passed {
+  0% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+/* With less motion asked for, the band does not play: it simply shows, and leaves with the card's refresh. */
+@media (prefers-reduced-motion: reduce) {
+  .zk-passed {
+    animation: none !important;
+    opacity: 1;
+  }
+}
