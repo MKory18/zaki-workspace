@@ -22,7 +22,7 @@ export function BottomNav({ places, current, pathname, badges = {} }: { places: 
     <nav
       aria-label={t("shell.places")}
       data-tour="places"
-      className="fixed bottom-0 end-0 start-0 z-40 border-t border-border bg-surface-1 pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="fixed bottom-0 end-0 start-0 z-40 border-t border-border bg-surface-1 pb-[env(safe-area-inset-bottom)] md:hidden zk-safe-x"
     >
       <ul className="flex">
         {places.map((place) => {

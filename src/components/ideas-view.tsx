@@ -150,7 +150,7 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
   }
 
   return (
-    <main className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
+    <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
       <header>
         <h1 className="text-lg font-semibold text-fg">{t("ideas.title")}</h1>
         <p className="text-xs text-fg-muted">{t("ideas.subtitle")}</p>
@@ -316,7 +316,7 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
           }}
         />
       ) : null}
-    </main>
+    </div>
   );
 }
 

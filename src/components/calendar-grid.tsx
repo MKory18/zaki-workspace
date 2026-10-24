@@ -131,7 +131,7 @@ export function CalendarGrid({
               className={cn(
                 "min-h-20 flex flex-col gap-0.5 rounded-sm bg-surface p-1.5",
                 !cell.inMonth && "opacity-40",
-                isToday && "ring-1 ring-accent/60",
+                isToday && "ring-1 ring-accent",
                 overKey === cell.iso && "bg-surface-2",
               )}
             >

@@ -114,7 +114,7 @@ export function ListFilters({
           defaultValue={q}
           aria-label={labels.search}
           placeholder={labels.search}
-          className="min-h-11 md:h-8 w-52 md:w-52 rounded-lg border border-muted bg-surface-1 px-2 text-base md:text-xs text-fg placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-inset"
+          className="min-h-11 md:h-8 w-52 md:w-52 rounded-lg border border-muted bg-surface-1 px-2 text-base md:text-xs text-fg placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
         />
       </form>
     </div>

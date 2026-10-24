@@ -20,6 +20,15 @@ describe("the notification bell's hover and focus (item 9)", () => {
   it("keyboard focus draws a ring inside the round button", () => {
     expect(source).toMatch(/focus-visible:ring-2/);
     expect(source).toMatch(/focus-visible:ring-inset/);
-    expect(source).toMatch(/focus-visible:ring-accent\//);
+    // a SOLID accent ring (review C item 15: the translucent ring-accent/60 lost its contrast)
+    expect(source).toMatch(/focus-visible:ring-accent(?![/\w-])/);
+  });
+});
+
+describe("a notification's own actions on a touch tablet (WP-UI2 item 9, review C item 10)", () => {
+  it("they hide until hover only where the device really hovers: a touch tablet at md and up sees them", () => {
+    const source = readFileSync("src/components/notification-bell.tsx", "utf8");
+    expect(source).toContain("md:[@media(hover:hover)]:opacity-0");
+    expect(source).not.toMatch(/(?<!\])\smd:opacity-0/);
   });
 });

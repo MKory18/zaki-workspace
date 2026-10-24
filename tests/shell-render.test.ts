@@ -494,3 +494,13 @@ describe("the source of the frame", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("the frame keeps off the notch on both sides (review C item 11: `.zk-safe-x` existed and nothing used it)", () => {
+  it("the top bar, the bottom bar and the page area carry the side safe-area padding", () => {
+    const html = shell("MEMBER", "/");
+    expect(/<header [^>]*>/.exec(html)?.[0]).toContain("zk-safe-x");
+    expect(bottomBar(html).split(">")[0]).toContain("zk-safe-x");
+    expect(/<main id="zk-main"[^>]*>/.exec(html)?.[0]).toContain("zk-safe-x");
+  });
+});
+
