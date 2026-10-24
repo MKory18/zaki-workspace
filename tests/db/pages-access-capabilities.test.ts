@@ -15,6 +15,7 @@ vi.mock("next/navigation", () => ({
 
 import CrmPage from "@/app/(app)/crm/page";
 import AutomationPage from "@/app/(app)/automation/page";
+import { GuestNotice } from "@/app/(app)/_guest";
 import TelegramPage from "@/app/(app)/telegram/page";
 import DepartmentsPage from "@/app/(app)/departments/page";
 import TeamsPage from "@/app/(app)/teams/page";
@@ -259,11 +260,15 @@ describe("the people pages follow directory.view", () => {
 // ---------------------------------------------------------------------------
 
 describe("the automation and Telegram screens show their controls to whoever holds integrations.manage", () => {
-  /** The rank the screen was told to believe. */
+  /**
+   * The rank the screen was told to believe — or "notice" when the page shows the guest notice
+   * instead of the automation view (a staff-only tab: review C6).
+   */
   async function automationRole(userId: string): Promise<string> {
     await loginAs(userId);
-    const suspense = (await AutomationPage()) as PageElement;
-    const view = suspense.props["children"] as PageElement;
+    const page = (await AutomationPage()) as PageElement & { type?: unknown };
+    if (page.type === GuestNotice) return "notice";
+    const view = page.props["children"] as PageElement;
     return (view.props["ctx"] as { orgRole: string }).orgRole;
   }
   async function telegramRole(userId: string): Promise<string> {
@@ -272,13 +277,13 @@ describe("the automation and Telegram screens show their controls to whoever hol
     return (view.props["ctx"] as { orgRole: string }).orgRole;
   }
 
-  it("defaults: the owner and admins manage, a lead and a member do not, a guest is a guest", async () => {
+  it("defaults: the owner and admins manage, a lead and a member do not, a guest gets the guest notice", async () => {
     const w = await company();
     expect(await automationRole(w.owner.id)).toBe("OWNER");
     expect(await automationRole(w.admin.id)).toBe("ADMIN");
     expect(await automationRole(w.lead.id)).toBe("MEMBER");
     expect(await automationRole(w.member.id)).toBe("MEMBER");
-    expect(await automationRole(w.guest.id)).toBe("GUEST");
+    expect(await automationRole(w.guest.id)).toBe("notice");
     expect(await telegramRole(w.owner.id)).toBe("OWNER");
     expect(await telegramRole(w.admin.id)).toBe("ADMIN");
     expect(await telegramRole(w.member.id)).toBe("MEMBER");
@@ -294,10 +299,10 @@ describe("the automation and Telegram screens show their controls to whoever hol
     expect(await telegramRole(w.admin.id)).toBe("MEMBER");
   });
 
-  it("a guest can never be given it, even if a stored row says so", async () => {
+  it("a guest can never be given it, even if a stored row says so: still the guest notice", async () => {
     const w = await company();
     await setCapabilities(w.org.id, w.guest.id, { grant: ["integrations.manage"] });
-    expect(await automationRole(w.guest.id)).toBe("GUEST");
+    expect(await automationRole(w.guest.id)).toBe("notice");
   });
 });
 

@@ -3,11 +3,13 @@ import { requireActor } from "@/server/policy/actor";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { createRoutine, listRoutines, routineSchema } from "@/server/services/production";
+import { assertNotGuest } from "@/server/services/guest-guard";
 
-/** GET: all routines (admin manage view). */
+/** GET: all routines (admin manage view). Staff only: a routine carries its assignee (review C6). */
 export async function GET() {
 	return withApi(async () => {
 		const actor = await requireActor();
+		assertNotGuest({ orgRole: actor.role });
 		const routines = await listRoutines(actor.orgId);
 		return NextResponse.json({ routines });
 	});

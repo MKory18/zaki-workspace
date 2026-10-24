@@ -412,19 +412,11 @@ const ENTRIES: Entry[] = PLACES.flatMap((place): Entry[] =>
 );
 
 /**
- * ⚠️ Two tabs are staff-only on the map, yet their pages (outside the files of WP-ACCESS) still render their
- *    view for a guest instead of the notice: «الروتين اليومي» renders the read-only checklist view (and
- *    /api/production still answers a guest - tests/db/guest-production.test.ts pins "can still read"), and
- *    «الأتمتة» renders the automation view (its routes refuse a guest, so it loads nothing).
- * 🔧 Reported with WP-ACCESS: give both pages `refusedToGuest` + `GuestNotice` (src/app/(app)/_guest.tsx) like
- *    /analytics, /settings, /goals and /ideas (and close the production reads to guests), then delete the line
- *    here: the loop then holds them like every other tab. Until then the strict check runs as `it.fails`, so it
- *    turns red the day the page is fixed, and the page is still checked for company text below.
+ * A staff-only tab whose page still renders for a guest would be listed here, with the strict check run as
+ * `it.fails`. Empty: «الروتين اليومي» and «الأتمتة», the last two, now show the guest notice and
+ * /api/production refuses a guest (review C6), so the loop holds them like every other tab.
  */
-const KNOWN_GAPS: Partial<Record<TabKey, string>> = {
-  production: "the page renders the read-only checklist view for a guest",
-  automation: "the page renders the automation view for a guest",
-};
+const KNOWN_GAPS: Partial<Record<TabKey, string>> = {};
 
 const RANKS: readonly NavRole[] = ["OWNER", "ADMIN", "LEAD", "MEMBER", "GUEST"];
 
