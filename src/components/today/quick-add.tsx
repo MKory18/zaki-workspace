@@ -10,6 +10,7 @@ import { ApiError, apiPost } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { quickTaskBody, TASK_TITLE_MAX, type QuickDue, type TodayQuickAddData } from "@/lib/today";
 import { cn } from "@/lib/utils";
+import { useNewIntent } from "@/lib/nav/use-new-intent";
 
 type Post = (path: string, body?: unknown) => Promise<unknown>;
 
@@ -32,6 +33,8 @@ type Post = (path: string, body?: unknown) => Promise<unknown>;
 export function TodayQuickAdd({ quickAdd, timeZone }: { quickAdd: TodayQuickAddData; timeZone: string }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  // «جديد» → «مهمّة» lands here with ?new=task
+  useNewIntent("task", () => setOpen(true));
 
   return (
     <>

@@ -7,6 +7,7 @@ import { apiGet } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { ProjectCreateModal } from "@/components/create-forms";
+import { useNewIntent } from "@/lib/nav/use-new-intent";
 
 interface OrgsResponse {
   organizations: { workspaces: { id: string; name: string }[] }[];
@@ -20,6 +21,8 @@ export function ProjectsToolbar() {
     queryFn: () => apiGet<OrgsResponse>("/api/workspaces"),
   });
   const workspaces = (orgs.data?.organizations ?? []).flatMap((o) => o.workspaces);
+  // «جديد» → «مشروع» lands here with ?new=project; the form opens once it knows the spaces
+  useNewIntent("project", () => setOpen(true), orgs.isSuccess);
 
   return (
     <>

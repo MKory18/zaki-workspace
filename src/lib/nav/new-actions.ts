@@ -1,0 +1,76 @@
+/**
+ * «جديد» — WHAT A PERSON MAY START FROM THE GOLD BUTTON, AND IN WHICH ORDER.
+ *
+ * Pure (no React, no Next, no server imports), like places.ts: the (app) layout computes the person's
+ * list on the server from their rank and switches, the wheel draws it, and the tests read it directly.
+ *
+ * Every action opens something that already exists — nothing here creates anything by itself:
+ *   task      Today's quick add (`/?new=task` opens its sheet)
+ *   project   the projects page's «مشروع جديد» form (`/projects?new=project`)
+ *   doc       the library, its upload button ready (`/files?new=upload`)
+ *   message   the chat's «محادثة جديدة» dialog, opened in place by the wheel
+ *   space     the «مساحة عمل جديدة» form of the space switcher, opened in place by the wheel
+ *   person    the team page's «إضافة شخص» form (`/members?new=person`)
+ *
+ * ⚠️ Like the map, this is discoverability only: each form is refused by the server on its own.
+ * 🔧 When a form's rule changes, change its `requires` here too (tests/shell-new-actions.test.ts pins it).
+ */
+import { canOpenTab, type NavSubject } from "./places";
+
+export const NEW_ACTIONS = ["task", "project", "doc", "message", "space", "person"] as const;
+export type NewActionKey = (typeof NEW_ACTIONS)[number];
+
+/** The query parameter a page reads to open its own form (`useNewIntent`). */
+export const NEW_PARAM = "new";
+
+/** Where an action goes when it is a page's own form; null when the wheel opens it in place. */
+export const NEW_HREF: Record<NewActionKey, string | null> = {
+  task: "/?new=task",
+  project: "/projects?new=project",
+  doc: "/files?new=upload",
+  message: null,
+  space: null,
+  person: "/members?new=person",
+};
+
+const staff = (s: NavSubject) => s.role !== "GUEST";
+const holds = (s: NavSubject, cap: string) => staff(s) && s.caps.includes(cap);
+
+/**
+ * Who is offered each action. An external partner (guest) is offered none: the wheel is not drawn for
+ * them at all (they are put in a space by a person, and start nothing company-wide).
+ *   task, project   any staff member (a project needs a space they belong to: the form lists those)
+ *   doc             whoever has the library
+ *   message         any staff member (the chat is everybody's place)
+ *   space           `spaces.create`
+ *   person          `users.manage`
+ */
+const REQUIRES: Record<NewActionKey, (s: NavSubject) => boolean> = {
+  task: staff,
+  project: staff,
+  doc: (s) => staff(s) && canOpenTab(s, "files"),
+  message: staff,
+  space: (s) => holds(s, "spaces.create"),
+  person: (s) => holds(s, "users.manage"),
+};
+
+/** The actions this person is offered, in the wheel's own order. */
+export function newActionsFor(subject: NavSubject): NewActionKey[] {
+  return NEW_ACTIONS.filter((key) => REQUIRES[key](subject));
+}
+
+export function isNewAction(value: unknown): value is NewActionKey {
+  return typeof value === "string" && (NEW_ACTIONS as readonly string[]).includes(value);
+}
+
+/**
+ * The last action used comes first (the thing a person adds most is one press away); the rest keep the
+ * wheel's order. Anything stored that is not offered any more is ignored.
+ */
+export function orderByLastUsed(offered: readonly NewActionKey[], last: unknown): NewActionKey[] {
+  if (!isNewAction(last) || !offered.includes(last)) return [...offered];
+  return [last, ...offered.filter((key) => key !== last)];
+}
+
+/** The device-local memory of the last action (a convenience: losing it only restores the default order). */
+export const NEW_LAST_KEY = "zk.new.last";

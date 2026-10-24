@@ -6,6 +6,7 @@ import { useI18n } from "@/lib/i18n";
 import type { Audience } from "@/lib/guide/audience";
 import { browserStore } from "@/lib/guide/storage";
 import { locate, type NavModel, type NavRole } from "@/lib/nav/places";
+import type { NewActionKey } from "@/lib/nav/new-actions";
 import type { AvatarUser } from "@/components/shell/avatar-menu";
 import { DolphinMark } from "@/components/logo";
 import { BottomNav } from "@/components/shell/bottom-nav";
@@ -29,23 +30,28 @@ export interface AppShellProps {
   isGuest?: boolean;
   /** What the server read from the `zk-sidebar` cookie: the first frame is already the right width. */
   defaultCollapsed?: boolean;
+  /** What «جديد» offers this person (`newActionsFor`, on the server). */
+  newActions?: readonly NewActionKey[];
+  /** The active company's name, under the wordmark. */
+  orgName?: string;
   children: ReactNode;
 }
 
 /**
  * THE FRAME OF EVERY SIGNED-IN PAGE — the five places of the owner's plan, mobile first, right to left.
  *
- *   phone (< md)       the top bar (mark, search, «؟», bell, avatar), the tab strip of the current place,
+ *   phone (< md)       the top bar (mark, «ليل/نهار», «؟», bell, «جديد», avatar; the search under them), the tab strip of the current place,
  *                      the page, and the places in a bar fixed along the bottom (no side menu).
  *   computer (>= md)   the side menu on the start side (the places, the spaces, the avatar; it folds to
- *                      an icon rail and remembers that on this device), the top bar (search, «؟», bell),
+ *                      an icon rail and remembers that on this device), the top bar (the place's name, search,
+ *                      «ليل/نهار», «؟», bell, «جديد»),
  *                      the tab strip, the page.
  *
  * Both the bottom bar and the side menu are in the page; CSS shows one. The map comes from the server
  * (`buildNav` in the (app) layout): the frame only draws it, and the server still decides every request.
  * Theme tokens only, logical CSS only; the decoration is in the side menu's header and nowhere else.
  */
-export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCollapsed = false, children }: AppShellProps) {
+export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCollapsed = false, newActions = [], orgName, children }: AppShellProps) {
   const { t } = useI18n();
   const pathname = usePathname() ?? "/";
   const here = locate(pathname);
@@ -92,6 +98,7 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
         user={user}
         rank={rank}
         isGuest={isGuest}
+        orgName={orgName}
         collapsed={collapsed}
         onToggle={toggleSidebar}
         animated={animated}
@@ -99,7 +106,15 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar nav={nav} pathname={pathname} audience={audience} user={user} rank={rank} />
+        <TopBar
+          nav={nav}
+          pathname={pathname}
+          audience={audience}
+          user={user}
+          rank={rank}
+          title={place ? t(place.labelKey) : undefined}
+          newActions={isGuest ? [] : newActions}
+        />
         <PlaceTabs
           place={place}
           tab={tab}
