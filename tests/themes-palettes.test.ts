@@ -132,6 +132,8 @@ describe("the contrast gate", () => {
     // a chip that passes on the page and a card but not on a hover row (surface-2): review C item 15
     const onHoverRow = checkPalette({ ...base, ok: "#1A7336" });
     expect(onHoverRow.map((p) => p.pair)).toEqual(["ok on ok/10 over surface-2"]);
+    // a gold too light under the «جديد» button's dark label (the scrim): day's own scrim before it was deepened
+    expect(checkPalette({ ...base, scrim: "#0C1A2B" }).map((p) => p.pair)).toContain("scrim on accent-2 (the gold button's label)");
     // a caption colour over a picture that is not light enough
     expect(broken({ "on-photo": "#7A7A7A" })).toContain("scrim");
     // a second accent too pale to see as a shape

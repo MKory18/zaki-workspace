@@ -2,6 +2,8 @@ import { pageActor } from "@/app/(app)/_access";
 import { AppShell } from "@/components/app-shell";
 import { audienceOf } from "@/lib/guide/audience";
 import { buildNav } from "@/lib/nav/places";
+import { newActionsFor } from "@/lib/nav/new-actions";
+import { db } from "@/server/db";
 import { cookies } from "next/headers";
 import { parseSidebarCookie, SIDEBAR_COOKIE } from "@/components/shell/sidebar-cookie";
 
@@ -23,6 +25,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // The side menu's folded state is a cookie (`zk-sidebar`), read on the server: the first frame is
   // already the right width, instead of 256px that shrink after the effect runs.
   const sidebarCollapsed = parseSidebarCookie(cookies().get(SIDEBAR_COOKIE)?.value);
+  const subject = { role: actor.role, caps: [...actor.caps] };
+  // the company's name under the wordmark: the active organization, nothing else about it
+  const org = await db.organization.findUnique({ where: { id: actor.orgId }, select: { name: true } });
   return (
     <AppShell
       // the shell draws a name, a username and an e-mail; session facts (tv, locale, onboarding
@@ -30,7 +35,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       user={{ name: user.name, username: user.username, email: user.email }}
       rank={actor.role}
       isGuest={actor.isExternal}
-      nav={buildNav({ role: actor.role, caps: [...actor.caps] })}
+      nav={buildNav(subject)}
+      newActions={actor.isExternal ? [] : newActionsFor(subject)}
+      orgName={org?.name}
       audience={audienceOf(actor)}
       defaultCollapsed={sidebarCollapsed}
     >
