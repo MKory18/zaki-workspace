@@ -6,7 +6,7 @@ import { clientIp } from "@/server/rate-limit";
 import { LoginGuard } from "@/server/login-guard";
 import { loginSchema } from "@/server/validation";
 import { onboardingStateOf } from "@/server/policy/org-settings";
-import { THEME_COOKIE, isThemeKey, prefCookieOptions } from "@/lib/themes/registry";
+import { THEME_COOKIE, isChosenTheme, prefCookieOptions, themeOf } from "@/lib/themes/registry";
 
 /**
  * Brute-force guard (policy and reasoning live in login-guard.ts): the (typed text, address) pair,
@@ -99,8 +99,9 @@ export async function POST(req: Request) {
       await audit("auth.login", { actorId: user.id, orgId: active.organizationId });
       const owed = onboardingStateOf(user, active.organization.settings);
       const res = NextResponse.json({ ok: true, next: owed.mustChangePassword || owed.transparencyPending ? "/onboarding" : "/" });
-      // the person's saved theme comes with them to this device ("system" = never chose: no cookie)
-      if (isThemeKey(user.theme)) res.cookies.set(THEME_COOKIE, user.theme, prefCookieOptions(process.env.NODE_ENV === "production"));
+      // the person's saved theme comes with them to this device ("system" = never chose: no cookie); a retired
+      // key is written as the theme it now means
+      if (isChosenTheme(user.theme)) res.cookies.set(THEME_COOKIE, themeOf(user.theme), prefCookieOptions(process.env.NODE_ENV === "production"));
       return res;
     } finally {
       attempt.done();

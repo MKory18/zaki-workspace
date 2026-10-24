@@ -17,7 +17,7 @@ import "./overlay-motion.css";
  *       <DropdownMenuItem asChild><Link href="/profile">الملف الشخصي</Link></DropdownMenuItem>
  *       <DropdownMenuSeparator />
  *       <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
- *         <DropdownMenuRadioItem value="day">نهاري</DropdownMenuRadioItem>
+ *         <DropdownMenuRadioItem value="day">نهار</DropdownMenuRadioItem>
  *       </DropdownMenuRadioGroup>
  *       <DropdownMenuCheckboxItem checked={on} onCheckedChange={setOn}>خيار</DropdownMenuCheckboxItem>
  *       <DropdownMenuItem tone="danger" onSelect={logout}>تسجيل الخروج</DropdownMenuItem>

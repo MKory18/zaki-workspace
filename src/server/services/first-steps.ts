@@ -3,7 +3,7 @@ import type { Actor } from "@/server/policy/actor";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { audienceOf, type Audience } from "@/lib/guide/audience";
 import { CURRENT_PHASE, stepsFor, toViews, type Fact, type FirstStepView } from "@/lib/guide/first-steps";
-import { isThemeKey } from "@/lib/themes/registry";
+import { isChosenTheme } from "@/lib/themes/registry";
 
 /**
  * The first-steps card («خطواتك الأولى») computed from REAL data for the signed-in actor: nothing is
@@ -32,9 +32,10 @@ export interface FirstStepsResult {
 async function check(actor: Who, fact: Fact): Promise<boolean> {
   switch (fact) {
     case "theme": {
-      // User.theme held "system" for the old light/dark toggle: only one of the four keys is a choice
+      // User.theme held "system" for the old light/dark toggle: only a theme key is a choice, and a retired
+      // key («إسلامي هادي», now «ليل») still counts — the person did choose
       const me = await db.user.findUnique({ where: { id: actor.userId }, select: { theme: true } });
-      return isThemeKey(me?.theme);
+      return isChosenTheme(me?.theme);
     }
     case "task-created": {
       const row = await db.task.findFirst({ where: { orgId: actor.orgId, creatorId: actor.userId }, select: { id: true } });

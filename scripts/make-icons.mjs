@@ -32,8 +32,8 @@ import sharp from "sharp";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ICON_SVG = join(ROOT, "src/app/icon.svg");
 
-/** The default theme's surface colour («إسلامي هادي»: src/lib/themes/palettes.ts, `islamic-calm`.surface). */
-export const BACKGROUND = "#F6F1E7";
+/** The default theme's surface colour («ليل»: src/lib/themes/palettes.ts, `night`.surface). */
+export const BACKGROUND = "#050F1F";
 
 /** The maskable safe zone: a circle of this radius, as a fraction of the icon size, around the centre. */
 export const SAFE_ZONE = 0.4;

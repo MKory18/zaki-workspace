@@ -19,8 +19,10 @@ const config: Config = {
       fontFamily: {
         // the body face, loaded by the root layout through next/font (--font-plex)
         sans: ["var(--font-plex)", '"Segoe UI"', "Tahoma", "system-ui", "sans-serif"],
-        // titles: Reem Kufi on the Islamic themes, IBM Plex on the others (h1-h3 use it by default)
+        // titles: Reem Kufi on night, day and epic, IBM Plex on neon-coast (h1-h3 use it by default)
         display: ["var(--font-display)"],
+        // the wordmark «زاكي» (Lalezar, loaded by the root layout through next/font: --font-lalezar)
+        brand: ["var(--font-lalezar)", "var(--font-display)"],
       },
       borderRadius: {
         lg: "8px",

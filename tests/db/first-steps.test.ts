@@ -73,6 +73,9 @@ describe("first steps: choosing a theme (User.theme)", () => {
       await db.user.update({ where: { id: w.member.id }, data: { theme: key } });
       expect(doneOf(await stepsOf(w.member.id))["theme"], key).toBe(true);
     }
+    // the retired «إسلامي هادي» was a choice too: it stays done (it is read as «ليل»)
+    await db.user.update({ where: { id: w.member.id }, data: { theme: "islamic-calm" } });
+    expect(doneOf(await stepsOf(w.member.id))["theme"], "islamic-calm").toBe(true);
     // the old light/dark/system toggle and anything else is no choice at all
     for (const value of ["system", "light", "dark", "", "Islamic-Calm", "nope"]) {
       await db.user.update({ where: { id: w.member.id }, data: { theme: value } });

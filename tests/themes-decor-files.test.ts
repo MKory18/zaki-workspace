@@ -2,14 +2,15 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { THEME_KEYS } from "@/lib/themes/registry";
-import { ART_SLOTS, COMPOSED, FAINT, PHOTOGRAPHIC, allDecorFiles, decorFilesOf, renderDecorCss } from "@/lib/themes/decor";
+import { ART_SLOTS, COMPOSED, PATTERN, PHOTOGRAPHIC, allDecorFiles, decorFilesOf, patternTileUrl, renderDecorCss } from "@/lib/themes/decor";
 import { DECOR_DIR, ROOT, luminance, parseCss, read, type Rgb } from "./themes-decor-helpers";
 
 /**
  * THE PICTURES ON THE DISK ARE THE PICTURES THE CODE ASKS FOR — AND NOTHING ELSE.
  *
- * `public/brand/decor/` holds the owner's own artwork: ten WebP files, three for each Islamic theme, three
- * photographs for «ساحل النيون», one faint mask for «نهاري». The repository is public and a phone downloads
+ * `public/brand/decor/` holds the owner's own artwork: six WebP files, three masks for «إسلامي ملحمي» and three
+ * photographs for «ساحل النيون» («ليل» and «نهار» draw their field of stars in code, from no file). The
+ * repository is public and a phone downloads
  * these, so the folder is held to: every file is referenced, every reference exists, each file is under
  * 150 KB, a mask has an alpha channel (a mask without one paints a solid rectangle) and a photograph does not.
  */
@@ -25,21 +26,21 @@ describe("the files in public/brand/decor are exactly the files decor.ts lists",
     expect(onDisk(), "a picture nobody asks for, or one that was never added").toEqual([...allDecorFiles()].sort());
   });
 
-  it("— each theme owns three drawings, or one, and no two themes share a file", () => {
+  it("— a theme with files owns three, a pattern theme none, and no two themes share a file", () => {
     const seen = new Map<string, string>();
     for (const theme of THEME_KEYS) {
       const files = decorFilesOf(theme);
-      expect(files.length, theme).toBeGreaterThan(0);
+      expect(files.length, theme).toBe(theme in PATTERN ? 0 : 3);
       for (const f of files) {
         expect(seen.get(f), `${f} is owned by two themes`).toBeUndefined();
         seen.set(f, theme);
         expect(f.startsWith(theme), `${f} does not carry its theme's name`).toBe(true);
       }
     }
-    expect(decorFilesOf("islamic-calm")).toHaveLength(3);
     expect(decorFilesOf("islamic-epic")).toHaveLength(3);
     expect(decorFilesOf("neon-coast")).toHaveLength(3);
-    expect(decorFilesOf("day")).toHaveLength(1);
+    expect(decorFilesOf("night")).toEqual([]);
+    expect(decorFilesOf("day")).toEqual([]);
   });
 
   it("— every theme has exactly one voice, and the list of themes that wear photographs is closed", () => {
@@ -48,18 +49,22 @@ describe("the files in public/brand/decor are exactly the files decor.ts lists",
      * A second photographic theme, or a theme with no voice, is a decision for the owner, taken by editing this
      * claim — not something that happens because a file was added.
      */
-    const voices = [...Object.keys(COMPOSED), ...Object.keys(PHOTOGRAPHIC), ...Object.keys(FAINT)].sort();
+    const voices = [...Object.keys(COMPOSED), ...Object.keys(PHOTOGRAPHIC), ...Object.keys(PATTERN)].sort();
     expect(voices, "every theme wears exactly one kind of decoration").toEqual([...THEME_KEYS].sort());
     expect(Object.keys(PHOTOGRAPHIC), "a second theme with photographs").toEqual(["neon-coast"]);
-    expect(Object.keys(COMPOSED)).toEqual(["islamic-calm", "islamic-epic"]);
-    expect(Object.keys(FAINT)).toEqual(["day"]);
+    expect(Object.keys(COMPOSED)).toEqual(["islamic-epic"]);
+    expect(Object.keys(PATTERN)).toEqual(["night", "day"]);
   });
 
-  it("— every url() in the generated stylesheet points at a file that exists under public/", () => {
+  it("— every url() in the generated stylesheet points at a file that exists under public/, or is the star tile drawn in code", () => {
     const { rules } = parseCss(renderDecorCss());
     const urls = rules.flatMap((r) => r.decls.flatMap(([, v]) => [...v.matchAll(/url\(([^)]+)\)/g)].map((m) => m[1] as string)));
     expect(urls.length).toBeGreaterThan(20);
-    for (const u of urls) expect(existsSync(path.join(ROOT, "public", u)), u).toBe(true);
+    const tiles = new Set(Object.values(PATTERN).map((p) => patternTileUrl(p.tile)));
+    for (const u of urls) {
+      if (u.startsWith("data:")) expect(tiles.has(u), "a data: URL that is not the star tile").toBe(true);
+      else expect(existsSync(path.join(ROOT, "public", u)), u).toBe(true);
+    }
   });
 });
 
@@ -120,7 +125,7 @@ describe("each file is the size and the kind the CSS expects", () => {
   });
 
   it("— the corner of a composed theme is ONE file, drawn three times (right, left turned, header turned)", () => {
-    for (const theme of ["islamic-calm", "islamic-epic"]) {
+    for (const theme of ["islamic-epic"]) {
       expect(onDisk().filter((f) => f.startsWith(`${theme}.corner`))).toEqual([`${theme}.corner.webp`]);
     }
   });
@@ -130,7 +135,9 @@ describe("every file in the repository's brand folders says where it came from",
   const credits = read("public", "brand", "CREDITS.md");
 
   it("— CREDITS.md names each theme's drawings", () => {
-    for (const theme of THEME_KEYS) expect(credits, theme).toContain(theme === "day" ? "brand/decor/day.webp" : `brand/decor/${theme}.`);
+    for (const theme of THEME_KEYS.filter((t) => decorFilesOf(t).length > 0)) expect(credits, theme).toContain(`brand/decor/${theme}.`);
+    // and a file that left the folder leaves the list
+    for (const gone of ["islamic-calm", "day.webp"]) expect(credits, gone).not.toContain(`brand/decor/${gone}`);
   });
 });
 

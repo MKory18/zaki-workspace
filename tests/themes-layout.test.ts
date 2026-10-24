@@ -25,6 +25,10 @@ vi.mock("next/font/google", () => ({
     googleFont.calls.push(opts);
     return { variable: "plex-variable", className: "plex-class", style: { fontFamily: "plex" } };
   },
+  Lalezar: (opts: unknown) => {
+    googleFont.calls.push(opts);
+    return { variable: "lalezar-variable", className: "lalezar-class", style: { fontFamily: "lalezar" } };
+  },
 }));
 vi.mock("next/font/local", () => ({
   default: (opts: unknown) => {
@@ -55,14 +59,19 @@ function render(): Html {
 beforeEach(() => jar.clear());
 
 describe("the root layout paints the theme from the cookie", () => {
-  it("Arabic, right-to-left, the default theme (light, no dark class) when there is no cookie", () => {
+  it("Arabic, right-to-left, the default theme «ليل» (dark: the dark class) when there is no cookie", () => {
     const html = render();
     expect(html.type).toBe("html");
     expect(html.props.lang).toBe("ar");
     expect(html.props.dir).toBe("rtl");
-    expect(html.props["data-theme"]).toBe("islamic-calm");
+    expect(html.props["data-theme"]).toBe("night");
     expect(html.props["data-decor"]).toBe("light");
-    expect(html.props.className.split(/\s+/)).not.toContain("dark");
+    expect(html.props.className.split(/\s+/)).toContain("dark");
+  });
+
+  it("a retired theme in the cookie («إسلامي هادي») is painted as «ليل», never as an attribute that matches nothing", () => {
+    jar.set("zaki_theme", "islamic-calm");
+    expect(render().props["data-theme"]).toBe("night");
   });
 
   it("a dark theme from the cookie carries the dark class (Tailwind's dark: variants)", () => {
@@ -84,7 +93,7 @@ describe("the root layout paints the theme from the cookie", () => {
   it("an old or forged cookie value is the default theme, never an attribute that matches nothing", () => {
     for (const value of ["system", "dark", "neon", '"><script>', ""]) {
       jar.set("zaki_theme", value);
-      expect(render().props["data-theme"], value).toBe("islamic-calm");
+      expect(render().props["data-theme"], value).toBe("night");
     }
   });
 
@@ -107,7 +116,7 @@ describe("the root layout paints the theme from the cookie", () => {
 
   it("keeps the fonts' CSS variables on <html> and tolerates attributes added by browser extensions", () => {
     const html = render();
-    expect(html.props.className.split(/\s+/)).toEqual(expect.arrayContaining(["plex-variable", "reem-variable"]));
+    expect(html.props.className.split(/\s+/)).toEqual(expect.arrayContaining(["plex-variable", "reem-variable", "lalezar-variable"]));
     expect(html.props.suppressHydrationWarning).toBe(true);
   });
 });
@@ -117,6 +126,10 @@ describe("the fonts", () => {
     expect(googleFont.calls[0]).toMatchObject({ variable: "--font-plex", display: "swap" });
     // 400 normal / 500 medium / 600 semibold / 700 bold — every weight the source asks for, no extra
     expect((googleFont.calls[0] as { weight: string[] }).weight).toEqual(["400", "500", "600", "700"]);
+  });
+
+  it("Lalezar is the wordmark face (--font-lalezar): Arabic, swapped in, not preloaded (only the wordmark wears it)", () => {
+    expect(googleFont.calls[1]).toMatchObject({ variable: "--font-lalezar", display: "swap", subsets: ["arabic"], weight: "400", preload: false });
   });
 
   it("Reem Kufi is self-hosted from public/fonts, swapped in, PRELOADED (the titles are the first thing painted)", () => {
@@ -138,7 +151,7 @@ describe("metadata and the browser chrome colour", () => {
   });
 
   it("the browser bar takes the chosen theme's page colour", () => {
-    expect(layout.generateViewport().themeColor).toBe("#F6F1E7");
+    expect(layout.generateViewport().themeColor).toBe("#050F1F");
     jar.set("zaki_theme", "neon-coast");
     expect(layout.generateViewport()).toMatchObject({ width: "device-width", initialScale: 1, themeColor: "#061C28" });
   });
