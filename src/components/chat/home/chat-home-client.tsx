@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { HomeDto } from "@/server/chat/dto";
 import { useRealtime } from "@/lib/realtime/use-realtime";
 import { ChatHome } from "./chat-home";
+import { ct } from "@/lib/chat/text";
 
 /**
  * The chat list, kept live. The loading skeleton shows only until the FIRST answer: a live refetch
@@ -25,5 +26,5 @@ export function ChatHomeClient({ guest }: { guest: boolean }) {
     }).then((data) => { if (alive) { setHome(data); setError(false); setLoaded(true); } }).catch(() => { if (alive) setError(true); });
     return () => { alive = false; };
   }, [reload]);
-  return <div className="min-h-full">{!loaded && !error && <div role="status" aria-label="جارٍ التحميل" className="mx-4 mt-4 space-y-3"><div className="h-16 animate-pulse rounded-xl bg-surface-2"/><div className="h-28 animate-pulse rounded-xl bg-surface-2"/></div>}{error && <div role="alert" className="mx-4 mt-4 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm">ما قدرنا نحمّل المحادثات. <button type="button" onClick={refresh} className="underline">حاول مرة ثانية</button></div>}{loaded && <ChatHome home={home} guest={guest}/>}</div>;
+  return <div className="min-h-full">{!loaded && !error && <div role="status" aria-label={ct("chath.loading")} className="mx-4 mt-4 space-y-3"><div className="h-16 animate-pulse rounded-xl bg-surface-2"/><div className="h-28 animate-pulse rounded-xl bg-surface-2"/></div>}{error && <div role="alert" className="mx-4 mt-4 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm">{ct("chath.load_failed")} <button type="button" onClick={refresh} className="min-h-11 underline">{ct("chath.retry")}</button></div>}{loaded && <ChatHome home={home} guest={guest}/>}</div>;
 }
