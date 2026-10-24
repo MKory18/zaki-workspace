@@ -132,12 +132,19 @@ export async function ingest(
   familyOf?: { familyId: string; latestVersion: number },
   purpose: "LIBRARY" | "CHAT" | "VOICE" = "LIBRARY",
   meta?: Record<string, unknown>,
+  /**
+   * `sniffedMime`: the chat's own sniffing (`sniffChatMedia`) already read the bytes WITH the declared
+   * kind, which is the only way to tell audio/webm from video/webm; the plain sniffer here would
+   * store a voice note as a video. Trusted callers only, never a client's claim.
+   */
+  opts: { sniffedMime?: string } = {},
 ): Promise<{ id: string; version: number; mimeType: string }> {
-  if (ctx.orgRole === "GUEST") throw new ForbiddenError("chat.guest_forbidden");
+  // a guest posts in the topics of their spaces (files and voice notes included), never in the library
+  if (ctx.orgRole === "GUEST" && purpose === "LIBRARY") throw new ForbiddenError("chat.guest_forbidden");
   if (input.bytes.length === 0) throw new ForbiddenError("files.empty");
   if (input.bytes.length > MAX_FILE_BYTES) throw new ForbiddenError("files.too_large");
 
-  const mime = sniffMimeType(input.bytes);
+  const mime = opts.sniffedMime ?? sniffMimeType(input.bytes);
   if (!mime) throw new ForbiddenError("files.unsupported");
 
   const display = safeStoredName(input.name.split(/[\\/]/).pop() ?? "file");

@@ -37,5 +37,11 @@
   "chat.f.compressing": "جارٍ ضغط الصورة…",
   "chat.f.uploading": "جارٍ الإرفاق…",
   "chat.f.upload_failed": "تعذر إرفاق الملف. حاول مجددًا.",
-  "chat.f.waiting_internet": "ينتظر الإنترنت"
+  "chat.f.waiting_internet": "ينتظر الإنترنت",
+  "chat.f.attach_menu": "إرفاق",
+  "chat.f.attach_media": "صورة أو فيديو",
+  "chat.f.record": "تسجيل رسالة صوتية",
+  "chat.f.hold_to_record": "اضغط مطوّلًا للتسجيل، وارفع إصبعك للإرسال",
+  "chat.f.remove": "إزالة {name}",
+  "chat.f.progress": "{name}: {percent}٪"
 }

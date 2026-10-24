@@ -66,7 +66,7 @@ describe("system lines", () => {
 describe("the chat bubble's colours come from the theme", () => {
   it("no class name that is not a theme token (text-muted-foreground, bg-background drew nothing)", async () => {
     const { readFileSync } = await import("node:fs");
-    for (const file of ["src/components/chat/message/message-item.tsx", "src/components/chat/conversation/conversation-screen.tsx"]) {
+    for (const file of ["src/components/chat/message/message-item.tsx", "src/components/chat/message/voice-player.tsx", "src/components/chat/conversation/conversation-screen.tsx", "src/components/chat/composer/chat-composer.tsx"]) {
       expect(readFileSync(file, "utf8")).not.toMatch(/muted-foreground|bg-background|text-foreground|bg-primary/);
     }
   });
