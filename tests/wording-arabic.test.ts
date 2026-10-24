@@ -69,11 +69,21 @@ describe("WP-ARABIC1: the words the review corrected", () => {
     expect(AR["guide.first.install.title"]).toBe("ثبّت التطبيق على موبايلك");
   });
 
-  it("no string carries the «ـاً» tanween spelling", () => {
-    const offenders = Object.entries(AR)
-      .filter(([, value]) => /ًا|اً/.test(value) && /[ًٌٍ]اً/.test(value))
-      .map(([key, value]) => `${key}: ${value}`);
+  it("no string carries the «ـاً» tanween spelling (the house writes «ـًا»: the mark on the letter before the alif)", () => {
+    // the old check also required a tanween mark right BEFORE «اً», which a real word never has, so it
+    // could not fail; it missed «اختر عضواً» (review C item 7). «اً» alone is the spelling to refuse.
+    const offenders = [
+      ...Object.entries(AR).map(([key, value]) => [key, value] as const),
+      ...ARTICLES.map((a) => [`guide:${a.slug}`, articleText(a, "managers")] as const),
+    ]
+      .filter(([, value]) => /اً/.test(value))
+      .map(([key, value]) => `${key}: ${value.slice(0, 80)}`);
     expect(offenders).toEqual([]);
+  });
+
+  it("the tanween check does catch «ـاً» (a self-test on a sample)", () => {
+    expect(/اً/.test("اختر عضواً")).toBe(true);
+    expect(/اً/.test("اختر عضوًا")).toBe(false);
   });
 
   it("a guest on an internal page is told the page is internal, and gets no chat or files tip", () => {

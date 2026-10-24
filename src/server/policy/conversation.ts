@@ -139,7 +139,10 @@ export function canArchive(role: string | null | undefined): boolean {
  * somebody of equal or higher standing (an ADMIN cannot mute an ADMIN; the OWNER can mute anybody).
  */
 export function canModerateTarget(actor: { role: string; spaceRole?: string | null }, target: { role: string; spaceRole?: string | null }): boolean {
-  if (actor.role === "OWNER") return target.role !== "OWNER";
+  // nobody mutes the OWNER, whoever asks: the standing below gives every other rank 1, so without this
+  // line a space admin (3) outranked the owner and could silence him in a space
+  if (target.role === "OWNER") return false;
+  if (actor.role === "OWNER") return true;
   const standing = (r: string, s?: string | null): number => {
     if (r === "ADMIN") return s === "ADMIN" ? 3 : 2;
     if (r === "LEAD") return 2;

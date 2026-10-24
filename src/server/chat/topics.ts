@@ -171,6 +171,9 @@ export async function conversationDetail(
       include: {
         space: { select: { id: true, name: true, organizationId: true } },
         members: {
+          // a suspended or offboarded person is nobody: their leftover row is not shown among the members
+          // (nor as a reader) — the same rule the policy applies to reading
+          where: { user: { memberships: { some: { organizationId: ctx.orgId, status: "ACTIVE" } } } },
           include: { user: { select: { id: true, name: true } } },
           orderBy: { joinedAt: "asc" },
         },

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { canManageWorkspaceMembers } from "@/server/services/access";
 import { pushNotification, pushNotificationToMany } from "@/server/notify";
-import { conversationDetail, listConversations } from "@/server/services/chat";
+import { conversationDetail } from "@/server/chat/topics";
+import { listDms } from "@/server/chat/dm";
 import * as projectRoute from "@/app/api/projects/[id]/route";
 import { call, db, loginAs, makeProject } from "./helpers";
 import { makeSpaceWorld } from "./spaces-helpers";
@@ -84,11 +85,11 @@ describe("group chats list only the people who are in", () => {
       where: { organizationId_userId: { organizationId: w.org.id, userId: w.lead.id } },
       data: { status: "SUSPENDED" },
     });
+    // the live chat (src/server/chat): the conversation screen and the chat list (this case was written
+    // against the retired services/chat.ts and keeps its claim)
     const ctx = { orgId: w.org.id, orgRole: "MEMBER" as const, userId: w.member.id };
-    const list = await listConversations(ctx);
-    const summary = list.find((c) => c.id === conv.id)!;
-    expect(summary.otherMembers.map((m) => m.id).sort()).toEqual([w.admin.id]);
     const detail = await conversationDetail(ctx, conv.id);
-    expect(detail.members.map((m) => m.id).sort()).toEqual([w.admin.id, w.member.id].sort());
+    expect(detail.members!.map((m) => m.id).sort()).toEqual([w.admin.id, w.member.id].sort());
+    expect((await listDms(ctx)).some((c) => c.id === conv.id)).toBe(true);
   });
 });
