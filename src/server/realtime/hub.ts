@@ -156,24 +156,37 @@ export async function deliverEvent(event: RtEvent): Promise<void> {
   // avatars move live. Only `targetUserId` narrows an event to one person.
   const target = event.ids.targetUserId;
   const targets = registry.filter((r) => r.client.orgId === event.orgId && (target === undefined || target === r.client.userId));
-  // DM delivery ticks: a connected recipient of a DM counts the message as delivered at once.
-  if (event.kind === "message.created" && event.ids.conversationId) {
-    const { markDeliveredForUser } = await import("@/server/chat/read-state");
-    for (const t of targets) {
-      try {
-        await markDeliveredForUser(t.client.userId);
-      } catch {
-        // read-state may still be a stub mid-wave; delivery ticks are best-effort
-      }
-    }
-  }
+  const delivered = new Set<string>();
+  const isDm = event.kind === "message.created" && !!event.ids.conversationId && (await isDmConversation(event.ids.conversationId));
   for (const entry of targets) {
     if (event.ids.conversationId && !(await maySee(entry, event))) continue;
     try {
       entry.client.send(frameOf(event));
     } catch {
       removeClient(entry.client);
+      continue;
     }
+    // DM delivery ticks: a connected recipient who may see the DM counts its message as delivered
+    // at once (once per person, however many tabs; the author's own mark never moves for it)
+    if (isDm && !delivered.has(entry.client.userId)) {
+      delivered.add(entry.client.userId);
+      try {
+        const { markDeliveredForUser } = await import("@/server/chat/read-state");
+        await markDeliveredForUser(entry.client.userId, event.ids.conversationId);
+      } catch {
+        // delivery ticks are best-effort; the next connect marks them
+      }
+    }
+  }
+}
+
+async function isDmConversation(conversationId: string): Promise<boolean> {
+  try {
+    const { db } = await import("@/server/db");
+    const conv = await db.conversation.findUnique({ where: { id: conversationId }, select: { kind: true } });
+    return conv?.kind === "DM";
+  } catch {
+    return false;
   }
 }
 

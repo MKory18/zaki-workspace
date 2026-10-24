@@ -4,6 +4,7 @@ import { loadOrgFacts, isSpaceAdmin } from "@/server/policy/conversation";
 import { listDms } from "@/server/chat/dm";
 import type { DmSummaryDto, HomeDto, SpaceSummaryDto, TopicSummaryDto } from "@/server/chat/dto";
 import { previewOf } from "@/server/chat/redact";
+import { systemSentenceOfBody } from "@/lib/chat/system-sentence";
 
 /**
  * The chat home: the spaces the viewer is in (with their topics), the viewer's DMs, and whether
@@ -69,19 +70,23 @@ export async function chatHome(ctx: OrgAccessContext): Promise<HomeDto> {
       if (!passes) continue;
 
       const lastRead = t.members[0]?.lastReadAt ?? null;
+      // a system line («انضم»، «ثبّت») is not a message to read: it never counts
+      const countable = { conversationId: t.id, authorId: { not: ctx.userId }, deletedAt: null, kind: { not: "SYSTEM" as const } };
+      // the OWNER's oversight never marks anything read, so a count there could never clear: 0
+      const silentOversight = isOwner && t.members.length === 0;
       const [last, unread, mentions] = await Promise.all([
         db.chatMessage.findFirst({
           where: { conversationId: t.id },
           orderBy: { createdAt: "desc" },
-          select: { body: true, deletedAt: true, createdAt: true, authorId: true },
+          select: { body: true, kind: true, deletedAt: true, createdAt: true, authorId: true, author: { select: { name: true } } },
         }),
+        silentOversight
+          ? 0
+          : lastRead
+            ? db.chatMessage.count({ where: { ...countable, createdAt: { gt: lastRead } } })
+            : db.chatMessage.count({ where: countable }),
         lastRead
-          ? db.chatMessage.count({ where: { conversationId: t.id, createdAt: { gt: lastRead }, authorId: { not: ctx.userId }, deletedAt: null } })
-          : db.chatMessage.count({ where: { conversationId: t.id, authorId: { not: ctx.userId }, deletedAt: null } }),
-        lastRead
-          ? db.chatMessage.count({
-              where: { conversationId: t.id, createdAt: { gt: lastRead }, authorId: { not: ctx.userId }, deletedAt: null, mentions: { has: ctx.userId } },
-            })
+          ? db.chatMessage.count({ where: { ...countable, createdAt: { gt: lastRead }, mentions: { has: ctx.userId } } })
           : 0,
       ]);
 
@@ -104,7 +109,11 @@ export async function chatHome(ctx: OrgAccessContext): Promise<HomeDto> {
         restricted: t.restricted,
         canPost,
         lastMessage: last
-          ? { at: last.createdAt.toISOString(), preview: previewOf(last.body, last.deletedAt), mine: last.authorId === ctx.userId }
+          ? {
+              at: last.createdAt.toISOString(),
+              preview: last.kind === "SYSTEM" ? systemSentenceOfBody(last.body, last.author.name) : previewOf(last.body, last.deletedAt),
+              mine: last.authorId === ctx.userId,
+            }
           : null,
       });
       spaceUnread += unread;

@@ -13,5 +13,21 @@
   "chatc.cancel_reply": "إلغاء الرد",
   "chatc.editing": "تعديل الرسالة",
   "chatc.save": "حفظ",
-  "chatc.cancel": "إلغاء"
+  "chatc.cancel": "إلغاء",
+  "chatc.sys.join": "انضمام {name} إلى المحادثة",
+  "chatc.sys.leave": "مغادرة {name} للمحادثة",
+  "chatc.sys.pin": "تثبيت رسالة بواسطة {name}",
+  "chatc.sys.unpin": "إلغاء تثبيت رسالة بواسطة {name}",
+  "chatc.sys.close": "إغلاق الموضوع بواسطة {name}",
+  "chatc.sys.reopen": "إعادة فتح الموضوع بواسطة {name}",
+  "chatc.sys.topic_created": "إنشاء الموضوع بواسطة {name}",
+  "chatc.sys.member_added": "إضافة عضو بواسطة {name}",
+  "chatc.sys.member_removed": "إزالة عضو بواسطة {name}",
+  "chatc.sys.forwarded": "تحويل رسالة بواسطة {name}",
+  "chatc.sys.other": "تحديث في المحادثة",
+  "chatc.tick.sent": "أُرسلت",
+  "chatc.tick.delivered": "وصلت",
+  "chatc.tick.read": "قُرئت",
+  "chatc.readers": "قرأها: {names}",
+  "chatc.readers_more": "و{count} آخرون"
 }

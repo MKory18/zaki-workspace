@@ -3,6 +3,7 @@ import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/a
 import { loadOrgFacts } from "@/server/policy/conversation";
 import { emitRealtime } from "@/server/realtime/emit";
 import { writeSystemMessage } from "@/server/chat/system";
+import { systemSentenceOfBody } from "@/lib/chat/system-sentence";
 
 /**
  * DMs. A DM is its two people; nobody else reads it, not even the OWNER (his silent eye covers
@@ -70,7 +71,11 @@ export async function listDms(ctx: OrgAccessContext) {
     },
     include: {
       members: { include: { user: { select: { id: true, name: true } } } },
-      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, body: true, deletedAt: true, authorId: true, createdAt: true } },
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true, body: true, kind: true, deletedAt: true, authorId: true, createdAt: true, author: { select: { name: true } } },
+      },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -82,7 +87,7 @@ export async function listDms(ctx: OrgAccessContext) {
       const last = c.messages[0] ?? null;
       const unread = last && mine
         ? await db.chatMessage.count({
-            where: { conversationId: c.id, createdAt: { gt: mine.lastReadAt }, authorId: { not: ctx.userId }, deletedAt: null },
+            where: { conversationId: c.id, createdAt: { gt: mine.lastReadAt }, authorId: { not: ctx.userId }, deletedAt: null, kind: { not: "SYSTEM" } },
           })
         : 0;
       return {
@@ -92,7 +97,7 @@ export async function listDms(ctx: OrgAccessContext) {
         lastMessage: last
           ? {
               at: last.createdAt.toISOString(),
-              preview: last.deletedAt ? null : last.body.slice(0, 140),
+              preview: last.kind === "SYSTEM" ? systemSentenceOfBody(last.body, last.author.name) : last.deletedAt ? null : last.body.slice(0, 140),
               mine: last.authorId === ctx.userId,
             }
           : null,
