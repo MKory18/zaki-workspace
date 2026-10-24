@@ -24,8 +24,9 @@ describe("archive list", () => {
     const html = renderToStaticMarkup(React.createElement(ArchiveList, { items: [item("edited", { previousBody: "قبل التعديل", body: "بعد التعديل", authorName: "ليلى" }), item("moderation", { action: "chat.topic_closed", actorName: "أحمد", targetName: "ليلى" }), item("closed", { title: "متابعة الطلبات" })] }));
     expect(html).toContain("قبل التعديل"); expect(html).toContain("بعد التعديل"); expect(html).toContain("متابعة الطلبات"); expect(html).toContain("ليلى");
   });
-  it("identifies closed records as topics", () => {
-    const html = renderToStaticMarkup(React.createElement(ArchiveList, { items: [item("closed", { title: "موضوع مغلق" })] }));
-    expect(html).toContain("موضوع مغلق"); expect(html).toContain("المقفول");
+  it("identifies closed records as topics, with one word for closed: «مغلق» (never «مقفول» or «المقفلة»)", () => {
+    const html = renderToStaticMarkup(React.createElement(ArchiveList, { items: [item("closed", { title: "متابعة الطلبات" })] }));
+    expect(html).toContain("متابعة الطلبات"); expect(html).toContain("المغلق");
+    expect(html).not.toMatch(/مقفول|المقفلة/);
   });
 });

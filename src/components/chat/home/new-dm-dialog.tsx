@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ct } from "@/lib/chat/text";
 
 type Person = { userId: string; user: { name: string; jobTitle: string | null } };
 
@@ -20,7 +21,7 @@ export function NewDmDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     fetch("/api/chat/directory", { cache: "no-store" })
       .then((r) => { if (!r.ok) throw new Error("directory"); return r.json() as Promise<{ people: Person[] }>; })
       .then((data) => { if (alive) setPeople(data.people); })
-      .catch(() => { if (alive) setError("تعذّر تحميل قائمة الزملاء."); });
+      .catch(() => { if (alive) setError(ct("chath.dm.load_failed")); });
     return () => { alive = false; };
   }, [open, people]);
   async function start(userId: string) {
@@ -33,7 +34,7 @@ export function NewDmDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       const { id } = await r.json() as { id: string };
       window.location.assign(`/chat/${encodeURIComponent(id)}`);
     } catch {
-      setError("تعذّر فتح المحادثة. حاول مرة أخرى.");
+      setError(ct("chath.dm.open_failed"));
       setBusy(false);
     }
   }
@@ -41,13 +42,13 @@ export function NewDmDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const shown = (people ?? []).filter((p) => !q || p.user.name.toLowerCase().includes(q) || (p.user.jobTitle ?? "").toLowerCase().includes(q));
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent size="md">
-      <DialogHeader><DialogTitle>رسالة جديدة</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>{ct("chath.dm.title")}</DialogTitle></DialogHeader>
       <DialogBody>
-        <label htmlFor="new-dm-search" className="sr-only">ابحث عن زميل</label>
-        <input id="new-dm-search" type="search" value={query} onChange={(e) => setQuery(e.currentTarget.value)} placeholder="ابحث بالاسم أو المسمّى" className="h-11 w-full rounded-lg border border-muted bg-surface px-3 text-base md:h-9 md:text-sm" />
+        <label htmlFor="new-dm-search" className="sr-only">{ct("chath.dm.search")}</label>
+        <input id="new-dm-search" type="search" value={query} onChange={(e) => setQuery(e.currentTarget.value)} placeholder={ct("chath.dm.search_hint")} className="h-11 w-full rounded-lg border border-muted bg-surface px-3 text-base md:h-9 md:text-sm" />
         {error && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
-        {!people && !error && <p role="status" className="mt-3 text-sm text-fg-muted">جارٍ التحميل…</p>}
-        {people && !shown.length && <p className="mt-3 text-sm text-fg-muted">لا يوجد زملاء بهذا الاسم.</p>}
+        {!people && !error && <p role="status" className="mt-3 text-sm text-fg-muted">{ct("chath.loading")}</p>}
+        {people && !shown.length && <p className="mt-3 text-sm text-fg-muted">{ct("chath.dm.none")}</p>}
         <ul className="mt-3 divide-y divide-border">{shown.map((p) => <li key={p.userId}><button type="button" disabled={busy} onClick={() => void start(p.userId)} className="flex min-h-12 w-full items-center gap-3 py-2 text-start hover:bg-surface-2 disabled:opacity-60">
           <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-accent/10">{p.user.name.slice(0, 1)}</span>
           <span className="min-w-0 flex-1 truncate"><bdi>{p.user.name}</bdi>{p.user.jobTitle && <small className="block truncate text-fg-muted"><bdi>{p.user.jobTitle}</bdi></small>}</span>
