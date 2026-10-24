@@ -194,7 +194,8 @@ describe("the articles: the data itself", () => {
 
   it("describes only what exists today: nothing of the later phases (assistant, calls, cash, penalties, owner's eye)", () => {
     // «المساعدة» (help) is an ordinary word and fine; «المساعد» (the assistant) is a later phase
-    const later = [/المساعد(?!ة)/, /مكالمة|المكالمات/, /الجزاءات/, /الصندوق/, /عين المالك/, /بحث بالمعنى/, /الفويس/, /رسالة صوتية/];
+    // voice messages shipped with the chat (P2): «رسالة صوتية» is today's, no longer a later phase
+    const later = [/المساعد(?!ة)/, /مكالمة|المكالمات/, /الجزاءات/, /الصندوق/, /عين المالك/, /بحث بالمعنى/, /الفويس/];
     for (const article of ARTICLES) {
       const text = strings(article).join("\n");
       for (const pattern of later) expect(text, `${article.slug}: ${pattern}`).not.toMatch(pattern);
@@ -280,7 +281,9 @@ describe("the articles: who gets which", () => {
     }
   });
 
-  it("a guest never reads anything about people management, customers, files, chat, departments or integrations", () => {
+  // the chat is a place for EVERYONE now (a guest posts in the topics of their spaces): a guest reads about
+  // it, but never about private DMs (a guest has none)
+  it("a guest never reads anything about people management, customers, files, private DMs, departments or integrations", () => {
     const forbidden = [
       "CRM",
       "العملاء",
@@ -290,7 +293,8 @@ describe("the articles: who gets which", () => {
       "المكتبة",
       "الأقسام",
       "الروتين",
-      "الدردشة",
+      "«خاص»",
+      "رسالة جديدة",
       "المحادثات",
       "تيليجرام",
       "n8n",
@@ -311,12 +315,13 @@ describe("the articles: who gets which", () => {
     }
   });
 
-  it("an 'everyone' article shows staff their own material (the library, the chat) and shows guests none of it", () => {
+  it("an 'everyone' article shows staff their own material (the library, private DMs) and shows guests none of it; the chat is everyone's", () => {
     const places = bySlug("places");
     expect(viewStrings(places, "staff").join("\n")).toContain("المكتبة");
-    expect(viewStrings(places, "staff").join("\n")).toContain("الدردشة");
+    expect(viewStrings(places, "staff").join("\n")).toContain("«خاص»");
     expect(viewStrings(places, "everyone").join("\n")).not.toContain("المكتبة");
-    expect(viewStrings(places, "everyone").join("\n")).not.toContain("الدردشة");
+    expect(viewStrings(places, "everyone").join("\n")).not.toContain("«خاص»");
+    expect(viewStrings(places, "everyone").join("\n")).toContain("الدردشة");
   });
 
   it("staff never get manager-only blocks, and managers get them", () => {

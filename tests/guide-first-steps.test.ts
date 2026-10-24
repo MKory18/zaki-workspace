@@ -17,9 +17,9 @@ const ids = (defs: readonly { id: string }[]) => defs.map((d) => d.id);
 const local = (over: Partial<FirstStepsLocal> = {}): FirstStepsLocal => ({ dismissed: false, collapsed: false, done: [], ...over });
 
 describe("the first-steps registry", () => {
-  it("this phase is 2, and every step today is available from phase 2 or earlier", () => {
-    expect(CURRENT_PHASE).toBe(2);
-    for (const step of FIRST_STEPS) expect(step.availableFrom, step.id).toBeLessThanOrEqual(2);
+  it("this phase is 3 (the chat), and every step today is available from phase 3 or earlier", () => {
+    expect(CURRENT_PHASE).toBe(3);
+    for (const step of FIRST_STEPS) expect(step.availableFrom, step.id).toBeLessThanOrEqual(3);
   });
 
   it("every step has a unique id, a title and a hint in the dictionary (Arabic), and a real page to go to", () => {
@@ -35,9 +35,9 @@ describe("the first-steps registry", () => {
     }
   });
 
-  it("the steps are the owner's: install, theme, first task, finish a task, open the guide; and for managers add a person and review the spaces", () => {
+  it("the steps are the owner's: install, theme, first message, first task, finish a task, open the guide; and for managers add a person and review the spaces", () => {
     expect([...ids(FIRST_STEPS)].sort()).toEqual(
-      ["add-person", "finish-task", "first-task", "install", "open-guide", "review-spaces", "theme"].sort(),
+      ["add-person", "finish-task", "first-message", "first-task", "install", "open-guide", "review-spaces", "theme"].sort(),
     );
     const titles = FIRST_STEPS.map((s) => AR[s.titleKey]);
     expect(titles).toContain("ثبّت التطبيق على موبايلك");
@@ -47,6 +47,7 @@ describe("the first-steps registry", () => {
     expect(titles).toContain("افتح الدليل");
     expect(titles).toContain("ضيف أول شخص");
     expect(titles).toContain("افتح أول مساحة");
+    expect(titles).toContain("ابعت أول رسالة بـ«عام»");
   });
 
   it("the install and guide steps are remembered by the device; the others are decided by real data", () => {
@@ -60,6 +61,7 @@ describe("the first-steps registry", () => {
     expect(byId["finish-task"]?.fact).toBe("task-completed");
     expect(byId["add-person"]?.fact).toBe("people");
     expect(byId["review-spaces"]?.fact).toBe("spaces");
+    expect(byId["first-message"]?.fact).toBe("message-sent");
   });
 });
 
@@ -68,17 +70,18 @@ describe("stepsFor: who gets which steps, and which phase they exist in", () => 
     expect(ids(stepsFor("everyone"))).toEqual(["install", "theme", "open-guide"]);
   });
 
-  it("staff add the two task steps", () => {
-    expect(ids(stepsFor("staff"))).toEqual(["install", "theme", "first-task", "finish-task", "open-guide"]);
+  it("staff add the first message and the two task steps (a guest is not in «الشركة», so no «عام» step for them)", () => {
+    expect(ids(stepsFor("staff"))).toEqual(["install", "theme", "first-message", "first-task", "finish-task", "open-guide"]);
   });
 
   it("managers get the people steps, first (a new owner's first job is the team)", () => {
-    expect(ids(stepsFor("managers"))).toEqual(["add-person", "review-spaces", "install", "theme", "first-task", "finish-task", "open-guide"]);
+    expect(ids(stepsFor("managers"))).toEqual(["add-person", "review-spaces", "install", "theme", "first-message", "first-task", "finish-task", "open-guide"]);
   });
 
-  it("before phase 2 there is nothing to show, and later phases change nothing about today's steps", () => {
+  it("before phase 2 there is nothing to show, phase 2 has everything but the chat's step, and later phases change nothing about today's steps", () => {
     expect(stepsFor("managers", 1)).toEqual([]);
-    expect(ids(stepsFor("managers", 2))).toEqual(ids(stepsFor("managers")));
+    expect(ids(stepsFor("managers", 2))).toEqual(ids(stepsFor("managers")).filter((id) => id !== "first-message"));
+    expect(ids(stepsFor("managers", 3))).toEqual(ids(stepsFor("managers")));
     expect(ids(stepsFor("managers", 9))).toEqual(ids(stepsFor("managers")));
   });
 
@@ -102,13 +105,14 @@ describe("toViews: what the card is told", () => {
   const defs = stepsFor("managers");
 
   it("marks the data steps from the facts and never marks a device step done on the server", () => {
-    const views = toViews(defs, { theme: true, "task-created": true, "task-completed": false, people: true, spaces: false });
+    const views = toViews(defs, { theme: true, "task-created": true, "task-completed": false, people: true, spaces: false, "message-sent": true });
     const done = Object.fromEntries(views.map((v) => [v.id, v.done]));
     expect(done).toEqual({
       "add-person": true,
       "review-spaces": false,
       install: false,
       theme: true,
+      "first-message": true,
       "first-task": true,
       "finish-task": false,
       "open-guide": false,
@@ -146,13 +150,13 @@ describe("the device's memory: stepDone, allStepsDone, progressOf", () => {
   });
 
   it("counts the steps done and the total", () => {
-    expect(progressOf(views, local())).toEqual({ done: 1, total: 5 });
-    expect(progressOf(views, local({ done: ["install", "open-guide"] }))).toEqual({ done: 3, total: 5 });
+    expect(progressOf(views, local())).toEqual({ done: 1, total: 6 });
+    expect(progressOf(views, local({ done: ["install", "open-guide"] }))).toEqual({ done: 3, total: 6 });
   });
 
   it("everything is done only when every step is: the card then disappears", () => {
     expect(allStepsDone(views, local())).toBe(false);
-    const all = toViews(stepsFor("staff"), { theme: true, "task-created": true, "task-completed": true });
+    const all = toViews(stepsFor("staff"), { theme: true, "task-created": true, "task-completed": true, "message-sent": true });
     expect(allStepsDone(all, local({ done: ["install"] }))).toBe(false);
     expect(allStepsDone(all, local({ done: ["install", "open-guide"] }))).toBe(true);
   });

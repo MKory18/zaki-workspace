@@ -10,6 +10,7 @@ import { TOURS } from "@/lib/guide/tours";
 const PAGES: [string, string][] = [
   ["/", "home"],
   ["/chat", "chat"],
+  ["/chat/x", "conversation"],
   ["/archive", "archive"],
   ["/my-work", "my-work"],
   ["/projects", "projects"],
