@@ -5,17 +5,18 @@ Everything in `public/brand/`, `public/fonts/` and `public/icons/` is listed her
 
 | File | What it is | Origin / licence |
 |---|---|---|
-| `brand/decor/islamic-calm.{rosette,corner,skyline}.webp` | Geometric ornament masks for the "إسلامي هادي" theme (white on transparent, tinted by the theme colour in CSS) | The owner's own artwork, made for the OMS and copied from `MKory18/Zaki-ai-CRM` (`public/brand/decor`). Geometry and architecture only: no calligraphy, no text, no people. No third-party material. |
-| `brand/decor/islamic-epic.{rosette,corner,skyline}.webp` | The same for the "إسلامي ملحمي" theme | Same as above. |
+| `brand/decor/islamic-epic.{rosette,corner,skyline}.webp` | Geometric ornament masks for the "إسلامي ملحمي" theme (white on transparent, tinted by the theme colour in CSS) | The owner's own artwork, made for the OMS and copied from `MKory18/Zaki-ai-CRM` (`public/brand/decor`). Geometry and architecture only: no calligraphy, no text, no people. No third-party material. |
 | `brand/decor/neon-coast.{door,door-tall,strip}.webp` | Opaque backgrounds for the "ساحل النيون" theme: a night coast road with neon light (wide, tall and a thin strip) | The owner's own image generations for the OMS (copied from the same place). Original work: not taken from any game or film, no logo, no text. |
-| `brand/decor/day.webp` | A very faint ornament mask for the "نهاري" theme | Same as the Islamic masks. |
 | `fonts/reem-kufi-var.woff2` | Reem Kufi (variable, Arabic subset) for the Islamic themes' headings | SIL Open Font License 1.1, text in `fonts/reem-kufi-OFL.txt`. The Reserved Font Name is "Josefin Sans": keep the name "Reem Kufi" and do not rename the font. |
 | `icons/icon-192.png`, `icons/icon-512.png` (in `public/`) | The app icon for "any" use (the web app manifest): the dolphin mark on the default theme's paper colour, on a rounded tile with transparent corners | The project's own logo (`src/app/icon.svg`), drawn by `scripts/make-icons.mjs`. No third-party material. |
 | `icons/icon-maskable-512.png` (in `public/`) | The maskable app icon: full-bleed paper colour, the mark inside the 80% safe zone so a round or squircle mask cuts nothing | Same as above. |
 | `src/app/apple-icon.png` (served by Next at `/apple-icon.png`, outside `public/`) | The iPhone home-screen icon, 180x180, opaque | Same as above. |
 
-IBM Plex Sans Arabic (the body font) is loaded through `next/font/google` at build time and is
-also SIL OFL 1.1.
+IBM Plex Sans Arabic (the body font) and Lalezar (the wordmark «زاكي» of «نجمة وطريق») are loaded
+through `next/font/google` at build time and served from this site; both are SIL OFL 1.1.
+
+The field of eight-pointed stars of the "ليل" and "نهار" themes is no file: it is drawn in code
+(`patternTileSvg` in `src/lib/themes/decor.ts`), plain geometry, the project's own.
 
 Rules for new files: say who made it and under what licence, keep photos and masks under 150 KB,
 and never add anything that reproduces a third party's game, film, brand or character.

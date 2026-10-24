@@ -9,11 +9,15 @@
  * The colours are in palettes.ts; the stylesheet they become is src/app/themes.css (generated).
  */
 
-export const THEME_KEYS = ["islamic-calm", "islamic-epic", "neon-coast", "day"] as const;
+/**
+ * «نجمة وطريق» (the owner's adopted look, 2026-10-24): «ليل» and «نهار» replace «إسلامي هادي» and the old
+ * «نهاري»; «إسلامي ملحمي» and «ساحل النيون» stay as further themes. «ليل» is everybody's default.
+ */
+export const THEME_KEYS = ["night", "day", "islamic-epic", "neon-coast"] as const;
 export type ThemeKey = (typeof THEME_KEYS)[number];
 
-/** Calm Islamic: the default for everybody who has not chosen. */
-export const DEFAULT_THEME: ThemeKey = "islamic-calm";
+/** The night: the default for everybody who has not chosen. */
+export const DEFAULT_THEME: ThemeKey = "night";
 
 export interface ThemeInfo {
   key: ThemeKey;
@@ -24,10 +28,10 @@ export interface ThemeInfo {
 }
 
 export const THEMES: Record<ThemeKey, ThemeInfo> = {
-  "islamic-calm": { key: "islamic-calm", dark: false, headingFont: "reem-kufi" },
+  night: { key: "night", dark: true, headingFont: "reem-kufi" },
+  day: { key: "day", dark: false, headingFont: "reem-kufi" },
   "islamic-epic": { key: "islamic-epic", dark: true, headingFont: "reem-kufi" },
   "neon-coast": { key: "neon-coast", dark: true, headingFont: "plex" },
-  day: { key: "day", dark: false, headingFont: "plex" },
 };
 
 /** The themes in the order the picker shows them. */
@@ -38,11 +42,25 @@ export function isThemeKey(value: unknown): value is ThemeKey {
 }
 
 /**
+ * The keys a person may still have stored from before «نجمة وطريق», and the theme each now means.
+ * No migration rewrites `User.theme` or the cookie: they are read through this map.
+ */
+export const LEGACY_THEME_KEYS: Readonly<Record<string, ThemeKey>> = { "islamic-calm": "night" };
+
+/**
  * Whatever was stored (`User.theme` used to hold "system" for the old light/dark/system toggle, a
- * cookie can be edited) becomes a real theme: anything that is not one of the four is the default.
+ * cookie can be edited, an old key) becomes a real theme: a retired key is its successor, anything
+ * else that is not one of the four is the default.
  */
 export function themeOf(value: unknown): ThemeKey {
-  return isThemeKey(value) ? value : DEFAULT_THEME;
+  if (isThemeKey(value)) return value;
+  if (typeof value === "string" && Object.prototype.hasOwnProperty.call(LEGACY_THEME_KEYS, value)) return LEGACY_THEME_KEYS[value]!;
+  return DEFAULT_THEME;
+}
+
+/** Was a theme really chosen (a current key, or a retired one that maps on)? "system" or nothing is not a choice. */
+export function isChosenTheme(value: unknown): boolean {
+  return isThemeKey(value) || (typeof value === "string" && Object.prototype.hasOwnProperty.call(LEGACY_THEME_KEYS, value));
 }
 
 export function isDarkTheme(key: ThemeKey): boolean {

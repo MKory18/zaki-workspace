@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { THEME_KEYS, type ThemeKey } from "@/lib/themes/registry";
-import { COMPOSED, FAINT, PHOTOGRAPHIC, SCRIM, WASH } from "@/lib/themes/decor";
+import { COMPOSED, PATTERN, PHOTOGRAPHIC, SCRIM, WASH } from "@/lib/themes/decor";
 import { BLACK, DECOR_DIR, SRC, WHITE, contrast, luminance, over, themeTokens, type Rgb } from "./themes-decor-helpers";
 
 /**
@@ -149,7 +149,7 @@ describe("a picture the owner adds later — a scrim of the page's own colour, i
   }
 
   it("— and a thin scrim fails (a light theme's muted text over a dark picture), so the number is doing work", () => {
-    const t = byTheme["islamic-calm"];
+    const t = byTheme.day;
     expect(ratio(t["fg-muted"], over(t.surface, BLACK, 0.7))).toBeLessThan(BAR);
   });
 });
@@ -157,7 +157,7 @@ describe("a picture the owner adds later — a scrim of the page's own colour, i
 describe("an ornament behind words — never louder than the words can bear", () => {
   const stacked = (layer: number) => 1 - (1 - WASH) * (1 - layer);
 
-  for (const [key, c] of Object.entries(COMPOSED) as Array<[ThemeKey, (typeof COMPOSED)["islamic-calm"]]>) {
+  for (const [key, c] of Object.entries(COMPOSED) as Array<[ThemeKey, (typeof COMPOSED)["islamic-epic"]]>) {
     it(`${key}: the rosette is drawn behind the words (the door's wordmark, an empty list's sentence): all three words ≥ 4.5`, () => {
       const t = byTheme[key];
       const backdrop = over(t.accent, t.surface, c.rosette);
@@ -177,12 +177,18 @@ describe("an ornament behind words — never louder than the words can bear", ()
     });
   }
 
-  it("«نهاري»: the faint mask, with the wash stacked under it, leaves the heading and the dimmer text above 4.5", () => {
-    const t = byTheme.day;
-    const backdrop = over(t.accent, t.surface, stacked(FAINT.day.ink));
-    expect(ratio(t.fg, backdrop)).toBeGreaterThanOrEqual(BAR);
-    expect(ratio(t["fg-muted"], backdrop)).toBeGreaterThanOrEqual(BAR);
-  });
+  for (const [key, pattern] of Object.entries(PATTERN) as Array<[ThemeKey, (typeof PATTERN)["night"]]>) {
+    it(`${key}: a star of the field (the gold at its ink) over the wash, under every word: all three words ≥ 4.5`, () => {
+      const t = byTheme[key];
+      for (const ground of ["surface", "surface-1", "surface-2"] as const) {
+        const backdrop = over(t["accent-2"], over(t.accent, t[ground], WASH), pattern.ink);
+        for (const word of WORDS) {
+          const r = ratio(t[word], backdrop);
+          expect(r, `${key} on ${ground}: ${word} on a star = ${r.toFixed(2)}`).toBeGreaterThanOrEqual(BAR);
+        }
+      }
+    });
+  }
 
   it("every theme: the wash alone, at its strongest point, leaves the heading and the dimmer text above 4.5", () => {
     for (const key of THEME_KEYS) {
@@ -193,8 +199,8 @@ describe("an ornament behind words — never louder than the words can bear", ()
     }
   });
 
-  it("— and the claim can fail: a rosette at 0.5 would take the calm theme's dimmer text below the bar", () => {
-    const t = byTheme["islamic-calm"];
+  it("— and the claim can fail: an ornament at 0.5 would take the day theme's dimmer text below the bar", () => {
+    const t = byTheme.day;
     expect(ratio(t["fg-muted"], over(t.accent, t.surface, 0.5))).toBeLessThan(BAR);
   });
 });

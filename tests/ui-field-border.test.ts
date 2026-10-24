@@ -16,7 +16,7 @@ import { AA_UI, contrastRatio } from "@/lib/themes/contrast";
 const ROOT = path.resolve(__dirname, "..");
 
 /** Tokens whose hex the palette carries (relative import not needed: the gate file is in the alias). */
-const { muted, border } = PALETTES["islamic-calm"].colors;
+const { muted, border } = PALETTES.night.colors;
 
 describe("the field-boundary rule in the contrast gate", () => {
   it("contrast.ts carries a field-border rule (source check)", () => {

@@ -12,7 +12,9 @@ import {
   decorLevelOf,
   isDarkTheme,
   isDecorLevel,
+  isChosenTheme,
   isThemeKey,
+  LEGACY_THEME_KEYS,
   prefCookieOptions,
   prefCookieString,
   rootThemeAttributes,
@@ -23,25 +25,25 @@ import {
 
 describe("the four themes", () => {
   it("are exactly the four agreed keys, in the picker's order", () => {
-    expect([...THEME_KEYS]).toEqual(["islamic-calm", "islamic-epic", "neon-coast", "day"]);
+    expect([...THEME_KEYS]).toEqual(["night", "day", "islamic-epic", "neon-coast"]);
     expect(THEME_LIST.map((t) => t.key)).toEqual([...THEME_KEYS]);
   });
 
-  it("«إسلامي هادي» is the default, and it is a light theme", () => {
-    expect(DEFAULT_THEME).toBe("islamic-calm");
-    expect(isDarkTheme(DEFAULT_THEME)).toBe(false);
+  it("«ليل» is the default, and it is a dark theme («نجمة وطريق», 2026-10-24)", () => {
+    expect(DEFAULT_THEME).toBe("night");
+    expect(isDarkTheme(DEFAULT_THEME)).toBe(true);
   });
 
-  it("two are dark (they also carry the `dark` class) and two are light", () => {
-    expect(THEME_KEYS.filter(isDarkTheme)).toEqual(["islamic-epic", "neon-coast"]);
-    expect(THEME_KEYS.filter((k) => !isDarkTheme(k))).toEqual(["islamic-calm", "day"]);
+  it("three are dark (they also carry the `dark` class) and «نهار» is light", () => {
+    expect(THEME_KEYS.filter(isDarkTheme)).toEqual(["night", "islamic-epic", "neon-coast"]);
+    expect(THEME_KEYS.filter((k) => !isDarkTheme(k))).toEqual(["day"]);
   });
 
-  it("the Islamic themes title in Reem Kufi, the others in IBM Plex", () => {
-    expect(THEMES["islamic-calm"].headingFont).toBe("reem-kufi");
+  it("«ليل», «نهار» and «إسلامي ملحمي» title in Reem Kufi, «ساحل النيون» in IBM Plex", () => {
+    expect(THEMES.night.headingFont).toBe("reem-kufi");
+    expect(THEMES.day.headingFont).toBe("reem-kufi");
     expect(THEMES["islamic-epic"].headingFont).toBe("reem-kufi");
     expect(THEMES["neon-coast"].headingFont).toBe("plex");
-    expect(THEMES.day.headingFont).toBe("plex");
   });
 });
 
@@ -54,10 +56,29 @@ describe("whatever was stored becomes a real theme", () => {
   });
 
   it("maps the old light/dark/system values, garbage, nothing and non-strings to the default", () => {
-    for (const value of ["system", "light", "dark", "", "ISLAMIC-CALM", " day", "neon", "<script>", undefined, null, 7, {}, ["day"]]) {
+    for (const value of ["system", "light", "dark", "", "ISLAMIC-CALM", " day", "neon", "<script>", "toString", "__proto__", undefined, null, 7, {}, ["day"]]) {
       expect(isThemeKey(value), String(value)).toBe(false);
+      expect(isChosenTheme(value), String(value)).toBe(false);
       expect(themeOf(value), String(value)).toBe(DEFAULT_THEME);
     }
+  });
+});
+
+describe("a retired theme a person may still have stored", () => {
+  it("«إسلامي هادي» (islamic-calm) is read as «ليل» — the cookie and User.theme need no migration", () => {
+    expect(LEGACY_THEME_KEYS).toEqual({ "islamic-calm": "night" });
+    expect(isThemeKey("islamic-calm")).toBe(false);
+    expect(themeOf("islamic-calm")).toBe("night");
+  });
+
+  it("and it still counts as a choice (the first-steps fact «اختار ثيمك» stays done)", () => {
+    expect(isChosenTheme("islamic-calm")).toBe(true);
+    for (const key of THEME_KEYS) expect(isChosenTheme(key)).toBe(true);
+  });
+
+  it("every retired key maps onto a current one", () => {
+    for (const target of Object.values(LEGACY_THEME_KEYS)) expect(isThemeKey(target)).toBe(true);
+    for (const old of Object.keys(LEGACY_THEME_KEYS)) expect(isThemeKey(old), old).toBe(false);
   });
 });
 

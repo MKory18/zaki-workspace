@@ -44,11 +44,17 @@ describe("sign-in brings the saved theme to this device", () => {
   });
 
   it("each of the four themes comes back as itself", async () => {
-    for (const theme of ["islamic-calm", "islamic-epic", "neon-coast", "day"]) {
+    for (const theme of ["night", "day", "islamic-epic", "neon-coast"]) {
       const { member } = await makeTeam();
       await db.user.update({ where: { id: member.id }, data: { theme } });
       expect(themeCookie((await signIn(member.email, TEST_PASSWORD)).headers), theme).toMatch(new RegExp(`^zaki_theme=${theme};`));
     }
+  });
+
+  it("a person who chose the retired «إسلامي هادي» gets the theme it now means: «ليل»", async () => {
+    const { member } = await makeTeam();
+    await db.user.update({ where: { id: member.id }, data: { theme: "islamic-calm" } });
+    expect(themeCookie((await signIn(member.email, TEST_PASSWORD)).headers)).toMatch(/^zaki_theme=night;/);
   });
 
   it("somebody who never chose ('system') or holds an old or unknown value gets no theme cookie", async () => {
