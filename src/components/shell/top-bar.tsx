@@ -34,7 +34,7 @@ export function TopBar({
 }) {
   const { t } = useI18n();
   return (
-    <header className="shrink-0 border-b border-border bg-surface pt-[env(safe-area-inset-top)]">
+    <header className="zk-safe-x shrink-0 border-b border-border bg-surface pt-[env(safe-area-inset-top)]">
       <div className="flex h-14 items-center gap-1 px-2 md:gap-2 md:px-4">
         <Link href="/" aria-label={t("nav.place.today")} className="grid size-11 shrink-0 place-items-center rounded-xl md:hidden">
           <span aria-hidden="true">

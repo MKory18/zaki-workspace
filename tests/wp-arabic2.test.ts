@@ -152,15 +152,21 @@ describe("(g) the shell is handed only what it draws", () => {
 });
 
 describe("(h) one <main> landmark per screen", () => {
-  it("no page of the app opens a second <main>: the shell owns it", () => {
-    const pages = [
-      "src/app/(app)/my-work/page.tsx",
-      "src/app/(app)/u/[id]/page.tsx",
-      "src/app/(app)/calendar/page.tsx",
-      "src/app/(app)/list/page.tsx",
-      "src/app/(app)/teams/page.tsx",
-    ];
-    for (const p of pages) expect(read(p)).not.toMatch(/<main[\s>]/);
+  it("no page of the app and no component opens a second <main>: the shell owns it", async () => {
+    // every file, not a hand-picked five (review C item 12 found four mains the old list missed); the
+    // door shell is the one exception: it frames the sign-in and onboarding screens, outside the app shell
+    const { readdirSync, statSync } = await import("node:fs");
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const full = `${dir}/${name}`;
+        return statSync(full).isDirectory() ? walk(full) : /\.tsx$/.test(name) ? [full] : [];
+      });
+    const files = [...walk("src/app/(app)"), ...walk("src/components")].filter(
+      (f) => !f.endsWith("components/app-shell.tsx") && !f.endsWith("components/theme/door-shell.tsx"),
+    );
+    expect(files.length).toBeGreaterThan(50);
+    const code = (f: string) => read(f).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(files.filter((f) => /<main[\s>]/.test(code(f)))).toEqual([]);
     expect(read("src/components/app-shell.tsx")).toContain('<main id="zk-main"');
   });
 });

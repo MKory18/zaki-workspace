@@ -84,8 +84,9 @@ describe("the panel", () => {
     const html = open();
     for (const label of [AR["notif.markRead"], AR["notif.delete"]]) expect(html).toContain(`aria-label="${label}"`);
     for (const [tag] of html.matchAll(/<button[^>]*aria-label="(?:تحديد كمقروء|حذف)"[^>]*>/g)) expect(tag).toMatch(/\bsize-11\b/);
-    // the row's action group is not hidden on a phone (hover does not exist there)
-    expect(html).not.toMatch(/class="(?![^"]*md:opacity-0)[^"]*\bopacity-0\b/);
+    // the row's action group is not hidden on a phone or a touch tablet (hover does not exist there): it hides
+    // only at md and up AND where the device really hovers (review C item 10)
+    expect(html).not.toMatch(/class="(?![^"]*md:\[@media\(hover:hover\)\]:opacity-0)[^"]*\bopacity-0\b/);
   });
 
   it("says so when there is nothing", () => {

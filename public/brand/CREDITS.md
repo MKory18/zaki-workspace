@@ -28,8 +28,9 @@ and never add anything that reproduces a third party's game, film, brand or char
 separate binary packages (`@img/sharp-libvips-*`), licensed **LGPL-3.0-or-later**.
 
 - ⚠️ The Docker image installs every dependency (`npm ci`) and its runner stage copies the whole
-  `node_modules`, so those LGPL binaries ship inside the production image, although no code of the app imports
-  sharp. 🔧 Give the runner stage production dependencies only (then none of it ships), or keep the binaries
+  `node_modules`, so those LGPL binaries ship inside the production image, and the app uses them: the chat
+  reads an uploaded image's width and height with sharp (`src/server/chat/attachments.ts`, a runtime
+  `import("sharp")`; without it the dimensions are left out and the upload still works). 🔧 Give the runner stage production dependencies only (then none of it ships), or keep the binaries
   unmodified, as npm installs them, and put the LGPL-3.0 text beside them in the image (their `package.json`
   names the licence; the package folders carry no licence file of their own).
 - ⚠️ On a machine where sharp's binary cannot be loaded, the icon checks are skipped instead of failing.

@@ -103,7 +103,7 @@
   "task.inBoard": "في لوحة {name}",
   "task.readOnly": "للقراءة فقط",
   "task.commentsCount": "التعليقات ({n})",
-  "task.noLabels": "لا توجد تصنيفات في المؤسسة بعد.",
+  "task.noLabels": "لا توجد تصنيفات في الشركة بعد.",
 
   "proj.one": "المشروع",
   "proj.boards": "اللوحات",
@@ -151,7 +151,7 @@
   "integration.bad_secret": "السرّ المشترك غير صالح",
   "label.invalid": "تصنيف غير صالح",
   "milestone.invalid": "هذا المعلم ليس من هذا المشروع",
-  "organization.not_found": "المؤسسة غير موجودة",
+  "organization.not_found": "الشركة غير موجودة",
   "project.not_found": "المشروع غير موجود",
   "routine.not_found": "المهمة المتكررة غير موجودة",
   "board.no_done_column": "هاي اللوحة ما فيها عمود الإنجاز «منتهي»، فما بنقدر ننجز مهامها من هون. أنشئ لوحة جديدة: بتجي جاهزة بهذا العمود.",

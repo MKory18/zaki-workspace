@@ -35,7 +35,7 @@ export function ChatHome({ home, guest }: { home: HomeDto; guest: boolean }) {
     return () => { active = false; };
   }, [allCompany, home.canOversee]);
   return (
-    <main dir="rtl" className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 text-fg">
+    <div dir="rtl" className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 text-fg">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">{ct("chath.title")}</h1>
         {home.canOversee && <div className="inline-flex rounded-xl border border-border bg-surface-1 p-1" role="group" aria-label={ct("chath.scope")}>
@@ -62,6 +62,6 @@ export function ChatHome({ home, guest }: { home: HomeDto; guest: boolean }) {
       </>}
       {!guest && <NewDmDialog open={newDm} onOpenChange={setNewDm} />}
       {canCreateSpace && <WorkspaceCreateModal open={creatingSpace} onClose={() => setCreatingSpace(false)} organizations={orgs.map((org) => ({ id: org.id, name: org.name, canAdmin: org.canCreateSpaces }))} />}
-    </main>
+    </div>
   );
 }
