@@ -7,7 +7,7 @@ import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 
 /**
- * «نقل إلى فريق» on a project's page: which team of its space the project belongs to («كل المساحة» = none).
+ * «نقل إلى مقطع» on a project's page: which team of its space the project belongs to («كل المساحة» = none).
  * Only a manager of the space sees it (the teams API says `canManage`); moving changes who sees the project, so
  * the server checks it again (`moveProjectToTeam`). Nothing is drawn in a space with no team.
  */

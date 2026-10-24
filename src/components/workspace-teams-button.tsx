@@ -35,7 +35,7 @@ function errText(err: unknown, t: (k: string) => string) {
 }
 
 /**
- * «الفرق» — the teams inside this space (the owner's decision, 2026-10-25: each team its own projects and
+ * «المقاطع» — the teams inside this space (the owner's decision, 2026-10-25: each team its own projects and
  * topics; src/server/services/team-scope.ts says who sees what). A manager of the space opens teams, puts the
  * space's people in and out, and deletes an empty team; anybody else sees the teams they are in, read-only.
  * The server decides everything again (src/server/services/teams.ts).
