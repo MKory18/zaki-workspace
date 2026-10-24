@@ -131,7 +131,8 @@ export interface ConversationDto {
   restricted?: boolean;
   closed: boolean;
   space?: { id: string; name: string; hasExternal: boolean } | null;
-  me: { canPost: boolean; canModerate: boolean; muted: boolean; oversight: boolean };
+  /** `canJoin`: the OWNER in oversight of an open topic may join it («شارك بالمحادثة») to post there. */
+  me: { canPost: boolean; canModerate: boolean; muted: boolean; oversight: boolean; canJoin: boolean };
   members?: MemberDto[];
   messages: MessageDto[];
   readers: ReaderDto[];

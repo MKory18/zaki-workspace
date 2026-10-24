@@ -270,6 +270,8 @@ export async function toggleReact(ctx: OrgAccessContext, messageId: string, inpu
   if (!msg || msg.orgId !== ctx.orgId) throw new NotFoundError("chat.e.not_found");
   const { facts, org } = await guard(ctx, msg.conversationId);
   if (!canRead(facts, org)) throw new NotFoundError("chat.e.not_found");
+  // a reaction would break the owner's silent reading: he joins first
+  if (org.role === "OWNER" && !facts.viewerIsMember) throw new ForbiddenError("chat.e.join_first");
   if (msg.deletedAt) throw new ForbiddenError("chat.e.deleted");
   if (!isSingleEmoji(input.emoji)) throw new ValidationError([{ path: "emoji", message: "chat.e.bad_reaction" }]);
 
@@ -298,6 +300,8 @@ export async function togglePin(ctx: OrgAccessContext, messageId: string): Promi
   const msg = await db.chatMessage.findUnique({ where: { id: messageId }, include: { conversation: { select: { id: true, orgId: true, kind: true, spaceId: true } } } });
   if (!msg || msg.orgId !== ctx.orgId) throw new NotFoundError("chat.e.not_found");
   const { facts, org } = await guard(ctx, msg.conversationId);
+  // a pin writes a line everybody sees: the owner in oversight joins first, like a reaction
+  if (org.role === "OWNER" && !facts.viewerIsMember) throw new ForbiddenError("chat.e.join_first");
   // topics: space admins (or the owner); DMs: either participant
   const mayPin = facts.kind === "DM" ? facts.viewerIsMember : canModerate(facts, org);
   if (!mayPin) throw new ForbiddenError("chat.e.pin_denied");
