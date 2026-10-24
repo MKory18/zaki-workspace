@@ -12,6 +12,7 @@ import path from "node:path";
 import { db, loginAs, logout, makeOrg, makeTeam, makeUser, makeWorkspace, uid } from "./helpers";
 import { claimUploads, purgeOrphanUploads, readAttachment } from "@/server/chat/attachments";
 import { PENDING_PATH } from "@/server/services/files";
+import * as attachmentRoute from "@/app/api/chat/attachments/[id]/route";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
 
@@ -72,64 +73,94 @@ async function claimed(uploaderId: string, conversationId: string) {
   return { file, msg, att };
 }
 
-describe("attachment read rule", () => {
-  it("a space member reads an attachment of the space topic", async () => {
+/**
+ * Every case goes through the real door, GET /api/chat/attachments/[id] (review C item 7: these cases
+ * used to call canReadConversation and never the route, so the 404 shape and the headers were never
+ * exercised). What may not be read is 404, never 403, and carries no bytes.
+ */
+async function fetchAttachment(id: string, headers: Record<string, string> = {}) {
+  const res = await attachmentRoute.GET(new Request(`http://localhost/api/chat/attachments/${id}`, { headers }), { params: { id } });
+  return { status: res.status, headers: res.headers, body: new Uint8Array(await res.arrayBuffer()) };
+}
+
+describe("attachment read rule (through the route)", () => {
+  it("a space member reads an attachment of the space topic: the bytes, nosniff, inline for an image, ranges", async () => {
     const { att } = await claimed(t.member.id, topicId);
     await loginAs(t.member.id);
-    const found = await readAttachment(t.org.id, att.id);
-    expect(found.attachment.id).toBe(att.id);
+    const res = await fetchAttachment(att.id);
+    expect(res.status).toBe(200);
+    expect([...res.body]).toEqual([...PNG]);
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("content-type")).toBe("image/png");
+    expect(res.headers.get("content-disposition")).toMatch(/^inline; filename\*=UTF-8''/);
+    expect(res.headers.get("accept-ranges")).toBe("bytes");
+    const part = await fetchAttachment(att.id, { range: "bytes=0-3" });
+    expect(part.status).toBe(206);
+    expect([...part.body]).toEqual([...PNG.slice(0, 4)]);
   });
 
   it("the OWNER reads every attachment silently (oversight)", async () => {
     const { att } = await claimed(t.member.id, topicId);
     await loginAs(t.owner.id);
-    const found = await readAttachment(t.org.id, att.id);
-    expect(found.attachment.id).toBe(att.id);
+    expect((await fetchAttachment(att.id)).status).toBe(200);
   });
 
-  it("a member of ANOTHER space does not resolve it (404 shape)", async () => {
+  it("a member of ANOTHER space gets 404, and no bytes", async () => {
     const { att } = await claimed(t.member.id, topicId);
-    await loginAs(t.admin.id); // admin of the org but a member of otherSpaceId only
-    expect(att.messageId).toBeTruthy();
-    const msg = await db.chatMessage.findUniqueOrThrow({ where: { id: att.messageId! } });
-    const { canReadConversation } = await import("@/server/policy/conversation");
-    expect(await canReadConversation(t.admin.id, msg.conversationId)).toBe(false);
+    await loginAs(t.admin.id); // an org admin, but only in otherSpaceId
+    const res = await fetchAttachment(att.id);
+    expect(res.status).toBe(404);
+    expect(res.body.length).toBe(0);
   });
 
-  it("a guest of the space reads the space topic, not other spaces' topics", async () => {
+  it("a guest of the space reads the space topic's attachment", async () => {
     const { att } = await claimed(t.member.id, topicId);
     await loginAs(t.guest.id);
-    const msg = await db.chatMessage.findUniqueOrThrow({ where: { id: att.messageId! } });
-    const { canReadConversation } = await import("@/server/policy/conversation");
-    expect(await canReadConversation(t.guest.id, msg.conversationId)).toBe(true);
+    expect((await fetchAttachment(att.id)).status).toBe(200);
   });
 
-  it("a restricted topic member reads it; a non-member does not", async () => {
+  it("a restricted topic's member reads it; the space's guest, not in the list, gets 404", async () => {
     const { att } = await claimed(t.member.id, restrictedTopicId);
     await loginAs(t.member.id);
-    const msg = await db.chatMessage.findUniqueOrThrow({ where: { id: att.messageId! } });
-    const { canReadConversation } = await import("@/server/policy/conversation");
-    expect(await canReadConversation(t.member.id, msg.conversationId)).toBe(true);
-    expect(await canReadConversation(t.guest.id, msg.conversationId)).toBe(false); // same space, not in the restricted list
+    expect((await fetchAttachment(att.id)).status).toBe(200);
+    await loginAs(t.guest.id);
+    expect((await fetchAttachment(att.id)).status).toBe(404);
   });
 
   it("a SUSPENDED member reads nothing", async () => {
     const { att } = await claimed(t.member.id, topicId);
+    await loginAs(t.member.id);
     await db.organizationMember.update({
       where: { organizationId_userId: { organizationId: t.org.id, userId: t.member.id } },
       data: { status: "SUSPENDED" },
     });
-    await loginAs(t.member.id);
-    const msg = await db.chatMessage.findUniqueOrThrow({ where: { id: att.messageId! } });
-    const { canReadConversation } = await import("@/server/policy/conversation");
-    expect(await canReadConversation(t.member.id, msg.conversationId)).toBe(false);
+    expect((await fetchAttachment(att.id)).status).not.toBe(200);
   });
 
-  it("the uploader reads his own upload BEFORE the message claims it", async () => {
+  it("the uploader reads his own upload BEFORE the message claims it; nobody else does", async () => {
     const file = await makeUpload(t.org.id, t.member.id);
     await loginAs(t.member.id);
-    const unclaimed = await db.storedFile.findUniqueOrThrow({ where: { id: file.id } });
-    expect(unclaimed.purpose).toBe("CHAT");
+    const mine = await fetchAttachment(file.id);
+    expect(mine.status).toBe(200);
+    expect([...mine.body]).toEqual([...PNG]);
+    await loginAs(t.owner.id);
+    expect((await fetchAttachment(file.id)).status).toBe(404);
+  });
+
+  it("the file of a deleted message is gone for everybody but the OWNER", async () => {
+    const { att, msg } = await claimed(t.member.id, topicId);
+    await db.chatMessage.update({ where: { id: msg.id }, data: { deletedAt: new Date(), deletedById: t.member.id } });
+    await loginAs(t.member.id);
+    expect((await fetchAttachment(att.id)).status).toBe(404);
+    await loginAs(t.owner.id);
+    expect((await fetchAttachment(att.id)).status).toBe(200);
+  });
+
+  it("another company's attachment id is 404, even for an OWNER", async () => {
+    const { att } = await claimed(t.member.id, topicId);
+    const other = await makeTeam();
+    await loginAs(other.owner.id);
+    expect((await fetchAttachment(att.id)).status).toBe(404);
   });
 });
 

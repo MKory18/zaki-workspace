@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { OrgRole } from "@prisma/client";
-import { createDm } from "@/server/services/chat";
+import { openDm } from "@/server/chat/dm";
+
+/**
+ * The live DM door (src/server/chat/dm.ts, behind POST /api/chat/dm). These cases were written against
+ * the retired services/chat.ts and moved here unchanged in what they prove; the error keys are the live
+ * ones (a guest on either side is chat.guest_forbidden, nobody outside the company is chat.e.not_found).
+ */
+const createDm = async (ctx: { orgId: string; orgRole: OrgRole; userId: string }, otherId: string) => (await openDm(ctx, otherId)).id;
 import { db, makeOrg, makeTeam, makeUser } from "./helpers";
 import { joinOrg } from "./scoping-helpers";
 
@@ -12,7 +19,7 @@ const dmsBetween = (a: string, b: string) =>
     select: { id: true, orgId: true, members: { select: { userId: true } } },
   });
 
-describe("createDm: a DM stays inside one organization and never reaches a guest", () => {
+describe("openDm: a DM stays inside one organization and never reaches a guest", () => {
   it("opens one DM per pair, whoever starts it, bound to the caller's org", async () => {
     const t = await makeTeam();
     const other = await makeUser({ orgId: t.org.id, role: "MEMBER" });
@@ -30,13 +37,13 @@ describe("createDm: a DM stays inside one organization and never reaches a guest
   it("refuses a GUEST as the other person, and creates nothing", async () => {
     const t = await makeTeam();
     await expect(createDm(ctxOf(t.org.id, t.member.id), t.guest.id)).rejects.toMatchObject({
-      name: "NotFoundError",
-      message: "chat.not_org_member",
+      name: "ForbiddenError",
+      message: "chat.guest_forbidden",
     });
     expect(await dmsBetween(t.member.id, t.guest.id)).toHaveLength(0);
     // an ADMIN opening a DM with a guest is refused the same way
     await expect(createDm(ctxOf(t.org.id, t.admin.id, "ADMIN"), t.guest.id)).rejects.toMatchObject({
-      name: "NotFoundError",
+      name: "ForbiddenError",
     });
     expect(await dmsBetween(t.admin.id, t.guest.id)).toHaveLength(0);
   });
@@ -55,7 +62,7 @@ describe("createDm: a DM stays inside one organization and never reaches a guest
     const b = await makeTeam();
     await expect(createDm(ctxOf(a.org.id, a.member.id), b.member.id)).rejects.toMatchObject({
       name: "NotFoundError",
-      message: "chat.not_org_member",
+      message: "chat.e.not_found",
     });
     expect(await dmsBetween(a.member.id, b.member.id)).toHaveLength(0);
     // an unknown id is refused the same way
@@ -68,8 +75,8 @@ describe("createDm: a DM stays inside one organization and never reaches a guest
     const t = await makeTeam();
     await expect(createDm(ctxOf(t.org.id, t.member.id), t.member.id)).rejects.toMatchObject({
       name: "ForbiddenError",
-      message: "chat.dm_self",
     });
+    expect(await dmsBetween(t.member.id, t.member.id)).toHaveLength(0);
   });
 
   it("never hands back a conversation that belongs to another organization", async () => {

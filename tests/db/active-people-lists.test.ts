@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as voteRoute from "@/app/api/ideas/[id]/vote/route";
-import { chatDirectory, createDm, createGroup, manageGroup } from "@/server/services/chat";
+import { createGroup, manageGroup, openDm } from "@/server/chat/dm";
+import { chatDirectory } from "@/server/chat/directory";
 import { getProfileForViewer, memberDirectory } from "@/server/services/users";
 import { listWorkspacePeople } from "@/server/services/views";
 import { loadAnalytics } from "@/server/services/analytics";
@@ -23,44 +24,49 @@ async function world() {
   return { ...team, active, suspended, gone };
 }
 
+// The live chat doors (src/server/chat/dm.ts and directory.ts); these cases were written against the
+// retired services/chat.ts and moved here with the same claims and the live answers: a group asked to
+// take in somebody who is out is refused whole (nothing is created), and extended without them.
 describe("chat: a conversation partner must be an active member of the same organization", () => {
   it("a DM with a suspended or an offboarded person is refused and creates nothing", async () => {
     const w = await world();
     for (const person of [w.suspended, w.gone]) {
-      await expect(createDm(ctxOf(w.org.id, w.member.id), person.id)).rejects.toMatchObject({
+      await expect(openDm(ctxOf(w.org.id, w.member.id), person.id)).rejects.toMatchObject({
         name: "NotFoundError",
-        message: "chat.not_org_member",
+        message: "chat.e.not_found",
       });
     }
-    expect(await db.conversation.count({ where: { orgId: w.org.id } })).toBe(0);
+    expect(await db.conversation.count({ where: { orgId: w.org.id, kind: "DM" } })).toBe(0);
     // an active colleague is still fine
-    expect(await createDm(ctxOf(w.org.id, w.member.id), w.active.id)).toBeTruthy();
+    expect((await openDm(ctxOf(w.org.id, w.member.id), w.active.id)).id).toBeTruthy();
   });
 
-  it("a group never takes them in: not when it is created, not when it is extended", async () => {
+  it("a group never takes them in: refused when it is created with them, and an extension leaves them out", async () => {
     const w = await world();
     const ctx = ctxOf(w.org.id, w.member.id);
-    const id = await createGroup(ctx, { kind: "GROUP", title: "Shop floor", memberIds: [w.active.id, w.suspended.id, w.gone.id] });
-    const created = await db.conversationMember.findMany({ where: { conversationId: id } });
-    expect(created.map((m) => m.userId).sort()).toEqual([w.member.id, w.active.id].sort());
+    await expect(createGroup(ctx, { title: "Shop floor", memberIds: [w.active.id, w.suspended.id, w.gone.id] })).rejects.toMatchObject({
+      name: "NotFoundError",
+    });
+    expect(await db.conversation.count({ where: { orgId: w.org.id, kind: "GROUP" } })).toBe(0);
 
+    const { id } = await createGroup(ctx, { title: "Shop floor", memberIds: [w.active.id] });
     const another = await makeUser({ orgId: w.org.id, role: "MEMBER", name: "Another colleague" });
-    await manageGroup(ctx, id, { addUserIds: [another.id, w.suspended.id, w.gone.id] });
+    await manageGroup(ctx, id, { addMemberIds: [another.id, w.suspended.id, w.gone.id] });
     const extended = await db.conversationMember.findMany({ where: { conversationId: id } });
     expect(extended.map((m) => m.userId).sort()).toEqual([w.member.id, w.active.id, another.id].sort());
   });
 
   it("a group of nobody but them is not created", async () => {
     const w = await world();
-    await expect(
-      createGroup(ctxOf(w.org.id, w.member.id), { kind: "GROUP", title: "Ghost town", memberIds: [w.suspended.id, w.gone.id] }),
-    ).rejects.toMatchObject({ name: "ForbiddenError", message: "chat.group_needs_members" });
-    expect(await db.conversation.count({ where: { orgId: w.org.id } })).toBe(0);
+    await expect(createGroup(ctxOf(w.org.id, w.member.id), { title: "Ghost town", memberIds: [w.suspended.id, w.gone.id] })).rejects.toMatchObject({
+      name: "NotFoundError",
+    });
+    expect(await db.conversation.count({ where: { orgId: w.org.id, kind: "GROUP" } })).toBe(0);
   });
 
   it("the recipients picker does not offer them", async () => {
     const w = await world();
-    const names = (await chatDirectory(w.org.id)).map((p) => p.user.name);
+    const names = (await chatDirectory(w.org.id)).map((p) => p.name);
     expect(names).toEqual(expect.arrayContaining(["Owner", "Admin", "Member", "Active colleague"]));
     expect(names).not.toContain("Suspended colleague");
     expect(names).not.toContain("Offboarded colleague");

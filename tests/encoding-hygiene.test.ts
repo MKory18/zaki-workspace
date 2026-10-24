@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { OpportunityStage } from "@prisma/client";
-import { ALLOWED_REACTIONS } from "../src/server/services/chat";
+import { ALLOWED_REACTIONS } from "../src/server/chat/reactions";
 import { CHAT_REACTIONS } from "../src/lib/chat-reactions";
 
 const SRC = path.resolve(__dirname, "../src");
