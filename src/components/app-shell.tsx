@@ -14,6 +14,7 @@ import { Sidebar } from "@/components/shell/sidebar";
 import { SpaceSwitcher } from "@/components/shell/space-switcher";
 import { TopBar } from "@/components/shell/top-bar";
 import { readSidebarCollapsed, writeSidebarCollapsed } from "@/components/shell/sidebar-state";
+import { useChatUnread } from "@/lib/chat/use-chat-unread";
 import { parseSidebarCookie, writeSidebarCookie } from "@/components/shell/sidebar-cookie";
 
 export interface AppShellProps {
@@ -51,6 +52,9 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
   // a page of a place this person is not offered (a guest who typed /files) marks nothing
   const place = nav.places.find((p) => p.key === here.place) ?? null;
   const tab = place && place.tabs.some((x) => x.key === here.tab) ? here.tab : null;
+  // the unread messages behind «الدردشة», on every page (only when the chat is one of this person's places)
+  const chatUnread = useChatUnread(nav.places.some((p) => p.key === "chat"));
+  const badges = { chat: chatUnread };
 
   // The folded state starts from the `zk-sidebar` COOKIE the server layout read: no 256px flash and
   // no animated shrink after the first paint. localStorage stays as a second memory for a device
@@ -91,6 +95,7 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
         collapsed={collapsed}
         onToggle={toggleSidebar}
         animated={animated}
+        badges={badges}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -115,7 +120,7 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
         </div>
       </div>
 
-      <BottomNav places={nav.places} current={place?.key ?? null} pathname={pathname} />
+      <BottomNav places={nav.places} current={place?.key ?? null} pathname={pathname} badges={badges} />
     </div>
   );
 }
