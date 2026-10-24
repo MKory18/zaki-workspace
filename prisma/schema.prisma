@@ -1090,3 +1090,22 @@ enum OpportunityStage {
   WON
   LOST
 }
+
+/// A company registration waiting for its owner to confirm the e-mail address (Phase 0 S1, reopened
+/// with a check). Nothing in the app exists yet: no User, no Organization, so an unconfirmed request
+/// can neither sign in nor hold an address another account needs. The confirmation link carries a
+/// random token; only its SHA-256 is stored. Rows expire after 24 h and the hourly purge removes them.
+model PendingRegistration {
+  id           String   @id @default(cuid())
+  email        String
+  name         String
+  jobTitle     String?
+  orgName      String
+  passwordHash String
+  tokenHash    String   @unique
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@index([email])
+  @@index([createdAt])
+}

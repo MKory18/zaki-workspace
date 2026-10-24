@@ -35,6 +35,14 @@ export async function purgeRealtimeEvents(): Promise<number> {
       } catch (err) {
         log.error("rt.purge_uploads_failed", { message: err instanceof Error ? err.message : String(err) });
       }
+      // Registration requests whose 24-hour link ran out (services/registration.ts). Guarded the same way.
+      try {
+        const { purgeExpiredRegistrations } = await import("@/server/services/registration");
+        const removed = await purgeExpiredRegistrations();
+        if (removed) log.info("registration.purged", { count: removed });
+      } catch (err) {
+        log.error("registration.purge_failed", { message: err instanceof Error ? err.message : String(err) });
+      }
       // Quoted: the table was created as "RealtimeEvent" (mixed case); unquoted SQL folds to lowercase.
       const res = await client.query<{ id: string }>(
         'DELETE FROM "RealtimeEvent" WHERE "createdAt" < now() - interval \'48 hours\' RETURNING "id"::text',

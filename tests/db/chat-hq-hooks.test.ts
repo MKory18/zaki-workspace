@@ -153,12 +153,16 @@ describe("space removal and mute audit rows", () => {
 describe("the very first company: its HQ space comes with it (empty database)", () => {
   let empty: { client: PrismaClient; drop: () => Promise<void> } | undefined;
   let route: typeof import("@/app/api/auth/register/route");
+  let confirmRoute: typeof import("@/app/api/auth/register/confirm/route");
+  let mail: typeof import("@/server/mail");
 
   beforeAll(async () => {
     empty = await emptyDatabase();
     vi.resetModules();
     vi.doMock("@/server/db", () => ({ db: empty!.client }));
     route = await import("@/app/api/auth/register/route");
+    confirmRoute = await import("@/app/api/auth/register/confirm/route");
+    mail = await import("@/server/mail");
   }, 120_000);
 
   afterAll(async () => {
@@ -170,10 +174,17 @@ describe("the very first company: its HQ space comes with it (empty database)", 
   it("creating the company creates its HQ space and its five topics exactly once", async () => {
     logout();
     const tag = uid();
-    const res = await call(route.POST, {
-      body: { email: `boss-${tag}@first.run`, name: `Boss ${tag}`, password: "FirstRun-pass1", orgName: `First ${tag}` },
-      headers: { "x-forwarded-for": `203.0.113.${(tag.charCodeAt(0) % 80) + 100}` },
+    const email = `boss-${tag}@first.run`;
+    const ip = `203.0.113.${(tag.charCodeAt(0) % 80) + 100}`;
+    const asked = await call(route.POST, {
+      body: { email, name: `Boss ${tag}`, password: "FirstRun-pass1", orgName: `First ${tag}` },
+      headers: { "x-forwarded-for": ip },
     });
+    expect(asked.status).toBe(202);
+    // the company is created when the mailed link is confirmed (services/registration.ts)
+    const link = [...mail.mailOutbox()].reverse().find((m) => m.to === email)?.text ?? "";
+    const token = /\/register\/confirm\?token=([A-Za-z0-9_-]+)/.exec(link)?.[1] ?? "";
+    const res = await call(confirmRoute.POST, { body: { token }, headers: { "x-forwarded-for": ip } });
     expect(res.status).toBe(201);
 
     const client = empty!.client;

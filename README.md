@@ -76,6 +76,8 @@ database.
 | `SESSION_TTL_HOURS` | no | Session lifetime, default 168 (one week) |
 | `LOG_LEVEL` | no | `debug`, `info` (default), `warn` or `error` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | no | Read-only Google Drive integration |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | yes, to open new companies | Outgoing mail (SMTP, nodemailer). Opening a company mails a one-time confirmation link (`src/server/services/registration.ts`); without `SMTP_HOST` and `MAIL_FROM` a production server answers registration with 503. `SMTP_PORT` defaults to 587 (STARTTLS); 465 means TLS from the first byte. `MAIL_FROM` looks like `Zaki Workspace <no-reply@your-domain.com>` |
+| `REGISTER_GLOBAL_PER_HOUR`, `REGISTER_GLOBAL_PER_DAY` | no | Server-wide cap on requests to open a company, on top of 10 an hour per address. Defaults **30** an hour and **100** a day |
 | `TEST_DATABASE_ADMIN_URL` | tests only | A Postgres server for `npm run test:db`, with a role that may `CREATE DATABASE` (see Testing). Falls back to `DATABASE_URL` |
 | `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`, `ALLOW_PROD_SEED` | seed only | See Local development |
 
