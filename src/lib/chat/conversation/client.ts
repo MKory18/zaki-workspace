@@ -19,6 +19,8 @@ export interface ChatMessagePayloadInput {
   mentions: string[];
   replyToId?: string;
   clientId: string;
+  /** a voice note: its one attachment is the recording (the server makes it a VOICE message) */
+  voice?: boolean;
 }
 
 export function buildChatMessagePayload(input: ChatMessagePayloadInput) {
@@ -28,7 +30,19 @@ export function buildChatMessagePayload(input: ChatMessagePayloadInput) {
     mentions: input.mentions,
     ...(input.replyToId ? { replyToId: input.replyToId } : {}),
     clientId: input.clientId,
+    ...(input.voice ? { voice: true } : {}),
   };
+}
+
+/** The upload form of a recording: the take, its length and its waveform (the server caps both). */
+export function createVoiceUploadFormData(take: { blob: Blob; mime: string; durationMs: number; peaks: number[] }): FormData {
+  const ext = take.mime.includes("mp4") ? "m4a" : take.mime.includes("ogg") ? "ogg" : "webm";
+  const form = new FormData();
+  form.append("file", new File([take.blob], `voice.${ext}`, { type: take.mime }));
+  form.append("kind", "VOICE");
+  form.append("durationMs", String(Math.round(take.durationMs)));
+  form.append("peaks", JSON.stringify(take.peaks));
+  return form;
 }
 
 export function messageClientId(): string {

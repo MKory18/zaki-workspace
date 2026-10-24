@@ -12,9 +12,14 @@ export type VoiceRecorderOptions = {
   onPeaks?: (peaks: number[]) => void;
   /** Elapsed recording time in ms, roughly every 100 ms. */
   onTick?: (elapsedMs: number) => void;
-  /** The recording stopped by itself (5-minute cap or the page was hidden). */
-  onAutoStop?: () => void;
+  /**
+   * The recording stopped by itself (5-minute cap or the page was hidden). It hands over the take,
+   * so nothing recorded is lost: the composer keeps it ready to send or discard.
+   */
+  onAutoStop?: (take: VoiceTake | null) => void;
 };
+
+export type VoiceTake = { blob: Blob; mime: string; durationMs: number; peaks: number[] };
 
 export const MAX_RECORDING_MS = 5 * 60 * 1000;
 const MAX_PEAKS = 100;
@@ -35,13 +40,16 @@ export class VoiceRecorder {
   private timer: ReturnType<typeof setInterval> | null = null;
   private startedAt = 0;
   private peaks: number[] = [];
+  /** Every chunk since start: MediaRecorder hands them over every 250 ms, the last one on stop. */
+  private chunks: Blob[] = [];
   private readonly opts: VoiceRecorderOptions;
   private readonly onHidden: () => void;
 
   constructor(opts: VoiceRecorderOptions = {}) {
     this.opts = opts;
     this.onHidden = () => {
-      if (document.visibilityState === "hidden" && this.recorder) this.stop(); // never keep the mic open in the background
+      // never keep the mic open in the background; what was recorded is kept, not thrown away
+      if (document.visibilityState === "hidden" && this.recorder) void this.stop().then((take) => this.opts.onAutoStop?.(take));
     };
   }
 
@@ -66,10 +74,10 @@ export class VoiceRecorder {
     }
     this.stream = stream;
     this.peaks = [];
-    const chunks: Blob[] = [];
+    this.chunks = [];
     this.recorder = new MediaRecorder(stream, { mimeType });
     this.recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
+      if (e.data.size > 0) this.chunks.push(e.data);
     };
     this.recorder.start(250);
     this.startedAt = Date.now();
@@ -97,8 +105,7 @@ export class VoiceRecorder {
       }
       this.opts.onTick?.(this.elapsedMs);
       if (this.elapsedMs >= MAX_RECORDING_MS) {
-        this.stop();
-        this.opts.onAutoStop?.();
+        void this.stop().then((take) => this.opts.onAutoStop?.(take));
       }
     }, 100);
     document.addEventListener("visibilitychange", this.onHidden);
@@ -112,15 +119,15 @@ export class VoiceRecorder {
   }
 
   /** Stop and return the recording (or null when nothing was captured). */
-  async stop(): Promise<{ blob: Blob; mime: string; durationMs: number; peaks: number[] } | null> {
+  async stop(): Promise<VoiceTake | null> {
     const recorder = this.recorder;
     if (!recorder) return null;
-    const durationMs = Date.now() - this.startedAt;
-    const chunks: Blob[] = [];
+    this.recorder = null; // a second stop (the timer and a tap at once) returns null instead of a twin
+    const durationMs = Math.min(MAX_RECORDING_MS, Date.now() - this.startedAt);
+    // ALL the chunks since start (the 250 ms slices) plus the final one stop() flushes: the old code
+    // started a fresh list here and kept only that last slice, so most of every recording was lost
+    const chunks = this.chunks;
     const blob = await new Promise<Blob | null>((resolve) => {
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
       recorder.onstop = () => resolve(chunks.length > 0 ? new Blob(chunks, { type: recorder.mimeType }) : null);
       if (recorder.state !== "inactive") recorder.stop();
       else resolve(null);
@@ -149,6 +156,7 @@ export class VoiceRecorder {
     this.stream?.getTracks().forEach((t) => t.stop()); // the microphone light goes off, always
     void this.audioCtx?.close().catch(() => undefined);
     this.recorder = null;
+    this.chunks = [];
     this.stream = null;
     this.analyser = null;
     this.audioCtx = null;

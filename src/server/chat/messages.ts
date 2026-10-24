@@ -42,13 +42,16 @@ export const sendSchema = z
     mentions: z.array(z.string().min(1)).max(50).optional(),
     attachmentIds: z.array(z.string().min(1)).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
     clientId: z.string().min(1).max(64).optional(),
+    // a voice note: exactly one recorded audio attachment (the schema used to drop this flag, so
+    // every recording arrived as an ordinary message with a file)
+    voice: z.boolean().optional(),
   })
   .refine((v) => (v.body?.trim().length ?? 0) > 0 || (v.attachmentIds?.length ?? 0) > 0, {
     message: "chat.e.empty",
     path: ["body"],
   });
 
-export type SendInput = z.infer<typeof sendSchema> & { voice?: boolean };
+export type SendInput = z.infer<typeof sendSchema>;
 
 async function guard(ctx: OrgAccessContext, conversationId: string) {
   const [facts, org] = await Promise.all([
@@ -155,7 +158,9 @@ export async function sendMessage(
       });
     }
     await emitRealtime(tx, ctx.orgId, "message.created", { conversationId, messageId: msg.id, spaceId: facts.spaceId ?? undefined });
-    return msg;
+    // the row was read before its files were claimed: read it again so the answer carries them (the
+    // sender's screen shows the message from this answer: a voice note without its audio was an empty bubble)
+    return attachments.length ? tx.chatMessage.findUniqueOrThrow({ where: { id: msg.id }, include: messageInclude() }) : msg;
   });
 
   // my own fresh DM message starts at ✓ (sent): the screen shows it from this answer before any refetch
@@ -187,9 +192,13 @@ async function notifyAfterSend(
   });
 }
 
-/** Attachments: the kind comes from the StoredFile's mime (FILES-VOICE owns the upload flow). */
+/**
+ * Attachments: the kind comes from the StoredFile's mime (FILES-VOICE owns the upload flow); a
+ * recording (purpose VOICE, sniffed as audio on upload) is audio, whatever container it came in.
+ */
 async function attachmentKind(fileId: string): Promise<string> {
-  const f = await db.storedFile.findUnique({ where: { id: fileId }, select: { mimeType: true } });
+  const f = await db.storedFile.findUnique({ where: { id: fileId }, select: { mimeType: true, purpose: true } });
+  if (f?.purpose === "VOICE") return "AUDIO";
   const mime = f?.mimeType ?? "";
   return mime.startsWith("audio/") ? "AUDIO" : mime.startsWith("image/") ? "IMAGE" : mime.startsWith("video/") ? "VIDEO" : "FILE";
 }

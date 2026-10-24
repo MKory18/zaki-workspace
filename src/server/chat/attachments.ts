@@ -146,6 +146,8 @@ export async function createChatUpload(input: ChatUploadInput): Promise<ChatUplo
     { name: input.name, bytes },
     undefined,
     input.declaredKind === "VOICE" ? "VOICE" : "CHAT",
+    undefined,
+    { sniffedMime: sn.mime }, // audio/webm stays audio/webm (the plain sniffer says video/webm)
   );
   // The upload metadata rides on the StoredFile row until the message claims it. Written with
   // parameterised raw SQL because the generated Prisma client does not know the column yet
