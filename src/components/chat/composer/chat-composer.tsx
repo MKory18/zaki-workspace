@@ -20,7 +20,11 @@ export const HOLD_CANCEL_PX = 80;
 
 const iconButton = "flex h-11 w-11 shrink-0 items-center justify-center rounded-full";
 
-export function ChatComposer({ conversationId, detail, onMessage, reply, onCancelReply }: { conversationId: string; detail: ConversationDto; onMessage: (message: MessageDto) => void; reply: MessageDto | null; onCancelReply: () => void }) {
+/**
+ * `editing`: «تعديل» from the message menu edits IN this box (there is no second edit box): the text is
+ * loaded here, «+» and the microphone step aside, and sending saves the edit.
+ */
+export function ChatComposer({ conversationId, detail, onMessage, reply, onCancelReply, editing = null, onCancelEdit, onEdited }: { conversationId: string; detail: ConversationDto; onMessage: (message: MessageDto) => void; reply: MessageDto | null; onCancelReply: () => void; editing?: MessageDto | null; onCancelEdit?: () => void; onEdited?: (message: MessageDto) => void }) {
  const { t } = useI18n(); const [body,setBody]=React.useState(""); const [files,setFiles]=React.useState<PendingFile[]>([]); const [mentions,setMentions]=React.useState<Array<{id:string;name:string}>>([]); const [busy,setBusy]=React.useState(false); const [error,setError]=React.useState("");
  const [progress, setProgress] = React.useState<number[]>([]);
  const [voice, setVoice] = React.useState<VoiceState>({ mode: "idle" });
@@ -38,6 +42,12 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
   for (const f of filesRef.current) if (f.preview) URL.revokeObjectURL(f.preview);
   recorder.current?.cancel(); // never leave the microphone on behind a closed conversation
  }, []);
+
+ // an edit starts with the message's own words in the box, and ends with an empty box
+ React.useEffect(() => {
+  setBody(editing ? (editing.body ?? "") : "");
+  setError("");
+ }, [editing]);
 
  function addFiles(list: FileList | null) {
   if (!list) return;
@@ -76,8 +86,28 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
   onMessage(await response.json() as MessageDto);
  }
 
+ async function saveEdit() {
+  if (!editing || !body.trim()) return;
+  setBusy(true);
+  setError("");
+  try {
+   const response = await fetch(`/api/chat/messages/${encodeURIComponent(editing.id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ body: body.trim() }),
+   });
+   if (!response.ok) throw new Error(t("chatc.message_failed"));
+   onEdited?.(await response.json() as MessageDto);
+  } catch (e) {
+   setError(failText(e, "chatc.message_failed"));
+  } finally {
+   setBusy(false);
+  }
+ }
+
  async function submit(event: React.FormEvent) {
   event.preventDefault();
+  if (editing) return void saveEdit();
   if (busy || (!body.trim() && !files.length)) return;
   if (files.length > MAX_ATTACHMENTS_PER_MESSAGE) {
    setError(t("chatc.too_many_files"));
@@ -200,7 +230,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
   void startRecording(false);
  }
 
- const empty = !body.trim() && !files.length;
+ const empty = !body.trim() && !files.length && !editing;
  const recording = voice.mode === "recording" ? voice : null;
 
  if (recording || voice.mode === "review") {
@@ -234,6 +264,12 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
 
  return (
   <form onSubmit={submit} className="flex flex-col gap-2">
+   {editing && (
+    <div className="flex items-center justify-between gap-2 rounded-md border-s-4 border-accent bg-surface-1 px-3 py-1 text-sm">
+     <span>{t("chatc.editing")}</span>
+     <button type="button" className="min-h-11 px-2" onClick={() => onCancelEdit?.()}>{t("chatc.cancel")}</button>
+    </div>
+   )}
    {files.length > 0 && (
     <ul className="flex flex-wrap gap-2" aria-label={t("chatc.attach")}>
      {files.map((item, index) => (
@@ -275,7 +311,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
     </ul>
    )}
    <div className="flex items-end gap-2">
-    <DropdownMenu>
+    {!editing && <DropdownMenu>
      <DropdownMenuTrigger asChild>
       <button type="button" className={`${iconButton} border border-border text-xl`} aria-label={t("chat.f.attach_menu")} disabled={busy}>
        <span aria-hidden="true">+</span>
@@ -286,7 +322,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
       <DropdownMenuItem onSelect={() => fileInput.current?.click()}>{t("chat.f.attach_file")}</DropdownMenuItem>
       <DropdownMenuItem onSelect={() => void startRecording(false)}>{t("chat.f.voice_label")}</DropdownMenuItem>
      </DropdownMenuContent>
-    </DropdownMenu>
+    </DropdownMenu>}
     <input ref={mediaInput} type="file" accept="image/*,video/*" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => { addFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
     <input ref={fileInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => { addFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
     <label className="sr-only" htmlFor="chat-message">{t("chatc.message")}</label>
@@ -311,7 +347,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
       <span aria-hidden="true">🎤</span>
      </button>
     ) : (
-     <button type="submit" disabled={busy} className={`${iconButton} bg-accent text-accent-fg`} aria-label={busy ? t("chatc.sending") : t("chatc.send")}>
+     <button type="submit" disabled={busy || (editing !== null && !body.trim())} className={`${iconButton} bg-accent text-accent-fg`} aria-label={editing ? t("chatc.save") : busy ? t("chatc.sending") : t("chatc.send")}>
       <span aria-hidden="true">{busy ? "…" : "➤"}</span>
      </button>
     )}
