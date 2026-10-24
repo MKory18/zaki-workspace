@@ -21,5 +21,6 @@
   "shell.spaces.empty": "لست في أي مساحة بعد",
   "shell.spaces.error": "ما قدرنا نجيب قائمة المساحات",
   "shell.spaces.retry": "حاول من جديد",
-  "shell.inbox_unread": "الإشعارات: {count} غير مقروءة"
+  "shell.inbox_unread": "الإشعارات: {count} غير مقروءة",
+  "shell.place_unread": "{count} رسالة غير مقروءة"
 }

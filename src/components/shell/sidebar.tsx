@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import type { NavModel, NavRole, PlaceKey } from "@/lib/nav/places";
 import { DolphinMark } from "@/components/logo";
 import { ThemeDecor } from "@/components/theme/theme-decor";
+import { PlaceBadge } from "./place-badge";
 import { NavIcon } from "./nav-icons";
 import { AvatarMenu, type AvatarUser } from "./avatar-menu";
 import { SpaceSwitcher } from "./space-switcher";
@@ -37,6 +38,7 @@ export function Sidebar({
   onToggle,
   /** True after a toggle in this session: then, and only then, the width animates. */
   animated = false,
+  badges = {},
 }: {
   nav: NavModel;
   current: PlaceKey | null;
@@ -47,6 +49,8 @@ export function Sidebar({
   collapsed: boolean;
   onToggle: () => void;
   animated?: boolean;
+  /** unread numbers per place (today: «الدردشة» only) */
+  badges?: Partial<Record<PlaceKey, number>>;
 }) {
   const { t } = useI18n();
   return (
@@ -98,8 +102,12 @@ export function Sidebar({
                     active ? "bg-accent/10 font-semibold text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
                   )}
                 >
-                  <NavIcon icon={place.icon} className={cn("size-5 shrink-0", active && "text-accent")} />
+                  <span className="relative shrink-0">
+                    <NavIcon icon={place.icon} className={cn("size-5 shrink-0", active && "text-accent")} />
+                    {collapsed && <PlaceBadge count={badges[place.key]} className="absolute -end-2 -top-2" />}
+                  </span>
                   <span className={cn("truncate", collapsed && "sr-only")}>{label}</span>
+                  {!collapsed && <PlaceBadge count={badges[place.key]} className="ms-auto" />}
                 </Link>
               </li>
             );

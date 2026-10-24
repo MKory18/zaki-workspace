@@ -5,6 +5,7 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { NavPlace, PlaceKey } from "@/lib/nav/places";
 import { NavIcon } from "./nav-icons";
+import { PlaceBadge } from "./place-badge";
 import { ariaCurrent } from "./current";
 
 /**
@@ -15,7 +16,7 @@ import { ariaCurrent } from "./current";
  *
  * `data-tour="places"`: the guide's tour points here on a phone (and at the side menu on a computer).
  */
-export function BottomNav({ places, current, pathname }: { places: readonly NavPlace[]; current: PlaceKey | null; pathname: string }) {
+export function BottomNav({ places, current, pathname, badges = {} }: { places: readonly NavPlace[]; current: PlaceKey | null; pathname: string; badges?: Partial<Record<PlaceKey, number>> }) {
   const { t } = useI18n();
   return (
     <nav
@@ -38,8 +39,9 @@ export function BottomNav({ places, current, pathname }: { places: readonly NavP
                   active ? "font-semibold text-fg" : "text-fg-muted hover:text-fg",
                 )}
               >
-                <span className={cn("grid h-7 w-12 place-items-center rounded-full transition-colors", active && "bg-accent/15 text-accent")}>
+                <span className={cn("relative grid h-7 w-12 place-items-center rounded-full transition-colors", active && "bg-accent/15 text-accent")}>
                   <NavIcon icon={place.icon} className="size-5" />
+                  <PlaceBadge count={badges[place.key]} className="absolute end-1 top-0" />
                 </span>
                 <span className="max-w-full truncate">{t(place.labelKey)}</span>
               </Link>
