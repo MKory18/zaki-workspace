@@ -626,6 +626,9 @@ async function offboardAccount(actor: Actor, target: Target, transferToUserId: s
     const handedOver = await handOverResponsibilities(tx, actor, target.userId, transferee);
     const where = { userId: target.userId };
     const spaces = await tx.workspaceMember.deleteMany({ where: { ...where, workspace: { organizationId: actor.orgId } } });
+    // and out of every team of the company's spaces (a team holds only people of its space)
+    await tx.teamMember.deleteMany({ where: { ...where, team: { workspace: { organizationId: actor.orgId } } } });
+    await tx.team.updateMany({ where: { leadId: target.userId, workspace: { organizationId: actor.orgId } }, data: { leadId: null } });
     const groupChats = await tx.conversationMember.deleteMany({
       where: { ...where, conversation: { orgId: actor.orgId, kind: { not: "DM" } } },
     });

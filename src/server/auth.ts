@@ -7,7 +7,7 @@ import { getSessionUser, clearSessionCookie, setSessionCookie } from "./session"
 import type { OrgRole, WorkspaceRole } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { onboardingStateOf } from "./policy/org-settings";
-import { workspaceRoleOf } from "./workspace-role";
+import { isSpaceManager, workspaceRoleOf } from "./workspace-role";
 
 export { clearSessionCookie, setSessionCookie };
 
@@ -179,6 +179,8 @@ export interface OrgAccessContext {
   orgId: string;
   orgRole: OrgRole;
   userId: string;
+  /** Set by `requireWorkspace`: does this person see every team of the space (src/server/services/team-scope.ts)? */
+  spaceManager?: boolean;
 }
 
 /**
@@ -234,12 +236,68 @@ export async function requireWorkspace(
     }),
   ]);
   if (!orgMember || orgMember.status !== "ACTIVE") throw new ForbiddenError("not_workspace_member");
-  const ctx: OrgAccessContext = { orgId: workspace.organizationId, orgRole: orgMember.role, userId: user.id };
+  const ctx: OrgAccessContext = {
+    orgId: workspace.organizationId,
+    orgRole: orgMember.role,
+    userId: user.id,
+    spaceManager: isSpaceManager(orgMember.role, wsMember?.role),
+  };
   if (orgMember.role === "OWNER") return ctx;
   if (!wsMember) throw new ForbiddenError("not_workspace_member");
   if (roles.includes(workspaceRoleOf(orgMember.role, wsMember.role))) return ctx;
   if (orgMember.role === "ADMIN" && roles.includes("ADMIN")) return ctx;
   throw new ForbiddenError("insufficient_role");
+}
+
+/**
+ * A project the caller may open: the space guard (`requireWorkspace(project.workspaceId, roles)`), then its
+ * TEAM — a project of a team is seen by that team and the space's managers only. Somebody outside the team
+ * gets "not found", as if it did not exist (the link says nothing). Returns the context and the project's ids.
+ */
+export async function requireProjectAccess(
+  projectId: string,
+  roles: WorkspaceRole[] = ["ADMIN", "MEMBER", "GUEST"],
+): Promise<OrgAccessContext & { project: { id: string; workspaceId: string; teamId: string | null } }> {
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { id: true, workspaceId: true, teamId: true } });
+  if (!project) throw new NotFoundError("project.not_found");
+  const ctx = await requireWorkspace(project.workspaceId, roles);
+  if (!(await seesTeamOf(ctx.userId, project.teamId, ctx.spaceManager === true))) throw new NotFoundError("project.not_found");
+  return { ...ctx, project };
+}
+
+/** The same for a task: its space, then its project's team. */
+export async function requireTaskAccess(
+  taskId: string,
+  roles: WorkspaceRole[] = ["ADMIN", "MEMBER", "GUEST"],
+): Promise<OrgAccessContext & { task: { id: string; workspaceId: string; projectId: string; teamId: string | null } }> {
+  const task = await db.task.findUnique({ where: { id: taskId }, select: { id: true, workspaceId: true, projectId: true, project: { select: { teamId: true } } } });
+  if (!task) throw new NotFoundError("task.not_found");
+  const ctx = await requireWorkspace(task.workspaceId, roles);
+  const teamId = task.project?.teamId ?? null;
+  if (!(await seesTeamOf(ctx.userId, teamId, ctx.spaceManager === true))) throw new NotFoundError("task.not_found");
+  return { ...ctx, task: { id: task.id, workspaceId: task.workspaceId, projectId: task.projectId, teamId } };
+}
+
+/**
+ * The space guard plus the TEAM of the thing being opened (a project's `teamId`, or the project's of a board, a
+ * column, a task, a comment): outside the team → "not found". Use it wherever `requireWorkspace` guarded a
+ * project-bound row.
+ */
+export async function requireTeamWork(
+  workspaceId: string,
+  teamId: string | null | undefined,
+  roles: WorkspaceRole[] = ["ADMIN", "MEMBER", "GUEST"],
+  notFound = "not_found",
+): Promise<OrgAccessContext> {
+  const ctx = await requireWorkspace(workspaceId, roles);
+  if (!(await seesTeamOf(ctx.userId, teamId ?? null, ctx.spaceManager === true))) throw new NotFoundError(notFound);
+  return ctx;
+}
+
+/** No team, a manager, or a member of the team (one query at most). Kept here so auth.ts imports no service. */
+async function seesTeamOf(userId: string, teamId: string | null, manager: boolean): Promise<boolean> {
+  if (!teamId || manager) return true;
+  return !!(await db.teamMember.findUnique({ where: { teamId_userId: { teamId, userId } }, select: { id: true } }));
 }
 
 export async function audit(

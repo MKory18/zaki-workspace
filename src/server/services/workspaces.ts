@@ -262,6 +262,9 @@ export async function changeWorkspaceMembers(
     }
     if (remove.length) {
       await tx.workspaceMember.deleteMany({ where: { workspaceId, userId: { in: remove } } });
+      // and out of the space's teams (a team holds only people of its space), and no longer leading one
+      await tx.teamMember.deleteMany({ where: { userId: { in: remove }, team: { workspaceId } } });
+      await tx.team.updateMany({ where: { workspaceId, leadId: { in: remove } }, data: { leadId: null } });
       // and out of the space's topics: a row left behind kept feeding them its messages (review A3)
       const rows = await tx.conversationMember.findMany({
         where: { userId: { in: remove }, conversation: { spaceId: workspaceId } },

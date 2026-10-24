@@ -20,9 +20,10 @@ describe("timeline authorization ordering (P1 regression)", () => {
   const page = read("src", "app", "(app)", "projects", "[id]", "timeline", "page.tsx");
 
   it("API route authorizes before fetching timeline data", () => {
-    const ws = route.indexOf("await requireWorkspace");
+    // the space AND the project's team (teams inside a space, 2026-10-25): requireTeamWork
+    const ws = route.indexOf("await requireTeamWork");
     const data = route.indexOf("await getProjectTimeline");
-    const resolve = route.indexOf("workspaceId: true");
+    const resolve = route.indexOf("workspaceId: true, teamId: true");
     expect(ws).toBeGreaterThan(-1);
     expect(resolve).toBeGreaterThan(-1);
     // workspace resolve + requireWorkspace must both precede the data fetch
@@ -31,9 +32,10 @@ describe("timeline authorization ordering (P1 regression)", () => {
   });
 
   it("SSR page checks workspace scope before fetching timeline data", () => {
-    const scope = page.indexOf("wsScope.includes");
+    // the space AND the project's team: canSeeProject over the person's work scope
+    const scope = page.indexOf("canSeeProject(scope, project)");
     const data = page.indexOf("await getProjectTimeline");
-    const resolve = page.indexOf("workspaceId: true");
+    const resolve = page.indexOf("workspaceId: true, teamId: true");
     expect(scope).toBeGreaterThan(-1);
     expect(resolve).toBeGreaterThan(-1);
     expect(resolve).toBeLessThan(data);

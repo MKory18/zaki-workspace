@@ -60,6 +60,7 @@ export default async function ListPage({
         await queryTasksForView({
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
+          visible: ctx.visible,
           assigneeId: assigneeId === "__none__" ? undefined : assigneeId,
           priority: validPriority as ViewTask["priority"] | undefined,
           search: q || undefined,

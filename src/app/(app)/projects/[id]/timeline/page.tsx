@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { db } from "@/server/db";
 import { pageUser } from "@/server/auth";
-import { accessibleWorkspaceIds } from "@/server/services/access";
+import { canSeeProject, loadWorkScope } from "@/server/services/team-scope";
 import { getProjectTimeline } from "@/server/services/timeline";
 import { TimelineGantt } from "@/components/timeline-gantt";
 import { getServerT } from "@/lib/i18n/server";
@@ -11,13 +11,12 @@ export default async function TimelinePage({ params }: { params: { id: string } 
   const { t } = await getServerT();
   const user = await pageUser();
   if (!user) redirect("/login");
-  const wsScope = await accessibleWorkspaceIds(user.id);
-  // authorize BEFORE fetching data: resolve the project's workspace first
+  const scope = await loadWorkScope(user.id);
+  // authorize BEFORE fetching data: resolve the project's space and team first
   const project = await db.project
-    .findUnique({ where: { id: params.id }, select: { workspaceId: true } })
+    .findUnique({ where: { id: params.id }, select: { workspaceId: true, teamId: true } })
     .catch(() => null);
-  const inScope =
-    project && wsScope.includes(project.workspaceId) ? await getProjectTimeline(params.id).catch(() => null) : null;
+  const inScope = project && canSeeProject(scope, project) ? await getProjectTimeline(params.id).catch(() => null) : null;
   if (!inScope) return <div className="p-6 text-sm text-fg-muted">{t("timeline.not_found")}</div>;
 
   return (

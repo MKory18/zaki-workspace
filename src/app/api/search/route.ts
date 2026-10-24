@@ -3,7 +3,7 @@ import { db } from "@/server/db";
 import { requireUser } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { ForbiddenError } from "@/server/auth";
-import { accessibleWorkspaceIds } from "@/server/services/access";
+import { loadWorkScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 
 /** Strip LIKE wildcards so user input is a literal substring. */
 function sanitize(q: string): string {
@@ -31,7 +31,9 @@ export async function GET(req: Request) {
     const orgIds = memberships.map((m) => m.organizationId);
     if (orgIds.length === 0) throw new ForbiddenError("not_org_member");
 
-    const workspaceIds = await accessibleWorkspaceIds(user.id);
+    // the spaces they may open and, inside a space with teams, the space's own work and their teams'
+    const scope = await loadWorkScope(user.id);
+    const workspaceIds = scopeSpaceIds(scope);
     if (workspaceIds.length === 0) return NextResponse.json({ tasks: [], projects: [] });
 
     const contains = { contains: q, mode: "insensitive" as const };
@@ -41,6 +43,7 @@ export async function GET(req: Request) {
         where: {
           orgId: { in: orgIds },
           workspaceId: { in: workspaceIds },
+          AND: [taskVisibleWhere(scope)],
           archived: false,
           title: contains,
         },
@@ -58,6 +61,7 @@ export async function GET(req: Request) {
       db.project.findMany({
         where: {
           workspaceId: { in: workspaceIds },
+          AND: [projectVisibleWhere(scope)],
           name: contains,
         },
         orderBy: [{ createdAt: "desc" }],

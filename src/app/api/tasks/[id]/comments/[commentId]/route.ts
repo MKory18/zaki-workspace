@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ForbiddenError, NotFoundError, requireWorkspace } from "@/server/auth";
+import { ForbiddenError, NotFoundError, requireTeamWork } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { db } from "@/server/db";
 import { parseJson } from "@/server/validation";
@@ -12,7 +12,7 @@ const editSchema = z.object({
 async function loadTaskComment(taskId: string, commentId: string) {
   const task = await db.task.findFirst({
     where: { id: taskId },
-    select: { id: true, workspaceId: true },
+    select: { id: true, workspaceId: true, project: { select: { teamId: true } } },
   });
   if (!task) throw new NotFoundError("task.not_found");
   const comment = await db.taskComment.findFirst({
@@ -28,7 +28,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string; co
   return withApi(async () => {
     const input = await parseJson(editSchema, req);
     const { task, comment } = await loadTaskComment(params.id, params.commentId);
-    const ctx = await requireWorkspace(task.workspaceId, ["ADMIN", "MEMBER"]);
+    const ctx = await requireTeamWork(task.workspaceId, task.project.teamId, ["ADMIN", "MEMBER"], "task.not_found");
     if (comment.authorId !== ctx.userId) throw new ForbiddenError("comment.not_yours");
     const updated = await db.taskComment.update({
       where: { id: comment.id },
@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string; co
 export async function DELETE(_req: Request, { params }: { params: { id: string; commentId: string } }) {
   return withApi(async () => {
     const { task, comment } = await loadTaskComment(params.id, params.commentId);
-    const ctx = await requireWorkspace(task.workspaceId, ["ADMIN", "MEMBER"]);
+    const ctx = await requireTeamWork(task.workspaceId, task.project.teamId, ["ADMIN", "MEMBER"], "task.not_found");
     if (comment.authorId !== ctx.userId) throw new ForbiddenError("comment.not_yours");
     await db.taskComment.delete({ where: { id: comment.id } });
     return NextResponse.json({ ok: true });

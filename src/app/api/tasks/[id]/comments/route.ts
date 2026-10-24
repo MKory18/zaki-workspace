@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { NotFoundError, requireWorkspace } from "@/server/auth";
+import { NotFoundError, requireTeamWork } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { dispatchEvent } from "@/server/services/n8n";
@@ -22,6 +22,7 @@ export async function POST(
       select: {
         id: true,
         workspaceId: true,
+        project: { select: { teamId: true } },
         number: true,
         assigneeId: true,
         creatorId: true,
@@ -30,7 +31,7 @@ export async function POST(
     });
     if (!task) throw new NotFoundError("task.not_found");
     // writing needs a member of the space: an external partner (GUEST) only reads
-    const ctx = await requireWorkspace(task.workspaceId, ["ADMIN", "MEMBER"]);
+    const ctx = await requireTeamWork(task.workspaceId, task.project.teamId, ["ADMIN", "MEMBER"], "task.not_found");
     const comment = await db.taskComment.create({
       data: { taskId: task.id, authorId: ctx.userId, body: input.body },
       include: { author: { select: { id: true, name: true } } },
@@ -56,10 +57,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return withApi(async () => {
     const task = await db.task.findFirst({
       where: { id: params.id },
-      select: { workspaceId: true },
+      select: { workspaceId: true, project: { select: { teamId: true } } },
     });
     if (!task) throw new NotFoundError("task.not_found");
-    await requireWorkspace(task.workspaceId);
+    await requireTeamWork(task.workspaceId, task.project.teamId, undefined, "task.not_found");
     const comments = await db.taskComment.findMany({
       where: { taskId: params.id },
       orderBy: { createdAt: "desc" },

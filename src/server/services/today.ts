@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { actorCan, type Actor } from "@/server/policy/actor";
-import { accessibleWorkspaceIds } from "@/server/services/access";
+import { loadWorkScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { fmtLongDate, fmtRelative } from "@/lib/format";
 import { enumLabel } from "@/lib/i18n/enums";
@@ -81,8 +81,9 @@ export async function getToday(actor: Actor, opts: { now?: Date } = {}): Promise
   const [org, me, accessible] = await Promise.all([
     db.organization.findUnique({ where: { id: actor.orgId }, select: { timezone: true } }),
     db.user.findUnique({ where: { id: actor.userId }, select: { name: true } }),
-    accessibleWorkspaceIds(actor.userId),
+    loadWorkScope(actor.userId),
   ]);
+  const scope = accessible;
 
   // the company's clock
   const timeZone = resolveTimeZone(org?.timezone);
@@ -94,15 +95,15 @@ export async function getToday(actor: Actor, opts: { now?: Date } = {}): Promise
 
   // the spaces of THIS company that the person can open, and the ones where they may change things
   // (their own row in a space says what they are there; the owner has none and may change everything)
-  const [spaces, rows] = accessible.length
+  const [spaces, rows] = scopeSpaceIds(scope).length
     ? await Promise.all([
         db.workspace.findMany({
-          where: { id: { in: accessible }, organizationId: actor.orgId },
+          where: { id: { in: scopeSpaceIds(scope) }, organizationId: actor.orgId },
           select: { id: true, name: true },
           orderBy: [{ name: "asc" }, { id: "asc" }],
         }),
         db.workspaceMember.findMany({
-          where: { userId: actor.userId, workspaceId: { in: accessible } },
+          where: { userId: actor.userId, workspaceId: { in: scopeSpaceIds(scope) } },
           select: { workspaceId: true, role: true },
         }),
       ])
@@ -124,7 +125,14 @@ export async function getToday(actor: Actor, opts: { now?: Date } = {}): Promise
   });
 
   // every query below carries the company and the allow-list of spaces; an empty list matches nothing
-  const open = { orgId: actor.orgId, workspaceId: { in: spaceIds }, archived: false, completedAt: null } satisfies Prisma.TaskWhereInput;
+  // and inside a space with teams, only the space's own work and the person's teams' (a manager sees all)
+  const open = {
+    orgId: actor.orgId,
+    workspaceId: { in: spaceIds },
+    archived: false,
+    completedAt: null,
+    AND: [taskVisibleWhere(scope)],
+  } satisfies Prisma.TaskWhereInput;
   const mine = { ...open, assigneeId: actor.userId } satisfies Prisma.TaskWhereInput;
   const overdueWhere = { ...mine, dueDate: { lt: todayStart } } satisfies Prisma.TaskWhereInput;
   const todayWhere = { ...mine, dueDate: { gte: todayStart, lt: tomorrowStart } } satisfies Prisma.TaskWhereInput;
@@ -159,6 +167,7 @@ export async function getToday(actor: Actor, opts: { now?: Date } = {}): Promise
     const found = await db.project.findMany({
       where: {
         workspaceId: { in: spaceIds },
+        AND: [projectVisibleWhere(scope)],
         status: { in: [...LIVE_PROJECT_STATUSES] },
         ...(actor.isExternal ? { tasks: { some: counted } } : {}),
       },
@@ -217,6 +226,7 @@ export async function getToday(actor: Actor, opts: { now?: Date } = {}): Promise
     const found = await db.project.findMany({
       where: {
         workspaceId: { in: writable.map((s) => s.id) },
+        AND: [projectVisibleWhere(scope)],
         status: { notIn: [...CLOSED_PROJECT_STATUSES] },
         boards: { some: usableBoard },
       },

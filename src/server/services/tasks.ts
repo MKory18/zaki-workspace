@@ -1,4 +1,5 @@
 import { Prisma, type Task } from "@prisma/client";
+import { userSeesProject } from "./team-scope";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
 import { AR } from "@/lib/i18n/dict";
@@ -144,9 +145,12 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
         id: input.projectId,
         workspace: { id: input.workspaceId, organizationId: actor.orgId },
       },
-      select: { id: true },
+      select: { id: true, workspaceId: true, teamId: true },
     });
     if (!chain) throw new NotFoundError("project.not_found");
+    // a project of a team takes tasks only from that team and the space's managers (the route, an idea
+    // converted to a task, a quick add: every caller comes through here)
+    if (chain.teamId && !(await userSeesProject(actor.userId, chain))) throw new NotFoundError("project.not_found");
 
     const board = await tx.board.findFirst({
       where: { id: input.boardId, projectId: input.projectId },
@@ -173,6 +177,8 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
       });
       if (!member) throw new ForbiddenError("assignee.not_member");
       if (member.status !== "ACTIVE") throw new ForbiddenError("assignee.not_active");
+      // a team's task goes to somebody who sees that team's work (its members and the space's managers)
+      if (chain.teamId && !(await userSeesProject(input.assigneeId, chain))) throw new ForbiddenError("assignee.not_in_team");
     }
 
     const number = await nextTaskNumber(actor.orgId, tx);
@@ -394,6 +400,10 @@ export async function setTaskCompletion(
 // ---------- reads ----------
 
 export interface ListFilters {
+  /** The space the caller passed the guard for: nothing outside it is listed. */
+  workspaceId: string;
+  /** Which of its projects (the teams the caller sees: `teamFilterInSpace`). */
+  project?: Prisma.ProjectWhereInput;
   projectId?: string;
   boardId?: string;
   assigneeId?: string;
@@ -405,6 +415,9 @@ export interface ListFilters {
 export async function listTasks(actor: ActorContext, filters: ListFilters): Promise<TaskDTO[]> {
   const where: Prisma.TaskWhereInput = {
     orgId: actor.orgId,
+    // before teams this listed the whole company's tasks for anyone in ANY one space: now only that space
+    workspaceId: filters.workspaceId,
+    ...(filters.project && Object.keys(filters.project).length ? { project: filters.project } : {}),
     archived: false,
     projectId: filters.projectId,
     boardId: filters.boardId,

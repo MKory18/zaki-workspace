@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireWorkspace, audit } from "@/server/auth";
 import { withApi } from "@/server/api";
+import { teamFilterInSpace } from "@/server/services/team-scope";
 import { parseJson, priorities, taskTypes } from "@/server/validation";
 import { createTask, listTasks } from "@/server/services/tasks";
 import { dispatchEvent } from "@/server/services/n8n";
@@ -46,6 +47,9 @@ export async function GET(req: Request) {
     const ctx = await requireWorkspace(filters.workspaceId);
     if (filters.overdue) requireValidOverdue();
     const tasks = await listTasks(ctx, {
+      // the space the caller was checked for, and only the projects they see in it (teams)
+      workspaceId: filters.workspaceId,
+      project: await teamFilterInSpace(ctx.userId, filters.workspaceId, ctx.spaceManager === true),
       projectId: filters.projectId,
       boardId: filters.boardId,
       assigneeId: filters.assigneeId,

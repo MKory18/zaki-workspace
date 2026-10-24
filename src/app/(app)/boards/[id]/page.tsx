@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { pageUser } from "@/server/auth";
 import { db } from "@/server/db";
-import { accessibleWorkspaceIds } from "@/server/services/access";
+import { loadWorkScope, projectVisibleWhere } from "@/server/services/team-scope";
 import { TASK_INCLUDE } from "@/server/services/tasks";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { BoardView, type TaskCardData } from "@/components/board-view";
@@ -16,9 +16,10 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
   const user = await pageUser();
   if (!user) return null;
 
-  const accessible = await accessibleWorkspaceIds(user.id);
+  // its project's space and team: another team's board is «not found»
+  const scope = await loadWorkScope(user.id);
   const board = await db.board.findFirst({
-    where: { id: params.id, project: { workspaceId: { in: accessible.length ? accessible : ["__none__"] } } },
+    where: { id: params.id, project: projectVisibleWhere(scope) },
     include: {
       project: {
         select: {

@@ -4,8 +4,9 @@ import { z } from "zod";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { db } from "@/server/db";
-import { NotFoundError, ForbiddenError, requireWorkspace } from "@/server/auth";
+import { NotFoundError, ForbiddenError, requireTeamWork } from "@/server/auth";
 import { audit } from "@/server/auth";
+import { moveProjectToTeam } from "@/server/services/teams";
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
@@ -15,15 +16,17 @@ const patchSchema = z.object({
   startDate: z.coerce.date().optional().nullable(),
   targetDate: z.coerce.date().optional().nullable(),
   departmentId: z.string().min(1).optional().nullable(),
+  /** Into a team of the space, or back to the space as a whole (null). A space manager only. */
+  teamId: z.string().min(1).optional().nullable(),
 });
 
 /** PATCH: project fields incl. department binding (dept must live in the project's org). */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const input = await parseJson(patchSchema, req);
-    const project = await db.project.findUnique({ where: { id: params.id }, select: { id: true, workspaceId: true } });
+    const project = await db.project.findUnique({ where: { id: params.id }, select: { id: true, workspaceId: true, teamId: true } });
     if (!project) throw new NotFoundError("project.not_found");
-    const ctx = await requireWorkspace(project.workspaceId, ["ADMIN", "MEMBER"]);
+    const ctx = await requireTeamWork(project.workspaceId, project.teamId, ["ADMIN", "MEMBER"], "project.not_found");
 
     if (input.departmentId) {
       const dept = await db.department.findFirst({
@@ -31,6 +34,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         select: { id: true },
       });
       if (!dept) throw new ForbiddenError("dept.not_found");
+    }
+
+    // moving between teams changes who sees the project: a manager decides it, through the one service
+    if (input.teamId !== undefined && input.teamId !== project.teamId) {
+      await moveProjectToTeam(ctx, project, input.teamId);
     }
 
     const data: Record<string, unknown> = {};
