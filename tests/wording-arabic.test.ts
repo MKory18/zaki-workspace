@@ -1,6 +1,6 @@
 /**
  * WP-ARABIC1: the wording decisions of 04-REVIEW-A-ARABIC.md, pinned so a later edit cannot quietly
- * undo them — «ركّب» is «ثبّت», «زكي» is «زاكي», the archive is «قريبًا», «المؤسسة» is «الشركة», the
+ * undo them — «ركّب» is «ثبّت», «زكي» is «زاكي», no «قريبًا» archive promise, «المؤسسة» is «الشركة», the
  * password rule names the English letter, and no «ـاً» spelling comes back.
  */
 import { describe, expect, it } from "vitest";
@@ -18,9 +18,15 @@ describe("WP-ARABIC1: the words the review corrected", () => {
     expect(AR["onboarding.password_rule"]).toContain("حرف إنجليزي ورقم، ومختلفة عن الحالية.");
   });
 
-  it("the archive is promised as «قريبًا», and an offboarded person keeps their messages «كما هي»", () => {
-    expect(AR["onboarding.notice_archive"]).toContain("قريبًا");
-    expect(AR["onboarding.notice_archive"]).toContain("لحد ذلك");
+  it("nothing promises the archive «قريبًا» or says a delete erases the text (both are false now), and an offboarded person keeps their messages «كما هي»", () => {
+    // the code keeps every edit's old text and every deleted body, and the owner's archive exists:
+    // the old point of the notice («قريبًا… والحذف بيمسحه») was removed, the notice stays general
+    expect(AR["onboarding.notice_archive"]).toBeUndefined();
+    for (const [key, text] of Object.entries(AR)) {
+      expect(text, key).not.toMatch(/الحذف بيمسح|قريبًا: أي رسالة/);
+    }
+    for (const a of ARTICLES) expect(articleText(a, "staff"), a.slug).not.toMatch(/الحذف بيمسح|قريبًا: أي رسالة/);
+    expect(AR["onboarding.notice_kept"]).toContain("من حق مالك النظام يطّلع عليها");
     expect(AR["members.offboarded_note"]).toContain("كما هي");
     expect(AR["members.act_offboard_hint"]).toContain("كما هي");
     expect(AR["members.confirm_offboard_body"]).toContain("كما هي");

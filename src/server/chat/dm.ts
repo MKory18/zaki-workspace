@@ -6,9 +6,9 @@ import { writeSystemMessage } from "@/server/chat/system";
 import { systemSentenceOfBody } from "@/lib/chat/system-sentence";
 
 /**
- * DMs. A DM is its two people; nobody else reads it, not even the OWNER (his silent eye covers
- * spaces and topics, and the design says DMs are the one thing he does not open). A person can
- * only open a DM in their own company; guests have no DMs at all.
+ * DMs. A DM is its two people; nobody else WRITES in it. The OWNER reads it too, silently (decision
+ * D-2, 2026-10-24: he reads everything; his reading leaves no mark). A person can only open a DM in
+ * their own company; guests have no DMs at all.
  *
  * `dmKey` is `min|max` of the two user ids in plain code-unit order — the same key the data move
  * wrote, so the second person opening the same DM finds the row instead of creating a twin.

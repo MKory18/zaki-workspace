@@ -149,6 +149,8 @@ export interface OversightConversationDto {
   spaceName: string | null;
   membersCount: number;
   lastMessageAt: string | null;
+  /** a DM's two people («خاص: سارة وأحمد») */
+  names?: string[];
 }
 
 export type ArchiveType = "deleted" | "edited" | "moderation" | "closed";
