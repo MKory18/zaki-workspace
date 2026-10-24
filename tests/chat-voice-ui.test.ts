@@ -31,6 +31,18 @@ describe("the composer", () => {
   });
 });
 
+describe("editing in the same box", () => {
+  it("«تعديل» loads the message into the composer: a banner with «إلغاء», no «+» and no microphone, «حفظ» to send", () => {
+    const editing = { id: "m1", kind: "TEXT", body: "قديم", deleted: false, edited: false, pinned: false, mine: true, authorId: "u1", authorName: "ليلى", createdAt: "2026-01-01T00:00:00Z", mentions: [], attachments: [], reactions: [] } as MessageDto;
+    const html = withI18n(React.createElement(ChatComposer, { conversationId: "c1", detail, reply: null, onMessage: () => undefined, onCancelReply: () => undefined, editing, onCancelEdit: () => undefined, onEdited: () => undefined }));
+    expect(html).toContain("تعديل الرسالة");
+    expect(html).toContain("إلغاء");
+    expect(html).not.toContain('aria-label="إرفاق"');
+    expect(html).not.toContain('aria-label="تسجيل رسالة صوتية"');
+    expect(html).toContain('aria-label="حفظ"');
+  });
+});
+
 describe("the voice upload and send", () => {
   it("the upload form carries the take, its kind, its length and its waveform", () => {
     const form = createVoiceUploadFormData({ blob: new Blob(["x"], { type: "audio/webm" }), mime: "audio/webm", durationMs: 4200.4, peaks: [1, 50, 99] });
@@ -86,7 +98,7 @@ describe("the voice note in a bubble", () => {
     const att = { id: "a1", kind: "AUDIO" as const, name: "voice.webm", mime: "audio/webm", size: 10, url: "/api/chat/attachments/a1", durationMs: 2000, peaks: [5, 50] };
     const base: MessageDto = { id: "m1", kind: "VOICE", body: null, deleted: false, edited: false, pinned: false, mine: false, authorId: "u1", authorName: "ليلى", createdAt: "2026-01-01T00:00:00Z", mentions: [], attachments: [att], reactions: [] };
     const noop = () => undefined;
-    const props = { canModerate: false, onReply: noop, onReact: noop, onPin: noop, onEdit: noop, onDelete: noop };
+    const props = { canModerate: false, onReact: noop, onAction: noop };
     const voice = renderToStaticMarkup(React.createElement(MessageItem, { ...props, message: base }));
     expect(voice).toContain("data-voice");
     expect(voice).not.toContain("تنزيل voice.webm");

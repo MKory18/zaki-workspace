@@ -8,7 +8,7 @@ import type { MessageDto } from "../src/server/chat/dto";
 const base: MessageDto = { id: "m1", kind: "TEXT", body: "نص", deleted: false, edited: false, pinned: false, mine: true, authorId: "u1", authorName: "ليلى", createdAt: "2026-01-01T00:00:00Z", mentions: [], attachments: [], reactions: [] };
 const noop = () => undefined;
 const render = (message: MessageDto, extra: Record<string, unknown> = {}) =>
-  renderToStaticMarkup(React.createElement(MessageItem, { message, canModerate: false, onReply: noop, onReact: noop, onPin: noop, onEdit: noop, onDelete: noop, ...extra }));
+  renderToStaticMarkup(React.createElement(MessageItem, { message, canModerate: false, onReact: noop, onAction: noop, ...extra }));
 
 describe("DM ticks on my own message", () => {
   it("✓ sent and ✓✓ delivered are muted; ✓✓ read is in the info colour; each says its word to a screen reader", () => {

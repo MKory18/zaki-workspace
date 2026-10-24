@@ -111,3 +111,8 @@ export function useToast(): ToastApi {
   if (!ctx) throw new Error("useToast requires ToastProvider");
   return ctx;
 }
+
+/** The toast API when a ToastProvider is above, else null (a screen that is also rendered on its own, in a test). */
+export function useOptionalToast(): ToastApi | null {
+  return useContext(ToastCtx);
+}
