@@ -97,6 +97,14 @@ describe("the root layout paints the theme from the cookie", () => {
     }
   });
 
+  it("«الأرقام»: the zk-digits cookie is painted as data-digits (anything unknown, or nothing, is «latin»)", () => {
+    expect((render().props as Record<string, unknown>)["data-digits"]).toBe("latin");
+    jar.set("zk-digits", "arabic");
+    expect((render().props as Record<string, unknown>)["data-digits"]).toBe("arabic");
+    jar.set("zk-digits", "hindi");
+    expect((render().props as Record<string, unknown>)["data-digits"]).toBe("latin");
+  });
+
   it("the decoration level comes from the zk-decor cookie (anything unknown is the light touch)", () => {
     jar.set("zk-decor", "off");
     expect(render().props["data-decor"]).toBe("off");

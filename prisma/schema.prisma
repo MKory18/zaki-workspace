@@ -33,6 +33,7 @@ model User {
   lastSeenAt   DateTime?
   locale       String   @default("ar") // ar | fr (en reserved)
   theme        String   @default("system") // light | dark | system
+  digits       String   @default("latin") // latin | arabic: how 0-9 are drawn (src/lib/digits.ts)
   avatarUrl    String?
   jobTitle     String? // وظيفي: professional title shown on profile (e.g. "Project Manager")
   bio          String?
