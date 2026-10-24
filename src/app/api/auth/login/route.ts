@@ -7,6 +7,7 @@ import { LoginGuard } from "@/server/login-guard";
 import { loginSchema } from "@/server/validation";
 import { onboardingStateOf } from "@/server/policy/org-settings";
 import { THEME_COOKIE, isChosenTheme, prefCookieOptions, themeOf } from "@/lib/themes/registry";
+import { DIGITS_COOKIE, digitsOf } from "@/lib/digits";
 
 /**
  * Brute-force guard (policy and reasoning live in login-guard.ts): the (typed text, address) pair,
@@ -35,6 +36,7 @@ async function findAccount(identifier: string) {
       mustChangePassword: true,
       transparencyVersion: true,
       theme: true,
+      digits: true,
       memberships: {
         where: { status: "ACTIVE" },
         orderBy: { createdAt: "asc" },
@@ -102,6 +104,8 @@ export async function POST(req: Request) {
       // the person's saved theme comes with them to this device ("system" = never chose: no cookie); a retired
       // key is written as the theme it now means
       if (isChosenTheme(user.theme)) res.cookies.set(THEME_COOKIE, themeOf(user.theme), prefCookieOptions(process.env.NODE_ENV === "production"));
+      // and how they see 0-9 (always set: «123» is a choice too, and this device may hold the other one)
+      res.cookies.set(DIGITS_COOKIE, digitsOf(user.digits), prefCookieOptions(process.env.NODE_ENV === "production"));
       return res;
     } finally {
       attempt.done();

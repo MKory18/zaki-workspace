@@ -264,3 +264,57 @@ html {
     opacity: 1;
   }
 }
+
+/* ── «الأرقام: 123 / ١٢٣» (src/lib/digits.ts) ──────────────────────────────────────────────────────
+   The page always holds 0-9. With <html data-digits="arabic"> the font "Zaki Digits" — the ten Arabic-Indic
+   digits of IBM Plex Sans Arabic, drawn for 0-9 only (`unicode-range`), one file per weight, ~1 KB each,
+   public/fonts (OFL) — comes first in every text stack, so a browser DRAWS 0-9 as ٠-٩. Nothing is rewritten:
+   a copy, a search, the server's HTML are still 0-9, and a field keeps the Western shapes (what is typed is
+   what is stored). A browser that never needs the font (latin) never downloads it. */
+@font-face {
+  font-family: "Zaki Digits";
+  src: url("/fonts/zaki-digits-400.woff2") format("woff2");
+  font-weight: 100 450;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: "Zaki Digits";
+  src: url("/fonts/zaki-digits-500.woff2") format("woff2");
+  font-weight: 451 550;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: "Zaki Digits";
+  src: url("/fonts/zaki-digits-600.woff2") format("woff2");
+  font-weight: 551 650;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: "Zaki Digits";
+  src: url("/fonts/zaki-digits-700.woff2") format("woff2");
+  font-weight: 651 1000;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+}
+[data-digits="arabic"] body {
+  font-family: "Zaki Digits", var(--font-plex), "Segoe UI", Tahoma, sans-serif;
+}
+[data-digits="arabic"] :is(h1, h2, h3),
+[data-digits="arabic"] .font-display {
+  font-family: "Zaki Digits", var(--font-display);
+}
+[data-digits="arabic"] .font-sans {
+  font-family: "Zaki Digits", var(--font-plex), "Segoe UI", Tahoma, sans-serif;
+}
+[data-digits="arabic"] .font-brand,
+[data-digits="arabic"] .zk-wordmark {
+  font-family: "Zaki Digits", var(--font-lalezar), var(--font-display);
+}
+/* what is typed stays what is shown and stored; the «123» sample of the choice is itself */
+[data-digits="arabic"] :is(input, textarea, select),
+[data-digits="arabic"] .zk-digits-sample {
+  font-family: var(--font-plex), "Segoe UI", Tahoma, sans-serif;
+}
