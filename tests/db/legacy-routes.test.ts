@@ -18,6 +18,8 @@ vi.mock("next/navigation", () => ({
 
 import TodayPage from "@/app/(app)/page";
 import ChatPage from "@/app/(app)/chat/page";
+import ChatConversationPage from "@/app/(app)/chat/[id]/page";
+import ArchivePage from "@/app/(app)/archive/page";
 import MyWorkPage from "@/app/(app)/my-work/page";
 import ProjectsPage from "@/app/(app)/projects/page";
 import ProjectPage from "@/app/(app)/projects/[id]/page";
@@ -49,7 +51,7 @@ import OnboardingPage from "@/app/onboarding/page";
 import { ARTICLES } from "@/lib/guide/articles";
 import { LEGACY_ROUTES, type NavRole } from "@/lib/nav/places";
 import { requireActor } from "@/server/policy/actor";
-import { loginAs, makeProject, makeTask, makeTeam, makeUser, makeWorkspace, uid } from "./helpers";
+import { db, loginAs, makeProject, makeTask, makeTeam, makeUser, makeWorkspace, uid } from "./helpers";
 import { html } from "./pages-access-helpers";
 import { resolveServerTree } from "./today-helpers";
 
@@ -75,8 +77,11 @@ import { resolveServerTree } from "./today-helpers";
 
 const APP_DIR = path.resolve(__dirname, "../../src/app");
 
-/** The pages of the shell that are not an old address: the in-app guide (Phase 2), reached from the help button. */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]"] as const;
+/**
+ * The pages of the shell that are not an old address: the in-app guide (Phase 2), reached from the help
+ * button, and from Phase 3 one conversation (`/chat/[id]`) and the owner's archive (`/archive`).
+ */
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive"] as const;
 /** The pages outside the shell: sign-in, the first-run set-up (first company only) and the one-time onboarding. */
 const DOOR_PAGES = ["/login", "/register", "/onboarding"] as const;
 
@@ -120,6 +125,8 @@ const idOf = ({ params }: PageArgs) => ({ id: params["id"] ?? "" });
 const PAGES: Record<string, PageCall> = {
   "/": () => TodayPage(),
   "/chat": () => ChatPage(),
+  "/chat/[id]": (args) => ChatConversationPage({ params: idOf(args) }),
+  "/archive": () => ArchivePage(),
   "/my-work": ({ searchParams }) => MyWorkPage({ searchParams }),
   "/projects": ({ searchParams }) => ProjectsPage({ searchParams }),
   "/projects/[id]": (args) => ProjectPage({ params: idOf(args) }),
@@ -256,7 +263,9 @@ async function linkWorld() {
   const teamSpace = await spaceWithWork([team.admin, lead, team.member].map((person) => ({ userId: person.id })), "Team", team.member.id);
   const shared = await spaceWithWork([{ userId: team.guest.id, role: "GUEST" }, { userId: team.member.id }], "Shared", team.guest.id);
   const closed = await spaceWithWork([], "Closed", null);
-  return { ...team, lead, teamSpace, shared, closed };
+  const teamTopic = await db.conversation.create({ data: { orgId, kind: "TOPIC", spaceId: teamSpace.space.id, title: "Team topic" } });
+  const closedTopic = await db.conversation.create({ data: { orgId, kind: "TOPIC", spaceId: closed.space.id, title: "Closed topic" } });
+  return { ...team, lead, teamSpace, shared, closed, teamTopic, closedTopic };
 }
 
 type World = Awaited<ReturnType<typeof linkWorld>>;
@@ -273,6 +282,9 @@ function addressesOf(route: string, w: World): string[] {
       return [...spaces.map((s) => s.board.id), GONE].map((id) => `/boards/${id}`);
     case "/tasks/[id]":
       return [...spaces.map((s) => s.task.id), GONE].map((id) => `/tasks/${id}`);
+    case "/chat/[id]":
+      // a topic of the team's space, one of the space nobody is in, and one that is gone
+      return [w.teamTopic.id, w.closedTopic.id, GONE].map((id) => `/chat/${id}`);
     case "/u/[id]":
       return [w.owner.id, w.admin.id, w.lead.id, w.member.id, w.guest.id, GONE].map((id) => `/u/${id}`);
     case "/guide/[slug]":
