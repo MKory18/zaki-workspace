@@ -16,7 +16,7 @@ describe("DM ticks on my own message", () => {
     expect(sent).toContain('data-ticks="sent"');
     expect(sent).toContain("✓</span>");
     expect(sent).toContain("أُرسلت");
-    expect(sent).toContain("text-muted-foreground");
+    expect(sent).toContain("text-fg-muted");
 
     const deliveredHtml = render({ ...base, status: "delivered" });
     expect(deliveredHtml).toContain("✓✓");
@@ -60,5 +60,14 @@ describe("system lines", () => {
     expect(systemSentence({ k: "something_new" }, "سارة")).toBe("تحديث في المحادثة");
     expect(systemSentenceOfBody("not json", "سارة")).toBe("تحديث في المحادثة");
     expect(systemSentenceOfBody(JSON.stringify({ k: "join", p: {} }), "سارة")).toBe("انضمام سارة إلى المحادثة");
+  });
+});
+
+describe("the chat bubble's colours come from the theme", () => {
+  it("no class name that is not a theme token (text-muted-foreground, bg-background drew nothing)", async () => {
+    const { readFileSync } = await import("node:fs");
+    for (const file of ["src/components/chat/message/message-item.tsx", "src/components/chat/conversation/conversation-screen.tsx"]) {
+      expect(readFileSync(file, "utf8")).not.toMatch(/muted-foreground|bg-background|text-foreground|bg-primary/);
+    }
   });
 });
