@@ -158,7 +158,8 @@ export async function sendMessage(
     return msg;
   });
 
-  const dto = presentMessage(created, withViewer(viewerOf(facts, org), ctx.userId));
+  // my own fresh DM message starts at ✓ (sent): the screen shows it from this answer before any refetch
+  const dto = presentMessage(created, withViewer(viewerOf(facts, org), ctx.userId), facts.kind === "DM" ? "sent" : undefined);
   await notifyAfterSend(ctx, facts, conversationId, mentionIds, input.replyToId ?? null, dto);
   return dto;
 }
