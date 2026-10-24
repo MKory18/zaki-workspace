@@ -6,6 +6,11 @@ import type { Prisma } from "@prisma/client";
  * (`prisma/migrations/20261024091000_chat_data_move`), so running this on a migrated database is
  * a no-op — same ids (`ws_hq_<orgId>`, `cv_hq_<key>_<orgId>`), same keys, same policies.
  *
+ * ONE difference (review B6): the data move named the space «المقر» 🕌, this file names it «الشركة» 🏢,
+ * the product's term. A company that existed at deploy time keeps «المقر» until its owner renames
+ * the space (an ordinary space rename); the released migration is never edited, and an existing
+ * name is never overwritten here (an owner's own choice must stay).
+ *
  *   space: key "hq", slug "hq", kind HQ — every ACTIVE non-owner non-guest person (an ADMIN as
  *          space ADMIN);
  *   topics: التنبيهات (announcements, ADMINS post) · المتابعة (followup, ADMINS post) · عام ·
