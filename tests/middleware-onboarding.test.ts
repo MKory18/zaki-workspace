@@ -116,12 +116,13 @@ describe("middleware: unfinished onboarding goes to /onboarding", () => {
     const saved = process.env["APP_URL"];
     process.env["APP_URL"] = "https://workspace.zakiai.io";
     try {
-      // a hostile header: the Location is relative, so the browser stays on the address it used
+      // a hostile header: the redirect goes to APP_URL, never to the host the client wrote; and it is
+      // ABSOLUTE, because Next's adapter answers 500 for a relative Location (the bug #14 shipped)
       const hostile = await middleware(
         new NextRequest("http://localhost:3001/projects", { headers: new Headers({ host: "localhost:3001", "x-forwarded-host": "evil.example", "x-forwarded-proto": "https" }) }),
       );
       expect(hostile.status).toBe(307);
-      expect(hostile.headers.get("location")).toBe("/login?next=%2Fprojects");
+      expect(hostile.headers.get("location")).toBe("https://workspace.zakiai.io/login?next=%2Fprojects");
       // the configured public host: an absolute redirect to it, as before
       const real = await middleware(
         new NextRequest("http://localhost:3001/projects", { headers: new Headers({ host: "localhost:3001", "x-forwarded-host": "workspace.zakiai.io", "x-forwarded-proto": "https" }) }),
@@ -129,6 +130,33 @@ describe("middleware: unfinished onboarding goes to /onboarding", () => {
       const loc = new URL(real.headers.get("location") as string);
       expect(loc.origin).toBe("https://workspace.zakiai.io");
       expect(loc.pathname + loc.search).toBe("/login?next=%2Fprojects");
+    } finally {
+      if (saved === undefined) delete process.env["APP_URL"];
+      else process.env["APP_URL"] = saved;
+    }
+  });
+
+  it("every redirect's Location is an absolute URL, as Next's middleware adapter requires (new URL() with no base)", async () => {
+    const saved = process.env["APP_URL"];
+    try {
+      for (const appUrl of [undefined, "https://workspace.zakiai.io", "http://localhost:3002"]) {
+        if (appUrl === undefined) delete process.env["APP_URL"];
+        else process.env["APP_URL"] = appUrl;
+        const cases: Array<Record<string, string>> = [
+          { host: "localhost:3001" },
+          { host: "sara.localhost:3002" },
+          { host: "127.0.0.1:3002" },
+          { host: "localhost:3001", "x-forwarded-host": "evil.example", "x-forwarded-proto": "https" },
+          { host: "workspace.zakiai.io", "x-forwarded-proto": "https" },
+        ];
+        for (const headers of cases) {
+          const res = await middleware(new NextRequest("http://localhost:3001/projects", { headers: new Headers(headers) }));
+          const loc = res.headers.get("location");
+          expect(loc, `${appUrl} ${JSON.stringify(headers)}`).not.toBeNull();
+          expect(() => new URL(loc as string), `${appUrl} ${JSON.stringify(headers)} -> ${loc}`).not.toThrow();
+          expect(new URL(loc as string).pathname).toBe("/login");
+        }
+      }
     } finally {
       if (saved === undefined) delete process.env["APP_URL"];
       else process.env["APP_URL"] = saved;

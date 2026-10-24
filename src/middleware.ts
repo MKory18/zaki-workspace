@@ -106,12 +106,12 @@ function publicBase(req: NextRequest): { origin: string; host: string; proto: st
   return { origin: `${proto}://${host}`, host, proto };
 }
 
-/** The host of APP_URL (the public address the owner configured), or null when it is not set or unparsable. */
-function appUrlHost(): string | null {
+/** APP_URL (the public address the owner configured), or null when it is not set or unparsable. */
+function appUrl(): URL | null {
   const raw = (process.env["APP_URL"] ?? "").trim();
   if (!raw) return null;
   try {
-    return new URL(raw).host.toLowerCase();
+    return new URL(raw);
   } catch {
     return null;
   }
@@ -120,14 +120,17 @@ function appUrlHost(): string | null {
 function redirectTo(req: NextRequest, pathname: string): NextResponse {
   const base = publicBase(req);
   const next = nextOf(req);
-  const trusted = appUrlHost();
+  const trusted = appUrl();
   // The forwarded host is written by whoever sends the request. With APP_URL set, it is trusted only
-  // when it IS the configured public host; any other value gets a RELATIVE Location, which the browser
-  // resolves against the address it actually used (a tunnel included) — never a host a client chose
-  // (review B5: header injection / cache poisoning). Without APP_URL (local development) the old rule stays.
-  if (trusted && base && base.host.toLowerCase() !== trusted) {
-    const query = next ? `?${new URLSearchParams({ next }).toString()}` : "";
-    return new NextResponse(null, { status: 307, headers: { location: `${pathname}${query}` } });
+  // when it IS the configured public host; any other value redirects to APP_URL itself — never to a
+  // host a client chose (review B5: header injection / cache poisoning). The Location must be ABSOLUTE:
+  // Next's middleware adapter parses it with `new URL()` and answers 500 for a relative one (a relative
+  // Location shipped in #14 and turned every redirect of a non-APP_URL address into an error page).
+  // Without APP_URL (local development) the old rule stays.
+  if (trusted && base && base.host.toLowerCase() !== trusted.host.toLowerCase()) {
+    const url = new URL(pathname, trusted.origin);
+    if (next) url.searchParams.set("next", next);
+    return NextResponse.redirect(url, 307);
   }
   const url = base ? new URL(`${base.origin}${pathname}`) : req.nextUrl.clone();
   url.pathname = pathname;
