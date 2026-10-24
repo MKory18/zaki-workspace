@@ -605,8 +605,10 @@ async function openWorkOf(client: Prisma.TransactionClient, orgId: string, userI
  *    history) and every department roster of this organization;
  *  - the people they managed report to the leaver's own manager (or to nobody).
  * Nothing else is deleted: the account, the membership row and everything they wrote stay.
- * Reactivation gives NONE of this back: spaces, group chats, departments, leads and owners stay
- * where offboarding put them; the owner puts the person back where they belong.
+ * Reactivation gives NONE of this back but «الشركة»: spaces, group chats, departments, leads and owners
+ * stay where offboarding put them, and the owner puts the person back where they belong. The company
+ * space (HQ) is everybody's, so a reactivated person is back in it at once (the owner's decision,
+ * 2026-10-24; reactivateAccount → addPersonToHq).
  */
 async function offboardAccount(actor: Actor, target: Target, transferToUserId: string | null): Promise<void> {
   const transferee = transferToUserId ? await checkedTransferee(actor.orgId, target.userId, transferToUserId) : null;
@@ -628,8 +630,10 @@ async function offboardAccount(actor: Actor, target: Target, transferToUserId: s
       where: { ...where, conversation: { orgId: actor.orgId, kind: { not: "DM" } } },
     });
     const departments = await tx.departmentMember.deleteMany({ where: { ...where, department: { orgId: actor.orgId } } });
-    // out of the HQ topics too (DMs stay, the other side keeps the history): inside the same transaction
+    // out of the HQ topics too (DMs stay, the other side keeps the history): inside the same transaction,
+    // and so is its audit row (a crash between the two used to leave the person out with no trace)
     await removePersonFromHq(tx, actor.orgId, target.userId);
+    await removePersonAudit(actor.orgId, actor.userId, target.userId, tx);
     const reports = await repointReports(tx, actor.orgId, target);
     await endSessions(tx, target.userId);
     return {
@@ -650,7 +654,6 @@ async function offboardAccount(actor: Actor, target: Target, transferToUserId: s
     target: target.userId,
     meta: { from: target.status, transferTo: transferee?.userId ?? null, ...moved },
   });
-  await removePersonAudit(actor.orgId, actor.userId, target.userId);
   if (transferee && transferee.userId !== actor.userId && moved.tasks + moved.tickets + moved.routines > 0) {
     const { t } = getServerT();
     await pushNotification({

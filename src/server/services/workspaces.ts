@@ -291,8 +291,8 @@ export async function changeWorkspaceMembers(
 // ---------- deleting ----------
 
 /**
- * Deletes a space that holds no projects (and so no tasks): its rows and teams go with it. A space
- * with work in it is never deleted by this door — the work would go with it, for good — and answers
+ * Deletes a space that holds no projects (and so no tasks) and no conversations: its rows and teams go
+ * with it. A space with work or chat in it is never deleted by this door — the work would go with it, for good — and answers
  * 409 `spaces.not_empty`.
  */
 export async function deleteEmptyWorkspace(workspaceId: string): Promise<void> {
@@ -302,6 +302,9 @@ export async function deleteEmptyWorkspace(workspaceId: string): Promise<void> {
     const ws = await tx.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } });
     if (!ws) throw new NotFoundError("workspace.not_found");
     if ((await tx.project.count({ where: { workspaceId } })) > 0) throw new SpaceConflictError("spaces.not_empty");
+    // a topic (the HQ's, a migrated group's, one somebody opened) keeps the space: the database refuses
+    // too (Conversation.spaceId ON DELETE RESTRICT), but that answered a bare 409 without a reason
+    if ((await tx.conversation.count({ where: { spaceId: workspaceId } })) > 0) throw new SpaceConflictError("spaces.not_empty");
     await tx.workspace.delete({ where: { id: workspaceId } });
   });
 }

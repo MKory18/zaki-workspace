@@ -133,7 +133,7 @@ export function pause(ms: number): Promise<void> {
  * for rows whose `column` equals `value` (an id made by the test), so nothing else in the run is
  * affected. Call the returned function to remove it.
  */
-export async function failWritesWhere(table: "Routine" | "WorkspaceMember", column: string, value: string) {
+export async function failWritesWhere(table: "Routine" | "WorkspaceMember" | "AuditLog", column: string, value: string) {
   if (!/^[A-Za-z]+$/.test(column) || !/^[a-z0-9]+$/.test(value)) throw new Error("unsafe trigger argument");
   const name = `zk_fail_${uid()}`;
   await db.$executeRawUnsafe(
