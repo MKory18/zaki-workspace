@@ -47,6 +47,8 @@ describe("voice messages", () => {
     const sent = await call(messagesRoute.POST, { params: { id: dm }, body: { voice: true, attachmentIds: [up.json?.["id"]] } });
     expect(sent.status).toBeLessThan(300);
     expect(sent.json?.["kind"]).toBe("VOICE");
+    // the answer itself carries the audio: the sender's screen draws the message from it
+    expect((sent.json?.["attachments"] as unknown[] | undefined)?.[0]).toMatchObject({ kind: "AUDIO", mime: "audio/webm", durationMs: 3000 });
 
     await loginAs(t.admin.id);
     const seen = (await call(conversationRoute.GET, { url: `http://localhost/api/chat/conversations/${dm}`, params: { id: dm } })).json as unknown as ConversationDto;

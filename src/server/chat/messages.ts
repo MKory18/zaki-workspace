@@ -158,7 +158,9 @@ export async function sendMessage(
       });
     }
     await emitRealtime(tx, ctx.orgId, "message.created", { conversationId, messageId: msg.id, spaceId: facts.spaceId ?? undefined });
-    return msg;
+    // the row was read before its files were claimed: read it again so the answer carries them (the
+    // sender's screen shows the message from this answer: a voice note without its audio was an empty bubble)
+    return attachments.length ? tx.chatMessage.findUniqueOrThrow({ where: { id: msg.id }, include: messageInclude() }) : msg;
   });
 
   const dto = presentMessage(created, withViewer(viewerOf(facts, org), ctx.userId));
