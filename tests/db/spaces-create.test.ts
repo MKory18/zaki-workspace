@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import * as workspacesRoute from "@/app/api/workspaces/route";
 import { call, db, loginAs, logout, makeOrg, makeUser, uid } from "./helpers";
-import { giveSecondHome, makeSpaceWorld, notificationsOf, setStatus } from "./spaces-helpers";
+import { giveSecondHome, letOpenSpaces, makeSpaceWorld, notificationsOf, setStatus } from "./spaces-helpers";
 
 /**
- * POST /api/workspaces — opening a space needs the capability `spaces.create` (every rank but GUEST
- * has it by default; the owner can switch it off per person), the creator becomes the space ADMIN, and
- * the people chosen at creation must be ACTIVE members of the same organization.
+ * POST /api/workspaces — opening a space needs the capability `spaces.create`: the owner and the admins
+ * hold it by default, a lead or a member only when the owner switches it on for them by name (the owner's
+ * decision, 2026-10-25); the creator becomes the space ADMIN, and the people chosen at creation must be
+ * ACTIVE members of the same organization.
  */
 
 const create = (body: unknown) => call(workspacesRoute.POST, { body });
@@ -35,7 +36,7 @@ describe("POST /api/workspaces: who may open a space", () => {
     expect(await spaceNamed(name)).toBeNull();
   });
 
-  it.each(["owner", "admin", "lead", "member"] as const)(
+  it.each(["owner", "admin"] as const)(
     "a %s opens a space with no extra step (it comes with the rank); they become its ADMIN and it is theirs only",
     async (who) => {
       const w = await makeSpaceWorld();
@@ -55,9 +56,29 @@ describe("POST /api/workspaces: who may open a space", () => {
     },
   );
 
+  it.each(["lead", "member"] as const)("a %s does NOT open a space by rank any more: refused, and nothing is created", async (who) => {
+    const w = await makeSpaceWorld();
+    const name = `Not by rank ${who} ${uid()}`;
+    await loginAs(w[who].id);
+    const res = await create({ name });
+    expect(res.status).toBe(403);
+    expect(res.json?.["message"]).toBe("insufficient_role");
+    expect(await spaceNamed(name)).toBeNull();
+  });
+
+  it.each(["lead", "member"] as const)("a %s the owner switched «فتح مساحة» on for opens one, and becomes its ADMIN", async (who) => {
+    const w = await makeSpaceWorld();
+    await letOpenSpaces(w.org.id, w[who].id);
+    const name = `Granted ${who} ${uid()}`;
+    await loginAs(w[who].id);
+    expect((await create({ name })).status).toBe(201);
+    expect((await spaceNamed(name))?.members).toEqual([{ userId: w[who].id, role: "ADMIN" }]);
+  });
+
   it("an old client that still sends organizationId for its own organization keeps working", async () => {
     const w = await makeSpaceWorld();
     const name = `Legacy ${uid()}`;
+    await letOpenSpaces(w.org.id, w.member.id);
     await loginAs(w.member.id);
     expect((await create({ organizationId: w.org.id, name })).status).toBe(201);
     expect((await spaceNamed(name))?.organizationId).toBe(w.org.id);
@@ -71,7 +92,7 @@ describe("POST /api/workspaces: the capability can be switched off per person", 
       data: { revokedCapabilities: ["spaces.create"] },
     });
 
-  it.each(["admin", "lead", "member"] as const)("a %s whose spaces.create is switched off is refused, and nothing is created", async (who) => {
+  it.each(["admin"] as const)("a %s whose spaces.create is switched off is refused, and nothing is created", async (who) => {
     const w = await makeSpaceWorld();
     await revoke(w.org.id, w[who].id);
     const name = `Revoked ${uid()}`;
@@ -105,6 +126,7 @@ describe("POST /api/workspaces: the capability can be switched off per person", 
     const w = await makeSpaceWorld();
     await db.user.update({ where: { id: w.member.id }, data: { mustChangePassword: true } });
     const name = `Too early ${uid()}`;
+    await letOpenSpaces(w.org.id, w.member.id);
     await loginAs(w.member.id);
     const res = await create({ name });
     expect(res.status).toBe(403);
@@ -118,6 +140,7 @@ describe("POST /api/workspaces: choosing the people at creation", () => {
     const w = await makeSpaceWorld();
     const colleague = await makeUser({ orgId: w.org.id, role: "MEMBER", name: "Colleague" });
     const name = `With people ${uid()}`;
+    await letOpenSpaces(w.org.id, w.member.id);
     await loginAs(w.member.id);
     const res = await create({
       name,
@@ -179,6 +202,7 @@ describe("POST /api/workspaces: choosing the people at creation", () => {
         bad = `no-such-user-${uid()}`;
       }
       const name = `Refused ${uid()}`;
+      await letOpenSpaces(w.org.id, w.member.id);
       await loginAs(w.member.id);
       const res = await create({ name, memberIds: [colleague.id, bad] });
       expect(res.status).toBe(403);
@@ -193,6 +217,7 @@ describe("POST /api/workspaces: choosing the people at creation", () => {
     const gone = await makeUser({ orgId: w.org.id, role: "MEMBER" });
     await db.organizationMember.deleteMany({ where: { organizationId: w.org.id, userId: gone.id } });
     const name = `Gone ${uid()}`;
+    await letOpenSpaces(w.org.id, w.member.id);
     await loginAs(w.member.id);
     const res = await create({ name, memberIds: [gone.id] });
     expect(res.status).toBe(403);
@@ -204,6 +229,7 @@ describe("POST /api/workspaces: which organization", () => {
   it("someone in two organizations opens the space in the one they name, using their rights THERE", async () => {
     const w = await makeSpaceWorld();
     const second = await giveSecondHome(w.member.id, "OWNER"); // a plain member of the first org, the owner of the second
+    await letOpenSpaces(w.org.id, w.member.id);
     await loginAs(w.member.id);
 
     const inSecond = `In the second ${uid()}`;
@@ -224,6 +250,7 @@ describe("POST /api/workspaces: which organization", () => {
     const w = await makeSpaceWorld();
     const stranger = await makeOrg();
     const name = `Foreign ${uid()}`;
+    await letOpenSpaces(w.org.id, w.member.id);
     await loginAs(w.member.id);
     const res = await create({ organizationId: stranger.id, name });
     expect(res.status).toBe(403);
@@ -246,6 +273,7 @@ describe("POST /api/workspaces: which organization", () => {
     const second = await giveSecondHome(w.member.id, "OWNER");
     const colleagueOfFirst = await makeUser({ orgId: w.org.id, role: "MEMBER" });
     const name = `Mixed up ${uid()}`;
+    await letOpenSpaces(w.org.id, w.member.id);
     await loginAs(w.member.id);
     const res = await create({ organizationId: second.id, name, memberIds: [colleagueOfFirst.id] });
     expect(res.status).toBe(403);
@@ -257,6 +285,7 @@ describe("POST /api/workspaces: which organization", () => {
 describe("POST /api/workspaces: input and record", () => {
   it("validates the body: a name is required (1-120 characters), the description is bounded, the list of people is bounded", async () => {
     const w = await makeSpaceWorld();
+    await letOpenSpaces(w.org.id, w.member.id);
     await loginAs(w.member.id);
     expect((await create({ name: `Valid ${uid()}`, description: "fine", memberIds: [w.lead.id] })).status).toBe(201); // the control
     expect((await create({})).status).toBe(422);
@@ -270,6 +299,7 @@ describe("POST /api/workspaces: input and record", () => {
   it("writes an audit entry for the creation, naming who did it", async () => {
     const w = await makeSpaceWorld();
     const name = `Audited ${uid()}`;
+    await letOpenSpaces(w.org.id, w.lead.id);
     await loginAs(w.lead.id);
     const res = await create({ name });
     const id = (res.json?.["workspace"] as { id: string }).id;
@@ -280,6 +310,7 @@ describe("POST /api/workspaces: input and record", () => {
   it("two spaces with the same name can exist side by side (the slug is unique)", async () => {
     const w = await makeSpaceWorld();
     const name = `Twin ${uid()}`;
+    await letOpenSpaces(w.org.id, w.member.id);
     await loginAs(w.member.id);
     expect((await create({ name })).status).toBe(201);
     expect((await create({ name })).status).toBe(201);

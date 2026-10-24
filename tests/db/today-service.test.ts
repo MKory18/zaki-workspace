@@ -387,12 +387,14 @@ describe("the team pulse: for the owner and whoever manages people, and never a 
 });
 
 describe("what «no space yet» says depends on whether the person may open one", () => {
-  it("knows who holds spaces.create: every rank but the partner, unless the owner switched it off", async () => {
+  it("knows who holds spaces.create: the owner and the admins, a lead or a member only when switched on, never the partner", async () => {
     const w = await world();
-    for (const who of [w.owner, w.admin, w.member, w.lead]) expect((await todayFor(who.id, NOW)).canCreateSpaces, who.name).toBe(true);
-    expect((await todayFor(w.guest.id, NOW)).canCreateSpaces).toBe(false);
-    await setMember(w.org.id, w.member.id, { revokedCapabilities: ["spaces.create"] });
-    expect((await todayFor(w.member.id, NOW)).canCreateSpaces).toBe(false);
+    for (const who of [w.owner, w.admin]) expect((await todayFor(who.id, NOW)).canCreateSpaces, who.name).toBe(true);
+    for (const who of [w.member, w.lead, w.guest]) expect((await todayFor(who.id, NOW)).canCreateSpaces, who.name).toBe(false);
+    await setMember(w.org.id, w.member.id, { capabilities: ["spaces.create"] });
+    expect((await todayFor(w.member.id, NOW)).canCreateSpaces).toBe(true);
+    await setMember(w.org.id, w.admin.id, { revokedCapabilities: ["spaces.create"] });
+    expect((await todayFor(w.admin.id, NOW)).canCreateSpaces).toBe(false);
     await setMember(w.org.id, w.guest.id, { capabilities: ["spaces.create"] });
     expect((await todayFor(w.guest.id, NOW)).canCreateSpaces).toBe(false);
   });

@@ -385,10 +385,10 @@ describe("the panel of one person: only what the actor may do is offered", () =>
     }
   });
 
-  it("a person who cannot hand out a switch sees it locked, with why (a team lead who was given users.manage lacks integrations.manage)", () => {
+  it("a person who cannot hand out a switch sees it locked, with why (a team lead who was given users.manage lacks integrations.manage and, since 2026-10-25, spaces.create)", () => {
     const markup = render(sheet(MEMBER, leadManagerActor));
     expect(markup).toContain(t("members.caps_locked_actor"));
-    expect(count(markup, /role="switch"[^>]*disabled=""/g)).toBe(1);
+    expect(count(markup, /role="switch"[^>]*disabled=""/g)).toBe(2);
     // an ADMIN holds every wired switch: nothing is locked
     const admin = render(sheet(MEMBER, adminActor));
     expect(admin).not.toContain(t("members.caps_locked_actor"));

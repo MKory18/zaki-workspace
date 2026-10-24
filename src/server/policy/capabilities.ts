@@ -41,7 +41,13 @@ export const WIRED_CAPABILITIES: readonly Capability[] = [
   "integrations.manage",
 ];
 
-/** What each rank can do without anyone switching anything on. The OWNER can do everything. */
+/**
+ * What each rank can do without anyone switching anything on. The OWNER can do everything.
+ *
+ * `spaces.create` is the owner's and the admins' by default (the owner's decision, 2026-10-25: «المالك
+ * والمديرين بس بيفتحوا مساحات»): a lead or a member opens a space only if the owner switches it on for
+ * them by name (a per-person extra in `capabilities`, which this change leaves untouched).
+ */
 export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
   OWNER: CAPABILITIES,
   ADMIN: [
@@ -55,8 +61,8 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "announce.send",
     "escalation.configure",
   ],
-  LEAD: ["spaces.create", "directory.view", "crm.view", "crm.edit", "prices.view"],
-  MEMBER: ["spaces.create", "directory.view", "crm.view", "crm.edit"],
+  LEAD: ["directory.view", "crm.view", "crm.edit", "prices.view"],
+  MEMBER: ["directory.view", "crm.view", "crm.edit"],
   GUEST: [],
 };
 

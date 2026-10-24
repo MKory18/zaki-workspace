@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { requireWorkspace, audit } from "@/server/auth";
+import { requireWorkspace, audit, ForbiddenError } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { teamFilterInSpace } from "@/server/services/team-scope";
 import { assertMayCreateInTeam } from "@/server/services/teams";
@@ -52,6 +52,10 @@ export async function POST(req: Request) {
   return withApi(async () => {
     const input = await parseJson(createSchema, req);
     const ctx = await requireWorkspace(input.workspaceId, ["ADMIN", "MEMBER"]);
+    // «الشركة» (HQ) is the whole company's announcements and talk, not a place for work: a project there
+    // would be seen by everybody (the owner's decision, 2026-10-25). The projects already there stay.
+    const space = await db.workspace.findUnique({ where: { id: input.workspaceId }, select: { kind: true } });
+    if (space?.kind === "HQ") throw new ForbiddenError("projects.not_in_hq");
     await assertMayCreateInTeam(ctx, input.workspaceId, input.teamId);
     const project = await db.project.create({
       data: {

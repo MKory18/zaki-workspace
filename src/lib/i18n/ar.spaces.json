@@ -23,5 +23,6 @@
   "spaceteams.create": "افتح مقطع",
   "spaceteams.picker": "المقطع",
   "spaceteams.whole_space": "كل المساحة",
-  "spaceteams.move": "نقل إلى مقطع"
+  "spaceteams.move": "نقل إلى مقطع",
+  "projects.not_in_hq": "مساحة «الشركة» للإعلانات والنقاش العام، وما بينفتح فيها مشروع. اختر مساحة فريق."
 }

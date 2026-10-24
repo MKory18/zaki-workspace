@@ -25,7 +25,8 @@ export interface OrgsResponse {
     role: string;
     /** The `spaces.create` capability in this organization (the server decides, the menu follows). */
     canCreateSpaces: boolean;
-    workspaces: { id: string; name: string; slug: string }[];
+    /** `holdsProjects`: false for «الشركة» (HQ), where no project is opened. */
+    workspaces: { id: string; name: string; slug: string; holdsProjects?: boolean }[];
   }[];
 }
 
