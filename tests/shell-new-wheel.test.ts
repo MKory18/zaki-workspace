@@ -46,8 +46,12 @@ describe("«جديد»: what each person is offered", () => {
     for (const role of ["OWNER", "ADMIN"] as const) expect(newActionsFor(who(role)), role).toEqual([...NEW_ACTIONS]);
   });
 
-  it("a lead or a member: everything but «عضو» (adding a person is `users.manage`)", () => {
-    for (const role of ["LEAD", "MEMBER"] as const) expect(newActionsFor(who(role)), role).toEqual(["task", "project", "doc", "message", "space"]);
+  it("a lead or a member: no «مساحة» (only the owner and the admins open spaces by default) and no «عضو» (`users.manage`)", () => {
+    for (const role of ["LEAD", "MEMBER"] as const) expect(newActionsFor(who(role)), role).toEqual(["task", "project", "doc", "message"]);
+  });
+
+  it("…unless the owner switched «فتح مساحة» on for that person by name", () => {
+    expect(newActionsFor(who("MEMBER", ["directory.view", "spaces.create"]))).toContain("space");
   });
 
   it("the switches decide, not the rank: a member without `spaces.create` gets no «مساحة», one given `users.manage` gets «عضو»", () => {

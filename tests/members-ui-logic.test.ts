@@ -296,7 +296,9 @@ describe("capability switches: rank defaults + extras - revoked", () => {
     const lead = actorOf("LEAD", { caps: [...RANK_DEFAULTS.LEAD, "users.manage"] });
     const byLead = rows(member, lead);
     expect(byLead.get("integrations.manage")?.locked).toBe("actor_lacks");
-    for (const cap of ["spaces.create", "users.manage", "directory.view", "crm.view", "crm.edit"] as const) {
+    // and no longer spaces.create: a lead does not hold it by default (the owner's decision, 2026-10-25)
+    expect(byLead.get("spaces.create")?.locked).toBe("actor_lacks");
+    for (const cap of ["users.manage", "directory.view", "crm.view", "crm.edit"] as const) {
       expect(byLead.get(cap)?.locked, cap).toBeNull();
     }
     // an admin whom the owner took integrations.manage away from cannot hand it out either

@@ -10,7 +10,7 @@ import { ProjectCreateModal } from "@/components/create-forms";
 import { useNewIntent } from "@/lib/nav/use-new-intent";
 
 interface OrgsResponse {
-  organizations: { workspaces: { id: string; name: string }[] }[];
+  organizations: { workspaces: { id: string; name: string; holdsProjects?: boolean }[] }[];
 }
 
 export function ProjectsToolbar() {
@@ -20,7 +20,8 @@ export function ProjectsToolbar() {
     queryKey: ["orgs"],
     queryFn: () => apiGet<OrgsResponse>("/api/workspaces"),
   });
-  const workspaces = (orgs.data?.organizations ?? []).flatMap((o) => o.workspaces);
+  // «الشركة» is not offered: the server refuses a project there (projects.not_in_hq)
+  const workspaces = (orgs.data?.organizations ?? []).flatMap((o) => o.workspaces).filter((w) => w.holdsProjects !== false);
   // «جديد» → «مشروع» lands here with ?new=project; the form opens once it knows the spaces
   useNewIntent("project", () => setOpen(true), orgs.isSuccess);
 

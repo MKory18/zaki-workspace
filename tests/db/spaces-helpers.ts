@@ -75,3 +75,14 @@ export const add = (...ids: string[]) => ({ addUserIds: ids });
 export const remove = (...ids: string[]) => ({ removeUserIds: ids });
 export const promote = (...ids: string[]) => ({ promoteUserIds: ids });
 export const demote = (...ids: string[]) => ({ demoteUserIds: ids });
+
+/**
+ * The owner switches «فتح مساحة» (`spaces.create`) on for one person by name. Since 2026-10-25 only the owner
+ * and the admins hold it by default; a lead or a member opens a space only like this.
+ */
+export async function letOpenSpaces(orgId: string, userId: string) {
+  await db.organizationMember.update({
+    where: { organizationId_userId: { organizationId: orgId, userId } },
+    data: { capabilities: ["spaces.create"] },
+  });
+}

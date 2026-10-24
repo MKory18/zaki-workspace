@@ -93,7 +93,8 @@ describe("GET /api/workspaces: who sees which space", () => {
     await loginAs(w.member.id);
     const org = (await list()).body.organizations[0]!;
     expect(org).toMatchObject({ id: w.org.id, name: w.org.name, keyPrefix: w.org.keyPrefix, role: "MEMBER" });
-    expect(Object.keys(org.workspaces[0]!).sort()).toEqual(["id", "name", "slug"]);
+    // + holdsProjects (2026-10-25): false for «الشركة», where no project is opened
+    expect(Object.keys(org.workspaces[0]!).sort()).toEqual(["holdsProjects", "id", "name", "slug"]);
   });
 
   it("never lists another organization's spaces, and a person in two organizations gets each one by its own rule", async () => {
@@ -158,22 +159,33 @@ describe("GET /api/workspaces: only ACTIVE members, and what they may do", () =>
 
   it("says, per organization, whether the caller may open a new space (canCreateSpaces)", async () => {
     const w = await listWorld();
-    for (const who of ["owner", "admin", "lead", "member"] as const) {
+    // the owner and the admins by rank; a lead, a member and a guest not (the owner's decision, 2026-10-25)
+    for (const who of ["owner", "admin"] as const) {
       await loginAs(w[who].id);
       expect((await list()).body.organizations[0]!.canCreateSpaces, who).toBe(true);
     }
-    await loginAs(w.guest.id);
-    expect((await list()).body.organizations[0]!.canCreateSpaces).toBe(false);
+    for (const who of ["lead", "member", "guest"] as const) {
+      await loginAs(w[who].id);
+      expect((await list()).body.organizations[0]!.canCreateSpaces, who).toBe(false);
+    }
 
-    // switched off for one person: false, and the others are not affected
+    // switched on for one person by name: true for them, and the others are not affected
     await db.organizationMember.update({
       where: { organizationId_userId: { organizationId: w.org.id, userId: w.member.id } },
-      data: { revokedCapabilities: ["spaces.create"] },
+      data: { capabilities: ["spaces.create"] },
     });
     await loginAs(w.member.id);
-    expect((await list()).body.organizations[0]!.canCreateSpaces).toBe(false);
-    await loginAs(w.lead.id);
     expect((await list()).body.organizations[0]!.canCreateSpaces).toBe(true);
+    await loginAs(w.lead.id);
+    expect((await list()).body.organizations[0]!.canCreateSpaces).toBe(false);
+
+    // and switched off for an admin: false
+    await db.organizationMember.update({
+      where: { organizationId_userId: { organizationId: w.org.id, userId: w.admin.id } },
+      data: { revokedCapabilities: ["spaces.create"] },
+    });
+    await loginAs(w.admin.id);
+    expect((await list()).body.organizations[0]!.canCreateSpaces).toBe(false);
   });
 
   it("canCreateSpaces is judged in each organization separately", async () => {
