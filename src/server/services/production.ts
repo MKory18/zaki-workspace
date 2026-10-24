@@ -149,6 +149,16 @@ function weekdaysToCsv(days: number[] | undefined): string {
 	return sorted.join(",");
 }
 
+/**
+ * A department named in a write must be one of the caller's own company (goals and routines both
+ * store a `departmentId`): another company's id is "not found", like everywhere else (review B7).
+ */
+export async function assertDepartmentInOrg(orgId: string, departmentId: string | null | undefined): Promise<void> {
+	if (!departmentId) return;
+	const dept = await db.department.findFirst({ where: { id: departmentId, orgId }, select: { id: true } });
+	if (!dept) throw new NotFoundError("dept.not_found");
+}
+
 async function assertRoutineOrg(orgId: string, routineId: string) {
 	const r = await db.routine.findFirst({ where: { id: routineId, orgId }, select: { id: true, assigneeId: true } });
 	if (!r) throw new NotFoundError("routine.not_found");
@@ -158,6 +168,7 @@ async function assertRoutineOrg(orgId: string, routineId: string) {
 export async function createRoutine(ctx: { orgId: string; userId: string }, input: z.infer<typeof routineSchema>) {
 	await assertCanManageRoutines(ctx);
 	if (input.assigneeId) await assertActiveAssignee(ctx.orgId, input.assigneeId);
+	await assertDepartmentInOrg(ctx.orgId, input.departmentId);
 	const routine = await db.routine.create({
 		data: {
 			orgId: ctx.orgId,
@@ -179,6 +190,7 @@ export async function updateRoutine(ctx: { orgId: string; userId: string }, id: 
 	const current = await assertRoutineOrg(ctx.orgId, id);
 	// a NEW assignee must be active; re-sending the current one (who may have left since) changes nothing
 	if (input.assigneeId && input.assigneeId !== current.assigneeId) await assertActiveAssignee(ctx.orgId, input.assigneeId);
+	await assertDepartmentInOrg(ctx.orgId, input.departmentId);
 	await db.routine.update({
 		where: { id },
 		data: {
