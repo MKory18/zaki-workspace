@@ -79,7 +79,7 @@ export async function joinTopic(ctx: OrgAccessContext, conversationId: string): 
   if (org.role === "GUEST" && facts.topicType === "ANNOUNCEMENTS") throw new ForbiddenError("chat.e.guest_read_only");
   await db.$transaction(async (tx) => {
     await tx.conversationMember.create({ data: { conversationId, userId: ctx.userId } });
-    await writeSystemMessage(tx, { orgId: ctx.orgId, conversationId, authorId: ctx.userId, k: "join" });
+    await writeSystemMessage(tx, { orgId: ctx.orgId, conversationId, authorId: ctx.userId, k: "join", spaceId: facts.spaceId });
     await emitRealtime(tx, ctx.orgId, "membership.changed", { conversationId, userId: ctx.userId, spaceId: facts.spaceId ?? undefined });
   });
   return { joined: true };
@@ -241,6 +241,8 @@ export async function conversationDetail(
       canModerate: canModerateHere,
       muted: !!(facts.mutedUntil && facts.mutedUntil > new Date()),
       oversight: org!.role === "OWNER" && !facts.viewerIsMember,
+      // a topic only (a DM is never his to enter), and not a closed one (it takes no messages)
+      canJoin: org!.role === "OWNER" && !facts.viewerIsMember && facts.kind === "TOPIC" && !conv.closedAt,
     },
     members,
     messages: messages.reverse(), // oldest first in the payload
