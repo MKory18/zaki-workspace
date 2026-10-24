@@ -20,6 +20,7 @@ import GoalsPage from "@/app/(app)/goals/page";
 import ProductionPage from "@/app/(app)/production/page";
 import FilesPage from "@/app/(app)/files/page";
 import AnalyticsPage from "@/app/(app)/analytics/page";
+import * as chatHomeRoute from "@/app/api/chat/home/route";
 import * as goalsRoute from "@/app/api/goals/route";
 import * as productionRoute from "@/app/api/production/route";
 import * as routinesRoute from "@/app/api/production/routines/route";
@@ -184,10 +185,20 @@ describe("pages serve the ACTIVE company, with the role held there", () => {
   });
 
   it("/chat opens the active company's chat", async () => {
+    // Phase 3: the page hands over only who is looking (a guest or not); the list itself comes from
+    // /api/chat/home, which scopes to the active company on the server (activeOrgCtx).
     const w = await makeTwoCompanyPerson({ oldRole: "ADMIN", newRole: "MEMBER" });
+    for (const [org, title] of [[w.oldOrg, "OLD COMPANY TOPIC"], [w.newOrg, "NEW COMPANY TOPIC"]] as const) {
+      const space = await makeWorkspace(org.id, [{ userId: w.person.id }]);
+      await db.conversation.create({ data: { orgId: org.id, kind: "TOPIC", spaceId: space.id, title } });
+    }
     await loginAs(w.person.id);
     const element = (await ChatPage()) as PageElement;
-    expect(element.props["ctx"]).toEqual({ orgId: w.newOrg.id, orgRole: "MEMBER" });
+    expect(element.props).toEqual({ guest: false });
+    const home = await call(chatHomeRoute.GET, { url: "http://localhost/api/chat/home" });
+    expect(home.status).toBe(200);
+    expect(home.text).toContain("NEW COMPANY TOPIC");
+    expect(home.text).not.toContain("OLD COMPANY TOPIC");
   });
 
   it("/files and /goals and /production take the role from the active company", async () => {

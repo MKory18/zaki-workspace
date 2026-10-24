@@ -2,9 +2,26 @@
 
 import React, { useEffect, useState } from "react";
 import type { HomeDto } from "@/server/chat/dto";
+import { WorkspaceCreateModal } from "@/components/create-forms";
+import type { OrgsResponse } from "@/components/shell/space-switcher";
+import { NewDmDialog } from "./new-dm-dialog";
 
 export function ChatHome({ home, guest }: { home: HomeDto; guest: boolean }) {
   const [allCompany, setAllCompany] = useState(false);
+  const [newDm, setNewDm] = useState(false);
+  const [creatingSpace, setCreatingSpace] = useState(false);
+  // «افتح مساحة» only for whoever may open one (`spaces.create`), the same answer the space switcher uses
+  const [orgs, setOrgs] = useState<OrgsResponse["organizations"]>([]);
+  useEffect(() => {
+    if (guest) return;
+    let active = true;
+    fetch("/api/workspaces", { cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<OrgsResponse>) : { organizations: [] }))
+      .then((data) => { if (active) setOrgs(data.organizations); })
+      .catch(() => { /* no button: the space switcher stays the way in */ });
+    return () => { active = false; };
+  }, [guest]);
+  const canCreateSpace = !guest && orgs.some((org) => org.canCreateSpaces);
   const [oversight, setOversight] = useState<{ items: { id: string; kind: string; title: string; spaceName: string | null; membersCount: number; lastMessageAt: string | null }[]; nextCursor: string | null } | null>(null);
   const [oversightError, setOversightError] = useState(false);
   useEffect(() => {
@@ -35,13 +52,15 @@ export function ChatHome({ home, guest }: { home: HomeDto; guest: boolean }) {
               {topic.restricted && <span aria-label="مقيّدة">🔒</span>}{topic.closed && <span aria-label="مغلقة">🔐</span>}{topic.mentions > 0 && <span className="rounded-full bg-warn/10 px-2 text-xs text-warn">@{topic.mentions}</span>}{topic.unread > 0 && <span className="rounded-full bg-accent/10 px-2 text-xs">{topic.unread}</span>}
             </a></li>)}</ul> : <p className="mt-3 text-sm text-fg-muted">ما في مواضيع لسا</p>}
           </details>)}</div> : <p className="text-sm text-fg-muted">لسا ما عندك مساحات.</p>}
-          <a href="/workspaces" className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-accent px-3 text-sm text-accent-fg">افتح مساحة</a>
+          {canCreateSpace && <button type="button" onClick={() => setCreatingSpace(true)} className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-accent px-3 text-sm text-accent-fg">افتح مساحة</button>}
         </section>
         {!guest && <section aria-labelledby="chat-dms" className="rounded-2xl border border-border bg-surface-1 p-4"><h2 id="chat-dms" className="mb-3 font-semibold">خاص</h2>
           {home.dms.length ? <ul className="divide-y divide-border">{home.dms.map((dm) => <li key={dm.id}><a href={`/chat/${dm.id}`} className="flex min-h-12 items-center gap-3 py-2"><span className="grid size-9 place-items-center rounded-full bg-accent/10">{dm.peer.name.slice(0, 1)}</span><span className="min-w-0 flex-1 truncate">{dm.peer.name}<small className="block truncate text-fg-muted">{dm.lastMessage?.preview ?? "ابدأوا المحادثة"}</small></span>{dm.lastMessage?.mine && <span aria-label="تم الإرسال">✓</span>}{dm.unread > 0 && <span className="rounded-full bg-accent/10 px-2 text-xs">{dm.unread}</span>}</a></li>)}</ul> : <p className="text-sm text-fg-muted">ما عندك محادثات خاصة.</p>}
-          <a href="/chat?new=dm" className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-accent px-3 text-sm text-accent-fg">رسالة جديدة</a>
+          <button type="button" onClick={() => setNewDm(true)} className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-accent px-3 text-sm text-accent-fg">رسالة جديدة</button>
         </section>}
       </>}
+      {!guest && <NewDmDialog open={newDm} onOpenChange={setNewDm} />}
+      {canCreateSpace && <WorkspaceCreateModal open={creatingSpace} onClose={() => setCreatingSpace(false)} organizations={orgs.map((org) => ({ id: org.id, name: org.name, canAdmin: org.canCreateSpaces }))} />}
     </main>
   );
 }
