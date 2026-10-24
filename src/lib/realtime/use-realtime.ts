@@ -75,10 +75,10 @@ function dispatch(payload: RealtimeEventPayload): void {
     return;
   }
   if (payload.kind === "message.created" && payload.conversationId) {
-    // a fresh message clears the typing bubble of its conversation
+    // a fresh message clears the typing bubble of its conversation — and is then handed to the
+    // screens like every other event (it used to stop here, so no screen ever saw a new message)
     stream.typingByConversation.delete(payload.conversationId);
     for (const h of stream.typingHandlers) h(payload.conversationId);
-    return;
   }
   for (const h of stream.handlers) h(payload);
 }
@@ -114,7 +114,10 @@ function teardown(): void {
 function connect(): void {
   if (!stream || stream.es) return;
   if (!stream.online || stream.paused) return;
-  const es = new EventSource("/api/rt");
+  // A reconnect asks for what it missed: the route replays the visible events after this id (or
+  // sends `reload`). EventSource cannot set the Last-Event-ID header on a new object, so a query.
+  const since = stream.lastEventId ? `?lastEventId=${encodeURIComponent(stream.lastEventId)}` : "";
+  const es = new EventSource(`/api/rt${since}`);
   stream.es = es;
   es.onopen = () => {
     if (stream) stream.failures = 0;
@@ -209,6 +212,16 @@ function release(): void {
 export function resetRealtimeForTests(): void {
   teardown();
   stream = null;
+}
+
+/** Test hook: subscribe a handler to the shared stream without React, as useRealtime does (never call from app code). */
+export function subscribeForTests(handler: Handler): () => void {
+  const s = acquire();
+  s.handlers.add(handler);
+  return () => {
+    s.handlers.delete(handler);
+    release();
+  };
 }
 
 /** Test hook: the current shared stream state (never call from app code). */

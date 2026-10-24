@@ -12,6 +12,7 @@ import {
   type OrgFacts,
 } from "@/server/policy/conversation";
 import { emitRealtime } from "@/server/realtime/emit";
+import { writeSystemMessage } from "@/server/chat/system";
 import { claimUploads, MAX_ATTACHMENTS_PER_MESSAGE } from "@/server/chat/attachments";
 import { presentMessage, previewOf, type Viewer } from "@/server/chat/redact";
 import { notifyMessageToAudience, notifyCandidates, readersAmong, rewriteMessagePreviews, DELETED_PREVIEW } from "@/server/chat/notify";
@@ -306,11 +307,14 @@ export async function togglePin(ctx: OrgAccessContext, messageId: string): Promi
   await db.$transaction(async (tx) => {
     await tx.chatMessage.update({ where: { id: messageId }, data: { pinned: next } });
     await emitRealtime(tx, ctx.orgId, "message.pinned", { conversationId: msg.conversationId, messageId, spaceId: facts.spaceId ?? undefined });
-    // pinning (and unpinning) is a system message, so the whole audience sees the moment
-    // a system message stores its {k,p} in `body` (ChatMessage has no meta column)
-    const body = JSON.stringify({ k: next ? "pin" : "unpin", p: { by: ctx.userId } });
-    await tx.chatMessage.create({
-      data: { orgId: ctx.orgId, conversationId: msg.conversationId, authorId: ctx.userId, body, kind: "SYSTEM" },
+    // pinning (and unpinning) is a system message, so the whole audience sees the moment (live too)
+    await writeSystemMessage(tx, {
+      orgId: ctx.orgId,
+      conversationId: msg.conversationId,
+      authorId: ctx.userId,
+      k: next ? "pin" : "unpin",
+      p: { by: ctx.userId },
+      spaceId: facts.spaceId,
     });
   });
   return { pinned: next };

@@ -69,7 +69,8 @@ export async function muteInSpace(
       where: { workspaceId_userId: { workspaceId: spaceId, userId: input.userId } },
       data: { mutedUntil },
     });
-    await emitRealtime(tx, ctx.orgId, "membership.changed", { spaceId, userId: input.userId });
+    // for the muted person only (their composer locks or unlocks); nobody else needs the ids
+    await emitRealtime(tx, ctx.orgId, "membership.changed", { spaceId, userId: input.userId, targetUserId: input.userId });
     await tx.auditLog.create({
       data: {
         action: mutedUntil ? "chat.mute" : "chat.unmute",

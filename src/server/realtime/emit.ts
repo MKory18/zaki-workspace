@@ -15,7 +15,10 @@ export type RealtimeIds = {
   conversationId?: string;
   messageId?: string;
   spaceId?: string;
+  /** WHO the event is about (the reader, the person who joined): it goes to everybody allowed to see it. */
   userId?: string;
+  /** The ONE person the event is for, when it is for one person only (a mute in a space). */
+  targetUserId?: string;
 };
 
 export type RealtimeClient = Prisma.TransactionClient | PrismaClient;
