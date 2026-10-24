@@ -133,19 +133,21 @@ export async function getToday(actor: Actor, opts: { now?: Date } = {}): Promise
   // ---------- the person's own tasks, in three groups ----------
 
   async function loadTasks(): Promise<TodayTasks> {
-    const [overdue, today, later, nOverdue, nToday, nLater] = await Promise.all([
+    const [overdue, today, later, nOverdue, nToday, nLater, nDoneToday] = await Promise.all([
       db.task.findMany({ where: overdueWhere, orderBy: BY_DUE, take: TODAY_LIMITS.overdue, select: TASK_SELECT }),
       db.task.findMany({ where: todayWhere, orderBy: BY_DUE, take: TODAY_LIMITS.today, select: TASK_SELECT }),
       db.task.findMany({ where: laterWhere, orderBy: BY_DUE, take: TODAY_LIMITS.later, select: TASK_SELECT }),
       db.task.count({ where: overdueWhere }),
       db.task.count({ where: todayWhere }),
       db.task.count({ where: laterWhere }),
+      // finished today, by the clock of the company (not the server's)
+      db.task.count({ where: { ...mine, completedAt: { gte: todayStart, lt: tomorrowStart } } }),
     ]);
     return {
       overdue: overdue.map(toTask),
       today: today.map(toTask),
       later: later.map(toTask),
-      counts: { open: nOverdue + nToday + nLater, overdue: nOverdue, today: nToday, later: nLater },
+      counts: { open: nOverdue + nToday + nLater, overdue: nOverdue, today: nToday, later: nLater, doneToday: nDoneToday },
     };
   }
 
@@ -244,7 +246,7 @@ export async function getToday(actor: Actor, opts: { now?: Date } = {}): Promise
   const hasSpaces = spaceIds.length > 0;
   const showPulse = !actor.isExternal && (actor.isOwner || actorCan(actor, "users.manage"));
   const showQuickAdd = !actor.isExternal && writable.length > 0;
-  const noTasks: TodayTasks = { overdue: [], today: [], later: [], counts: { open: 0, overdue: 0, today: 0, later: 0 } };
+  const noTasks: TodayTasks = { overdue: [], today: [], later: [], counts: { open: 0, overdue: 0, today: 0, later: 0, doneToday: 0 } };
 
   // nothing is read for a person who can open no space, and a pulse of no space is no pulse
   const [tasks, projects, pulse, quickAdd] = await Promise.all([

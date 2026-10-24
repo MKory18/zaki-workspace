@@ -5,7 +5,8 @@ import { AR } from "@/lib/i18n/dict";
 import { TOUR_HOOKS, TOUR_KEYS, TOURS, hookSelector, planTour, resolveTourSteps, type TourHook } from "@/lib/guide/tours";
 
 /** The hooks the briefing promises (the contract between the shell, the home page, the guide and the themes). */
-const BRIEFED = ["places", "tabs", "search", "inbox", "avatar", "theme", "today-tasks", "first-steps", "quick-add"];
+// «new» joined with «نجمة وطريق» (2026-10-24): the gold «جديد» of the top bar
+const BRIEFED = ["places", "tabs", "search", "inbox", "new", "avatar", "theme", "today-tasks", "first-steps", "quick-add"];
 
 describe("the tour hooks", () => {
   it("are exactly the stable hooks of the briefing", () => {
@@ -33,7 +34,7 @@ describe("the tours", () => {
   });
 
   it("the app tour walks the shell: places, tabs, search, the bell, the avatar menu and the theme picker", () => {
-    expect(TOURS.shell.map((s) => s.hook)).toEqual(["places", "tabs", "search", "inbox", "avatar", "theme"]);
+    expect(TOURS.shell.map((s) => s.hook)).toEqual(["places", "tabs", "search", "inbox", "new", "avatar", "theme"]);
   });
 
   it("the today tour walks today's own elements: tasks, quick add and the first-steps card", () => {
@@ -78,7 +79,7 @@ describe("planTour: a step whose element is not on the page is skipped", () => {
   const present = (...hooks: TourHook[]) => (hook: TourHook) => hooks.includes(hook);
 
   it("keeps every step when every element is there, in order", () => {
-    expect(planTour("shell", () => true).map((s) => s.hook)).toEqual(["places", "tabs", "search", "inbox", "avatar", "theme"]);
+    expect(planTour("shell", () => true).map((s) => s.hook)).toEqual(["places", "tabs", "search", "inbox", "new", "avatar", "theme"]);
   });
 
   it("drops the steps whose element is missing and keeps the rest in order", () => {
@@ -124,7 +125,7 @@ describe("resolveTourSteps: the steps the tour library is given", () => {
       asked.push(hook);
       return null;
     });
-    expect(asked).toEqual(["places", "tabs", "search", "inbox", "avatar", "theme"]);
+    expect(asked).toEqual(["places", "tabs", "search", "inbox", "new", "avatar", "theme"]);
   });
 
   it("never lets a popover sit to the physical left or right of an element (the page is right-to-left)", () => {

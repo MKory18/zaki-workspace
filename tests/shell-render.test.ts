@@ -159,6 +159,7 @@ describe("the frame for the owner, on a project page", () => {
     expect(count(html, 'data-tour="tabs"')).toBe(1);
     expect(count(html, 'data-tour="search"')).toBe(1);
     expect(count(html, 'data-tour="inbox"')).toBe(1);
+    expect(count(html, 'data-tour="new"')).toBe(1); // «جديد», the shell tour's stop since «نجمة وطريق»
     expect(count(html, 'data-tour="avatar"')).toBe(2);
     // the search hook is around the palette's button
     expect(outerOf(html, /<div[^>]*data-tour="search"[^>]*>/, "div")).toContain(`aria-label="${AR["pal.open"]}"`);
