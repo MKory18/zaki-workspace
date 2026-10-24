@@ -3,9 +3,10 @@ import { ChevronLeft, TriangleAlert } from "lucide-react";
 import { EmptyState } from "@/components/ui/card";
 import { fmtNumber } from "@/lib/format";
 import { getServerT } from "@/lib/i18n/server";
-import type { TodayTask, TodayTasks } from "@/lib/today";
+import { dayProgress, type TodayQuickAddData, type TodayTask, type TodayTasks } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import { TodayTaskRow, type RowTone } from "./today-task-row";
+import { TodayQuickAdd } from "./quick-add";
 
 /** Where «عرض الباقي» of each group goes: the tab of «مهامي» that holds the rest. */
 const REST_HREF: Record<RowTone, string> = {
@@ -15,7 +16,8 @@ const REST_HREF: Record<RowTone, string> = {
 };
 
 /**
- * «مهامي اليوم»: the person's open tasks in three groups, «متأخرة» (due before today), «اليوم» and «لاحقًا» (the
+ * «مهمّاتي اليوم»: «x من y خلصت» under the title and the star between two rules («نجمة وطريق»), then the
+ * person's open tasks in three groups, «متأخرة» (due before today), «اليوم» and «لاحقًا» (the
  * next few, with a due date or none), each row finishable with one press.
  *
  * - The list container carries the tour's hook `today-tasks`, whether or not there is anything in it.
@@ -25,18 +27,38 @@ const REST_HREF: Record<RowTone, string> = {
  *   next step («افتح مهامي») and the owner's drawing slot `empty-tasks`; for a person who is in no space yet it
  *   says so instead of pretending they have no work.
  * - Colour means something here: the danger colour is for what is late, and only for that.
+ * - At its foot the inline quick add (`TodayQuickAdd`), for whoever may add a task.
  */
-export function TodayTasksCard({ tasks, hasSpaces, canCreateSpaces = false }: { tasks: TodayTasks; hasSpaces: boolean; canCreateSpaces?: boolean }) {
+export function TodayTasksCard({
+  tasks,
+  hasSpaces,
+  canCreateSpaces = false,
+  quickAdd = null,
+  timeZone = "UTC",
+}: {
+  tasks: TodayTasks;
+  hasSpaces: boolean;
+  canCreateSpaces?: boolean;
+  /** What the inline quick add needs; null for somebody who may add nowhere. */
+  quickAdd?: TodayQuickAddData | null;
+  timeZone?: string;
+}) {
   const { t } = getServerT();
   const { counts } = tasks;
+  const progress = dayProgress(counts);
   const nothingDueButLater = counts.open > 0 && counts.overdue === 0 && counts.today === 0;
 
   return (
     <section aria-labelledby="today-tasks-title" className="rounded-card border border-border bg-surface-1 shadow-card">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-3">
-        <h2 id="today-tasks-title" className="text-base font-semibold text-fg">
-          {t("today.tasks.title")}
-        </h2>
+        <div className="min-w-0">
+          <h2 id="today-tasks-title" className="text-base font-semibold text-fg">
+            {t("today.tasks.title")}
+          </h2>
+          {progress.total > 0 ? (
+            <p className="text-xs text-fg-muted">{t("today.tasks.progress", { done: fmtNumber(progress.done), total: fmtNumber(progress.total) })}</p>
+          ) : null}
+        </div>
         {counts.open > 0 ? (
           <Link href="/my-work" className="ms-auto inline-flex min-h-11 items-center gap-1 text-sm font-medium text-accent hover:underline">
             {t("today.tasks.see_all")}
@@ -51,6 +73,7 @@ export function TodayTasksCard({ tasks, hasSpaces, canCreateSpaces = false }: { 
           </ul>
         ) : null}
       </header>
+      <div aria-hidden="true" className="zk-orn mx-4 mt-2" />
 
       <div data-tour="today-tasks" className="px-2 pb-3 pt-1">
         {!hasSpaces && canCreateSpaces ? (
@@ -83,6 +106,7 @@ export function TodayTasksCard({ tasks, hasSpaces, canCreateSpaces = false }: { 
             {tasks.later.length > 0 ? <Group id="today-group-later" tone="later" title={t("today.tasks.later")} rows={tasks.later} total={counts.later} /> : null}
           </div>
         )}
+        {quickAdd ? <TodayQuickAdd quickAdd={quickAdd} timeZone={timeZone} /> : null}
       </div>
     </section>
   );

@@ -81,3 +81,240 @@ body {
   padding-inline-start: max(0px, env(safe-area-inset-left));
   padding-inline-end: max(0px, env(safe-area-inset-right));
 }
+
+/* ═══ «نجمة وطريق» — the frame's shapes (the owner's adopted look) ═══════════════════════════════
+ * Shapes only: every colour is a theme token, so «ليل»/«نهار» (and the other two themes) reskin these
+ * rules too. Tailwind cannot express a mask, a conic ring or a transform built from a custom property.
+ */
+
+/* The eight-pointed star, cut once (an inline SVG: no file, no request) and reused by every mask. */
+html {
+  --zk-star-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='12,2 14.45,6.09 19.07,4.93 17.91,9.55 22,12 17.91,14.45 19.07,19.07 14.45,17.91 12,22 9.55,17.91 4.93,19.07 6.09,14.45 2,12 6.09,9.55 4.93,4.93 9.55,6.09'/%3E%3C/svg%3E");
+}
+
+/* A star in the current text colour: the active place of the side menu. */
+.zk-star {
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask: var(--zk-star-mask) center / contain no-repeat;
+  mask: var(--zk-star-mask) center / contain no-repeat;
+}
+
+/* The wordmark «زاكي»: Lalezar, the caption colour, a stroke and a hard shadow in the theme's scrim. */
+.zk-wordmark {
+  font-family: var(--font-lalezar), var(--font-display);
+  font-weight: 400;
+  color: rgb(var(--on-photo));
+  -webkit-text-stroke: 4px rgb(var(--scrim));
+  paint-order: stroke fill;
+  text-shadow: 3px 3px 0 rgb(var(--scrim));
+}
+
+/* The dashed gold thread down the side menu, on its end edge (it draws nothing a person reads). */
+.zk-side-rule::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 3px;
+  width: 2px;
+  background: repeating-linear-gradient(180deg, rgb(var(--accent-2)) 0 3px, transparent 3px 11px);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* The pressed half of «ليل / نهار»: the raised ground with a gold thread under it. */
+.zk-seg-on {
+  background-color: rgb(var(--surface-2));
+  box-shadow: inset 0 -2px 0 rgb(var(--accent-2));
+}
+
+/* «جديد» on a computer: a gold rim over golden spokes — one between each two actions, however many the
+   person is offered (`--n`) — with a hollow centre for the question. */
+.zk-wheel-ring {
+  border-radius: 9999px;
+  border: 2px solid rgb(var(--accent-2));
+  background-image:
+    radial-gradient(circle, rgb(var(--surface-1)) 0 33%, transparent 33.4%),
+    repeating-conic-gradient(
+      from calc(0.5turn / var(--n, 6)),
+      rgb(var(--accent-2) / 0.55) 0 0.6deg,
+      rgb(var(--surface-1) / 0.97) 0.6deg calc(1turn / var(--n, 6))
+    );
+  box-shadow: 0 24px 70px rgb(var(--scrim) / 0.55);
+}
+
+/* One action of the wheel: centred, then set on a 112px arm at its share of the turn, its label kept
+   upright. On a phone the actions are a grid in a bottom sheet instead, so this is from `sm` up. */
+@media (min-width: 640px) {
+  .zk-wheel-item {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    transform: rotate(calc(var(--i) * 1turn / var(--n))) translateY(-112px) rotate(calc(var(--i) * -1turn / var(--n)));
+  }
+}
+
+/* ── «اليوم» in the shape of «نجمة وطريق» ───────────────────────────────────────────────────────── */
+
+/* «المهمّة الجاية»: Amman at dusk (public/brand/hero, CC BY 4.0 — public/brand/CREDITS.md) behind the
+   mission card, on «ليل» and «نهار» only, and never at the «off» level. It is a CSS background, so a
+   browser on another theme or with decoration off never even asks for the file. Every word on the card
+   sits on a `.zk-scrim` panel in front of it, never on the picture itself. */
+.zk-hero-photo {
+  display: none;
+}
+[data-theme="night"]:not([data-decor="off"]) .zk-hero-photo,
+[data-theme="day"]:not([data-decor="off"]) .zk-hero-photo {
+  display: block;
+  background: url("/brand/hero/amman-dusk.webp") center 58% / cover no-repeat;
+}
+
+/* The skewed gold ribbon over the card: «المهمّة الجاية». */
+.zk-ribbon {
+  display: inline-block;
+  padding: 2px 12px;
+  border-radius: 3px;
+  background-color: rgb(var(--accent-2));
+  color: rgb(var(--scrim));
+  transform: skewX(-14deg);
+}
+.zk-ribbon > span {
+  display: inline-block;
+  transform: skewX(14deg);
+}
+
+/* A star between two thin rules, under a card's title. */
+.zk-orn {
+  position: relative;
+  height: 16px;
+  background-image: linear-gradient(to left, rgb(var(--border)) calc(50% - 16px), transparent calc(50% - 16px), transparent calc(50% + 16px), rgb(var(--border)) calc(50% + 16px));
+  background-position: center;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+}
+.zk-orn::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc(50% - 7px);
+  top: 1px;
+  width: 14px;
+  height: 14px;
+  background-color: rgb(var(--accent-2));
+  -webkit-mask: var(--zk-star-mask) center / contain no-repeat;
+  mask: var(--zk-star-mask) center / contain no-repeat;
+}
+
+/* «أول خطواتك»: a dashed gold road down the start side, threading the steps' marks. */
+.zk-route > li {
+  position: relative;
+}
+.zk-route > li::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  /* through the centre of the 32px marks, which sit 4px in from the start of every row */
+  inset-inline-start: 19px;
+  border-inline-start: 2px dashed rgb(var(--accent-2) / 0.55);
+  pointer-events: none;
+}
+.zk-route > li:first-child::before {
+  top: 50%;
+}
+.zk-route > li:last-child::before {
+  bottom: 50%;
+}
+
+/* The step to do now breathes a gold ring (reduced motion stops it: see the rule above). */
+.zk-ping {
+  animation: zk-ping 1.8s ease-out infinite;
+}
+@keyframes zk-ping {
+  0% {
+    box-shadow: 0 0 0 0 rgb(var(--accent-2) / 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgb(var(--accent-2) / 0);
+  }
+}
+
+/* «تمّت المهمّة!»: the band that plays once over the mission card when it is finished. */
+.zk-passed {
+  animation: zk-passed 1.8s ease forwards;
+}
+@keyframes zk-passed {
+  0% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+/* With less motion asked for, the band does not play: it simply shows, and leaves with the card's refresh. */
+@media (prefers-reduced-motion: reduce) {
+  .zk-passed {
+    animation: none !important;
+    opacity: 1;
+  }
+}
+
+/* ── «الأرقام: 123 / ١٢٣» (src/lib/digits.ts) ──────────────────────────────────────────────────────
+   The page always holds 0-9. With <html data-digits="arabic"> the font "Zaki Digits" — the ten Arabic-Indic
+   digits of IBM Plex Sans Arabic, drawn for 0-9 only (`unicode-range`), one file per weight, ~1 KB each,
+   public/fonts (OFL) — comes first in every text stack, so a browser DRAWS 0-9 as ٠-٩. Nothing is rewritten:
+   a copy, a search, the server's HTML are still 0-9, and a field keeps the Western shapes (what is typed is
+   what is stored). A browser that never needs the font (latin) never downloads it. */
+@font-face {
+  font-family: "Zaki Digits";
+  src: url("/fonts/zaki-digits-400.woff2") format("woff2");
+  font-weight: 100 450;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: "Zaki Digits";
+  src: url("/fonts/zaki-digits-500.woff2") format("woff2");
+  font-weight: 451 550;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: "Zaki Digits";
+  src: url("/fonts/zaki-digits-600.woff2") format("woff2");
+  font-weight: 551 650;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: "Zaki Digits";
+  src: url("/fonts/zaki-digits-700.woff2") format("woff2");
+  font-weight: 651 1000;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+}
+[data-digits="arabic"] body {
+  font-family: "Zaki Digits", var(--font-plex), "Segoe UI", Tahoma, sans-serif;
+}
+[data-digits="arabic"] :is(h1, h2, h3),
+[data-digits="arabic"] .font-display {
+  font-family: "Zaki Digits", var(--font-display);
+}
+[data-digits="arabic"] .font-sans {
+  font-family: "Zaki Digits", var(--font-plex), "Segoe UI", Tahoma, sans-serif;
+}
+[data-digits="arabic"] .font-brand,
+[data-digits="arabic"] .zk-wordmark {
+  font-family: "Zaki Digits", var(--font-lalezar), var(--font-display);
+}
+/* what is typed stays what is shown and stored; the «123» sample of the choice is itself */
+[data-digits="arabic"] :is(input, textarea, select),
+[data-digits="arabic"] .zk-digits-sample {
+  font-family: var(--font-plex), "Segoe UI", Tahoma, sans-serif;
+}

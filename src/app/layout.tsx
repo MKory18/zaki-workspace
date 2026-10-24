@@ -6,6 +6,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { DECOR_COOKIE, THEME_COOKIE, decorLevelOf, rootThemeAttributes, themeOf } from "@/lib/themes/registry";
 import { themeColorOf } from "@/lib/themes/palettes";
+import { DIGITS_COOKIE, digitsOf } from "@/lib/digits";
 
 /** The body face of every theme. */
 const plex = IBM_Plex_Sans_Arabic({
@@ -57,6 +58,7 @@ function chosen() {
   return {
     theme: themeOf(store.get(THEME_COOKIE)?.value),
     decor: decorLevelOf(store.get(DECOR_COOKIE)?.value),
+    digits: digitsOf(store.get(DIGITS_COOKIE)?.value),
   };
 }
 
@@ -74,13 +76,13 @@ export function generateViewport(): Viewport {
  * Dialogs and menus inherit it from <html>.
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const { theme, decor } = chosen();
+  const { theme, decor, digits } = chosen();
   const attrs = rootThemeAttributes(theme, decor);
   const className = [plex.variable, reem.variable, lalezar.variable, attrs.dark ? "dark" : ""].filter(Boolean).join(" ");
   return (
-    <html lang="ar" dir="rtl" data-theme={attrs["data-theme"]} data-decor={attrs["data-decor"]} className={className} suppressHydrationWarning>
+    <html lang="ar" dir="rtl" data-theme={attrs["data-theme"]} data-decor={attrs["data-decor"]} data-digits={digits} className={className} suppressHydrationWarning>
       <body>
-        <Providers theme={theme} decor={decor}>
+        <Providers theme={theme} decor={decor} digits={digits}>
           {children}
         </Providers>
       </body>

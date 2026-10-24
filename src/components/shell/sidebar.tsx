@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { BookOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { NavModel, NavRole, PlaceKey } from "@/lib/nav/places";
-import { DolphinMark } from "@/components/logo";
 import { ThemeDecor } from "@/components/theme/theme-decor";
 import { PlaceBadge } from "./place-badge";
 import { NavIcon } from "./nav-icons";
@@ -14,16 +13,19 @@ import { SpaceSwitcher } from "./space-switcher";
 import { ariaCurrent } from "./current";
 
 /**
- * The computer's side menu (from `md`), on the START side — the right, in Arabic:
+ * The computer's side menu (from `md`), on the START side — the right, in Arabic («نجمة وطريق»):
  *
- *   - the 72px header: the theme's ornament (`ThemeDecor kind="sidebar"`, one of the four places a
- *     decoration may be drawn) behind the dolphin mark and the «Zaki Workspace» wordmark. The header is
- *     `relative` and clips the layer; its content is `relative` too, so it paints over the layer. The
- *     ornament stays in the header: never behind the list of places;
+ *   - the 88px header: the theme's ornament (`ThemeDecor kind="sidebar"`, one of the four places a
+ *     decoration may be drawn — the field of stars on «ليل»/«نهار») behind the wordmark «زاكي» in
+ *     Lalezar (`.zk-wordmark`) and the company's name. The header is `relative` and clips the layer;
+ *     its content is `relative` too, so it paints over the layer. The ornament stays in the header:
+ *     never behind the list of places;
  *   - the space switcher, and «+» for whoever may open a space;
- *   - the places (icon and label), the current one marked;
- *   - at the bottom the avatar menu and the button that folds the menu to an icon rail (remembered on
- *     this device by the shell).
+ *   - the places (icon and label), the current one washed in gold and marked with a star, the unread
+ *     count beside «الدردشة»;
+ *   - a dashed gold thread down the menu's end edge (`.zk-side-rule`, decoration only);
+ *   - at the bottom «دليل زاكي», the avatar menu and the button that folds the menu to an icon rail
+ *     (remembered on this device by the shell).
  *
  * `data-tour="places"` on the list (the bottom bar carries it on a phone).
  */
@@ -34,6 +36,7 @@ export function Sidebar({
   user,
   rank,
   isGuest,
+  orgName,
   collapsed,
   onToggle,
   /** True after a toggle in this session: then, and only then, the width animates. */
@@ -46,6 +49,8 @@ export function Sidebar({
   user: AvatarUser;
   rank: NavRole;
   isGuest: boolean;
+  /** The company's name under the wordmark (the active organization). */
+  orgName?: string;
   collapsed: boolean;
   onToggle: () => void;
   animated?: boolean;
@@ -56,28 +61,28 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "hidden shrink-0 flex-col border-e border-border bg-surface-1 md:flex",
+        "zk-side-rule relative hidden shrink-0 flex-col border-e border-border bg-surface-1 md:flex",
         // the fold animates only after the person has toggled it in this visit: the FIRST frame must
         // already be the right width, so a hard load never plays the 256px → 72px shrink
         animated && "transition-[width] duration-150",
         collapsed ? "w-[72px]" : "w-64",
       )}
     >
-      <div className="relative isolate flex h-[72px] shrink-0 items-center overflow-hidden border-b border-border px-4">
+      <div className="relative isolate flex h-[88px] shrink-0 flex-col justify-center overflow-hidden border-b border-border px-4">
         <ThemeDecor kind="sidebar" />
         <Link
           href="/"
-          aria-label={collapsed ? t("app.name") : undefined}
-          className={cn("relative flex min-w-0 items-center gap-2.5 rounded-xl", collapsed && "mx-auto")}
+          aria-label={t("app.brand")}
+          className={cn("relative flex min-w-0 flex-col rounded-xl", collapsed && "mx-auto items-center")}
         >
-          <span aria-hidden="true" className="shrink-0">
-            <DolphinMark className="size-9" />
+          <span aria-hidden="true" className={cn("zk-wordmark leading-none", collapsed ? "text-2xl" : "text-[40px]")}>
+            {t("app.brand")}
           </span>
-          {collapsed ? null : (
-            <span lang="en" dir="ltr" className="truncate text-base font-bold tracking-tight text-fg">
-              {t("app.name")}
+          {orgName && !collapsed ? (
+            <span aria-hidden="true" className="mt-1.5 truncate text-xs font-semibold text-fg-muted">
+              <bdi>{orgName}</bdi>
             </span>
-          )}
+          ) : null}
         </Link>
       </div>
 
@@ -99,7 +104,7 @@ export function Sidebar({
                   className={cn(
                     "flex h-11 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
                     collapsed && "justify-center px-0",
-                    active ? "bg-accent/10 font-semibold text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
+                    active ? "bg-accent-2/10 font-semibold text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
                   )}
                 >
                   <span className="relative shrink-0">
@@ -108,12 +113,30 @@ export function Sidebar({
                   </span>
                   <span className={cn("truncate", collapsed && "sr-only")}>{label}</span>
                   {!collapsed && <PlaceBadge count={badges[place.key]} className="ms-auto" />}
+                  {active && !collapsed ? (
+                    <span aria-hidden="true" className={cn("zk-star size-3 shrink-0 text-accent-2", !badges[place.key] && "ms-auto")} />
+                  ) : null}
                 </Link>
               </li>
             );
           })}
         </ul>
       </nav>
+
+      <div className={cn("shrink-0 px-3 pb-1", collapsed && "px-2")}>
+        <Link
+          href="/guide"
+          aria-current={ariaCurrent(pathname.startsWith("/guide"), "/guide", pathname)}
+          title={collapsed ? t("shell.guide") : undefined}
+          className={cn(
+            "flex h-11 items-center gap-2.5 rounded-xl border border-dashed border-accent-2 text-sm font-semibold text-fg transition-colors hover:bg-accent-2/10",
+            collapsed ? "justify-center px-0" : "px-3",
+          )}
+        >
+          <BookOpen aria-hidden="true" className="size-5 shrink-0 text-accent-2" />
+          <span className={cn("truncate", collapsed && "sr-only")}>{t("shell.guide")}</span>
+        </Link>
+      </div>
 
       <div className={cn("flex shrink-0 items-center gap-1 border-t border-border p-3", collapsed && "flex-col")}>
         <div className={cn("min-w-0", collapsed ? "flex justify-center" : "flex-1")}>

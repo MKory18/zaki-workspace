@@ -18,6 +18,7 @@ import { AddMemberSheet } from "@/components/members/add-member-sheet";
 import { membersApi } from "@/components/members/api";
 import { MemberSheet } from "@/components/members/member-sheet";
 import { MembersList, type ListFilter } from "@/components/members/members-list";
+import { useNewIntent } from "@/lib/nav/use-new-intent";
 
 /** A clock for "last sign-in: 3 hours ago" that moves on by itself, once a minute. */
 function useNow(intervalMs = 60_000): number {
@@ -62,6 +63,8 @@ export function OrgMembersView({
   const spaces = query.data?.spaces ?? [];
   const actor: ActorInfo = { id: actorId, role: actorRole, caps: actorCaps };
   const opened = openId ? (members.find((m) => m.id === openId) ?? null) : null;
+  // «جديد» → «عضو» lands here with ?new=person; like the button, the form waits for the list
+  useNewIntent("person", () => setAdding(true), query.isSuccess && creatableRoles(actorRole).length > 0);
 
   /** Show a change that the server accepted at once, without waiting for the list to be fetched again. */
   const patchMember = useCallback(

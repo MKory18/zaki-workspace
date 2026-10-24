@@ -1,3 +1,4 @@
+import { DIGIT_MODES } from "@/lib/digits";
 import * as React from "react";
 import { createElement, type FunctionComponent, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -272,7 +273,8 @@ describe("ThemePicker", () => {
 
   it("every target is at least 44px tall and shows a focus ring", () => {
     const labels = markup.match(/<label[^>]*>/g) ?? [];
-    expect(labels.length).toBe(THEME_KEYS.length + DECOR_LEVELS.length);
+    // the four themes, the three decoration levels and the two digit shapes («الأرقام»)
+    expect(labels.length).toBe(THEME_KEYS.length + DECOR_LEVELS.length + DIGIT_MODES.length);
     for (const label of labels) {
       expect(label).toMatch(/min-h-11|min-h-\[44px\]|min-h-24/);
       expect(label).toMatch(/has-\[:focus-visible\]:ring-2/);

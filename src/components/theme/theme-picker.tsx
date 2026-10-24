@@ -6,6 +6,8 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { DECOR_LEVELS, themeLabelKey, themeMoodKey, type ThemeKey } from "@/lib/themes/registry";
 import { useTheme } from "./theme-provider";
+import { useDigits } from "./digits-provider";
+import { DIGIT_MODES, DIGIT_SAMPLES } from "@/lib/digits";
 
 /**
  * The theme picker: four cards, each a native radio (so arrows move the choice, Tab enters and
@@ -20,6 +22,7 @@ import { useTheme } from "./theme-provider";
 export function ThemePicker({ className }: { className?: string }) {
   const { t } = useI18n();
   const { theme, setTheme, decor, setDecor, themes } = useTheme();
+  const { digits, setDigits } = useDigits();
   const id = useId();
 
   return (
@@ -100,6 +103,41 @@ export function ThemePicker({ className }: { className?: string }) {
           })}
         </div>
         <p className="mt-1.5 text-xs text-muted">{t("theme.decor_motion")}</p>
+      </fieldset>
+
+      {/* «الأرقام: 123 / ١٢٣» — how 0-9 are drawn (src/lib/digits.ts); fields, copies and searches stay 0-9 */}
+      <fieldset>
+        <legend className="text-sm font-semibold text-fg">{t("digits.picker")}</legend>
+        <p className="mt-0.5 text-xs text-fg-muted">{t("digits.picker_hint")}</p>
+        <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1">
+          {DIGIT_MODES.map((mode) => {
+            const selected = mode === digits;
+            return (
+              <label
+                key={mode}
+                className={cn(
+                  "flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg px-2 text-center text-sm transition-colors",
+                  "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent",
+                  selected ? "bg-surface font-semibold text-fg shadow-card" : "text-fg-muted hover:text-fg",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="zk-digits"
+                  className="sr-only"
+                  checked={selected}
+                  value={mode}
+                  aria-label={t(`digits.${mode}`)}
+                  onChange={() => setDigits(mode)}
+                />
+                {/* the sample is spelled in its own code points, so it looks the same whatever is chosen */}
+                <span aria-hidden="true" dir="ltr" className="zk-digits-sample">
+                  {DIGIT_SAMPLES[mode]}
+                </span>
+              </label>
+            );
+          })}
+        </div>
       </fieldset>
     </div>
   );

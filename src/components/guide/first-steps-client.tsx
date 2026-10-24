@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, ChevronDown, ChevronLeft, ChevronUp, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronUp, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { allStepsDone, progressOf, stepDone, type FirstStepView } from "@/lib/guide/first-steps";
 import {
@@ -22,17 +22,22 @@ import {
 } from "./first-steps-cookie";
 import { cn } from "@/lib/utils";
 
-/** The little circle in front of a step: filled with a check when it is done. */
-function Mark({ done }: { done: boolean }) {
+/**
+ * A step's mark on the road of «أول خطواتك» («نجمة وطريق»): a gold star once it is done, a gold ring that
+ * breathes for the step to do now, a plain ring for the rest. The dashed road between them is `.zk-route`
+ * on the list (globals.css); the mark sits on it, on the page's own colour so the road does not show through.
+ */
+function Mark({ state }: { state: "done" | "now" | "todo" }) {
   return (
     <span
       aria-hidden
       className={cn(
-        "grid size-6 shrink-0 place-items-center rounded-full border",
-        done ? "border-accent bg-accent text-accent-fg" : "border-border text-transparent",
+        "relative grid size-8 shrink-0 place-items-center rounded-full",
+        state === "done" ? "bg-surface-1" : "border-2 bg-surface-1",
+        state === "now" ? "zk-ping border-accent-2" : state === "todo" ? "border-muted" : "",
       )}
     >
-      <Check className="size-4" />
+      {state === "done" ? <span className="zk-star size-6 text-accent-2" /> : null}
     </span>
   );
 }
@@ -118,11 +123,11 @@ export function FirstStepsView({
         aria-valuenow={done}
         className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2"
       >
-        <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round((done / total) * 100)}%` }} />
+        <div className="h-full rounded-full bg-accent-2" style={{ width: `${Math.round((done / total) * 100)}%` }} />
       </div>
 
       {local.collapsed ? null : (
-        <ol id="first-steps-list" className="mt-3 space-y-1">
+        <ol id="first-steps-list" className="zk-route mt-3 space-y-1">
           {steps.map((step) => {
             const isDone = stepDone(step, local);
             const title = t(step.titleKey);
@@ -132,7 +137,7 @@ export function FirstStepsView({
             if (isDone) {
               return (
                 <li key={step.id} className="flex min-h-12 items-center gap-3 px-1">
-                  <Mark done />
+                  <Mark state="done" />
                   <p className="min-w-0 flex-1 text-[15px] leading-7 text-fg-muted">
                     {title}
                     {stateNote}
@@ -144,10 +149,10 @@ export function FirstStepsView({
             // the next step: opened, with its hint and the one primary button
             if (step.id === nextId) {
               return (
-                <li key={step.id} className="rounded-xl bg-surface-2 p-3">
+                <li key={step.id} className="rounded-xl bg-surface-2 py-3 pe-3 ps-1">
                   <div className="flex items-start gap-3">
                     <span className="mt-0.5">
-                      <Mark done={false} />
+                      <Mark state="now" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[15px] font-semibold leading-7 text-fg">
@@ -177,7 +182,7 @@ export function FirstStepsView({
                   href={step.href}
                   className="flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-lg px-1 text-fg transition-colors hover:bg-surface-2"
                 >
-                  <Mark done={false} />
+                  <Mark state="todo" />
                   <span className="min-w-0 flex-1 text-[15px] leading-7">
                     {title}
                     {stateNote}

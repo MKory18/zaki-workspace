@@ -32,7 +32,7 @@ describe("scope: only what the person may open, only their own, only their compa
     const data = await todayFor(w.member.id, NOW);
     expect(allTaskIds(data)).toEqual([visible.id]);
     for (const hidden of [hiddenToday, hiddenOverdue, hiddenLater]) expect(allTaskIds(data)).not.toContain(hidden.id);
-    expect(data.tasks.counts).toEqual({ open: 1, overdue: 0, today: 1, later: 0 });
+    expect(data.tasks.counts).toEqual({ open: 1, overdue: 0, today: 1, later: 0, doneToday: 0 });
     expect(JSON.stringify(data)).not.toContain("مخفية");
     expect(data.hasSpaces).toBe(true);
   });
@@ -139,7 +139,7 @@ describe("the three groups: overdue, today, later — counted by the company's d
     // the next days first, the undated last
     expect(idsOf(data.tasks.later)).toEqual([lEdge.id, lFar.id, lNone.id]);
     expect(data.tasks.later.map((t) => t.dueLabel)).toEqual(["بكرا", "بعد 8 أيام", ""]);
-    expect(data.tasks.counts).toEqual({ open: 8, overdue: 3, today: 2, later: 3 });
+    expect(data.tasks.counts).toEqual({ open: 8, overdue: 3, today: 2, later: 3, doneToday: 0 });
   });
 
   it("carries what a row shows: the title, the project, the priority in Arabic, and whether the person may finish it", async () => {
@@ -189,6 +189,7 @@ describe("the three groups: overdue, today, later — counted by the company's d
       overdue: cut.overdue + 2,
       today: cut.today + 2,
       later: cut.later + 2,
+      doneToday: 0,
     });
   });
 
@@ -617,5 +618,38 @@ describe("through the endpoints that already exist", () => {
     const data = await todayFor(w.member.id, NOW);
     expect(data.tasks.later.map((t) => [t.title, t.dueLabel])).toEqual([["بكرا", "بكرا"], ["بلا موعد", ""]]);
     expect(data.tasks.today).toEqual([]);
+  });
+});
+
+describe("«x من y خلصت»: what the person finished today", () => {
+  it("counts the person's own tasks finished today in the company's day — not yesterday's, not a colleague's, not another space's", async () => {
+    const w = await world();
+    const done = async (assigneeId: string, completedAt: Date, place: "in" | "out" = "in") => {
+      const row = await put(w, place, { assigneeId, due: at("2026-10-20T10:00:00Z"), completed: true });
+      await db.task.update({ where: { id: row.id }, data: { completedAt } });
+    };
+    await done(w.member.id, at("2026-10-22T08:00:00Z")); // today, before NOW
+    await done(w.member.id, at("2026-10-22T00:00:00Z")); // the very start of today
+    await done(w.member.id, at("2026-10-21T23:59:59Z")); // yesterday
+    await done(w.lead.id, at("2026-10-22T08:00:00Z")); // a colleague's
+    await done(w.member.id, at("2026-10-22T08:00:00Z"), "out"); // a space the member is not in
+    await put(w, "in", { assigneeId: w.member.id, due: at("2026-10-22T10:00:00Z") }); // still open, due today
+
+    const data = await todayFor(w.member.id, NOW);
+    expect(data.tasks.counts.doneToday).toBe(2);
+    expect(data.tasks.counts.today).toBe(1);
+  });
+
+  it("follows the company's zone: finished at 22:30 UTC is TOMORROW in Asia/Damascus", async () => {
+    const w = await world("Asia/Damascus");
+    const row = await put(w, "in", { assigneeId: w.member.id, due: null, completed: true });
+    await db.task.update({ where: { id: row.id }, data: { completedAt: at("2026-10-21T22:30:00Z") } });
+    // NOW is 2026-10-22 12:00 in Damascus: 22:30Z on the 21st is 01:30 on the 22nd there — today
+    expect((await todayFor(w.member.id, NOW)).tasks.counts.doneToday).toBe(1);
+    // and in a UTC company the same moment is yesterday
+    const u = await world();
+    const other = await put(u, "in", { assigneeId: u.member.id, due: null, completed: true });
+    await db.task.update({ where: { id: other.id }, data: { completedAt: at("2026-10-21T22:30:00Z") } });
+    expect((await todayFor(u.member.id, NOW)).tasks.counts.doneToday).toBe(0);
   });
 });

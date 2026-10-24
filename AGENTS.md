@@ -287,6 +287,8 @@ other way is a bug.
   Statuses, priorities, ranks and every other enum are shown through `enumLabel()`, board columns
   through `columnLabel()`, dates and numbers through `src/lib/format.ts` (Arabic names, Western
   digits); `tests/arabic-ui.test.ts` fails on a raw enum, a Latin word or a French/English date.
+  The code always writes 0-9: a person who picks «الأرقام: ١٢٣» sees ٠-٩ because the font
+  "Zaki Digits" draws them (`src/lib/digits.ts`, `<html data-digits>`) — never convert a number.
 - **Colours come from the theme tokens**, never from Tailwind's default palette or a hex value:
   `text-danger`, `bg-ok/10`, `border-warn/40`, `text-info`, `bg-cat-3/10` (and `bg-surface-1`,
   `text-fg-muted`, `border-border`, `bg-accent` ...). Four themes (`night` default,
@@ -294,7 +296,14 @@ other way is a bug.
   `src/app/themes.css` and `src/components/theme/decor.css` are generated
   (`node scripts/build-themes-css.mjs`, `node scripts/build-decor-css.mjs`) and a test fails when
   they drift. Decoration (ornament, photographs) appears only on the login door, empty states, the
-  sidebar header and the Today strip — never behind a number, an amount or a table.
+  sidebar header and the Today strip — never behind a number, an amount or a table. The Today strip
+  is the mission card: its two buttons sit INSIDE the `zk-scrim` panel, never on the picture.
+- **The look is «نجمة وطريق»** (the owner's adopted mock-up, 2026-10-24): the gold of `accent-2` is
+  the star (a shape colour, 3:1 — its label is `text-scrim`, held to 4.5:1 by the gate), the
+  wordmark «زاكي» is Lalezar (`font-brand`), the shell's shapes are the `.zk-*` rules at the end
+  of `globals.css`. «جديد» offers only what `newActionsFor()` (src/lib/nav/new-actions.ts) allows,
+  and every action opens an existing form (`?new=` + `useNewIntent`). A new font, picture or
+  third-party file is credited in `public/brand/CREDITS.md` AND in the guide's «الاعتمادات» article.
 - Environment is read through `src/server/env.ts` (zod). A missing or malformed value fails
   at boot, loudly, with the key name and never the value.
 - Read the Next.js 14 documentation for what you use; do not assume Next 15/16 behaviour
