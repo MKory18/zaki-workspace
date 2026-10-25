@@ -301,15 +301,20 @@ model StoredFile {
   // Chat uploads carry their attachment facts here until the message claims them
   // (image width/height; voice durationMs and peaks). Null for every library file.
   meta       Json?
+  // A library file's space (the owner's decision, 2026-10-25: each space has its own library). None: a file from
+  // before spaces had libraries, read in «الشركة»; and every chat file (it goes with its conversation).
+  workspaceId String?
   createdAt  DateTime  @default(now())
 
   organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   uploader     User                @relation("FileUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+  workspace    Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   chatLinks    MessageAttachment[]
 
   @@index([orgId, familyId, isLatest])
   @@index([familyId])
   @@index([orgId, purpose])
+  @@index([orgId, workspaceId])
 }
 
 // ---------- internal chat (Phase: real-time rooms over the org boundary) ----------
@@ -599,6 +604,7 @@ model Workspace {
   teams         Team[]
   projects      Project[]
   conversations Conversation[]
+  files         StoredFile[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, systemKey])

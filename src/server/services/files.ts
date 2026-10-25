@@ -7,6 +7,7 @@ import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/a
 import { logEvent } from "@/server/services/integrations";
 import { canReadConversation } from "@/server/policy/conversation";
 import { MAX_FILE_BYTES, canManageFile, checksumHex, safeStoredName, sniffMimeType } from "@/server/files/sniff";
+import { accessibleWorkspaceIds } from "@/server/services/access";
 
 export const fileLibrary = process.env.UPLOAD_DIR || join(process.cwd(), ".data", "uploads");
 
@@ -26,9 +27,30 @@ export async function logFile(orgId: string, type: string, payload?: Record<stri
   await logEvent(orgId, { direction: "IN", type, payload: payload as Prisma.InputJsonValue });
 }
 
+/* ---------------- where a library file is read ---------------- */
+
+/**
+ * EACH SPACE HAS ITS OWN LIBRARY (the owner's decision, 2026-10-25): inside a space, the files uploaded there; inside
+ * «الشركة» also the files from before spaces had libraries.
+ */
+export interface FilePlace {
+  spaceId: string | null;
+  isHq: boolean;
+}
+
+export function filePlaceWhere(place: FilePlace): Prisma.StoredFileWhereInput {
+  if (!place.spaceId) return { id: { in: [] } };
+  return place.isHq ? { OR: [{ workspaceId: place.spaceId }, { workspaceId: null }] } : { workspaceId: place.spaceId };
+}
+
+/** A library file of a space the person cannot open is «not found» (one with no space is everybody's). */
+async function assertOfMySpaces(userId: string, workspaceId: string | null): Promise<void> {
+  if (workspaceId && !(await accessibleWorkspaceIds(userId)).includes(workspaceId)) throw new NotFoundError("files.not_found");
+}
+
 /* ---------------- reads ---------------- */
 
-export async function listFiles(orgId: string): Promise<
+export async function listFiles(orgId: string, place?: FilePlace): Promise<
   Array<{
     id: string;
     name: string;
@@ -43,14 +65,15 @@ export async function listFiles(orgId: string): Promise<
     familyId: string;
   }>
 > {
+  const here = place ? { AND: [filePlaceWhere(place)] } : {};
   const heads = await db.storedFile.findMany({
-    where: { orgId, isLatest: true, deletedAt: null, purpose: "LIBRARY", ...STORED },
+    where: { orgId, isLatest: true, deletedAt: null, purpose: "LIBRARY", ...STORED, ...here },
     orderBy: { createdAt: "desc" },
     include: { uploader: { select: { name: true } } },
   });
   const counts = await db.storedFile.groupBy({
     by: ["familyId"],
-    where: { orgId, ...STORED, purpose: "LIBRARY" },
+    where: { orgId, ...STORED, purpose: "LIBRARY", ...here },
     _count: { familyId: true },
   });
   const versionCount = new Map(counts.map((c) => [c.familyId, c._count.familyId]));
@@ -83,11 +106,13 @@ export async function assertMayReadFile(ctx: OrgAccessContext, id: string): Prom
     select: {
       purpose: true,
       uploaderId: true,
+      workspaceId: true,
       chatLinks: { select: { message: { select: { conversationId: true, deletedAt: true } } } },
     },
   });
   if (!f) throw new NotFoundError("files.not_found");
-  if (f.purpose === "LIBRARY") return;
+  // a library file: of one of the person's spaces (or from before spaces had libraries)
+  if (f.purpose === "LIBRARY") return assertOfMySpaces(ctx.userId, f.workspaceId);
   const messages = f.chatLinks.flatMap((l) => (l.message ? [l.message] : []));
   if (messages.length === 0 && f.uploaderId === ctx.userId) return;
   for (const m of messages) {
@@ -170,7 +195,7 @@ export async function ingest(
    * kind, which is the only way to tell audio/webm from video/webm; the plain sniffer here would
    * store a voice note as a video. Trusted callers only, never a client's claim.
    */
-  opts: { sniffedMime?: string } = {},
+  opts: { sniffedMime?: string; workspaceId?: string | null } = {},
 ): Promise<{ id: string; version: number; mimeType: string }> {
   // a guest posts in the topics of their spaces (files and voice notes included), never in the library
   if (ctx.orgRole === "GUEST" && purpose === "LIBRARY") throw new ForbiddenError("chat.guest_forbidden");
@@ -183,6 +208,13 @@ export async function ingest(
   const display = safeStoredName(input.name.split(/[\\/]/).pop() ?? "file");
   const familyId = familyOf ? familyOf.familyId : "";
   const version = familyOf ? familyOf.latestVersion + 1 : 1;
+  // a library file lives in a space: a new version in its family's, a new file in the one it was uploaded in
+  const workspaceId =
+    purpose !== "LIBRARY"
+      ? null
+      : familyOf
+        ? ((await db.storedFile.findFirst({ where: { familyId, orgId: ctx.orgId }, select: { workspaceId: true } }))?.workspaceId ?? null)
+        : (opts.workspaceId ?? null);
 
   // The row comes first (its id is part of the file name) and is PENDING until the bytes are on disk.
   const created = await db.storedFile.create({
@@ -196,6 +228,7 @@ export async function ingest(
       size: input.bytes.length,
       version,
       purpose,
+      workspaceId,
     },
     select: { id: true },
   });
@@ -250,9 +283,10 @@ export async function ingest(
 export async function softDelete(ctx: OrgAccessContext, id: string): Promise<void> {
   const f = await db.storedFile.findFirst({
     where: { id, orgId: ctx.orgId, deletedAt: null, purpose: "LIBRARY", ...STORED },
-    select: { id: true, uploaderId: true, isLatest: true, familyId: true },
+    select: { id: true, uploaderId: true, isLatest: true, familyId: true, workspaceId: true },
   });
   if (!f) throw new NotFoundError("files.not_found");
+  await assertOfMySpaces(ctx.userId, f.workspaceId);
   if (!canManageFile({ uploaderId: f.uploaderId, viewerId: ctx.userId, orgRole: ctx.orgRole })) {
     throw new ForbiddenError("files.no_perm");
   }
