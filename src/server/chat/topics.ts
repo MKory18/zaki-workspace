@@ -6,7 +6,7 @@ import { emitRealtime } from "@/server/realtime/emit";
 import { isSpaceAdmin } from "@/server/policy/conversation";
 import { writeSystemMessage } from "@/server/chat/system";
 import type { ConversationDto, MemberDto, MessageDto, ReaderDto } from "@/server/chat/dto";
-import { presentMessage, type Viewer } from "@/server/chat/redact";
+import { presentMessage, previewOf, type Viewer } from "@/server/chat/redact";
 import { messageInclude, dmStatusFor } from "@/server/chat/messages";
 import type { Prisma } from "@prisma/client";
 
@@ -380,7 +380,17 @@ export async function conversationDetail(
       oversight: org!.role === "OWNER" && !facts.viewerIsMember,
       // a topic only (a DM is never his to enter), and not a closed one (it takes no messages)
       canJoin: org!.role === "OWNER" && !facts.viewerIsMember && facts.kind === "TOPIC" && !conv.closedAt,
+      canMakeWork: org!.role !== "GUEST" && !(org!.role === "OWNER" && !facts.viewerIsMember),
+      id: ctx.userId,
     },
+    pinnedMessages: (
+      await db.chatMessage.findMany({
+        where: { conversationId, pinned: true, deletedAt: null, kind: { not: "SYSTEM" } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: { id: true, body: true, deletedAt: true, author: { select: { name: true } } },
+      })
+    ).map((m) => ({ id: m.id, authorName: m.author.name, preview: previewOf(m.body, m.deletedAt) })),
     members,
     messages: messages.reverse(), // oldest first in the payload
     // topics and groups: each person's avatar sits under the last message they read (DMs have ticks)

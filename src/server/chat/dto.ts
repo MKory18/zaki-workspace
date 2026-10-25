@@ -68,6 +68,8 @@ export interface MessageDto {
   /** the OWNER only, on an edited message. */
   history?: { body: string; editedAt: string }[];
   system?: SystemMeta | null;
+  /** the tasks and tickets made from this message («صارت مهمة»). */
+  work?: { kind: "task" | "ticket"; id: string }[];
 }
 
 export interface SpaceSummaryDto {
@@ -146,7 +148,18 @@ export interface ConversationDto {
   closed: boolean;
   space?: { id: string; name: string; hasExternal: boolean } | null;
   /** `canJoin`: the OWNER in oversight of an open topic may join it («شارك بالمحادثة») to post there. */
-  me: { canPost: boolean; canModerate: boolean; muted: boolean; oversight: boolean; canJoin: boolean };
+  me: {
+    canPost: boolean;
+    canModerate: boolean;
+    muted: boolean;
+    oversight: boolean;
+    canJoin: boolean;
+    /** may turn a message into a task or a ticket (not a guest, not in silent oversight) */
+    canMakeWork?: boolean;
+    id?: string;
+  };
+  /** the pinned messages, newest first (the bar on top of the conversation) */
+  pinnedMessages?: { id: string; authorName: string; preview: string | null }[];
   members?: MemberDto[];
   messages: MessageDto[];
   readers: ReaderDto[];

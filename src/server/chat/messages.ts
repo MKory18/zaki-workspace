@@ -472,6 +472,8 @@ export function messageInclude() {
     },
     revisions: { orderBy: { createdAt: "asc" as const } },
     notes: { orderBy: { createdAt: "asc" as const }, include: { author: { select: { name: true } } } },
+    tasks: { select: { id: true } },
+    tickets: { select: { id: true } },
   } satisfies Prisma.ChatMessageInclude;
 }
 
