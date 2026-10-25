@@ -78,11 +78,12 @@ function render(element: ReactElement, canCreateSpaces = true): string {
   );
 }
 
-function shell(role: NavRole, pathname: string): string {
+function shell(role: NavRole, pathname: string, space: { id: string; name: string; emoji: string | null } | null = null): string {
   where.pathname = pathname;
   const subject = who(role);
   return render(
     createElement(AppShell, {
+      space,
       user: USER,
       nav: buildNav(subject),
       rank: role,
@@ -172,12 +173,22 @@ describe("the frame for the owner, on a project page", () => {
     expect(sidebarPlaces(html)).not.toContain("zk-decor");
   });
 
-  it("«نجمة وطريق»: the wordmark «زاكي» in Lalezar, the company's name under it, a link home named in Arabic", () => {
+  it("«نجمة وطريق»: the wordmark in Lalezar (the space's name, «زاكي» before one is known), the company's name under it, a link home", () => {
     const aside = sidebar(html);
-    expect(aside).toMatch(/<span aria-hidden="true" class="zk-wordmark[^"]*">زاكي<\/span>/);
+    expect(aside).toMatch(/<span aria-hidden="true" class="zk-wordmark[^"]*"><bdi>زاكي<\/bdi><\/span>/);
     expect(aside).toContain("<bdi>شركة زكي</bdi>");
     expect(linkTo(aside, "/")).toContain(`aria-label="${AR["app.brand"]}"`);
     expect(aside.split(">")[0]).toContain("zk-side-rule");
+  });
+
+  it("the space you are in is written where «زاكي» was, in the same lettering (the owner's ask, 2026-10-25)", () => {
+    const aside = sidebar(shell("OWNER", "/my-work", { id: "w1", name: "العمل", emoji: "🛠️" }));
+    expect(aside).toMatch(/<span aria-hidden="true" class="zk-wordmark[^"]*"><bdi>العمل<\/bdi><\/span>/);
+    expect(aside).not.toMatch(/class="zk-wordmark[^"]*"><bdi>زاكي/);
+    expect(linkTo(aside, "/")).toContain('aria-label="العمل"');
+    // a long name steps down a size so it fits
+    const long = sidebar(shell("OWNER", "/my-work", { id: "w2", name: "مصاريف المكتب الرئيسي", emoji: null }));
+    expect(/class="zk-wordmark([^"]*)"/.exec(long)?.[1]?.split(" ")).toContain("text-2xl");
   });
 
   it("the current place is washed in gold and marked with a star; the others are not", () => {
@@ -200,7 +211,7 @@ describe("the frame for the owner, on a project page", () => {
 
   it("offers the spaces and «+» in the side menu, and the spaces at the end of «الشغل»'s strip for the phone", () => {
     const aside = sidebar(html);
-    expect(aside).toContain(AR["top.workspaces"]);
+    expect(aside).toContain(AR["shell.spaces.mine"]);
     expect(aside).toContain(`aria-label="${AR["ws.new"]}"`);
     expect(tabStrip(html)).toContain(`aria-label="${AR["shell.spaces.open"]}"`);
   });

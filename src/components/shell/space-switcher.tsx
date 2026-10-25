@@ -134,14 +134,9 @@ export function SpaceSwitcher({
         type="button"
         className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm text-fg transition-colors hover:bg-surface-2"
       >
-        {current?.emoji ? (
-          <span aria-hidden="true" className="shrink-0 text-base leading-none">{current.emoji}</span>
-        ) : (
-          <Layers aria-hidden="true" className="size-4 shrink-0 text-muted" />
-        )}
-        <span className="min-w-0 flex-1 truncate text-start font-semibold">
-          <bdi>{current ? current.name : t("top.workspaces")}</bdi>
-        </span>
+        <Layers aria-hidden="true" className="size-4 shrink-0 text-muted" />
+        {/* the space's own name is written above it, in the menu's head (sidebar.tsx) */}
+        <span className="min-w-0 flex-1 truncate text-start font-semibold">{t("shell.spaces.mine")}</span>
         {dot}
         <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted" />
       </button>

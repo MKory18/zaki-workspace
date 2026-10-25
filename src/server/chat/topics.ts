@@ -37,6 +37,15 @@ export const createTopicSchema = z.object({
   memberIds: z.array(z.string().min(1)).max(200).optional(),
 });
 
+/** Named people must be people of the space (nobody is pulled in from outside it). */
+async function assertPeopleOfSpace(orgId: string, spaceId: string, ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const inSpace = await db.workspaceMember.count({
+    where: { workspaceId: spaceId, userId: { in: ids }, user: { memberships: { some: { organizationId: orgId, status: "ACTIVE" } } } },
+  });
+  if (inSpace !== ids.length) throw new ForbiddenError("teams.member_not_in_space");
+}
+
 /** The «مقطع» must be one of the space's own (a miss reads as «not found», like everything of another space). */
 async function assertTeamOfSpace(spaceId: string, teamId: string | null | undefined): Promise<void> {
   if (!teamId) return;
@@ -59,16 +68,7 @@ export async function createTopic(ctx: OrgAccessContext, input: z.infer<typeof c
   // a topic for named people: they must be people of the space (nobody is pulled in from outside it)
   const restricted = input.restricted ?? false;
   const named = restricted ? [...new Set(input.memberIds ?? [])].filter((id) => id !== ctx.userId) : [];
-  if (named.length) {
-    const inSpace = await db.workspaceMember.count({
-      where: {
-        workspaceId: input.spaceId,
-        userId: { in: named },
-        user: { memberships: { some: { organizationId: ctx.orgId, status: "ACTIVE" } } },
-      },
-    });
-    if (inSpace !== named.length) throw new ForbiddenError("teams.member_not_in_space");
-  }
+  await assertPeopleOfSpace(ctx.orgId, input.spaceId, named);
 
   const topicType = input.topicType ?? "DISCUSSION";
   const topic = await db.$transaction(async (tx) => {
@@ -105,14 +105,24 @@ export const updateTopicSchema = z.object({
   postingPolicy: z.enum(["ALL", "ADMINS"]).optional(),
   /** Move the topic to a «مقطع» of its space, or back to the whole space (null). */
   teamId: z.string().min(1).nullable().optional(),
+  /** With `restricted: true`: exactly who the topic is for (the one changing it stays in). */
+  memberIds: z.array(z.string().min(1)).max(200).optional(),
 });
 
 export async function updateTopic(ctx: OrgAccessContext, conversationId: string, input: z.infer<typeof updateTopicSchema>): Promise<void> {
   const { facts, org } = await guardTopic(ctx, conversationId);
   if (!canModerate(facts, org)) throw new ForbiddenError("chat.e.moderator_only");
   if (input.teamId !== undefined && facts.spaceId) await assertTeamOfSpace(facts.spaceId, input.teamId);
+  // «ناس محددين»: the people it is for are exactly the ones named (and the one changing it)
+  const { memberIds, ...fields } = input;
+  const named = fields.restricted && memberIds ? [...new Set([...memberIds, ctx.userId])] : null;
+  if (named && facts.spaceId) await assertPeopleOfSpace(ctx.orgId, facts.spaceId, named.filter((id) => id !== ctx.userId));
   await db.$transaction(async (tx) => {
-    await tx.conversation.update({ where: { id: conversationId }, data: { ...input } });
+    await tx.conversation.update({ where: { id: conversationId }, data: { ...fields } });
+    if (named) {
+      await tx.conversationMember.deleteMany({ where: { conversationId, userId: { notIn: named } } });
+      await tx.conversationMember.createMany({ data: named.map((userId) => ({ conversationId, userId })), skipDuplicates: true });
+    }
     await emitRealtime(tx, ctx.orgId, "conversation.changed", { conversationId, spaceId: facts.spaceId ?? undefined });
   });
 }
@@ -284,6 +294,7 @@ export async function conversationDetail(
     topicType: conv.topicType as ConversationDto["topicType"],
     postingPolicy: conv.postingPolicy as ConversationDto["postingPolicy"],
     restricted: conv.restricted,
+    teamId: conv.teamId,
     closed: !!conv.closedAt,
     space: conv.space ? { id: conv.space.id, name: conv.space.name, hasExternal: false } : null,
     me: {
