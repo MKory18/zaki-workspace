@@ -26,6 +26,7 @@ describe("the notification rows the bell reads", () => {
       orgPrefix: "ZK",
       taskId: "task-1",
       title: "جهّز تقرير الأسبوع",
+      workspaceId: null,
     });
     const row = await db.notification.findFirst({ where: { userId: w.member.id, type: "task_assigned" } });
     expect(row?.title).toBe(AR["notif.type.task_assigned"]);
@@ -43,6 +44,7 @@ describe("the notification rows the bell reads", () => {
       authorId: w.owner.id,
       authorName: "سارة",
       body: "شفت الملاحظة، بمشي عليها",
+      workspaceId: null,
       watcherIds: [w.member.id],
     });
     const row = await db.notification.findFirst({ where: { userId: w.member.id, type: "comment" } });

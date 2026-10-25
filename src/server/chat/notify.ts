@@ -2,6 +2,7 @@ import { db } from "@/server/db";
 import { pushNotification } from "@/server/notify";
 import { isOnline } from "@/server/realtime/presence";
 import { canReadConversation, type ConversationFacts } from "@/server/policy/conversation";
+import { hqSpaceId } from "@/server/chat/hq";
 
 /**
  * Chat notifications: a message reaches the people of its audience that are NOT looking at the
@@ -19,6 +20,9 @@ export async function notifyMessageToAudience(opts: {
   messageId: string; // in the link, so an edit or a delete can reach the preview again
 }): Promise<void> {
   const targets = new Set(opts.audienceIds);
+  // the space the message is in (a DM from before spaces had them is «الشركة»'s): the bell of that space shows it
+  const conv = await db.conversation.findUnique({ where: { id: opts.conversationId }, select: { spaceId: true, orgId: true } });
+  const workspaceId = conv?.spaceId ?? (conv ? await hqSpaceId(conv.orgId) : null);
   for (const userId of targets) {
     if (await isOnline(userId)) continue;
     if (opts.kind === "DM") {
@@ -34,6 +38,7 @@ export async function notifyMessageToAudience(opts: {
       title: opts.title,
       body: opts.preview,
       linkUrl: messageLink(opts.conversationId, opts.messageId),
+      workspaceId,
     });
   }
 }

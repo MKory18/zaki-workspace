@@ -12,6 +12,7 @@ import {
   type MemberChanges,
 } from "@/server/services/workspaces";
 import { notifyMembership } from "@/server/notify";
+import { goHref } from "@/lib/space-link";
 
 /**
  * The people of a space: only those IN it whose membership is ACTIVE. The OWNER reads the list
@@ -71,8 +72,9 @@ async function apply(ctx: OrgAccessContext, workspaceId: string, changes: Member
       userIds: added,
       kind: "workspace",
       title: ws.name,
-      linkUrl: "/projects",
+      linkUrl: goHref(workspaceId),
       actorId: ctx.userId,
+      workspaceId: workspaceId,
     });
   }
   await audit("workspace.members_updated", {

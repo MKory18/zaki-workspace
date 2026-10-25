@@ -15,7 +15,13 @@ async function activeRecipients(userIds: readonly string[]): Promise<string[]> {
   return userIds.filter((id) => active.has(id));
 }
 
-/** Generic in-app notification writer (bell UI maps type → localized label). */
+/**
+ * Generic in-app notification writer (bell UI maps type → localized label).
+ *
+ * `workspaceId`: the space the notification belongs to (a task's, a topic's, a space one was added to). The bell
+ * shows the space the person is in (each space is like a separate site); without one it is personal and shows in
+ * every space.
+ */
 export async function pushNotification(input: {
   userId: string;
   type: string;
@@ -23,6 +29,7 @@ export async function pushNotification(input: {
   body?: string | null;
   taskId?: string | null;
   linkUrl?: string | null;
+  workspaceId?: string | null;
 }): Promise<void> {
   if ((await activeRecipients([input.userId])).length === 0) return;
   await db.notification.create({
@@ -33,6 +40,7 @@ export async function pushNotification(input: {
       body: input.body ?? null,
       taskId: input.taskId ?? null,
       linkUrl: input.linkUrl ?? null,
+      workspaceId: input.workspaceId ?? null,
     },
   });
 }
@@ -46,6 +54,7 @@ export async function pushNotificationToMany(
     body?: string | null;
     taskId?: string | null;
     linkUrl?: string | null;
+    workspaceId?: string | null;
   },
 ): Promise<void> {
   const unique = await activeRecipients([...new Set(userIds)]);
@@ -58,6 +67,7 @@ export async function pushNotificationToMany(
       body: input.body ?? null,
       taskId: input.taskId ?? null,
       linkUrl: input.linkUrl ?? null,
+      workspaceId: input.workspaceId ?? null,
     })),
   });
 }
@@ -69,6 +79,8 @@ export async function notifyAssignment(input: {
   orgPrefix: string;
   taskId: string;
   title: string;
+  /** the task's space (null: personal) */
+  workspaceId: string | null;
 }): Promise<void> {
   // the bell prints the stored title VERBATIM (notification-bell.tsx), so the title is the Arabic
   // phrase and the machine label goes in the body (WP-ARABIC2 (a): nothing English on screen)
@@ -79,6 +91,7 @@ export async function notifyAssignment(input: {
     body: `${input.orgPrefix}-${input.taskNumber} · ${input.title}`,
     taskId: input.taskId,
     linkUrl: `/tasks/${input.taskId}`,
+    workspaceId: input.workspaceId,
   });
 }
 
@@ -91,6 +104,8 @@ export async function notifyComment(input: {
   authorName: string;
   body: string;
   watcherIds: readonly string[];
+  /** the task's space (null: personal) */
+  workspaceId: string | null;
 }): Promise<void> {
   await pushNotificationToMany(input.watcherIds.filter((id) => id !== input.authorId), {
     type: "comment",
@@ -98,6 +113,7 @@ export async function notifyComment(input: {
     body: `${input.authorName}: ${input.body.slice(0, 140)}`,  // the task label rides in the link
     taskId: input.taskId,
     linkUrl: `/tasks/${input.taskId}`,
+    workspaceId: input.workspaceId,
   });
 }
 
@@ -108,10 +124,13 @@ export async function notifyMembership(input: {
   title: string;
   linkUrl: string | null;
   actorId?: string;
+  /** the space they were added to (a department's notice is personal) */
+  workspaceId?: string | null;
 }): Promise<void> {
   await pushNotificationToMany(input.userIds.filter((id) => id !== input.actorId), {
     type: input.kind === "workspace" ? "ws_member_added" : "dept_member_added",
     title: input.title,
     linkUrl: input.linkUrl,
+    workspaceId: input.workspaceId ?? null,
   });
 }

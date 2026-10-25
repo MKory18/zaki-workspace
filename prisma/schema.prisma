@@ -595,6 +595,7 @@ model Workspace {
 
   organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   department    Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  notifications Notification[]
   members       WorkspaceMember[]
   teams         Team[]
   projects      Project[]
@@ -921,10 +922,16 @@ model Notification {
   taskId    String?
   readAt    DateTime?
   createdAt DateTime  @default(now())
+  // The space the notification belongs to (a task's, a topic's or a DM's, a space one was added to): the bell shows
+  // the space the person is in. None: personal (a welcome, a changed rank), shown in every space — and the
+  // notifications from before spaces had them.
+  workspaceId String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([userId, readAt, createdAt])
+  @@index([userId, workspaceId, readAt])
 }
 
 model AuditLog {
