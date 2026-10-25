@@ -185,12 +185,14 @@ describe("Calendar page: only workspaces the user can open", () => {
 });
 
 describe("Analytics page: this organization and the workspaces the user can open", () => {
-  it("counts the user's own workspaces and the org's ideas, never another org's", async () => {
+  it("counts the user's own workspaces and the ideas of the space they are in, never another org's", async () => {
     const f = await makeScopedOrg();
     const other = await makeScopedOrg();
-    for (const org of [f.org.id, f.org.id, other.org.id, other.org.id, other.org.id]) {
-      await db.idea.create({ data: { orgId: org, creatorId: org === f.org.id ? f.owner.id : other.owner.id, title: "An idea" } });
-    }
+    // each space has its own ideas (2026-10-25): two of wsIn, one of wsOut; five in the other company
+    const idea = (orgId: string, creatorId: string, workspaceId: string) => db.idea.create({ data: { orgId, creatorId, workspaceId, title: "An idea" } });
+    for (let i = 0; i < 2; i += 1) await idea(f.org.id, f.owner.id, f.wsIn.id);
+    await idea(f.org.id, f.owner.id, f.wsOut.id);
+    for (let i = 0; i < 5; i += 1) await idea(other.org.id, other.owner.id, other.wsIn.id);
     await loginAs(f.member.id);
     const page = await html(AnalyticsPage());
     expect(page).toContain(t("analytics.statWorkspaces", { n: 1 }));
@@ -204,14 +206,16 @@ describe("Analytics page: this organization and the workspaces the user can open
     enter(f.wsOut.id);
     const ownerPage = await html(AnalyticsPage());
     expect(ownerPage).toContain(t("analytics.statWorkspaces", { n: 1 }));
-    expect(ownerPage).toContain(t("analytics.ideasTotal", { total: 2 }));
+    expect(ownerPage).toContain(t("analytics.ideasTotal", { total: 1 }));
 
-    // an ADMIN counts only the spaces they are in (none yet); the org's ideas are still theirs to see
+    // an ADMIN counts only the spaces they are in (none yet: no space, no ideas); then the one they were put in
     await loginAs(f.admin.id);
     const adminPage = await html(AnalyticsPage());
     expect(adminPage).toContain(t("analytics.statWorkspaces", { n: 0 }));
-    expect(adminPage).toContain(t("analytics.ideasTotal", { total: 2 }));
+    expect(adminPage).toContain(t("analytics.ideasTotal", { total: 0 }));
     await joinWorkspace(f.admin.id, f.wsOut.id);
-    expect(await html(AnalyticsPage())).toContain(t("analytics.statWorkspaces", { n: 1 }));
+    const joined = await html(AnalyticsPage());
+    expect(joined).toContain(t("analytics.statWorkspaces", { n: 1 }));
+    expect(joined).toContain(t("analytics.ideasTotal", { total: 1 }));
   });
 });

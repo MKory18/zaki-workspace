@@ -29,16 +29,25 @@ describe("canTransition (idea review discipline)", () => {
     expect(canTransition("NEW", "REJECTED")).toBe(false);
   });
 
-  it("review decisions come from UNDER_REVIEW", () => {
-    expect(canTransition("UNDER_REVIEW", "ACCEPTED")).toBe(true);
+  it("review decides: on to planning, or rejected (the old «معتمدة» is no longer a step)", () => {
+    expect(canTransition("UNDER_REVIEW", "PLANNING")).toBe(true);
     expect(canTransition("UNDER_REVIEW", "REJECTED")).toBe(true);
+    expect(canTransition("UNDER_REVIEW", "ACCEPTED")).toBe(false);
     expect(canTransition("UNDER_REVIEW", "NEW")).toBe(false);
   });
 
-  it("rejected ideas may return to review; accepted is terminal", () => {
+  it("planning launches (or goes back to review); launched is the end", () => {
+    expect(canTransition("PLANNING", "LAUNCHED")).toBe(true);
+    expect(canTransition("PLANNING", "UNDER_REVIEW")).toBe(true);
+    expect(canTransition("LAUNCHED", "PLANNING")).toBe(false);
+    expect(canTransition("LAUNCHED", "UNDER_REVIEW")).toBe(false);
+  });
+
+  it("rejected ideas may return to review; an idea accepted before goes on to planning or launch", () => {
     expect(canTransition("REJECTED", "UNDER_REVIEW")).toBe(true);
+    expect(canTransition("ACCEPTED", "PLANNING")).toBe(true);
+    expect(canTransition("ACCEPTED", "LAUNCHED")).toBe(true);
     expect(canTransition("ACCEPTED", "REJECTED")).toBe(false);
-    expect(canTransition("ACCEPTED", "UNDER_REVIEW")).toBe(false);
   });
 
   it("rejects unknown statuses safely", () => {

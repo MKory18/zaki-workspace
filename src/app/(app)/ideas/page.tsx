@@ -1,6 +1,7 @@
 import { pageActor } from "@/app/(app)/_access";
 import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { listIdeas } from "@/server/services/ideas";
+import { currentSpace } from "@/server/services/current-space";
 import { IdeasView, type IdeaItem } from "@/components/ideas-view";
 
 export default async function IdeasPage() {
@@ -10,7 +11,10 @@ export default async function IdeasPage() {
   // /api/ideas refuses an external partner, so the list is never read for them.
   if (refusedToGuest(actor, "ideas")) return <GuestNotice />;
 
-  const ideas = await listIdeas(actor.orgId, { viewerId: user.id, external: actor.isExternal });
+  // the ideas of the space the person is in; «الشركة» also reads the ones shared with the company
+  const space = await currentSpace(actor);
+  const isHq = space?.kind === "HQ";
+  const ideas = await listIdeas(actor.orgId, { viewerId: user.id, external: actor.isExternal, place: { spaceId: space?.id ?? null, isHq } });
   const initial: IdeaItem[] = ideas.map((i) => ({
     id: i.id,
     title: i.title,
@@ -22,6 +26,9 @@ export default async function IdeasPage() {
     creatorJobTitle: i.creatorJobTitle,
     voteCount: i.voteCount,
     votedByMe: i.votedByMe,
+    workspaceId: i.workspaceId,
+    spaceName: i.spaceName,
+    shared: i.shared,
   }));
 
   return (
@@ -30,7 +37,10 @@ export default async function IdeasPage() {
       ctx={{
         userId: user.id,
         orgRole: actor.role,
-        canManage: actor.role === "OWNER" || actor.role === "ADMIN",
+        // the managers of this space move its ideas along; in «الشركة» the owner and the admins
+        canManage: isHq ? actor.role === "OWNER" || actor.role === "ADMIN" : Boolean(space?.manager),
+        spaceId: space?.id ?? null,
+        isHq,
       }}
     />
   );

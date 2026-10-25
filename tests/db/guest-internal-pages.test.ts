@@ -48,6 +48,7 @@ import { requireActor } from "@/server/policy/actor";
 import { listGoals } from "@/server/services/goals";
 import { listIdeas } from "@/server/services/ideas";
 import { SPACE_COOKIE } from "@/server/services/current-space";
+import { withHq } from "./hq-helpers";
 import { call, db, loginAs, makeProject, makeTask, makeTeam, makeUser, makeWorkspace, uid } from "./helpers";
 import {
   CUSTOMER_CHAT_TITLE,
@@ -98,6 +99,8 @@ async function companyWorld() {
     [team.admin, lead, team.member, staffer].map((person) => ({ userId: person.id })),
     `Space ${secret}`,
   );
+  // «الشركة», every staff member in it (the guest is not): the ideas from before spaces had them are read there
+  await withHq(orgId, [team.admin, lead, team.member, staffer].map((person) => person.id));
   const work = await makeProject(space.id, `Project ${secret}`);
   await makeTask({
     orgId,

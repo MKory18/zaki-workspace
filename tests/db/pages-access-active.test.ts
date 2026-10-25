@@ -31,6 +31,7 @@ import * as boardRoute from "@/app/api/boards/[id]/route";
 import * as projectsRoute from "@/app/api/projects/route";
 import * as customersRoute from "@/app/api/crm/customers/route";
 import { getServerT } from "@/lib/i18n/server";
+import { withHq } from "./hq-helpers";
 import { call, db, loginAs, makeOrg, makeProject, makeTask, makeTeam, makeUser, makeWorkspace, uid } from "./helpers";
 import { makeRoutine } from "./guest-helpers";
 import { html, makeGoal, makeIdea, makeTwoCompanyPerson, suspendMember, type PageElement } from "./pages-access-helpers";
@@ -94,6 +95,8 @@ describe("routes serve the ACTIVE company, never the suspended one", () => {
 
   it("GET /api/ideas lists the active company's ideas only, and POST files a new one there", async () => {
     const w = await makeTwoCompanyPerson();
+    // the ideas of the company's «الشركة» (the old ones, with no space, are read there)
+    await withHq(w.newOrg.id, [w.person.id]);
     await makeIdea(w.oldOrg.id, w.oldOwner.id, "OLD COMPANY IDEA");
     await makeIdea(w.newOrg.id, w.newOwner.id, "NEW COMPANY IDEA");
     await loginAs(w.person.id);
@@ -176,6 +179,8 @@ describe("routes serve the ACTIVE company, never the suspended one", () => {
 describe("pages serve the ACTIVE company, with the role held there", () => {
   it("/ideas lists the active company's ideas and is not a manager's view", async () => {
     const w = await makeTwoCompanyPerson({ oldRole: "ADMIN", newRole: "MEMBER" });
+    // the ideas of the company's «الشركة» (the old ones, with no space, are read there)
+    await withHq(w.newOrg.id, [w.person.id]);
     await makeIdea(w.oldOrg.id, w.oldOwner.id, "OLD COMPANY IDEA");
     await makeIdea(w.newOrg.id, w.newOwner.id, "NEW COMPANY IDEA");
     await loginAs(w.person.id);
@@ -213,6 +218,8 @@ describe("pages serve the ACTIVE company, with the role held there", () => {
 
   it("/analytics counts the ideas of the active company only", async () => {
     const w = await makeTwoCompanyPerson();
+    // the ideas of the company's «الشركة» (the old ones, with no space, are read there)
+    await withHq(w.newOrg.id, [w.person.id]);
     for (let i = 0; i < 5; i += 1) await makeIdea(w.oldOrg.id, w.oldOwner.id, `old idea ${i}`);
     for (let i = 0; i < 2; i += 1) await makeIdea(w.newOrg.id, w.newOwner.id, `new idea ${i}`);
     await loginAs(w.person.id);

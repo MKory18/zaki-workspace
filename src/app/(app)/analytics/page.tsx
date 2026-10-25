@@ -3,6 +3,7 @@ import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { getServerT } from "@/lib/i18n/server";
 import { loadWorkScope, narrowScope, scopeSpaceIds } from "@/server/services/team-scope";
 import { loadAnalytics } from "@/server/services/analytics";
+import { ideaPlaceWhere } from "@/server/services/ideas";
 import { fmtNumber } from "@/lib/format";
 import { enumLabel } from "@/lib/i18n/enums";
 import { currentSpace } from "@/server/services/current-space";
@@ -18,13 +19,17 @@ export default async function AnalyticsPage() {
   // numbers for the active org (oldest ACTIVE membership), over the workspaces the user can open
   // …inside the space they are in (src/server/services/current-space.ts)
   const teams = narrowScope(await loadWorkScope(user.id), (await currentSpace(actor))?.id);
-  const data = await loadAnalytics(actor.orgId, scopeSpaceIds(teams), undefined, teams);
+  // the space's ideas (and in «الشركة» the shared ones)
+  const here = await currentSpace(actor);
+  const data = await loadAnalytics(actor.orgId, scopeSpaceIds(teams), undefined, teams, {
+    AND: [ideaPlaceWhere({ spaceId: here?.id ?? null, isHq: here?.kind === "HQ" })],
+  });
   const byPriority = new Map(data.byPriority.map((row) => [row.priority, row._count._all]));
   const byStatus = new Map(data.byStatus30.map((row) => [row.status, row._count._all]));
   const maxWorkload = Math.max(1, ...data.assignees.map((a) => a._count._all));
 const priorities: TaskPriority[] = ["URGENT", "HIGH", "NORMAL", "LOW", "NONE"];
   const maxPriority = Math.max(1, ...priorities.map((p) => byPriority.get(p) ?? 0));
-const ideaStatuses: IdeaStatus[] = ["NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED"];
+const ideaStatuses: IdeaStatus[] = ["NEW", "UNDER_REVIEW", "PLANNING", "LAUNCHED", "REJECTED"];
   const maxIdea = Math.max(1, ...ideaStatuses.map((s) => byStatus.get(s) ?? 0));
   const rate = data.total > 0 ? Math.round((data.completed / data.total) * 100) : null;
 

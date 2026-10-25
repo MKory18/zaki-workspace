@@ -45,7 +45,7 @@ describe("idea → task: the caller must be able to open the target workspace", 
     expect(task.workspaceId).toBe(f.wsIn.id);
     expect(task.creatorId).toBe(f.member.id);
     const after = await db.idea.findUniqueOrThrow({ where: { id: idea.id } });
-    expect(after.status).toBe("ACCEPTED");
+    expect(after.status).toBe("PLANNING");
     expect(after.taskId).toBe(taskId);
   });
 

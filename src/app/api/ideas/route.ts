@@ -6,6 +6,7 @@ import type { OrgAccessContext } from "@/server/auth";
 import { requireActor } from "@/server/policy/actor";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { createIdea, listIdeas } from "@/server/services/ideas";
+import { currentSpace } from "@/server/services/current-space";
 import { dispatchEvent } from "@/server/services/n8n";
 
 const createSchema = z.object({
@@ -20,7 +21,7 @@ const querySchema = z.object({
 
 /**
  * The caller's active org = their oldest ACTIVE membership (a suspended or removed one never
- * counts). Ideas have noWorkspace nesting; they belong to the organization itself.
+ * counts). Each space has its own ideas (2026-10-25); «الشركة» also reads the ones shared with the company.
  *
  * Ideas are the team's own (every idea names its author): staff only. An external partner (guest)
  * gets 403 `guest.no_access` from every handler, before the query string or the body is looked at.
@@ -37,7 +38,10 @@ export async function GET(req: Request) {
     const ctx = await ideasCtx();
     const url = new URL(req.url);
     const q = querySchema.parse(Object.fromEntries(url.searchParams.entries()));
-    const ideas = await listIdeas(ctx.orgId, { status: q.status, mine: q.mine, viewerId: ctx.userId, external: ctx.orgRole === "GUEST" });
+    // the ideas of the space the person is in (and in «الشركة» the ones shared with the company)
+    const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
+    const place = { spaceId: space?.id ?? null, isHq: space?.kind === "HQ" };
+    const ideas = await listIdeas(ctx.orgId, { status: q.status, mine: q.mine, viewerId: ctx.userId, external: ctx.orgRole === "GUEST", place });
     return NextResponse.json({ ideas });
   });
 }
@@ -47,7 +51,9 @@ export async function POST(req: Request) {
   return withApi(async () => {
     const ctx = await ideasCtx();
     const input = await parseJson(createSchema, req);
-    const idea = await createIdea(ctx.orgId, ctx, input);
+    // born in the space the person is in
+    const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
+    const idea = await createIdea(ctx.orgId, ctx, input, space?.id ?? null);
     await dispatchEvent(ctx.orgId, "idea.created", { ideaId: idea.id, title: idea.title });
     return NextResponse.json({ idea }, { status: 201 });
   });

@@ -117,4 +117,4 @@ export const loginSchema = z
     return { identifier, password: v.password };
   });
 
-export const ideaStatuses = ["NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED"] as const;
+export const ideaStatuses = ["NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED", "PLANNING", "LAUNCHED"] as const;
