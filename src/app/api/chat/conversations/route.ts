@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { activeOrgCtx } from "@/server/services/integrations";
+import { currentSpace } from "@/server/services/current-space";
 import { createGroup, listDms, openDm } from "@/server/chat/dm";
 
 const createDmSchema = z.object({ kind: z.literal("DM"), userId: z.string().min(1) });
@@ -18,7 +19,8 @@ const bodySchema = z.discriminatedUnion("kind", [createDmSchema, createGroupSche
 export async function GET() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
-    return NextResponse.json({ conversations: await listDms(ctx) });
+    const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
+    return NextResponse.json({ conversations: await listDms(ctx, space?.id ?? null) });
   });
 }
 
@@ -27,8 +29,9 @@ export async function POST(req: Request) {
   return withApi(async () => {
     const input = await parseJson(bodySchema, req);
     const ctx = await activeOrgCtx();
+    const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
     const result = input.kind === "DM"
-      ? await openDm(ctx, input.userId)
+      ? await openDm(ctx, input.userId, space?.id ?? null)
       : await createGroup(ctx, { title: input.title, memberIds: input.memberIds, emoji: input.emoji });
     return NextResponse.json({ id: result.id }, { status: 201 });
   });

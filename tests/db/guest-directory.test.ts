@@ -35,13 +35,15 @@ describe("chat directory", () => {
     expect(res.text).not.toContain("Workspace mate");
   });
 
-  it("still lists the staff for a MEMBER (without themselves)", async () => {
+  it("lists the staff of the MEMBER's space and the owner (without themselves); another space's people stay out", async () => {
     const w = await directoryWorld();
     await loginAs(w.member.id);
     const res = await call(directoryRoute.GET);
     expect(res.status).toBe(200);
     const names = (res.json?.["people"] as { user: { name: string } }[]).map((p) => p.user.name);
-    expect(names).toEqual(expect.arrayContaining(["Owner", "Admin", "Workspace mate", "Elsewhere"]));
+    // inside the space they share (2026-10-25: people only among colleagues of the same space)
+    expect(names.sort()).toEqual(["Owner", "Workspace mate"]);
+    expect(names).not.toContain("Elsewhere");
     expect(names).not.toContain("Member");
     expect(names).not.toContain("Guest");
   });

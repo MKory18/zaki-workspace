@@ -61,5 +61,6 @@
   "chath.topic.pick_people": "اختار شخص واحد على الأقل.",
   "chath.topic.people_failed": "ما قدرنا نجيب أعضاء المساحة.",
   "chath.topic.failed": "ما انفتح الموضوع. جرّب مرة ثانية.",
-  "chath.topic.create": "افتح الموضوع"
+  "chath.topic.create": "افتح الموضوع",
+  "chat.dm_not_in_space": "هالشخص مش معك بهالمساحة. الرسائل الخاصة بين ناس المساحة الوحدة."
 }

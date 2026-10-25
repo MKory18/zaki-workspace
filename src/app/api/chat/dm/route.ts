@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { activeOrgCtx } from "@/server/services/integrations";
+import { currentSpace } from "@/server/services/current-space";
 import { openDm } from "@/server/chat/dm";
 
 const dmSchema = z.object({ userId: z.string().min(1) });
@@ -12,7 +13,9 @@ export async function POST(req: Request) {
   return withApi(async () => {
     const input = await parseJson(dmSchema, req);
     const ctx = await activeOrgCtx();
-    const result = await openDm(ctx, input.userId);
+    // in the space the person is in, with somebody of it
+    const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
+    const result = await openDm(ctx, input.userId, space?.id ?? null);
     return NextResponse.json(result, { status: result.created ? 201 : 200 });
   });
 }

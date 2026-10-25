@@ -196,7 +196,8 @@ export async function loadConversationFacts(userId: string, conversationId: stri
   if (conv.kind === "DM") {
     // the pair comes from the DM's key when it has one, not from the rows that happen to be left:
     // a lost row on one side must not turn the other side into "nobody" (review A7)
-    const pair = conv.dmKey ? conv.dmKey.split("|") : conv.members.map((m) => m.userId);
+    // (a DM of a space ends its key in `@<spaceId>`)
+    const pair = conv.dmKey ? (conv.dmKey.split("@")[0] ?? "").split("|") : conv.members.map((m) => m.userId);
     const otherId = pair.find((id) => id !== userId);
     if (otherId) {
       const other = await db.organizationMember.findUnique({

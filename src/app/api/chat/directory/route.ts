@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
 import { directoryContext } from "@/app/api/_access";
 import { chatDirectory } from "@/server/chat/directory";
+import { currentSpace } from "@/server/services/current-space";
 
 /**
  * GET: chatable org members (recipients picker). It is the staff directory, so it follows the
@@ -10,7 +11,9 @@ import { chatDirectory } from "@/server/chat/directory";
 export async function GET() {
   return withApi(async () => {
     const ctx = await directoryContext("chat.guest_forbidden");
-    const people = await chatDirectory(ctx.orgId);
+    // the people of the space the person is in
+    const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
+    const people = await chatDirectory(ctx.orgId, space?.id ?? null);
     return NextResponse.json({
       people: people
         .filter((p) => p.userId !== ctx.userId)
