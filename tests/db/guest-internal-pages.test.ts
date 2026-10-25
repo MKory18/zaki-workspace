@@ -26,6 +26,8 @@ import GoalsPage from "@/app/(app)/goals/page";
 import IdeasPage from "@/app/(app)/ideas/page";
 import ProductionPage from "@/app/(app)/production/page";
 import DepartmentsPage from "@/app/(app)/departments/page";
+import TicketsPage from "@/app/(app)/tickets/page";
+import CampaignsPage from "@/app/(app)/campaigns/page";
 import CrmPage from "@/app/(app)/crm/page";
 import FilesPage from "@/app/(app)/files/page";
 import MembersPage from "@/app/(app)/members/page";
@@ -372,6 +374,8 @@ const TAB_PAGES: Record<TabKey, PageCall> = {
   ideas: () => IdeasPage(),
   production: () => ProductionPage(),
   departments: () => DepartmentsPage(),
+  tickets: () => TicketsPage(),
+  campaigns: () => CampaignsPage(),
   crm: () => CrmPage(),
   files: () => FilesPage(),
   team: () => MembersPage(),
