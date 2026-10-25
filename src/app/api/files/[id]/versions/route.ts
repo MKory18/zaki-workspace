@@ -4,7 +4,7 @@ import { db } from "@/server/db";
 import { NotFoundError } from "@/server/auth";
 import { activeOrgCtx } from "@/server/services/integrations";
 import { assertNotGuest } from "@/server/services/guest-guard";
-import { ingest, PENDING_PATH } from "@/server/services/files";
+import { assertMayReadFile, ingest, PENDING_PATH } from "@/server/services/files";
 
 /** POST multipart/form-data: file= — stores a NEW VERSION in the same family of a LIBRARY file (never for guests). */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -17,6 +17,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       select: { familyId: true },
     });
     if (!anchor) throw new NotFoundError("files.not_found");
+    // a file of a space the person cannot open is «not found» here too
+    await assertMayReadFile(ctx, params.id);
     const head = await db.storedFile.findFirst({
       where: { familyId: anchor.familyId, isLatest: true, deletedAt: null, path: { not: PENDING_PATH } },
       select: { familyId: true, version: true },

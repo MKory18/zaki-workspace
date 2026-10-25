@@ -12,6 +12,7 @@ import * as rawRoute from "@/app/api/files/[id]/raw/route";
 import * as versionsRoute from "@/app/api/files/[id]/versions/route";
 import { ingest } from "@/server/services/files";
 import { call, db, loginAs, logout, makeTeam } from "./helpers";
+import { withHq } from "./hq-helpers";
 
 type Handler = (req: Request, ctx: { params: Record<string, string> }) => Promise<Response>;
 
@@ -44,6 +45,8 @@ async function libraryWithOneFile() {
     { orgId: team.org.id, orgRole: "MEMBER", userId: team.member.id },
     { name: "price-list-secret.mp4", bytes: fakeMp4(500) },
   );
+  // a file with no space is «الشركة»'s (2026-10-25): the company has it, with its staff in it (the guest is not)
+  await withHq(team.org.id, [team.member.id, team.admin.id]);
   return { ...team, file };
 }
 
