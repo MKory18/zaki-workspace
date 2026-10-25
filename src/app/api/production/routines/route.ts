@@ -4,13 +4,14 @@ import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { createRoutine, listRoutines, routineSchema } from "@/server/services/production";
 import { assertNotGuest } from "@/server/services/guest-guard";
+import { placeOf } from "@/server/services/space-place";
 
 /** GET: all routines (admin manage view). Staff only: a routine carries its assignee (review C6). */
 export async function GET() {
 	return withApi(async () => {
 		const actor = await requireActor();
 		assertNotGuest({ orgRole: actor.role });
-		const routines = await listRoutines(actor.orgId);
+		const routines = await listRoutines(actor.orgId, await placeOf(actor));
 		return NextResponse.json({ routines });
 	});
 }
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
 	return withApi(async () => {
 		const actor = await requireActor();
 		const input = await parseJson(routineSchema, req);
-		const routine = await createRoutine({ orgId: actor.orgId, userId: actor.userId }, input);
+		const routine = await createRoutine({ orgId: actor.orgId, userId: actor.userId }, input, (await placeOf(actor)).spaceId);
 		return NextResponse.json({ routine }, { status: 201 });
 	});
 }

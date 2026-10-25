@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { crmContext } from "@/app/api/_access";
 import { withApi } from "@/server/api";
+import { placeOf } from "@/server/services/space-place";
 import { parseJson } from "@/server/validation";
 import {
   createOpportunity,
@@ -12,7 +13,7 @@ import {
 export async function GET() {
   return withApi(async () => {
     const ctx = await crmContext("view");
-    const opportunities = await listOpportunities(ctx);
+    const opportunities = await listOpportunities(ctx, await placeOf({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole }));
     return NextResponse.json({ opportunities });
   });
 }

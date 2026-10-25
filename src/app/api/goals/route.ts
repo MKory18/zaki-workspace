@@ -4,6 +4,7 @@ import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { createGoal, goalSchema, listGoals } from "@/server/services/goals";
+import { placeOf } from "@/server/services/space-place";
 
 /**
  * Goals are the company's own plans (titles, descriptions, departments, who set them): staff only. An
@@ -16,7 +17,7 @@ export async function GET() {
 	return withApi(async () => {
 		const actor = await requireActor();
 		assertNotGuest({ orgRole: actor.role });
-		const goals = await listGoals({ orgId: actor.orgId, orgRole: actor.role });
+		const goals = await listGoals({ orgId: actor.orgId, orgRole: actor.role }, await placeOf(actor));
 		return NextResponse.json({ goals });
 	});
 }
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
 		const actor = await requireActor();
 		assertNotGuest({ orgRole: actor.role });
 		const input = await parseJson(goalSchema, req);
-		const goal = await createGoal({ orgId: actor.orgId, userId: actor.userId }, input);
+		const goal = await createGoal({ orgId: actor.orgId, userId: actor.userId }, input, (await placeOf(actor)).spaceId);
 		return NextResponse.json({ goal }, { status: 201 });
 	});
 }

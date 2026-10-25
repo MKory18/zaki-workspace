@@ -49,6 +49,8 @@ describe("routes serve the ACTIVE company, never the suspended one", () => {
     const w = await makeTwoCompanyPerson();
     await makeGoal(w.oldOrg.id, w.oldOwner.id, "OLD COMPANY GOAL");
     await makeGoal(w.newOrg.id, w.newOwner.id, "NEW COMPANY GOAL");
+    // the company's «الشركة» (the old rows, with no space, are read there)
+    await withHq(w.newOrg.id, [w.person.id]);
     await loginAs(w.person.id);
     const res = await call(goalsRoute.GET);
     expect(res.status).toBe(200);
@@ -69,6 +71,8 @@ describe("routes serve the ACTIVE company, never the suspended one", () => {
     const w = await makeTwoCompanyPerson();
     await makeRoutine({ orgId: w.oldOrg.id, title: "OLD COMPANY ROUTINE" });
     await makeRoutine({ orgId: w.newOrg.id, title: "NEW COMPANY ROUTINE" });
+    // the company's «الشركة» (the old rows, with no space, are read there)
+    await withHq(w.newOrg.id, [w.person.id]);
     await loginAs(w.person.id);
     const res = await call(productionRoute.GET);
     expect(res.status).toBe(200);
@@ -79,6 +83,8 @@ describe("routes serve the ACTIVE company, never the suspended one", () => {
     const w = await makeTwoCompanyPerson();
     await makeRoutine({ orgId: w.oldOrg.id, title: "OLD COMPANY ROUTINE" });
     await makeRoutine({ orgId: w.newOrg.id, title: "NEW COMPANY ROUTINE" });
+    // the company's «الشركة» (the old rows, with no space, are read there)
+    await withHq(w.newOrg.id, [w.person.id]);
     await loginAs(w.person.id);
     const res = await call(routinesRoute.GET);
     expect(res.status).toBe(200);

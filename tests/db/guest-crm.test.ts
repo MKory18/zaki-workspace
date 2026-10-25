@@ -3,6 +3,7 @@ import * as customersRoute from "@/app/api/crm/customers/route";
 import * as customerRoute from "@/app/api/crm/customers/[id]/route";
 import * as opportunitiesRoute from "@/app/api/crm/opportunities/route";
 import * as opportunityRoute from "@/app/api/crm/opportunities/[id]/route";
+import { withHq } from "./hq-helpers";
 import { call, db, loginAs, logout, makeTeam } from "./helpers";
 import { makeCustomer, makeOpportunity } from "./guest-helpers";
 
@@ -19,6 +20,8 @@ async function crmWorld() {
     value: PRICE,
     title: "Big contract",
   });
+  // a customer with no space is «الشركة»'s (2026-10-25): the company has it, with its staff in it (the guest is not)
+  await withHq(team.org.id, [team.member.id, team.admin.id]);
   return { ...team, customer, opportunity };
 }
 
