@@ -602,9 +602,9 @@ model Workspace {
   department    Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   members       WorkspaceMember[]
   teams         Team[]
+  files         StoredFile[]
   projects      Project[]
   conversations Conversation[]
-  files         StoredFile[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, systemKey])
