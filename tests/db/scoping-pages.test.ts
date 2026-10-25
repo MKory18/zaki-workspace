@@ -19,6 +19,7 @@ import { I18nProvider } from "@/lib/i18n";
 import { getServerT } from "@/lib/i18n/server";
 import { ToastProvider } from "@/components/ui/toast";
 import { db, loginAs, logout, makeUser } from "./helpers";
+import { SPACE_COOKIE } from "@/server/services/current-space";
 import { joinWorkspace, makeScopedOrg, seedWork, todayNoon } from "./scoping-helpers";
 
 // the providers' `children` is typed as required, which createElement(type, props, child) cannot express
@@ -34,6 +35,9 @@ async function html(page: Promise<ReactElement> | ReactElement): Promise<string>
 }
 
 const { t } = getServerT();
+
+/** Enter a space (src/server/services/current-space.ts): the pages show the space the person is in. */
+const enter = (spaceId: string) => (globalThis as { __zkCookieJar?: Map<string, string> }).__zkCookieJar?.set(SPACE_COOKIE, spaceId);
 
 describe("My Work page: renders only what getMyWork returns", () => {
   it("shows my assigned tasks and none of a colleague's or of a workspace I am not in", async () => {
@@ -60,8 +64,9 @@ describe("My Work page: renders only what getMyWork returns", () => {
     expect(adminPage).not.toContain(`${f.token} task mine-visible`);
     expect(adminPage).not.toContain(`${f.token} task mine-hidden`);
 
-    // the OWNER sees every workspace without a row, and still only their own work
+    // the OWNER sees every workspace without a row (inside the one he entered), and still only their own work
     await loginAs(f.owner.id);
+    enter(f.wsOut.id);
     const ownerPage = await html(MyWorkPage({ searchParams: { tab: "mine" } }));
     expect(ownerPage).toContain(`${f.token} task owner-anywhere`);
     expect(ownerPage).not.toContain(`${f.token} task mine-hidden`);
@@ -94,14 +99,15 @@ describe("List page: only workspaces the user can open", () => {
     expect(page).not.toContain(f.wsOut.name);
   });
 
-  it("the OWNER can open any workspace of the org, without being in it", async () => {
+  it("the OWNER can open any workspace of the org, without being in it (the one he entered, and that one only)", async () => {
     const f = await makeScopedOrg();
     await loginAs(f.owner.id);
-    const page = await html(ListPage({ searchParams: { workspace: f.wsOut.id } }));
+    enter(f.wsOut.id);
+    const page = await html(ListPage({ searchParams: {} }));
     expect(page).toContain(`${f.token} task out`);
     expect(page).not.toContain(`${f.token} task in`);
-    expect(page).toContain(f.wsIn.name);
     expect(page).toContain(f.wsOut.name);
+    expect(page).not.toContain(f.wsIn.name);
   });
 
   it("an ADMIN opens only the workspaces they are in: none by rank, then just the one they were put in", async () => {
@@ -154,8 +160,9 @@ describe("Calendar page: only workspaces the user can open", () => {
     expect(page).toContain(`${f.token} task cal-in`);
     expect(page).not.toContain(`${f.token} task cal-out`);
 
-    // the OWNER can open every workspace without a row
+    // the OWNER can open every workspace without a row (the one he entered)
     await loginAs(f.owner.id);
+    enter(f.wsOut.id);
     const ownerPage = await html(CalendarPage({ searchParams: { workspace: f.wsOut.id, month } }));
     expect(ownerPage).toContain(`${f.token} task cal-out`);
     expect(ownerPage).not.toContain(`${f.token} task cal-in`);
@@ -191,10 +198,12 @@ describe("Analytics page: this organization and the workspaces the user can open
     expect(page).toContain(t("analytics.ideasTotal", { total: 2 }));
     expect(page).not.toContain(t("analytics.ideasTotal", { total: 5 }));
 
-    // the OWNER counts every workspace of the org
+    // the OWNER may enter every workspace of the org; the reports count the one he is in (each space is its own
+    // site: «كل المساحات» is where he looks over all of them)
     await loginAs(f.owner.id);
+    enter(f.wsOut.id);
     const ownerPage = await html(AnalyticsPage());
-    expect(ownerPage).toContain(t("analytics.statWorkspaces", { n: 2 }));
+    expect(ownerPage).toContain(t("analytics.statWorkspaces", { n: 1 }));
     expect(ownerPage).toContain(t("analytics.ideasTotal", { total: 2 }));
 
     // an ADMIN counts only the spaces they are in (none yet); the org's ideas are still theirs to see

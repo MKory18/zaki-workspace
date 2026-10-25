@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as searchRoute from "@/app/api/search/route";
 import { call, db, loginAs, logout, makeOrg, makeUser, makeWorkspace } from "./helpers";
 import { joinOrg, joinWorkspace, makeScopedOrg, seedWork } from "./scoping-helpers";
+import { SPACE_COOKIE } from "@/server/services/current-space";
 
 interface SearchBody {
   tasks: { id: string; key: string; title: string; priority: string; projectId: string; projectName: string }[];
@@ -12,6 +13,10 @@ async function search(q: string) {
   const res = await call(searchRoute.GET, { url: `http://localhost/api/search?q=${encodeURIComponent(q)}` });
   return { status: res.status, body: res.json as unknown as SearchBody };
 }
+
+
+/** Enter a space (src/server/services/current-space.ts): search looks inside the space the person is in. */
+const enter = (spaceId: string) => (globalThis as { __zkCookieJar?: Map<string, string> }).__zkCookieJar?.set(SPACE_COOKIE, spaceId);
 
 describe("search: only work in workspaces the caller can access", () => {
   it("a plain MEMBER finds the tasks and projects of their own workspace but none of a workspace they are not in", async () => {
@@ -49,12 +54,15 @@ describe("search: only work in workspaces the caller can access", () => {
     expect(JSON.stringify(body)).not.toContain(f.inside.task.id);
   });
 
-  it("the OWNER finds the work of every workspace in the org", async () => {
+  it("the OWNER finds the work of every workspace in the org — of the one he is in (each space is its own site)", async () => {
     const f = await makeScopedOrg();
     await loginAs(f.owner.id);
-    const { body } = await search(f.token);
-    expect(body.tasks.map((t) => t.id).sort()).toEqual([f.inside.task.id, f.outside.task.id].sort());
-    expect(body.projects.map((p) => p.id).sort()).toEqual([f.inside.project.id, f.outside.project.id].sort());
+    for (const [space, work] of [[f.wsIn, f.inside], [f.wsOut, f.outside]] as const) {
+      enter(space.id);
+      const { body } = await search(f.token);
+      expect(body.tasks.map((t) => t.id)).toEqual([work.task.id]);
+      expect(body.projects.map((p) => p.id)).toEqual([work.project.id]);
+    }
   });
 
   it("a workspace member added later starts finding that workspace's work", async () => {
@@ -87,13 +95,14 @@ describe("search: only work in workspaces the caller can access", () => {
     await joinOrg(multi.id, b.org.id, "MEMBER");
     await joinWorkspace(multi.id, b.wsOut.id);
 
-    // a search for A's token must never surface B's work, and vice versa
+    // they work in A (their oldest membership) inside A's space: A's work is found, B's never
     await loginAs(multi.id);
     const forA = (await search(a.token)).body;
     expect(forA.tasks.map((t) => t.id)).toEqual([a.inside.task.id]);
-    const forB = (await search(b.token)).body;
-    expect(forB.tasks.map((t) => t.id)).toEqual([b.outside.task.id]);
-    expect(forB.projects.map((p) => p.id)).toEqual([b.outside.project.id]);
+    expect((await search(b.token)).body).toEqual({ tasks: [], projects: [] });
+    // a space of B named in the cookie is not theirs in the company they work in: still nothing of B's
+    enter(b.wsOut.id);
+    expect((await search(b.token)).body).toEqual({ tasks: [], projects: [] });
 
     // and a user of only one org cannot find the other org's work at all
     await loginAs(a.owner.id);

@@ -94,7 +94,8 @@ describe("GET /api/workspaces: who sees which space", () => {
     const org = (await list()).body.organizations[0]!;
     expect(org).toMatchObject({ id: w.org.id, name: w.org.name, keyPrefix: w.org.keyPrefix, role: "MEMBER" });
     // + holdsProjects (2026-10-25): false for «الشركة», where no project is opened
-    expect(Object.keys(org.workspaces[0]!).sort()).toEqual(["holdsProjects", "id", "name", "slug"]);
+    // + emoji and unread (2026-10-25, the space you are in): the switcher's face of each space and what waits there
+    expect(Object.keys(org.workspaces[0]!).sort()).toEqual(["emoji", "holdsProjects", "id", "name", "slug", "unread"]);
   });
 
   it("never lists another organization's spaces, and a person in two organizations gets each one by its own rule", async () => {

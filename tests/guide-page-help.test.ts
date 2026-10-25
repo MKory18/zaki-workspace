@@ -12,6 +12,7 @@ const PAGES: [string, string][] = [
   ["/chat", "chat"],
   ["/chat/x", "conversation"],
   ["/archive", "archive"],
+  ["/spaces", "spaces"],
   ["/my-work", "my-work"],
   ["/projects", "projects"],
   ["/projects/ckabc123", "project"],

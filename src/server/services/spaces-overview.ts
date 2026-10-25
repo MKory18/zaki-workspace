@@ -1,0 +1,62 @@
+import type { WorkspaceKind } from "@prisma/client";
+import { db } from "@/server/db";
+import type { Actor } from "@/server/policy/actor";
+import { unreadBySpace } from "@/server/chat/unread";
+import { spacesOf } from "@/server/services/current-space";
+import { loadWorkScope, taskVisibleWhere } from "@/server/services/team-scope";
+import { resolveTimeZone, zonedDayStart } from "@/lib/zoned-time";
+
+/**
+ * «كل المساحات» — the owner's and the admins' one look over every space they can open (the owner's decision,
+ * 2026-10-25): each space stays a separate site, and this page only counts what is in each and lets them enter
+ * one. Nothing of a space's content is shown here: the numbers, never the work.
+ */
+export interface SpaceCard {
+  id: string;
+  name: string;
+  emoji: string | null;
+  kind: WorkspaceKind;
+  members: number;
+  /** Open tasks (not done, not archived) the viewer may see there. */
+  open: number;
+  /** …of which past their due day (the company's day). */
+  overdue: number;
+  /** Messages waiting for the viewer in its topics. */
+  unread: number;
+}
+
+/** Only the OWNER and the ADMINs get the overview. */
+export function mayOverview(actor: Pick<Actor, "role">): boolean {
+  return actor.role === "OWNER" || actor.role === "ADMIN";
+}
+
+export async function spacesOverview(actor: Actor, now: Date = new Date()): Promise<SpaceCard[]> {
+  const spaces = await spacesOf(actor);
+  if (spaces.length === 0) return [];
+  const ids = spaces.map((s) => s.id);
+  const [org, scope, unread] = await Promise.all([
+    db.organization.findUnique({ where: { id: actor.orgId }, select: { timezone: true } }),
+    loadWorkScope(actor.userId),
+    unreadBySpace({ userId: actor.userId, orgId: actor.orgId, orgRole: actor.role }),
+  ]);
+  const todayStart = zonedDayStart(now, resolveTimeZone(org?.timezone));
+  const open = { orgId: actor.orgId, workspaceId: { in: ids }, archived: false, completedAt: null, AND: [taskVisibleWhere(scope)] };
+  const [members, openBy, overdueBy] = await Promise.all([
+    db.workspaceMember.groupBy({ by: ["workspaceId"], where: { workspaceId: { in: ids } }, _count: { _all: true } }),
+    db.task.groupBy({ by: ["workspaceId"], where: open, _count: { _all: true } }),
+    db.task.groupBy({ by: ["workspaceId"], where: { ...open, dueDate: { lt: todayStart } }, _count: { _all: true } }),
+  ]);
+  const count = (rows: Array<{ workspaceId: string; _count: { _all: number } }>) =>
+    new Map(rows.map((r) => [r.workspaceId, r._count._all] as const));
+  const [m, o, d] = [count(members), count(openBy), count(overdueBy)];
+  return spaces.map((s) => ({
+    id: s.id,
+    name: s.name,
+    emoji: s.emoji,
+    kind: s.kind,
+    members: m.get(s.id) ?? 0,
+    open: o.get(s.id) ?? 0,
+    overdue: d.get(s.id) ?? 0,
+    unread: unread[s.id] ?? 0,
+  }));
+}

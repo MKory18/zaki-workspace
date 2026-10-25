@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { pageUser } from "@/server/auth";
 import { db } from "@/server/db";
+import { requireActor } from "@/server/policy/actor";
+import { keepInSpace } from "@/server/services/current-space";
 import { loadWorkScope, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { TaskDetail } from "@/components/task-detail";
@@ -29,6 +31,8 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
     },
   });
   if (!task) notFound();
+  // a thing of another space of theirs: enter that space first, so the name at the top says where it is
+  await keepInSpace(await requireActor(), task.workspaceId, `/tasks/${task.id}`);
 
   // Editable exactly when the API would let the person write in this space (the same rule as the
   // board page): the real organization rank and the real row in the space. An org guest never

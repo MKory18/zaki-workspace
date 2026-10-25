@@ -12,7 +12,7 @@ import { DolphinMark } from "@/components/logo";
 import { BottomNav } from "@/components/shell/bottom-nav";
 import { PlaceTabs } from "@/components/shell/place-tabs";
 import { Sidebar } from "@/components/shell/sidebar";
-import { SpaceSwitcher } from "@/components/shell/space-switcher";
+import { SpaceSwitcher, useCurrentSpace, type ShellSpace } from "@/components/shell/space-switcher";
 import { TopBar } from "@/components/shell/top-bar";
 import { readSidebarCollapsed, writeSidebarCollapsed } from "@/components/shell/sidebar-state";
 import { useChatUnread } from "@/lib/chat/use-chat-unread";
@@ -34,6 +34,10 @@ export interface AppShellProps {
   newActions?: readonly NewActionKey[];
   /** The active company's name, under the wordmark. */
   orgName?: string;
+  /** The space the person is in (src/server/services/current-space.ts): its name sits at the top. */
+  space?: ShellSpace | null;
+  /** The owner and the admins: «كل المساحات» in the space menu. */
+  canOverview?: boolean;
   children: ReactNode;
 }
 
@@ -51,8 +55,10 @@ export interface AppShellProps {
  * (`buildNav` in the (app) layout): the frame only draws it, and the server still decides every request.
  * Theme tokens only, logical CSS only; the decoration is in the side menu's header and nowhere else.
  */
-export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCollapsed = false, newActions = [], orgName, children }: AppShellProps) {
+export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCollapsed = false, newActions = [], orgName, space: initialSpace = null, canOverview = false, children }: AppShellProps) {
   const { t } = useI18n();
+  // the space the person is in (the layout's answer, then the server's after each navigation)
+  const space = useCurrentSpace(initialSpace);
   const pathname = usePathname() ?? "/";
   const here = locate(pathname);
   // a page of a place this person is not offered (a guest who typed /files) marks nothing
@@ -99,6 +105,8 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
         rank={rank}
         isGuest={isGuest}
         orgName={orgName}
+        space={space}
+        canOverview={canOverview}
         collapsed={collapsed}
         onToggle={toggleSidebar}
         animated={animated}
@@ -113,6 +121,7 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
           user={user}
           rank={rank}
           title={place ? t(place.labelKey) : undefined}
+          space={space}
           newActions={isGuest ? [] : newActions}
         />
         <PlaceTabs
@@ -122,7 +131,7 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
           end={
             place?.key === "work" ? (
               <div className="shrink-0 border-s border-border px-1 md:hidden">
-                <SpaceSwitcher variant="strip" isGuest={isGuest} />
+                <SpaceSwitcher variant="strip" isGuest={isGuest} current={space} canOverview={canOverview} />
               </div>
             ) : null
           }

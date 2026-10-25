@@ -60,8 +60,8 @@ const orgs = (canCreateSpaces: boolean): OrgsResponse => ({
       role: canCreateSpaces ? "MEMBER" : "GUEST",
       canCreateSpaces,
       workspaces: [
-        { id: "w1", name: "المقر", slug: "hq" },
-        { id: "w2", name: "الشحن", slug: "ship" },
+        { id: "w1", name: "المقر", slug: "hq", emoji: "🏢", unread: 0 },
+        { id: "w2", name: "الشحن", slug: "ship", emoji: "🚚", unread: 3 },
       ],
     },
   ],
@@ -397,14 +397,23 @@ describe("the avatar menu", () => {
 });
 
 describe("the space switcher", () => {
-  it("lists every space as a way into its projects, «all spaces», and «new space» for whoever may open one", () => {
-    const html = render(createElement(SpaceSwitcher, { variant: "sidebar", defaultOpen: true, portal: false }));
-    expect(linkTo(html, "/projects")).toContain('role="menuitem"');
-    expect(html).toContain(AR["shell.spaces.all"]);
-    expect(linkTo(html, "/projects?workspace=w1")).toContain('role="menuitem"');
-    expect(html).toContain("المقر");
-    expect(html).toContain("الشحن");
+  it("wears the name of the space you are in, and lists every space as a way INTO it (its «اليوم»), with what waits there", () => {
+    const html = render(createElement(SpaceSwitcher, { variant: "sidebar", current: { id: "w1", name: "المقر", emoji: "🏢" }, defaultOpen: true, portal: false }));
+    // the button says where you are, not «مساحات العمل»
+    expect(html).toMatch(/<button[^>]*>.*<bdi>المقر<\/bdi>.*<\/button>/s);
+    expect(html).not.toContain(`<bdi>${AR["top.workspaces"]}</bdi>`);
+    // folded to an icon, the button still says it
+    const rail = render(createElement(SpaceSwitcher, { variant: "rail", current: { id: "w1", name: "المقر", emoji: "🏢" } }));
+    expect(rail).toMatch(/<button[^>]*aria-label="أنت في المقر — بدّل المساحة"/);
+    // each space is entered through /go; the current one is marked, the other says what waits there
+    expect(linkTo(html, "/go\?space=w1")).toContain('aria-current="true"');
+    expect(linkTo(html, "/go\?space=w2")).toContain('aria-label="الشحن: 3 بانتظارك"');
+    expect(html).not.toContain("/projects?workspace=");
     expect(html).toContain(AR["ws.new"]);
+    // «كل المساحات» is the owner's and the admins' only
+    expect(html).not.toContain(AR["shell.spaces.all"]);
+    const forOwner = render(createElement(SpaceSwitcher, { variant: "sidebar", canOverview: true, defaultOpen: true, portal: false }));
+    expect(linkTo(forOwner, "/spaces")).toContain('role="menuitem"');
   });
 
   it("without the right to open a space: the list, no «new space»", () => {

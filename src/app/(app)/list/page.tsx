@@ -9,6 +9,8 @@ import {
 import { TaskRow, type RowMember } from "@/components/task-row";
 import { ListFilters } from "@/components/list-filters";
 import { getServerT } from "@/lib/i18n/server";
+import { pageActor } from "@/app/(app)/_access";
+import { currentSpace } from "@/server/services/current-space";
 import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 
 const GROUPS = ["status", "priority", "project", "assignee"] as const;
@@ -21,7 +23,10 @@ export default async function ListPage({
   searchParams: { workspace?: string; group?: string; priority?: string; assignee?: string; q?: string };
 }) {
   const { t } = getServerT();
-  const result = await resolveWorkspaceView(searchParams.workspace);
+  // the space the person is in, never one named in the address (that is entered through the switcher)
+  const { actor } = await pageActor();
+  const space = await currentSpace(actor);
+  const result = await resolveWorkspaceView(space?.id ?? "");
   if ("pageRedirect" in result) redirect("/login");
 
   if ("none" in result) {
@@ -132,7 +137,6 @@ export default async function ListPage({
       </header>
 
       <ListFilters
-        workspaces={ctx.workspaces}
         wsId={ctx.workspaceId}
         group={group}
         priority={priority}

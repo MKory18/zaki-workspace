@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
+import { currentSpace } from "@/server/services/current-space";
 import { activeOrgCtx } from "@/server/services/integrations";
 import { unreadTotal } from "@/server/chat/unread";
 
@@ -7,6 +8,8 @@ import { unreadTotal } from "@/server/chat/unread";
 export async function GET() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
-    return NextResponse.json({ total: await unreadTotal(ctx) }, { headers: { "Cache-Control": "no-store" } });
+    // the space the person is in (another space's count is on the space switcher)
+    const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
+    return NextResponse.json({ total: await unreadTotal(ctx, space?.id ?? null) }, { headers: { "Cache-Control": "no-store" } });
   });
 }

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/server/db";
-import { pageUser } from "@/server/auth";
-import { loadWorkScope, projectVisibleWhere, scopeSpaceIds } from "@/server/services/team-scope";
+import { pageActor } from "@/app/(app)/_access";
+import { loadWorkScope, narrowScope, projectVisibleWhere, scopeSpaceIds } from "@/server/services/team-scope";
+import { currentSpace } from "@/server/services/current-space";
+import { goHref } from "@/lib/space-link";
 import { Card, CardBody, Badge, EmptyState } from "@/components/ui/card";
 import { ProjectsToolbar } from "@/components/projects-toolbar";
 import { WorkspaceMembersButton } from "@/components/workspace-members-button";
@@ -18,10 +20,15 @@ export default async function ProjectsPage({
   searchParams: { workspace?: string };
 }) {
   const { t } = getServerT();
-  const user = await pageUser();
-  if (!user) redirect("/login");
-  // the spaces they may open, and inside a space with teams only the space's own projects and their teams'
-  const scope = await loadWorkScope(user.id);
+  const { user, actor } = await pageActor();
+  const space = await currentSpace(actor);
+  const everything = await loadWorkScope(user.id);
+  // an old link naming another space of theirs (`?workspace=`) enters that space first, then comes back here;
+  // a space that is not theirs is ignored (it says nothing about it)
+  const named = searchParams.workspace;
+  if (named && space && named !== space.id && scopeSpaceIds(everything).includes(named)) redirect(goHref(named, "/projects"));
+  // the projects of the space the person is in — and inside a space with «مقاطع» only its own and theirs
+  const scope = narrowScope(everything, space?.id);
   const accessible = scopeSpaceIds(scope);
   if (accessible.length === 0) {
     return (
@@ -34,12 +41,8 @@ export default async function ProjectsPage({
       </div>
     );
   }
-  // Workspace isolation: only projects inside workspaces the caller may open;
-  // ?workspace narrows further (ignored when not accessible).
-  const wsFilter =
-    searchParams.workspace && accessible.includes(searchParams.workspace)
-      ? searchParams.workspace
-      : { in: accessible };
+  // one space: the one the person is in (`accessible` holds it alone)
+  const wsFilter: string | { in: string[] } = accessible.length === 1 ? (accessible[0] as string) : { in: accessible };
   const projects = await db.project.findMany({
     where: {
       workspaceId: typeof wsFilter === "string" ? wsFilter : { in: wsFilter.in },

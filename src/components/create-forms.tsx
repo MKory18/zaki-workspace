@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { goHref } from "@/lib/space-link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { useI18n as useT } from "@/lib/i18n";
@@ -47,7 +48,11 @@ export function WorkspaceCreateModal({
   const adminOrgs = organizations.filter((o) => o.canAdmin);
   const { mutation, error } = useCreate<{ workspace: { id: string } }>({
     path: "/api/workspaces",
-    onDone: () => onClose(),
+    // the new space is entered at once (its «اليوم»), like opening a new site
+    onDone: (data) => {
+      onClose();
+      window.location.assign(goHref(data.workspace.id));
+    },
   });
 
   function submit(e: React.FormEvent<HTMLFormElement>) {

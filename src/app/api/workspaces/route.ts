@@ -9,11 +9,16 @@ import { can, effectiveCapabilities } from "@/server/policy/capabilities";
 import { parseJson } from "@/server/validation";
 import { createWorkspace } from "@/server/services/workspaces";
 import { accessibleWorkspaceIds } from "@/server/services/access";
+import { unreadBySpace } from "@/server/chat/unread";
+import { currentSpace } from "@/server/services/current-space";
 
 /**
  * Workspace switcher — only the spaces the caller may open: the OWNER sees every space of the
  * company, everybody else (an ADMIN included) only the spaces they are in, and only while their
  * membership is ACTIVE. `canCreateSpaces` says whether they may open a new one in that organization.
+ * Each space carries its emoji and `unread`: the messages waiting for the person in its topics (the number
+ * beside it on the space switcher, like the accounts of a messaging app). «الشركة» comes first, then by name;
+ * `currentSpaceId` is the space the person is in (the shell follows it after every navigation).
  */
 export async function GET() {
   return withApi(async () => {
@@ -38,18 +43,27 @@ export async function GET() {
     const workspaces = wsIds.length
       ? await db.workspace.findMany({
           where: { id: { in: wsIds } },
-          select: { id: true, name: true, slug: true, organizationId: true, kind: true },
+          select: { id: true, name: true, slug: true, organizationId: true, kind: true, emoji: true },
           orderBy: { name: "asc" },
         })
       : [];
-    const byOrg = new Map<string, { id: string; name: string; slug: string; holdsProjects: boolean }[]>();
-    for (const w of workspaces) {
+    // what waits in each space, per organization (one query each)
+    const unread: Record<string, number> = {};
+    for (const m of orgs) Object.assign(unread, await unreadBySpace({ userId: user.id, orgId: m.organization.id, orgRole: m.role }));
+    type Entry = { id: string; name: string; slug: string; emoji: string | null; holdsProjects: boolean; unread: number };
+    const byOrg = new Map<string, Entry[]>();
+    const hqFirst = [...workspaces.filter((w) => w.kind === "HQ"), ...workspaces.filter((w) => w.kind !== "HQ")];
+    for (const w of hqFirst) {
       const list = byOrg.get(w.organizationId) ?? [];
       // «الشركة» (HQ) is for announcements and the company's talk: no project is opened there
-      list.push({ id: w.id, name: w.name, slug: w.slug, holdsProjects: w.kind !== "HQ" });
+      list.push({ id: w.id, name: w.name, slug: w.slug, emoji: w.emoji, holdsProjects: w.kind !== "HQ", unread: unread[w.id] ?? 0 });
       byOrg.set(w.organizationId, list);
     }
+    // the company they work in is the oldest ACTIVE membership (`requireActor`): its current space
+    const first = orgs[0];
+    const here = first ? await currentSpace({ userId: user.id, orgId: first.organization.id, role: first.role }) : null;
     return NextResponse.json({
+      currentSpaceId: here?.id ?? null,
       organizations: orgs.map((m) => ({
         id: m.organization.id,
         name: m.organization.name,

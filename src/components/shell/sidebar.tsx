@@ -9,7 +9,7 @@ import { ThemeDecor } from "@/components/theme/theme-decor";
 import { PlaceBadge } from "./place-badge";
 import { NavIcon } from "./nav-icons";
 import { AvatarMenu, type AvatarUser } from "./avatar-menu";
-import { SpaceSwitcher } from "./space-switcher";
+import { SpaceSwitcher, type ShellSpace } from "./space-switcher";
 import { ariaCurrent } from "./current";
 
 /**
@@ -37,6 +37,8 @@ export function Sidebar({
   rank,
   isGuest,
   orgName,
+  space = null,
+  canOverview = false,
   collapsed,
   onToggle,
   /** True after a toggle in this session: then, and only then, the width animates. */
@@ -51,6 +53,10 @@ export function Sidebar({
   isGuest: boolean;
   /** The company's name under the wordmark (the active organization). */
   orgName?: string;
+  /** The space the person is in: the switcher wears its name. */
+  space?: ShellSpace | null;
+  /** The owner and the admins: «كل المساحات». */
+  canOverview?: boolean;
   collapsed: boolean;
   onToggle: () => void;
   animated?: boolean;
@@ -87,7 +93,7 @@ export function Sidebar({
       </div>
 
       <div className={cn("flex shrink-0 items-center gap-2 px-3 pt-3", collapsed && "justify-center")}>
-        <SpaceSwitcher variant={collapsed ? "rail" : "sidebar"} isGuest={isGuest} />
+        <SpaceSwitcher variant={collapsed ? "rail" : "sidebar"} isGuest={isGuest} current={space} canOverview={canOverview} />
       </div>
 
       <nav aria-label={t("shell.places")} data-tour="places" className="min-h-0 flex-1 overflow-y-auto px-3 py-3">

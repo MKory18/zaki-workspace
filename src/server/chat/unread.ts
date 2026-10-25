@@ -10,8 +10,10 @@ import type { OrgAccessContext } from "@/server/auth";
  * - A topic counts only while I am still in its space (rows outlive leaving it); the OWNER's rows are
  *   the topics he joined and his own DMs, so his silent oversight never adds anything.
  * - A guest: topics only.
+ * - Inside a space (`spaceId`, the space the person is in): that space's topics, plus the DMs (they belong to no
+ *   space yet). Another space's topics are on the space switcher instead (`unreadBySpace`).
  */
-export async function unreadTotal(ctx: OrgAccessContext): Promise<number> {
+export async function unreadTotal(ctx: OrgAccessContext, spaceId: string | null = null): Promise<number> {
   const isOwner = ctx.orgRole === "OWNER";
   const isGuest = ctx.orgRole === "GUEST";
   const rows = await db.$queryRaw<Array<{ total: number }>>`
@@ -29,6 +31,33 @@ export async function unreadTotal(ctx: OrgAccessContext): Promise<number> {
         c.kind <> 'TOPIC'
         OR ${isOwner} = true
         OR EXISTS (SELECT 1 FROM "WorkspaceMember" w WHERE w."workspaceId" = c."spaceId" AND w."userId" = ${ctx.userId})
-      )`;
+      )
+      AND (c.kind <> 'TOPIC' OR ${spaceId}::text IS NULL OR c."spaceId" = ${spaceId})`;
   return rows[0]?.total ?? 0;
+}
+
+/**
+ * The same count per space, topics only (the number beside every space on the switcher, like the accounts of
+ * a messaging app): `{ spaceId: count }`, spaces with nothing waiting left out.
+ */
+export async function unreadBySpace(ctx: OrgAccessContext): Promise<Record<string, number>> {
+  const isOwner = ctx.orgRole === "OWNER";
+  const rows = await db.$queryRaw<Array<{ spaceId: string; total: number }>>`
+    SELECT c."spaceId" AS "spaceId", COUNT(*)::int AS total
+    FROM "ChatMessage" m
+    JOIN "ConversationMember" cm ON cm."conversationId" = m."conversationId" AND cm."userId" = ${ctx.userId}
+    JOIN "Conversation" c ON c.id = m."conversationId"
+    WHERE c."orgId" = ${ctx.orgId}
+      AND c.kind = 'TOPIC'
+      AND c."spaceId" IS NOT NULL
+      AND m."createdAt" > cm."lastReadAt"
+      AND m."authorId" <> ${ctx.userId}
+      AND m."deletedAt" IS NULL
+      AND m.kind <> 'SYSTEM'
+      AND (
+        ${isOwner} = true
+        OR EXISTS (SELECT 1 FROM "WorkspaceMember" w WHERE w."workspaceId" = c."spaceId" AND w."userId" = ${ctx.userId})
+      )
+    GROUP BY c."spaceId"`;
+  return Object.fromEntries(rows.map((r) => [r.spaceId, r.total]));
 }

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/server/db";
 import { pageUser } from "@/server/auth";
+import { requireActor } from "@/server/policy/actor";
+import { keepInSpace } from "@/server/services/current-space";
 import { loadWorkScope, projectVisibleWhere } from "@/server/services/team-scope";
 import { Card, CardBody, CardHeader, Badge } from "@/components/ui/card";
 import { BoardCreateButton } from "@/components/board-create-button";
@@ -27,6 +29,8 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     },
   });
   if (!project) notFound();
+  // a thing of another space of theirs: enter that space first, so the name at the top says where it is
+  await keepInSpace(await requireActor(), project.workspace.id, `/projects/${project.id}`);
   const doneColumnIds = await db.boardColumn.findMany({
     where: { board: { projectId: project.id }, done: true },
     select: { id: true },

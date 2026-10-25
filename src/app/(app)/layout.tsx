@@ -6,6 +6,7 @@ import { newActionsFor } from "@/lib/nav/new-actions";
 import { db } from "@/server/db";
 import { cookies } from "next/headers";
 import { parseSidebarCookie, SIDEBAR_COOKIE } from "@/components/shell/sidebar-cookie";
+import { currentSpace } from "@/server/services/current-space";
 
 /**
  * The frame of every signed-in page, decided on the server from the DATABASE (behind the middleware,
@@ -28,6 +29,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const subject = { role: actor.role, caps: [...actor.caps] };
   // the company's name under the wordmark: the active organization, nothing else about it
   const org = await db.organization.findUnique({ where: { id: actor.orgId }, select: { name: true } });
+  // the space the person is in, named at the top of every page (a space is like a separate site)
+  const space = await currentSpace(actor);
   return (
     <AppShell
       // the shell draws a name, a username and an e-mail; session facts (tv, locale, onboarding
@@ -38,6 +41,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       nav={buildNav(subject)}
       newActions={actor.isExternal ? [] : newActionsFor(subject)}
       orgName={org?.name}
+      space={space ? { id: space.id, name: space.name, emoji: space.emoji } : null}
+      canOverview={actor.role === "OWNER" || actor.role === "ADMIN"}
       audience={audienceOf(actor)}
       defaultCollapsed={sidebarCollapsed}
     >

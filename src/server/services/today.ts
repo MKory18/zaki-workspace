@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { actorCan, type Actor } from "@/server/policy/actor";
-import { loadWorkScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
+import { loadWorkScope, narrowScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { fmtLongDate, fmtRelative } from "@/lib/format";
 import { enumLabel } from "@/lib/i18n/enums";
@@ -46,6 +46,8 @@ import {
  *    holds them. Like the reports, the
  *    counts keep the work of people who are no longer active (the work is still there); the LIST never shows
  *    them, nor any task nobody holds: a suspended or offboarded person is not named on the page.
+ *  - ONE SPACE. The page passes the space the person is in (src/server/services/current-space.ts): everything
+ *    above is then counted inside that space only, like a separate site (the owner's decision, 2026-10-25).
  *  - The result is plain data (strings, numbers, booleans, lists): see src/lib/today.ts.
  */
 
@@ -75,7 +77,7 @@ type TaskRow = {
   project: { id: string; name: string };
 };
 
-export async function getToday(actor: Actor, opts: { now?: Date } = {}): Promise<TodayData> {
+export async function getToday(actor: Actor, opts: { now?: Date; spaceId?: string | null } = {}): Promise<TodayData> {
   const now = opts.now ?? new Date();
 
   const [org, me, accessible] = await Promise.all([
@@ -83,7 +85,8 @@ export async function getToday(actor: Actor, opts: { now?: Date } = {}): Promise
     db.user.findUnique({ where: { id: actor.userId }, select: { name: true } }),
     loadWorkScope(actor.userId),
   ]);
-  const scope = accessible;
+  // the space the person is in (the page passes it): its «اليوم» only, like a separate site
+  const scope = opts.spaceId === undefined ? accessible : narrowScope(accessible, opts.spaceId);
 
   // the company's clock
   const timeZone = resolveTimeZone(org?.timezone);

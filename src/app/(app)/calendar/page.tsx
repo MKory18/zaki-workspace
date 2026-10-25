@@ -8,6 +8,8 @@ import { pageUser } from "@/server/auth";
 import { monthName } from "@/lib/format";
 import { CalendarGrid, type CalTask } from "@/components/calendar-grid";
 import { getServerT } from "@/lib/i18n/server";
+import { pageActor } from "@/app/(app)/_access";
+import { currentSpace } from "@/server/services/current-space";
 
 export default async function CalendarPage({
   searchParams,
@@ -15,7 +17,10 @@ export default async function CalendarPage({
   searchParams: { month?: string; workspace?: string; mine?: string; project?: string };
 }) {
   const { t } = getServerT();
-  const view = await resolveWorkspaceView(searchParams.workspace);
+  // the space the person is in, never one named in the address (that is entered through the switcher)
+  const { actor } = await pageActor();
+  const space = await currentSpace(actor);
+  const view = await resolveWorkspaceView(space?.id ?? "");
   if ("pageRedirect" in view) redirect("/login");
 
   if ("none" in view) {

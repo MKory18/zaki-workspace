@@ -3,7 +3,9 @@ import { db } from "@/server/db";
 import { requireUser } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { ForbiddenError } from "@/server/auth";
-import { loadWorkScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
+import { currentSpace } from "@/server/services/current-space";
+import { requireActor } from "@/server/policy/actor";
+import { loadWorkScope, narrowScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 
 /** Strip LIKE wildcards so user input is a literal substring. */
 function sanitize(q: string): string {
@@ -32,7 +34,9 @@ export async function GET(req: Request) {
     if (orgIds.length === 0) throw new ForbiddenError("not_org_member");
 
     // the spaces they may open and, inside a space with teams, the space's own work and their teams'
-    const scope = await loadWorkScope(user.id);
+    // …and only in the space they are in, like a separate site
+    const actor = await requireActor();
+    const scope = narrowScope(await loadWorkScope(user.id), (await currentSpace(actor))?.id);
     const workspaceIds = scopeSpaceIds(scope);
     if (workspaceIds.length === 0) return NextResponse.json({ tasks: [], projects: [] });
 
