@@ -5,6 +5,7 @@ import { dayChecklist, dayIso } from "@/server/services/production";
 import { db } from "@/server/db";
 import { resolveTimeZone } from "@/lib/zoned-time";
 import { assertNotGuest } from "@/server/services/guest-guard";
+import { placeOf } from "@/server/services/space-place";
 
 /**
  * GET /api/production?day=YYYY-MM-DD — the daily production checklist for the
@@ -19,11 +20,11 @@ export async function GET(req: Request) {
 		const url = new URL(req.url);
 		const raw = url.searchParams.get("day");
 		if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-			return NextResponse.json(await dayChecklist(actor.orgId, raw));
+			return NextResponse.json(await dayChecklist(actor.orgId, raw, undefined, await placeOf(actor)));
 		}
 		const zone = resolveTimeZone(
 			(await db.organization.findUnique({ where: { id: actor.orgId }, select: { timezone: true } }))?.timezone,
 		);
-		return NextResponse.json(await dayChecklist(actor.orgId, dayIso(new Date(), zone), zone));
+		return NextResponse.json(await dayChecklist(actor.orgId, dayIso(new Date(), zone), zone, await placeOf(actor)));
 	});
 }

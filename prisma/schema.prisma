@@ -219,13 +219,19 @@ model Routine {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  // The space it belongs to (the owner's decision, 2026-10-25: each space is like a separate site). None: from
+  // before spaces had their own, read in «الشركة».
+  workspaceId String?
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   assignee     User?        @relation("RoutineAssignee", fields: [assigneeId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   logs         RoutineLog[]
 
   @@index([orgId])
+
+  @@index([orgId, workspaceId])
 }
 
 model RoutineLog {
@@ -259,13 +265,19 @@ model Goal {
   creatorId    String
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  // The space it belongs to (the owner's decision, 2026-10-25: each space is like a separate site). None: from
+  // before spaces had their own, read in «الشركة».
+  workspaceId String?
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   creator      User         @relation("GoalCreator", fields: [creatorId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([orgId, period])
   @@index([departmentId])
+
+  @@index([orgId, workspaceId])
 }
 
 model DepartmentMember {
@@ -599,6 +611,10 @@ model Workspace {
   teams         Team[]
   projects      Project[]
   conversations Conversation[]
+  goals         Goal[]
+  routines      Routine[]
+  customers     Customer[]
+  opportunities Opportunity[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, systemKey])
@@ -1079,12 +1095,18 @@ model Customer {
   creatorId      String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  // The space it belongs to (the owner's decision, 2026-10-25: each space is like a separate site). None: from
+  // before spaces had their own, read in «الشركة».
+  workspaceId String?
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   creator      User         @relation("CustomerCreator", fields: [creatorId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   opportunities Opportunity[]
 
   @@index([orgId, name])
+
+  @@index([orgId, workspaceId])
 }
 
 model Opportunity {
@@ -1100,14 +1122,20 @@ model Opportunity {
   ownerId     String
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  // The space it belongs to (the owner's decision, 2026-10-25: each space is like a separate site). None: from
+  // before spaces had their own, read in «الشركة».
+  workspaceId String?
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
   owner        User         @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@unique([orgId, number])
   @@index([orgId, stage])
   @@index([customerId])
+
+  @@index([orgId, workspaceId])
 }
 
 enum OpportunityStage {

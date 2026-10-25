@@ -5,6 +5,7 @@ import { assertNotGuest } from "@/server/services/guest-guard";
 import { canManageOrg } from "@/server/services/orgs";
 import { assertDepartmentInOrg, orgRoleOf } from "@/server/services/production";
 import { resolveTimeZone, zonedParts, zonedWallTime } from "@/lib/zoned-time";
+import { mySpacesWhere, placeWhere, type SpacePlace } from "@/server/services/space-place";
 
 export type GoalPeriodT = "WEEKLY" | "MONTHLY";
 
@@ -57,10 +58,11 @@ export function goalStatus(goal: { periodEnd: Date; progress: number }, now: Dat
  * who set them): an external partner (guest) is refused here as well as at the route, so a new caller that
  * forgets the door still hands a guest nothing (docs/PHASE0-AUDIT.md R10).
  */
-export async function listGoals(viewer: { orgId: string; orgRole: string }) {
+export async function listGoals(viewer: { orgId: string; orgRole: string }, place?: SpacePlace) {
 	assertNotGuest(viewer);
 	const rows = await db.goal.findMany({
-		where: { orgId: viewer.orgId },
+		// the goals of the space the person is in (and in «الشركة» the ones from before spaces had their own)
+		where: { orgId: viewer.orgId, ...(place ? { AND: [placeWhere(place)] } : {}) },
 		orderBy: [{ periodStart: "desc" }, { createdAt: "asc" }],
 		select: {
 			id: true,
@@ -97,7 +99,7 @@ async function orgZone(orgId: string): Promise<string> {
 	);
 }
 
-export async function createGoal(ctx: { orgId: string; userId: string }, input: z.infer<typeof goalSchema>) {
+export async function createGoal(ctx: { orgId: string; userId: string }, input: z.infer<typeof goalSchema>, spaceId: string | null = null) {
 	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
 	await assertDepartmentInOrg(ctx.orgId, input.departmentId);
 	const anchor = parseAnchor(input.anchorDate);
@@ -114,6 +116,8 @@ export async function createGoal(ctx: { orgId: string; userId: string }, input: 
 			progress: input.progress ?? 0,
 			departmentId: input.departmentId ?? null,
 			creatorId: ctx.userId,
+			// set in the space the person is in
+			workspaceId: spaceId,
 		},
 		select: { id: true },
 	});
@@ -126,7 +130,7 @@ export type GoalPatch = z.infer<typeof goalPatchSchema>;
 
 export async function updateGoal(ctx: { orgId: string; userId: string }, id: string, input: GoalPatch) {
 	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
-	const existing = await db.goal.findFirst({ where: { id, orgId: ctx.orgId }, select: { id: true, periodStart: true, periodEnd: true, period: true } });
+	const existing = await db.goal.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] }, select: { id: true, periodStart: true, periodEnd: true, period: true } });
 	if (!existing) throw new NotFoundError("goal.not_found");
 	await assertDepartmentInOrg(ctx.orgId, input.departmentId);
 	let data: Record<string, unknown> = {
@@ -151,7 +155,7 @@ export async function updateGoal(ctx: { orgId: string; userId: string }, id: str
 
 export async function deleteGoal(ctx: { orgId: string; userId: string }, id: string) {
 	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
-	const existing = await db.goal.findFirst({ where: { id, orgId: ctx.orgId }, select: { id: true } });
+	const existing = await db.goal.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] }, select: { id: true } });
 	if (!existing) throw new NotFoundError("goal.not_found");
 	await db.goal.delete({ where: { id } });
 	await audit("goal.deleted", { actorId: ctx.userId, orgId: ctx.orgId, target: id });

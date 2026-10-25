@@ -5,6 +5,7 @@ import { canManageOrg } from "@/server/services/orgs";
 import { assertCanWrite } from "@/server/services/guest-guard";
 import { assertActiveAssignee } from "@/server/services/active-people";
 import { resolveTimeZone, zonedParts, zonedWallTime } from "@/lib/zoned-time";
+import { mySpacesWhere, placeWhere, type SpacePlace } from "@/server/services/space-place";
 
 /**
  * Daily production. Reading the checklist and the routine list stays open to every
@@ -61,9 +62,10 @@ export interface RoutineRow {
 	active: boolean;
 }
 
-export async function listRoutines(orgId: string): Promise<RoutineRow[]> {
+export async function listRoutines(orgId: string, place?: SpacePlace): Promise<RoutineRow[]> {
 	const rows = await db.routine.findMany({
-		where: { orgId },
+		// the routines of the space the person is in (and in «الشركة» the ones from before spaces had their own)
+		where: { orgId, ...(place ? { AND: [placeWhere(place)] } : {}) },
 		orderBy: { createdAt: "asc" },
 		select: {
 			id: true,
@@ -99,9 +101,9 @@ export function runsOnDay(weekdays: string, day: string, timeZone?: string): boo
 }
 
 /** Checklist for one day: active routines scheduled that day + today's completion state. */
-export async function dayChecklist(orgId: string, day: string, timeZone?: string) {
+export async function dayChecklist(orgId: string, day: string, timeZone?: string, place?: SpacePlace) {
 	const routines = await db.routine.findMany({
-		where: { orgId, active: true },
+		where: { orgId, active: true, ...(place ? { AND: [placeWhere(place)] } : {}) },
 		orderBy: { createdAt: "asc" },
 		select: {
 			id: true,
@@ -159,13 +161,15 @@ export async function assertDepartmentInOrg(orgId: string, departmentId: string 
 	if (!dept) throw new NotFoundError("dept.not_found");
 }
 
-async function assertRoutineOrg(orgId: string, routineId: string) {
-	const r = await db.routine.findFirst({ where: { id: routineId, orgId }, select: { id: true, assigneeId: true } });
+async function assertRoutineOrg(orgId: string, routineId: string, userId?: string) {
+	// of one of the person's spaces (or from before spaces had their own): anything else is «not found»
+	const mine = userId ? { AND: [await mySpacesWhere(userId)] } : {};
+	const r = await db.routine.findFirst({ where: { id: routineId, orgId, ...mine }, select: { id: true, assigneeId: true } });
 	if (!r) throw new NotFoundError("routine.not_found");
 	return r;
 }
 
-export async function createRoutine(ctx: { orgId: string; userId: string }, input: z.infer<typeof routineSchema>) {
+export async function createRoutine(ctx: { orgId: string; userId: string }, input: z.infer<typeof routineSchema>, spaceId: string | null = null) {
 	await assertCanManageRoutines(ctx);
 	if (input.assigneeId) await assertActiveAssignee(ctx.orgId, input.assigneeId);
 	await assertDepartmentInOrg(ctx.orgId, input.departmentId);
@@ -178,6 +182,8 @@ export async function createRoutine(ctx: { orgId: string; userId: string }, inpu
 			assigneeId: input.assigneeId ?? null,
 			weekdays: weekdaysToCsv(input.weekdays),
 			active: input.active ?? true,
+			// set in the space the person is in
+			workspaceId: spaceId,
 		},
 		select: { id: true },
 	});
@@ -187,7 +193,7 @@ export async function createRoutine(ctx: { orgId: string; userId: string }, inpu
 
 export async function updateRoutine(ctx: { orgId: string; userId: string }, id: string, input: z.infer<typeof routineSchema>) {
 	await assertCanManageRoutines(ctx);
-	const current = await assertRoutineOrg(ctx.orgId, id);
+	const current = await assertRoutineOrg(ctx.orgId, id, ctx.userId);
 	// a NEW assignee must be active; re-sending the current one (who may have left since) changes nothing
 	if (input.assigneeId && input.assigneeId !== current.assigneeId) await assertActiveAssignee(ctx.orgId, input.assigneeId);
 	await assertDepartmentInOrg(ctx.orgId, input.departmentId);
@@ -207,7 +213,7 @@ export async function updateRoutine(ctx: { orgId: string; userId: string }, id: 
 
 export async function deleteRoutine(ctx: { orgId: string; userId: string }, id: string) {
 	await assertCanManageRoutines(ctx);
-	await assertRoutineOrg(ctx.orgId, id);
+	await assertRoutineOrg(ctx.orgId, id, ctx.userId);
 	await db.routine.delete({ where: { id } });
 	await audit("routine.deleted", { actorId: ctx.userId, orgId: ctx.orgId, target: id });
 }
@@ -230,7 +236,7 @@ export async function setRoutineDone(
 	done: boolean,
 ): Promise<void> {
 	assertCanWrite({ orgRole: await orgRoleOf(ctx.orgId, ctx.userId) });
-	const routine = await db.routine.findFirst({ where: { id: routineId, orgId: ctx.orgId }, select: { id: true } });
+	const routine = await db.routine.findFirst({ where: { id: routineId, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] }, select: { id: true } });
 	if (!routine) throw new NotFoundError("routine.not_found");
 	if (done) {
 		await db.routineLog.upsert({

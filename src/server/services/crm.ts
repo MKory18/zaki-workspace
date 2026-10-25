@@ -5,6 +5,7 @@ import { NotFoundError, audit, type OrgAccessContext } from "@/server/auth";
 import { nextTaskNumber, type Tx } from "@/server/services/tasks";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { assertCapability } from "@/server/services/active-people";
+import { mySpacesWhere, placeWhere, type SpacePlace } from "@/server/services/space-place";
 
 export const OPPORTUNITY_STAGES = [
   "LEAD",
@@ -63,10 +64,11 @@ async function assertCrm(ctx: OrgAccessContext, capability: "crm.view" | "crm.ed
   await assertCapability(ctx, capability);
 }
 
-export async function listCustomers(ctx: OrgAccessContext) {
+export async function listCustomers(ctx: OrgAccessContext, place?: SpacePlace) {
   await assertCrm(ctx, "crm.view");
   return db.customer.findMany({
-    where: { orgId: ctx.orgId },
+    // the space the person is in (and in «الشركة» the ones from before spaces had their own)
+    where: { orgId: ctx.orgId, ...(place ? { AND: [placeWhere(place)] } : {}) },
     orderBy: { createdAt: "desc" },
     include: { creator: { select: { id: true, name: true } } },
   });
@@ -75,7 +77,7 @@ export async function listCustomers(ctx: OrgAccessContext) {
 export async function getCustomer(ctx: OrgAccessContext, id: string) {
   await assertCrm(ctx, "crm.view");
   const customer = await db.customer.findFirst({
-    where: { id, orgId: ctx.orgId },
+    where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] },
     include: {
       creator: { select: { id: true, name: true } },
       opportunities: { orderBy: { createdAt: "desc" } },
@@ -85,7 +87,7 @@ export async function getCustomer(ctx: OrgAccessContext, id: string) {
   return customer;
 }
 
-export async function createCustomer(ctx: OrgAccessContext, input: CustomerInput) {
+export async function createCustomer(ctx: OrgAccessContext, input: CustomerInput, spaceId: string | null = null) {
   await assertCrm(ctx, "crm.edit");
   const customer = await db.customer.create({
     data: {
@@ -96,6 +98,8 @@ export async function createCustomer(ctx: OrgAccessContext, input: CustomerInput
       phone: input.phone ?? null,
       notes: input.notes ?? null,
       creatorId: ctx.userId,
+      // added in the space the person is in
+      workspaceId: spaceId,
     },
   });
   await audit("crm.customer_created", { actorId: ctx.userId, orgId: ctx.orgId, target: customer.id });
@@ -104,7 +108,7 @@ export async function createCustomer(ctx: OrgAccessContext, input: CustomerInput
 
 export async function updateCustomer(ctx: OrgAccessContext, id: string, input: Partial<CustomerInput>) {
   await assertCrm(ctx, "crm.edit");
-  const customer = await db.customer.findFirst({ where: { id, orgId: ctx.orgId } });
+  const customer = await db.customer.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] } });
   if (!customer) throw new NotFoundError("crm.not_found");
   const updated = await db.customer.update({ where: { id: customer.id }, data: input });
   await audit("crm.customer_updated", { actorId: ctx.userId, orgId: ctx.orgId, target: customer.id });
@@ -113,16 +117,17 @@ export async function updateCustomer(ctx: OrgAccessContext, id: string, input: P
 
 export async function deleteCustomer(ctx: OrgAccessContext, id: string) {
   await assertCrm(ctx, "crm.edit");
-  const customer = await db.customer.findFirst({ where: { id, orgId: ctx.orgId } });
+  const customer = await db.customer.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] } });
   if (!customer) throw new NotFoundError("crm.not_found");
   await db.customer.delete({ where: { id: customer.id } });
   await audit("crm.customer_deleted", { actorId: ctx.userId, orgId: ctx.orgId, target: customer.id });
 }
 
-export async function listOpportunities(ctx: OrgAccessContext) {
+export async function listOpportunities(ctx: OrgAccessContext, place?: SpacePlace) {
   await assertCrm(ctx, "crm.view");
   return db.opportunity.findMany({
-    where: { orgId: ctx.orgId },
+    // the space the person is in (and in «الشركة» the ones from before spaces had their own)
+    where: { orgId: ctx.orgId, ...(place ? { AND: [placeWhere(place)] } : {}) },
     orderBy: { createdAt: "desc" },
     include: {
       customer: { select: { id: true, name: true, company: true } },
@@ -134,7 +139,7 @@ export async function listOpportunities(ctx: OrgAccessContext) {
 export async function getOpportunity(ctx: OrgAccessContext, id: string) {
   await assertCrm(ctx, "crm.view");
   const opportunity = await db.opportunity.findFirst({
-    where: { id, orgId: ctx.orgId },
+    where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] },
     include: {
       customer: { select: { id: true, name: true, company: true, email: true, phone: true } },
       owner: { select: { id: true, name: true } },
@@ -146,7 +151,7 @@ export async function getOpportunity(ctx: OrgAccessContext, id: string) {
 
 export async function createOpportunity(ctx: OrgAccessContext, input: OpportunityInput) {
   await assertCrm(ctx, "crm.edit");
-  const customer = await db.customer.findFirst({ where: { id: input.customerId, orgId: ctx.orgId } });
+  const customer = await db.customer.findFirst({ where: { id: input.customerId, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] } });
   if (!customer) throw new NotFoundError("crm.not_found");
 
   const opportunity = await db.$transaction(async (tx: Tx) => {
@@ -162,6 +167,8 @@ export async function createOpportunity(ctx: OrgAccessContext, input: Opportunit
         expectedCloseAt: input.expectedCloseAt ? new Date(input.expectedCloseAt) : null,
         notes: input.notes ?? null,
         ownerId: ctx.userId,
+        // an opportunity lives where its customer does
+        workspaceId: customer.workspaceId,
       },
     });
   });
@@ -176,7 +183,7 @@ export async function updateOpportunity(
   input: Partial<OpportunityInput>,
 ) {
   await assertCrm(ctx, "crm.edit");
-  const opportunity = await db.opportunity.findFirst({ where: { id, orgId: ctx.orgId } });
+  const opportunity = await db.opportunity.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] } });
   if (!opportunity) throw new NotFoundError("crm.not_found");
 
   const data: Record<string, unknown> = { ...input };
@@ -192,7 +199,7 @@ export async function updateOpportunity(
 
 export async function deleteOpportunity(ctx: OrgAccessContext, id: string) {
   await assertCrm(ctx, "crm.edit");
-  const opportunity = await db.opportunity.findFirst({ where: { id, orgId: ctx.orgId } });
+  const opportunity = await db.opportunity.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] } });
   if (!opportunity) throw new NotFoundError("crm.not_found");
   await db.opportunity.delete({ where: { id: opportunity.id } });
   await audit("crm.opportunity_deleted", { actorId: ctx.userId, orgId: ctx.orgId, target: opportunity.id });
