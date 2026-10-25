@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowBigUp, Rocket, Trash2, ExternalLink } from "lucide-react";
+import { ArrowBigUp, Rocket, Trash2, ExternalLink, Share2 } from "lucide-react";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -19,30 +19,42 @@ export interface IdeaItem {
   id: string;
   title: string;
   description: string | null;
-  status: "NEW" | "UNDER_REVIEW" | "ACCEPTED" | "REJECTED";
+  status: "NEW" | "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "PLANNING" | "LAUNCHED";
   taskId: string | null;
   creatorId: string;
   creatorName: string;
   creatorJobTitle: string | null;
   voteCount: number;
   votedByMe: boolean;
+  /** The space it was born in (null: from before spaces had ideas). */
+  workspaceId?: string | null;
+  spaceName?: string | null;
+  /** Shared with the company («شارك مع الشركة»). */
+  shared?: boolean;
 }
 
 export interface IdeasCtx {
   userId: string;
   orgRole: string;
+  /** Moves the ideas of this space along (its managers; in «الشركة» the owner and the admins). */
   canManage: boolean;
+  /** The space the person is in, and whether it is «الشركة». */
+  spaceId?: string | null;
+  isHq?: boolean;
 }
 
 interface WorkspacesResponse {
   organizations: { id: string; name: string; workspaces: { id: string; name: string }[] }[];
 }
 
+/** The road of an idea (src/server/services/ideas.ts decides again): فكرة → مراجعة → تخطيط → انطلقت, or مرفوضة. */
 const NEXT_STATUS: Record<IdeaItem["status"], IdeaItem["status"][]> = {
   NEW: ["UNDER_REVIEW"],
-  UNDER_REVIEW: ["ACCEPTED", "REJECTED"],
+  UNDER_REVIEW: ["PLANNING", "REJECTED"],
+  PLANNING: ["LAUNCHED", "UNDER_REVIEW"],
   REJECTED: ["UNDER_REVIEW"],
-  ACCEPTED: [],
+  ACCEPTED: ["PLANNING", "LAUNCHED"],
+  LAUNCHED: [],
 };
 
 /**
@@ -62,13 +74,15 @@ export function ideaError(err: unknown, t: (key: string) => string): string {
   return t("common.error");
 }
 
-const FILTERS: (IdeaItem["status"] | "ALL" | "MINE")[] = [
-  "ALL", "NEW", "UNDER_REVIEW", "ACCEPTED", "REJECTED", "MINE",
+const FILTERS: (IdeaItem["status"] | "ALL" | "MINE" | "SHARED")[] = [
+  "ALL", "NEW", "UNDER_REVIEW", "PLANNING", "LAUNCHED", "REJECTED", "SHARED", "MINE",
 ];
 
 const STATUS_STYLE: Record<IdeaItem["status"], string> = {
   NEW: "bg-surface-2 text-fg-muted",
   UNDER_REVIEW: "bg-warn/10 text-warn",
+  PLANNING: "bg-info/10 text-info",
+  LAUNCHED: "bg-ok/10 text-ok",
   ACCEPTED: "bg-ok/10 text-ok",
   REJECTED: "bg-danger/10 text-danger",
 };
@@ -88,7 +102,7 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
   const shown = useMemo(
     () =>
       ideas.filter((i) =>
-        filter === "ALL" ? true : filter === "MINE" ? i.creatorId === ctx.userId : i.status === filter,
+        filter === "ALL" ? true : filter === "MINE" ? i.creatorId === ctx.userId : filter === "SHARED" ? i.shared === true : i.status === filter,
       ),
     [ideas, filter, ctx.userId],
   );
@@ -138,6 +152,16 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
     }
   }
 
+  async function share(idea: IdeaItem, shared: boolean) {
+    try {
+      const res = await apiPost<{ idea: IdeaItem }>(`/api/ideas/${idea.id}/share`, { shared });
+      setIdeas((prev) => prev.map((i) => (i.id === idea.id ? res.idea : i)));
+      toast(t(shared ? "ideas.sharedToast" : "ideas.unsharedToast"), "success");
+    } catch (err) {
+      toast(ideaError(err, t), "error");
+    }
+  }
+
   async function removeIdea(idea: IdeaItem) {
     if (!window.confirm(t("ideas.deleteConfirm"))) return;
     try {
@@ -153,7 +177,7 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
     <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
       <header>
         <h1 className="text-lg font-semibold text-fg">{t("ideas.title")}</h1>
-        <p className="text-xs text-fg-muted">{t("ideas.subtitle")}</p>
+        <p className="text-xs text-fg-muted">{t(ctx.isHq ? "ideas.subtitle_hq" : ctx.spaceId ? "ideas.subtitle_space" : "ideas.subtitle")}</p>
       </header>
 
       {canWrite ? (
@@ -240,6 +264,13 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
                   <p className="mt-1.5 text-xs text-muted">
                     {idea.creatorName}
                     {idea.creatorJobTitle ? ` · ${idea.creatorJobTitle}` : ""}
+                    {/* in «الشركة», a shared idea says which space it comes from */}
+                    {ctx.isHq && idea.shared && idea.spaceName && idea.workspaceId !== ctx.spaceId ? (
+                      <span className="ms-1">· <bdi>{t("ideas.from_space", { space: idea.spaceName })}</bdi></span>
+                    ) : null}
+                    {idea.shared && !ctx.isHq ? (
+                      <span className="ms-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-accent">{t("ideas.shared")}</span>
+                    ) : null}
                     {idea.taskId ? (
                       <a href={`/tasks/${idea.taskId}`} className="ms-1 inline-flex items-center gap-0.5 text-accent hover:underline">
                         <ExternalLink className="h-2.5 w-2.5" />
@@ -255,6 +286,19 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
                   </span>
                   {canEdit ? (
                     <div className="flex items-center gap-1">
+                      {/* «شارك مع الشركة»: an idea of a space (one with no space is the company's already) */}
+                      {idea.workspaceId && !(ctx.isHq && idea.workspaceId === ctx.spaceId) ? (
+                        <button
+                          type="button"
+                          onClick={() => share(idea, !idea.shared)}
+                          aria-pressed={idea.shared === true}
+                          aria-label={t(idea.shared ? "ideas.unshare" : "ideas.share")}
+                          title={t(idea.shared ? "ideas.unshare" : "ideas.share")}
+                          className={cn("rounded p-1 hover:bg-surface-2", idea.shared ? "text-accent" : "text-muted hover:text-accent")}
+                        >
+                          <Share2 className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
                       {canConvert ? (
                         <button
                           type="button"
@@ -308,7 +352,7 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
           onClose={() => setConverting(null)}
           onDone={(taskId) => {
             setIdeas((prev) =>
-              prev.map((i) => (i.id === converting.id ? { ...i, status: "ACCEPTED", taskId } : i)),
+              prev.map((i) => (i.id === converting.id ? { ...i, status: i.status === "LAUNCHED" ? "LAUNCHED" : "PLANNING", taskId } : i)),
             );
             setConverting(null);
             toast(t("ideas.convertedToast"), "success");

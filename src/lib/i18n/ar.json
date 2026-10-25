@@ -184,6 +184,9 @@
   "ideas.filter.under_review": "تحت المراجعة",
   "ideas.filter.accepted": "معتمدة",
   "ideas.filter.rejected": "مرفوضة",
+  "ideas.filter.planning": "بالتخطيط",
+  "ideas.filter.launched": "انطلقت",
+  "ideas.filter.shared": "المشتركة مع الشركة",
   "ideas.filter.mine": "أفكاري",
   "ideas.status.NEW": "جديدة",
   "ideas.status.UNDER_REVIEW": "تحت المراجعة",
@@ -661,5 +664,15 @@
   "camp.not_found": "الحملة غير موجودة",
   "camp.admin_only": "لا تملك صلاحية على هذه الحملة",
   "email.taken": "هذا البريد مستخدم مسبقًا — سجّل الدخول أو استخدم بريدًا آخر",
-  "auth.validationHint": "تحقق من البيانات: كلمة المرور 8 خانات على الأقل وفيها حرف إنجليزي ورقم"
+  "auth.validationHint": "تحقق من البيانات: كلمة المرور 8 خانات على الأقل وفيها حرف إنجليزي ورقم",
+  "ideas.status.PLANNING": "بالتخطيط",
+  "ideas.status.LAUNCHED": "انطلقت",
+  "ideas.share": "شارك مع الشركة",
+  "ideas.unshare": "وقّف المشاركة مع الشركة",
+  "ideas.shared": "مشتركة مع الشركة",
+  "ideas.sharedToast": "صارت الفكرة مشتركة مع الشركة",
+  "ideas.unsharedToast": "رجعت الفكرة لمساحتها بس",
+  "ideas.from_space": "من {space}",
+  "ideas.subtitle_space": "أفكار هالمساحة. شارك أي وحدة مع الشركة لتطلع بـ«الشركة» كمان.",
+  "ideas.subtitle_hq": "أفكار «الشركة»، ومعها الأفكار اللي شاركتها المساحات مع الشركة."
 }

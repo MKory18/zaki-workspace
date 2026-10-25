@@ -597,6 +597,7 @@ model Workspace {
   department    Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   notifications Notification[]
   members       WorkspaceMember[]
+  ideas         Idea[]
   teams         Team[]
   projects      Project[]
   conversations Conversation[]
@@ -958,6 +959,8 @@ enum IdeaStatus {
   UNDER_REVIEW
   ACCEPTED
   REJECTED
+  PLANNING
+  LAUNCHED
 }
 
 model Idea {
@@ -966,17 +969,24 @@ model Idea {
   creatorId   String
   title       String
   description String?
-  status      IdeaStatus @default(NEW) // NEW -> UNDER_REVIEW -> ACCEPTED/REJECTED
+  status      IdeaStatus @default(NEW) // NEW -> UNDER_REVIEW -> PLANNING -> LAUNCHED, or REJECTED (ACCEPTED: before PLANNING existed)
   taskId      String? // set when converted into a real task
+  // The space the idea was born in (the owner's decision, 2026-10-25: each space has its own ideas). None: an idea
+  // from before spaces had them, read in «الشركة».
+  workspaceId String?
+  // Shared with the company («شارك مع الشركة»): read in «الشركة» too.
+  sharedAt    DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   creator      User         @relation("IdeaCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  workspace    Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   votes        IdeaVote[]
 
   @@index([orgId, status])
   @@index([orgId, createdAt])
+  @@index([orgId, workspaceId])
 }
 
 model IdeaVote {

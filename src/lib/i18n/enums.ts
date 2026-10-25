@@ -109,6 +109,8 @@ export const ENUM_KEYS: Record<EnumName, Readonly<Record<string, string>>> = {
     UNDER_REVIEW: "ideas.status.UNDER_REVIEW",
     ACCEPTED: "ideas.status.ACCEPTED",
     REJECTED: "ideas.status.REJECTED",
+    PLANNING: "ideas.status.PLANNING",
+    LAUNCHED: "ideas.status.LAUNCHED",
   },
   IntegrationType: own("IntegrationType", ["TELEGRAM", "N8N", "GOOGLE_DRIVE"]),
   OpportunityStage: {

@@ -18,7 +18,7 @@ import { resolveTimeZone, zonedDayStart } from "@/lib/zoned-time";
  *    and the Today page: a task due today at 09:00 is not overdue at 15:00, it is due within the coming week.
  * Nothing is ever counted across organizations.
  */
-export async function loadAnalytics(orgId: string, wsIds: string[], now: Date = new Date(), teams?: WorkScope) {
+export async function loadAnalytics(orgId: string, wsIds: string[], now: Date = new Date(), teams?: WorkScope, ideasWhere: Prisma.IdeaWhereInput = {}) {
   const org = await db.organization.findUnique({ where: { id: orgId }, select: { timezone: true } });
   const todayStart = zonedDayStart(now, resolveTimeZone(org?.timezone));
   const since30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
@@ -35,7 +35,7 @@ export async function loadAnalytics(orgId: string, wsIds: string[], now: Date = 
       db.task.count({ where: { ...scope, completedAt: { gte: since30 } } }),
       db.task.count({ where: { ...scope, completedAt: null, dueDate: { gte: todayStart, lte: in7 } } }),
       db.task.groupBy({ by: ["priority"], where: { ...scope, completedAt: null }, _count: { _all: true } }),
-      db.idea.groupBy({ by: ["status"], where: { orgId }, _count: { _all: true } }),
+      db.idea.groupBy({ by: ["status"], where: { orgId, ...ideasWhere }, _count: { _all: true } }),
       db.task.groupBy({
         by: ["assigneeId"],
         where: {
@@ -48,7 +48,7 @@ export async function loadAnalytics(orgId: string, wsIds: string[], now: Date = 
         orderBy: { _count: { assigneeId: "desc" } },
         take: 8,
       }),
-      db.idea.count({ where: { orgId } }),
+      db.idea.count({ where: { orgId, ...ideasWhere } }),
       db.workspace.count({ where: { organizationId: orgId, id: { in: wsIds } } }),
       db.project.count({ where: { workspaceId: { in: wsIds }, workspace: { organizationId: orgId }, ...(teams ? { AND: [projectVisibleWhere(teams)] } : {}) } }),
     ]);
