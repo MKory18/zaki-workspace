@@ -64,6 +64,10 @@ export function Sidebar({
   badges?: Partial<Record<PlaceKey, number>>;
 }) {
   const { t } = useI18n();
+  // the space you are in, written where «زاكي» was and in its lettering (the owner's ask, 2026-10-25); a long name
+  // steps down a size so it fits the menu, and the folded rail keeps the space's mark
+  const brand = space?.name ?? t("app.brand");
+  const brandSize = collapsed ? "text-2xl" : brand.length > 12 ? "text-2xl" : brand.length > 8 ? "text-[32px]" : "text-[40px]";
   return (
     <aside
       className={cn(
@@ -78,11 +82,11 @@ export function Sidebar({
         <ThemeDecor kind="sidebar" />
         <Link
           href="/"
-          aria-label={t("app.brand")}
+          aria-label={brand}
           className={cn("relative flex min-w-0 flex-col rounded-xl", collapsed && "mx-auto items-center")}
         >
-          <span aria-hidden="true" className={cn("zk-wordmark leading-none", collapsed ? "text-2xl" : "text-[40px]")}>
-            {t("app.brand")}
+          <span aria-hidden="true" className={cn("zk-wordmark block max-w-full truncate py-0.5 leading-tight", brandSize)}>
+            <bdi>{collapsed ? (space?.emoji ?? Array.from(brand)[0] ?? "") : brand}</bdi>
           </span>
           {orgName && !collapsed ? (
             <span aria-hidden="true" className="mt-1.5 truncate text-xs font-semibold text-fg-muted">

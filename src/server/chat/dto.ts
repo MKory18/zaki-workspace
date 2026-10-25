@@ -135,6 +135,8 @@ export interface ConversationDto {
   topicType?: TopicType;
   postingPolicy?: PostingPolicy;
   restricted?: boolean;
+  /** The «مقطع» the topic belongs to (null: the whole space's, or not a topic). */
+  teamId?: string | null;
   closed: boolean;
   space?: { id: string; name: string; hasExternal: boolean } | null;
   /** `canJoin`: the OWNER in oversight of an open topic may join it («شارك بالمحادثة») to post there. */

@@ -82,5 +82,16 @@
   "chatc.pinned": "مثبّتة",
   "chatc.download": "تنزيل {name}",
   "chatc.reaction": "تفاعل {emoji}، {count}",
-  "chatc.list_sep": "، "
+  "chatc.list_sep": "، ",
+  "chatc.topic.settings": "إعدادات الموضوع",
+  "chatc.topic.who_reads": "مين بيشوفه وبيقرأه",
+  "chatc.topic.who_reads_hint.space": "كل أهل المساحة بيشوفوه.",
+  "chatc.topic.who_reads_hint.section": "أهل المقطع ومدير المساحة بس. ما بيوصل منه إشعار لحدا برّاه.",
+  "chatc.topic.who_reads_hint.people": "بس اللي بتختارهم، ومعهم مدير المساحة.",
+  "chatc.topic.pick_section": "اختار المقطع.",
+  "chatc.topic.who_writes": "مين بيكتب فيه",
+  "chatc.topic.writers.all": "كل اللي بيشوفوه",
+  "chatc.topic.writers.admins": "مديرين المساحة بس",
+  "chatc.topic.save": "احفظ",
+  "chatc.topic.save_failed": "ما انحفظت الإعدادات. جرّب مرة ثانية."
 }
