@@ -11,7 +11,7 @@ import {
   listDepartmentTickets,
 } from "@/server/services/tickets";
 
-/** GET: all tickets of the caller's org department (never for guests: 403). */
+/** GET: the department's tickets — all of them for its people and the managers, one's own for anybody else (never guests). */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       select: { id: true },
     });
     if (!dept) throw new NotFoundError("dept.not_found");
-    const tickets = await listDepartmentTickets(dept.id);
+    const tickets = await listDepartmentTickets(dept.id, ctx);
     return NextResponse.json({ tickets });
   });
 }

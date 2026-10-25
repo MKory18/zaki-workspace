@@ -68,9 +68,11 @@ async function loadCampaign(ctx: OrgAccessContext, campaignId: string) {
   return c;
 }
 
-export async function listDepartmentCampaigns(departmentId: string) {
+/** A department's campaigns: all of them for its people and the managers; anybody else sees the ones they own. */
+export async function listDepartmentCampaigns(departmentId: string, viewer?: OrgAccessContext) {
+  const insider = viewer ? canManage(viewer, (await deptContext(viewer, departmentId)).isMember) : true;
   return db.campaign.findMany({
-    where: { departmentId },
+    where: { departmentId, ...(insider || !viewer ? {} : { ownerId: viewer.userId }) },
     orderBy: [{ startDate: "asc" }],
     select: {
       id: true, number: true, title: true, description: true, status: true,
@@ -155,6 +157,10 @@ export async function campaignDetail(ctx: OrgAccessContext, campaignId: string) 
     },
   });
   if (!c) throw new NotFoundError("campaign.not_found");
+  // outside the department, only one's own campaign: anything else is «not found»
+  if (c.owner.id !== ctx.userId && !canManage(ctx, (await deptContext(ctx, c.department.id)).isMember)) {
+    throw new NotFoundError("campaign.not_found");
+  }
   return c;
 }
 

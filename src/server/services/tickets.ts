@@ -96,6 +96,12 @@ async function departmentContext(ctx: OrgAccessContext, departmentId: string) {
   return { dept, isMember, isLead, isAdmin };
 }
 
+/** The department's people, the OWNER and the ADMINs read all of its tickets and campaigns. */
+async function seesDepartment(ctx: OrgAccessContext, departmentId: string): Promise<boolean> {
+  const { isMember, isLead, isAdmin } = await departmentContext(ctx, departmentId);
+  return isMember || isLead || isAdmin;
+}
+
 /** The facts `canEditTicket` needs for this actor and this ticket. Editing and deleting share them. */
 async function ticketEditFacts(
   ctx: OrgAccessContext,
@@ -112,9 +118,15 @@ async function ticketEditFacts(
   };
 }
 
-export async function listDepartmentTickets(departmentId: string) {
+/**
+ * A department's tickets: all of them for its people (members and lead), the OWNER and the ADMINs; anybody else sees
+ * only the ones they raised or hold (the owner's decision, 2026-10-25: each department works like its own site).
+ */
+export async function listDepartmentTickets(departmentId: string, viewer?: OrgAccessContext) {
+  const insider = viewer ? await seesDepartment(viewer, departmentId) : true;
+  const mine = insider || !viewer ? {} : { OR: [{ creatorId: viewer.userId }, { assigneeId: viewer.userId }] };
   return db.ticket.findMany({
-    where: { departmentId },
+    where: { departmentId, ...mine },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     select: {
       id: true,
@@ -195,11 +207,12 @@ export async function loadTicketForOrg(orgId: string, ticketId: string) {
   return ticket;
 }
 
-/** Org-member gate + read access for a single ticket (any org member can view). */
+/** One ticket: for the department's people, the OWNER and the ADMINs, and for whoever raised or holds it. */
 export async function ticketDetail(ctx: OrgAccessContext, ticketId: string) {
   const ticket = await db.ticket.findFirst({
     where: { id: ticketId, orgId: ctx.orgId },
     select: {
+      creatorId: true, assigneeId: true,
       id: true, orgId: true, departmentId: true, number: true, title: true,
       description: true, status: true, priority: true, resolvedAt: true, createdAt: true,
       creator: { select: { id: true, name: true } },
@@ -216,6 +229,10 @@ export async function ticketDetail(ctx: OrgAccessContext, ticketId: string) {
     },
   });
   if (!ticket) throw new NotFoundError("ticket.not_found");
+  // outside the department, only one's own ticket (raised or held): anything else is «not found»
+  if (ticket.creatorId !== ctx.userId && ticket.assigneeId !== ctx.userId && !(await seesDepartment(ctx, ticket.departmentId))) {
+    throw new NotFoundError("ticket.not_found");
+  }
   return ticket;
 }
 

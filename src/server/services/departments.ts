@@ -4,6 +4,7 @@ import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/a
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { loadWorkScope, projectVisibleWhere, scopeSpaceIds } from "@/server/services/team-scope";
 import { assertCapability } from "@/server/services/active-people";
+import { alignDepartmentSpace, syncDepartmentSpace } from "@/server/services/department-space";
 
 /**
  * The departments area is the company's staff directory (who works where, with
@@ -79,6 +80,8 @@ export async function createDepartment(ctx: OrgAccessContext, input: z.infer<typ
     },
     select: { id: true, name: true },
   });
+  // its own space from the first day, with its people (and its lead as the space's ADMIN)
+  await syncDepartmentSpace(ctx.orgId, dept.id, { add: [...validMembers, ...(input.leadId ? [input.leadId] : [])] });
   return dept;
 }
 
@@ -186,6 +189,8 @@ export async function updateDepartment(ctx: OrgAccessContext, id: string, input:
       ...(input.leadId !== undefined ? { leadId: input.leadId || null } : {}),
     },
   });
+  // the space carries the department's name and mark, and its lead
+  await alignDepartmentSpace(ctx.orgId, d.id);
 }
 
 export async function deleteDepartment(ctx: OrgAccessContext, id: string): Promise<void> {
@@ -218,4 +223,6 @@ export async function setMembers(ctx: OrgAccessContext, id: string, input: z.inf
       });
     }
   });
+  // who is in the department is who is in its space
+  await syncDepartmentSpace(ctx.orgId, id, { add, remove });
 }

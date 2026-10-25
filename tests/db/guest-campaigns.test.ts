@@ -90,9 +90,13 @@ describe("campaigns: closed to a GUEST", () => {
       expect(res.text).not.toContain(campaign.title);
     }
 
+    // a staff member outside the department (2026-10-25: a department's campaigns are its own): the list answers
+    // without the department's campaigns, and somebody else's campaign is «not found»
     await loginAs(w.stranger.id);
-    expect((await call(departmentCampaignsRoute.GET, { params: { id: w.dept.id } })).status).toBe(200);
-    expect((await call(campaignRoute.GET, { params: { id: campaign.id } })).status).toBe(200);
+    const list = await call(departmentCampaignsRoute.GET, { params: { id: w.dept.id } });
+    expect(list.status).toBe(200);
+    expect(list.text).not.toContain(campaign.title);
+    expect((await call(campaignRoute.GET, { params: { id: campaign.id } })).status).toBe(404);
   });
 });
 
