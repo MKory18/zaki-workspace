@@ -2,10 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/server/db";
 import { pageUser } from "@/server/auth";
-import { accessibleWorkspaceIds } from "@/server/services/access";
+import { loadWorkScope, projectVisibleWhere, scopeSpaceIds } from "@/server/services/team-scope";
 import { Card, CardBody, Badge, EmptyState } from "@/components/ui/card";
 import { ProjectsToolbar } from "@/components/projects-toolbar";
 import { WorkspaceMembersButton } from "@/components/workspace-members-button";
+import { WorkspaceTeamsButton } from "@/components/workspace-teams-button";
 import { WorkspaceEditButton } from "@/components/workspace-edit-button";
 import { fmtDMY } from "@/lib/format";
 import { enumLabel } from "@/lib/i18n/enums";
@@ -19,7 +20,9 @@ export default async function ProjectsPage({
   const { t } = getServerT();
   const user = await pageUser();
   if (!user) redirect("/login");
-  const accessible = await accessibleWorkspaceIds(user.id);
+  // the spaces they may open, and inside a space with teams only the space's own projects and their teams'
+  const scope = await loadWorkScope(user.id);
+  const accessible = scopeSpaceIds(scope);
   if (accessible.length === 0) {
     return (
       <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
@@ -38,7 +41,11 @@ export default async function ProjectsPage({
       ? searchParams.workspace
       : { in: accessible };
   const projects = await db.project.findMany({
-    where: { workspaceId: typeof wsFilter === "string" ? wsFilter : { in: wsFilter.in }, status: { not: "ARCHIVED" } },
+    where: {
+      workspaceId: typeof wsFilter === "string" ? wsFilter : { in: wsFilter.in },
+      status: { not: "ARCHIVED" },
+      AND: [projectVisibleWhere(scope)],
+    },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,
@@ -68,6 +75,7 @@ export default async function ProjectsPage({
             <>
               <WorkspaceEditButton workspaceId={wsFilter as string} name={wsInfo.name} description={wsInfo.description} />
               <WorkspaceMembersButton workspaceId={wsFilter as string} />
+              <WorkspaceTeamsButton workspaceId={wsFilter as string} />
             </>
           ) : null}
           <ProjectsToolbar />

@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+import { projectVisibleWhere, taskVisibleWhere, type WorkScope } from "@/server/services/team-scope";
 import { db } from "@/server/db";
 import { resolveTimeZone, zonedDayStart } from "@/lib/zoned-time";
 
@@ -16,12 +18,13 @@ import { resolveTimeZone, zonedDayStart } from "@/lib/zoned-time";
  *    and the Today page: a task due today at 09:00 is not overdue at 15:00, it is due within the coming week.
  * Nothing is ever counted across organizations.
  */
-export async function loadAnalytics(orgId: string, wsIds: string[], now: Date = new Date()) {
+export async function loadAnalytics(orgId: string, wsIds: string[], now: Date = new Date(), teams?: WorkScope) {
   const org = await db.organization.findUnique({ where: { id: orgId }, select: { timezone: true } });
   const todayStart = zonedDayStart(now, resolveTimeZone(org?.timezone));
   const since30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
   const in7 = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
-  const scope = { archived: false, orgId, workspaceId: { in: wsIds } };
+  // `teams`: inside a space with teams, only the space's own work and the caller's teams' are counted
+  const scope: Prisma.TaskWhereInput = { archived: false, orgId, workspaceId: { in: wsIds }, ...(teams ? { AND: [taskVisibleWhere(teams)] } : {}) };
   const [total, open, completed, overdue, created30, completed30, upcoming7, byPriority, byStatus30, assignees, ideas, workspaces, projects] =
     await Promise.all([
       db.task.count({ where: scope }),
@@ -47,7 +50,7 @@ export async function loadAnalytics(orgId: string, wsIds: string[], now: Date = 
       }),
       db.idea.count({ where: { orgId } }),
       db.workspace.count({ where: { organizationId: orgId, id: { in: wsIds } } }),
-      db.project.count({ where: { workspaceId: { in: wsIds }, workspace: { organizationId: orgId } } }),
+      db.project.count({ where: { workspaceId: { in: wsIds }, workspace: { organizationId: orgId }, ...(teams ? { AND: [projectVisibleWhere(teams)] } : {}) } }),
     ]);
   const nameOf = new Map(
     assignees.length

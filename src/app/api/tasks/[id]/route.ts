@@ -1,27 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { requireWorkspace, audit, NotFoundError } from "@/server/auth";
+import { requireTaskAccess, audit, ForbiddenError, NotFoundError } from "@/server/auth";
+import { userSeesProject } from "@/server/services/team-scope";
 import { withApi } from "@/server/api";
 import { parseJson, priorities, taskTypes } from "@/server/validation";
 import { updateTask, deleteTask } from "@/server/services/tasks";
 import { assertActiveAssignee } from "@/server/services/active-people";
 import { notifyAssignment } from "@/server/notify";
 
-/** Resolves a task id to its workspace for membership checks. */
-async function taskWorkspace(taskId: string): Promise<string> {
-  const task = await db.task.findFirst({
-    where: { id: taskId },
-    select: { workspaceId: true, orgId: true, title: true },
-  });
-  if (!task) throw new NotFoundError("task.not_found");
-  return task.workspaceId;
-}
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const wsId = await taskWorkspace(params.id);
-    await requireWorkspace(wsId);
+    // its space, then its project's team: outside the team it is «not found»
+    await requireTaskAccess(params.id);
     const task = await db.task.findFirst({
       where: { id: params.id },
       include: {
@@ -61,8 +53,7 @@ const patchSchema = z.object({
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const input = await parseJson(patchSchema, req);
-    const wsId = await taskWorkspace(params.id);
-    const ctx = await requireWorkspace(wsId, ["ADMIN", "MEMBER"]);
+    const ctx = await requireTaskAccess(params.id, ["ADMIN", "MEMBER"]);
     const prevAssignee = await db.task.findUnique({
       where: { id: params.id },
       select: { assigneeId: true, number: true, orgId: true },
@@ -72,6 +63,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     // been suspended since, changes nothing: work somebody holds stays editable until it is moved.
     if (input.assigneeId && input.assigneeId !== prevAssignee?.assigneeId) {
       await assertActiveAssignee(ctx.orgId, input.assigneeId);
+      // a team's task goes to somebody who sees that team's work (its members and the space's managers)
+      if (ctx.task.teamId && !(await userSeesProject(input.assigneeId, ctx.task))) throw new ForbiddenError("assignee.not_in_team");
     }
     const task = await updateTask(ctx, params.id, {
       title: input.title,
@@ -100,8 +93,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const wsId = await taskWorkspace(params.id);
-    const ctx = await requireWorkspace(wsId, ["ADMIN"]);
+    const ctx = await requireTaskAccess(params.id, ["ADMIN"]);
     await deleteTask(ctx, params.id);
     await audit("task.deleted", { actorId: ctx.userId, orgId: ctx.orgId, target: params.id });
     return NextResponse.json({ ok: true });

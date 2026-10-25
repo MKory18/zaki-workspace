@@ -2,24 +2,23 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/server/db";
 import { pageUser } from "@/server/auth";
-import { accessibleWorkspaceIds } from "@/server/services/access";
+import { loadWorkScope, projectVisibleWhere } from "@/server/services/team-scope";
 import { Card, CardBody, CardHeader, Badge } from "@/components/ui/card";
 import { BoardCreateButton } from "@/components/board-create-button";
 import { fmtDMY } from "@/lib/format";
 import { enumLabel } from "@/lib/i18n/enums";
 import { getServerT } from "@/lib/i18n/server";
 import { TimelineBadgeButton } from "@/components/timeline-badge-button";
+import { ProjectTeamPicker } from "@/components/project-team-picker";
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
   const { t } = getServerT();
   const user = await pageUser();
   if (!user) return null;
-  const accessible = await accessibleWorkspaceIds(user.id);
+  // its space and its team: another team's project is «not found», like one that does not exist
+  const scope = await loadWorkScope(user.id);
   const project = await db.project.findFirst({
-    where: {
-      id: params.id,
-      workspaceId: { in: accessible.length ? accessible : ["__none__"] },
-    },
+    where: { id: params.id, AND: [projectVisibleWhere(scope)] },
     include: {
       boards: { where: { archived: false }, select: { id: true, name: true, _count: { select: { tasks: true } } } },
       milestones: { select: { id: true, name: true, status: true, targetDate: true } },
@@ -57,6 +56,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           </span>
         </div>
         {project.description ? <p className="max-w-2xl text-sm text-fg-muted">{project.description}</p> : null}
+        <ProjectTeamPicker projectId={project.id} workspaceId={project.workspace.id} teamId={project.teamId} />
       </header>
 
       <section>

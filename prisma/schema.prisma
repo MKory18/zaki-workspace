@@ -43,6 +43,7 @@ model User {
   memberships     OrganizationMember[] @relation("MemberUser")
   managedMembers  OrganizationMember[] @relation("MemberManager")
   workspaceLinks  WorkspaceMember[]
+  teamLinks       TeamMember[]
   createdTasks    Task[]               @relation("TaskCreator")
   assignedTasks   Task[]               @relation("TaskAssignee")
   comments        TaskComment[]
@@ -344,6 +345,9 @@ model Conversation {
 
   organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
   space        Workspace?           @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+  // A topic that belongs to a team of its space: its audience is that team and the space's managers.
+  teamId       String?
+  team         Team?                @relation(fields: [teamId], references: [id], onDelete: Restrict)
   members      ConversationMember[]
   messages     ChatMessage[]
 
@@ -351,6 +355,7 @@ model Conversation {
   @@unique([spaceId, systemKey])
   @@index([orgId, updatedAt])
   @@index([spaceId, position])
+  @@index([teamId])
 }
 
 model ConversationMember {
@@ -629,18 +634,39 @@ enum WorkspaceRole {
   GUEST
 }
 
+// A team INSIDE a space (the owner's decision, 2026-10-25: «جوّا المساحة فرق، كل فريق إله مشاريعه ومواضيعه»).
+// A space with no team works exactly as before; once it has teams, a member sees the space's own work (no
+// team) and the work of their teams, and the space's managers see all of it (src/server/services/team-scope.ts).
 model Team {
   id          String   @id @default(cuid())
   workspaceId String
   name        String
   description String?
   leadId      String?
+  position    Int      @default(0)
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  projects  Project[]
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projects      Project[]
+  members       TeamMember[]
+  conversations Conversation[]
 
   @@index([workspaceId])
+}
+
+// Who is in a team. Only people with a row in the team's space may be added (the service checks).
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
 }
 
 // ---------- Projects ----------
@@ -679,6 +705,7 @@ model Project {
   @@index([workspaceId])
   @@index([status])
   @@index([departmentId])
+  @@index([teamId])
 }
 
 model Milestone {

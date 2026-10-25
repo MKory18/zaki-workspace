@@ -1,7 +1,7 @@
 import { Prisma, type TaskPriority } from "@prisma/client";
 import { db } from "@/server/db";
 import { TASK_INCLUDE } from "@/server/services/tasks";
-import { accessibleWorkspaceIds } from "@/server/services/access";
+import { loadWorkScope, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace, workspaceRoleOf } from "@/server/workspace-role";
 
 // ---------- workspace access resolution for RSC pages ----------
@@ -45,6 +45,8 @@ export interface WorkspaceViewCtx {
   denied: boolean;
   /** The workspaces the user can open (for selectors) — never an inaccessible one. */
   workspaces: { id: string; name: string }[];
+  /** The tasks this person may see (spaces AND teams): pass it as `visible` to `queryTasksForView`. */
+  visible: Prisma.TaskWhereInput;
 }
 
 /**
@@ -63,7 +65,8 @@ export async function resolveWorkspaceView(
   const user = await pageUser();
   if (!user) return { pageRedirect: true };
 
-  const accessibleIds = await accessibleWorkspaceIds(user.id);
+  const scope = await loadWorkScope(user.id);
+  const accessibleIds = scopeSpaceIds(scope);
   if (accessibleIds.length === 0) return { none: true };
 
   const rows = await db.workspace.findMany({
@@ -116,6 +119,7 @@ export async function resolveWorkspaceView(
       editable: canWriteInWorkspace(orgMember.role, wsMember?.role),
       denied: false,
       workspaces,
+      visible: taskVisibleWhere(scope),
     },
   };
 }
@@ -247,6 +251,8 @@ export interface ViewQuery {
    * `workspaceId` outside the list matches nothing. Absent = no workspace limit.
    */
   workspaceIds?: string[];
+  /** The teams rule (`taskVisibleWhere`): when present it ALWAYS applies, on top of everything else. */
+  visible?: Prisma.TaskWhereInput;
   priority?: TaskPriority;
   dueFrom?: Date;
   dueTo?: Date;
@@ -300,6 +306,7 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
   } else if (q.workspaceId) {
     where.workspaceId = q.workspaceId;
   }
+  if (q.visible) where.AND = [q.visible];
   if (q.priority) where.priority = q.priority;
   if (q.dueFrom || q.dueTo) {
     where.dueDate = {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { audit, NotFoundError, requireWorkspace } from "@/server/auth";
+import { audit, NotFoundError, requireTeamWork } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { db } from "@/server/db";
 import { parseJson } from "@/server/validation";
@@ -16,10 +16,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const input = await parseJson(createSchema, req);
     const board = await db.board.findFirst({
       where: { id: params.id },
-      select: { id: true, project: { select: { workspaceId: true } } },
+      select: { id: true, project: { select: { workspaceId: true, teamId: true } } },
     });
     if (!board) throw new NotFoundError("board.not_found");
-    await requireWorkspace(board.project.workspaceId, ["ADMIN", "MEMBER"]);
+    await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
 
     const last = await db.boardColumn.findFirst({
       where: { boardId: board.id },

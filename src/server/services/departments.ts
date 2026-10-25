@@ -2,7 +2,7 @@ import { z } from "zod";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { assertNotGuest } from "@/server/services/guest-guard";
-import { accessibleWorkspaceIds } from "@/server/services/access";
+import { loadWorkScope, projectVisibleWhere, scopeSpaceIds } from "@/server/services/team-scope";
 import { assertCapability } from "@/server/services/active-people";
 
 /**
@@ -85,7 +85,8 @@ export async function createDepartment(ctx: OrgAccessContext, input: z.infer<typ
 export async function listDepartments(ctx: OrgAccessContext) {
   assertNotGuest(ctx);
   await assertCapability(ctx, "directory.view");
-  const wsIds = await accessibleWorkspaceIds(ctx.userId);
+  const scope = await loadWorkScope(ctx.userId);
+  const wsIds = scopeSpaceIds(scope);
   const rows = await db.department.findMany({
     where: { orgId: ctx.orgId },
     orderBy: { createdAt: "asc" },
@@ -95,7 +96,7 @@ export async function listDepartments(ctx: OrgAccessContext) {
         select: { user: { select: { id: true, name: true, jobTitle: true } }, role: true },
       },
       projects: {
-        where: { workspaceId: { in: wsIds } },
+        where: { workspaceId: { in: wsIds }, AND: [projectVisibleWhere(scope)] },
         select: { id: true, tasks: { select: { completedAt: true, dueDate: true } } },
       },
       tickets: { where: { status: { in: ["OPEN", "IN_PROGRESS"] } }, select: { id: true } },
@@ -131,9 +132,9 @@ export async function getDepartment(ctx: OrgAccessContext, id: string) {
   });
   // only the spaces this person can open: a department's projects live in spaces, and a space is
   // visible to the people in it (and the OWNER), not to a rank
-  const wsIds = await accessibleWorkspaceIds(ctx.userId);
+  const scope = await loadWorkScope(ctx.userId);
   const projects = await db.project.findMany({
-    where: { departmentId: d.id, workspaceId: { in: wsIds } },
+    where: { departmentId: d.id, workspaceId: { in: scopeSpaceIds(scope) }, AND: [projectVisibleWhere(scope)] },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,

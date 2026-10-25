@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { audit, ForbiddenError, NotFoundError, requireWorkspace } from "@/server/auth";
+import { audit, ForbiddenError, NotFoundError, requireTeamWork } from "@/server/auth";
 import { apiError } from "@/server/api";
 import { withApi } from "@/server/api";
 import { db } from "@/server/db";
@@ -19,7 +19,7 @@ export async function PATCH(
   return withApi(async () => {
     const input = await parseJson(patchSchema, req);
     const { board } = await resolveBoard(params.id);
-    await requireWorkspace(board.project.workspaceId, ["ADMIN", "MEMBER"]);
+    await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
     const column = await db.boardColumn.findFirst({
       where: { id: params.columnId, boardId: board.id },
       select: { id: true },
@@ -42,7 +42,7 @@ export async function DELETE(
 ) {
   return withApi(async () => {
     const { board } = await resolveBoard(params.id);
-    await requireWorkspace(board.project.workspaceId, ["ADMIN", "MEMBER"]);
+    await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
     const column = await db.boardColumn.findFirst({
       where: { id: params.columnId, boardId: board.id },
       select: { id: true, _count: { select: { tasks: true } } },
@@ -62,7 +62,7 @@ export async function DELETE(
 async function resolveBoard(boardId: string) {
   const board = await db.board.findFirst({
     where: { id: boardId },
-    select: { id: true, project: { select: { workspaceId: true } } },
+    select: { id: true, project: { select: { workspaceId: true, teamId: true } } },
   });
   if (!board) throw new NotFoundError("board.not_found");
   return { board: board as typeof board & { id: string } };

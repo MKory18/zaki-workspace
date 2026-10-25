@@ -1,5 +1,5 @@
 import { db } from "@/server/db";
-import { accessibleWorkspaceIds } from "@/server/services/access";
+import { loadWorkScope, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 import {
   dayWindow,
   queryTasksForView,
@@ -68,19 +68,20 @@ export async function getMyWork(userId: string, now: Date = new Date()): Promise
       where: { userId, status: "ACTIVE" },
       select: { organizationId: true, role: true },
     }),
-    accessibleWorkspaceIds(userId),
+    loadWorkScope(userId),
   ]);
-  if (memberships.length === 0 || accessible.length === 0) return results;
+  if (memberships.length === 0 || scopeSpaceIds(accessible).length === 0) return results;
+  const visible = taskVisibleWhere(accessible);
 
   // group the accessible workspaces by organization (every query stays org-scoped)
   const [workspaces, wsRows] = await Promise.all([
     db.workspace.findMany({
-      where: { id: { in: accessible } },
+      where: { id: { in: scopeSpaceIds(accessible) } },
       select: { id: true, organizationId: true },
     }),
     // the user's own row in each of them (none for a space the org OWNER sees without being put in it)
     db.workspaceMember.findMany({
-      where: { userId, workspaceId: { in: accessible } },
+      where: { userId, workspaceId: { in: scopeSpaceIds(accessible) } },
       select: { workspaceId: true, role: true },
     }),
   ]);
@@ -109,6 +110,7 @@ export async function getMyWork(userId: string, now: Date = new Date()): Promise
             ...filters[tab],
             orgId: m.organizationId,
             workspaceIds,
+            visible,
           });
           return {
             tab,

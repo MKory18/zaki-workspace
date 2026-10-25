@@ -83,7 +83,8 @@ describe("tasks: work cannot be assigned to a suspended or an offboarded person"
       creatorId: w.owner.id,
       assigneeId: w.suspended.id,
     });
-    const listed = await listTasks(w.actor, { limit: 10 });
+    // the list is of ONE space now (it used to be the whole company's): this task's
+    const listed = await listTasks(w.actor, { workspaceId: w.ws.id, limit: 10 });
     expect(listed.find((t) => t.id === task.id)?.assignee?.name).toBe("Suspended colleague");
 
     const saved = await updateTask(w.actor, task.id, { assigneeId: w.suspended.id, title: "still saves" });

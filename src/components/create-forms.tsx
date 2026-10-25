@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiPost, ApiError } from "@/lib/api-client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { useI18n as useT } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -104,6 +104,17 @@ export function ProjectCreateModal({
   workspaces: { id: string; name: string }[];
 }) {
   const { t } = useT();
+  // the team the project belongs to: «كل المساحة», or one of the space's teams this person sees
+  const [spaceId, setSpaceId] = useState(workspaces[0]?.id ?? "");
+  useEffect(() => {
+    if (!workspaces.some((w) => w.id === spaceId)) setSpaceId(workspaces[0]?.id ?? "");
+  }, [workspaces, spaceId]);
+  const teams = useQuery({
+    queryKey: ["ws-teams", spaceId],
+    queryFn: () => apiGet<{ teams: { id: string; name: string }[] }>(`/api/workspaces/${spaceId}/teams`),
+    enabled: open && !!spaceId,
+  });
+  const teamOptions = teams.data?.teams ?? [];
   const { mutation, error } = useCreate<{ project: { id: string } }>({
     path: "/api/projects",
     onDone: (data) => {
@@ -124,6 +135,7 @@ export function ProjectCreateModal({
       description: String(fd.get("description") || "") || undefined,
       startDate: start || undefined,
       targetDate: target || undefined,
+      teamId: String(fd.get("teamId") || "") || undefined,
     });
   }
 
@@ -135,6 +147,8 @@ export function ProjectCreateModal({
           <select
             name="workspaceId"
             required
+            value={spaceId}
+            onChange={(e) => setSpaceId(e.target.value)}
             className="h-9 w-full rounded-lg border border-border bg-surface-1 px-2 text-sm text-fg"
           >
             {workspaces.map((w) => (
@@ -144,6 +158,19 @@ export function ProjectCreateModal({
             ))}
           </select>
         </div>
+        {teamOptions.length ? (
+          <div>
+            <Label>{t("spaceteams.picker")}</Label>
+            <select name="teamId" defaultValue="" className="h-9 w-full rounded-lg border border-border bg-surface-1 px-2 text-sm text-fg">
+              <option value="">{t("spaceteams.whole_space")}</option>
+              {teamOptions.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <div>
           <Label>{t("proj.name")}</Label>
           <Input name="name" required maxLength={120} />

@@ -40,3 +40,16 @@ export function canWriteInWorkspace(orgRole: string | null | undefined, wsRole: 
   if (orgRole === "ADMIN") return true;
   return wsRole !== "GUEST";
 }
+
+/**
+ * Does this person see EVERY team of the space (a space manager)? The org OWNER always; an org GUEST
+ * never; anybody else who is in the space as its ADMIN, or who is an org ADMIN with a row in it — the
+ * same people `canManageWorkspaceMembers` lets manage the space. Everybody else in the space sees the
+ * space's own work (no team) and the work of the teams they are in (src/server/services/team-scope.ts).
+ */
+export function isSpaceManager(orgRole: string | null | undefined, wsRole: string | null | undefined): boolean {
+  if (orgRole === "OWNER") return true;
+  if (orgRole === "GUEST" || !orgRole || !STAFF_ROLES.has(orgRole)) return false;
+  if (!wsRole) return false;
+  return wsRole === "ADMIN" || orgRole === "ADMIN";
+}

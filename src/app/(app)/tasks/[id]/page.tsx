@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { pageUser } from "@/server/auth";
 import { db } from "@/server/db";
-import { accessibleWorkspaceIds } from "@/server/services/access";
+import { loadWorkScope, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { TaskDetail } from "@/components/task-detail";
 
@@ -10,12 +10,10 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   if (!user) redirect("/login");
 
   // Workspace membership gates task access (writes go through API role checks).
-  const wsScope = await accessibleWorkspaceIds(user.id);
+  // Workspace membership and the project's team gate task access (writes go through API role checks).
+  const scope = await loadWorkScope(user.id);
   const task = await db.task.findFirst({
-    where: {
-      id: params.id,
-      workspaceId: { in: wsScope.length ? wsScope : ["__none__"] },
-    },
+    where: { id: params.id, AND: [taskVisibleWhere(scope)] },
     include: {
       labels: { select: { label: true } },
       assignee: { select: { id: true, name: true } },

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { NotFoundError, requireWorkspace } from "@/server/auth";
+import { NotFoundError, requireTeamWork } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import type { Prisma } from "@prisma/client";
@@ -18,10 +18,10 @@ export async function GET(
   return withApi(async () => {
     const board = await db.board.findFirst({
       where: { id: params.id },
-      include: { project: { select: { id: true, name: true, workspaceId: true, workspace: { select: { name: true } } } } },
+      include: { project: { select: { id: true, name: true, workspaceId: true, teamId: true, workspace: { select: { name: true } } } } },
     });
     if (!board) throw new NotFoundError("board.not_found");
-    await requireWorkspace(board.project.workspaceId);
+    await requireTeamWork(board.project.workspaceId, board.project.teamId, undefined, "board.not_found");
 
     const [columns, tasks] = await Promise.all([
       db.boardColumn.findMany({
@@ -77,10 +77,10 @@ export async function PATCH(
     const input = await parseJson(patchSchema, req);
     const board = await db.board.findFirst({
       where: { id: params.id },
-      select: { id: true, projectId: true, project: { select: { workspaceId: true } } },
+      select: { id: true, projectId: true, project: { select: { workspaceId: true, teamId: true } } },
     });
     if (!board) throw new NotFoundError("board.not_found");
-    await requireWorkspace(board.project.workspaceId, ["ADMIN", "MEMBER"]);
+    await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
     const updated = await db.board.update({
       where: { id: board.id },
       data: input,
@@ -104,10 +104,10 @@ export async function POST(
     const { order } = await parseJson(columnsSchema, req);
     const board = await db.board.findFirst({
       where: { id: params.id },
-      select: { id: true, project: { select: { workspaceId: true } } },
+      select: { id: true, project: { select: { workspaceId: true, teamId: true } } },
     });
     if (!board) throw new NotFoundError("board.not_found");
-    await requireWorkspace(board.project.workspaceId, ["ADMIN", "MEMBER"]);
+    await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
     const txs = order.map((columnId, position) =>
       db.boardColumn.updateMany({
         where: { id: columnId, boardId: board.id },

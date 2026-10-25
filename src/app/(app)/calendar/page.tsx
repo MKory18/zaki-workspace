@@ -45,6 +45,7 @@ export default async function CalendarPage({
     : await queryTasksForView({
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
+        visible: ctx.visible,
         projectId: searchParams.project || undefined,
         assigneeId: mine ? user.id : undefined,
         dueFrom: win.from,
