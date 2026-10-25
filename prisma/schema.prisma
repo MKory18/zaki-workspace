@@ -13,73 +13,73 @@ datasource db {
 // ---------- Identity ----------
 
 model User {
-  id                     String    @id @default(cuid())
+  id           String   @id @default(cuid())
   // An account is created by the owner with a username + password; an e-mail address is optional
   // (moderators and warehouse staff may have none). Both are stored lower-case and are unique.
-  email                  String?   @unique
-  username               String?   @unique
-  name                   String
-  passwordHash           String
+  email        String?  @unique
+  username     String?  @unique
+  name         String
+  passwordHash String
   // Bumped to end every session of this user at once (suspend, offboard, password reset, "log out
   // everywhere"). The session token carries the value it was issued with; a mismatch is a sign-out.
-  tokenVersion           Int       @default(0)
+  tokenVersion Int      @default(0)
   // True while the password is a temporary one chosen by the owner: the user must change it first.
-  mustChangePassword     Boolean   @default(false)
+  mustChangePassword Boolean @default(false)
   // The version of the "work chats are archived and visible to the owner" notice this user accepted.
   transparencyVersion    Int?
   transparencyAcceptedAt DateTime?
-  lastLoginAt            DateTime?
+  lastLoginAt  DateTime?
   // Presence for the chat: written at most once a minute while the person has a live connection.
-  lastSeenAt             DateTime?
-  locale                 String    @default("ar") // ar | fr (en reserved)
-  theme                  String    @default("system") // light | dark | system
-  digits                 String    @default("latin") // latin | arabic: how 0-9 are drawn (src/lib/digits.ts)
-  avatarUrl              String?
-  jobTitle               String? // وظيفي: professional title shown on profile (e.g. "Project Manager")
-  bio                    String?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  lastSeenAt   DateTime?
+  locale       String   @default("ar") // ar | fr (en reserved)
+  theme        String   @default("system") // light | dark | system
+  digits       String   @default("latin") // latin | arabic: how 0-9 are drawn (src/lib/digits.ts)
+  avatarUrl    String?
+  jobTitle     String? // وظيفي: professional title shown on profile (e.g. "Project Manager")
+  bio          String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  memberships        OrganizationMember[] @relation("MemberUser")
-  managedMembers     OrganizationMember[] @relation("MemberManager")
-  workspaceLinks     WorkspaceMember[]
-  teamLinks          TeamMember[]
-  createdTasks       Task[]               @relation("TaskCreator")
-  assignedTasks      Task[]               @relation("TaskAssignee")
-  comments           TaskComment[]
-  activity           TaskActivity[]
-  notifications      Notification[]
-  ideas              Idea[]               @relation("IdeaCreator")
-  ideaVotes          IdeaVote[]           @relation("IdeaVoter")
-  chatMemberships    ConversationMember[] @relation("ChatMember")
-  chatMessages       ChatMessage[]        @relation("ChatAuthor")
-  chatDeletions      ChatMessage[]        @relation("ChatDeleter")
-  chatReactions      ChatReaction[]
-  messageRevisions   MessageRevision[]    @relation("RevisionEditor")
-  messageNotes       MessageNote[]        @relation("NoteAuthor")
-  uploadedFiles      StoredFile[]         @relation("FileUploader")
-  deptMemberships    DepartmentMember[]
-  createdTickets     Ticket[]             @relation("TicketCreator")
-  assignedTickets    Ticket[]             @relation("TicketAssignee")
-  ticketComments     TicketComment[]      @relation("TicketCommentAuthor")
-  ticketActivity     TicketActivity[]     @relation("TicketActivityActor")
-  createdCustomers   Customer[]           @relation("CustomerCreator")
-  ownedOpportunities Opportunity[]        @relation("OpportunityOwner")
-  routines           Routine[]            @relation("RoutineAssignee")
-  goals              Goal[]               @relation("GoalCreator")
-  campaigns          Campaign[]           @relation("CampaignOwner")
+  memberships     OrganizationMember[] @relation("MemberUser")
+  managedMembers  OrganizationMember[] @relation("MemberManager")
+  workspaceLinks  WorkspaceMember[]
+  teamLinks       TeamMember[]
+  createdTasks    Task[]               @relation("TaskCreator")
+  assignedTasks   Task[]               @relation("TaskAssignee")
+  comments        TaskComment[]
+  activity        TaskActivity[]
+  notifications   Notification[]
+  ideas           Idea[]               @relation("IdeaCreator")
+  ideaVotes       IdeaVote[]           @relation("IdeaVoter")
+  chatMemberships ConversationMember[] @relation("ChatMember")
+  chatMessages    ChatMessage[]        @relation("ChatAuthor")
+  chatDeletions   ChatMessage[]        @relation("ChatDeleter")
+  chatReactions   ChatReaction[]
+  messageRevisions MessageRevision[]   @relation("RevisionEditor")
+  messageNotes    MessageNote[]        @relation("NoteAuthor")
+  uploadedFiles   StoredFile[]         @relation("FileUploader")
+  deptMemberships DepartmentMember[]
+  createdTickets  Ticket[]             @relation("TicketCreator")
+  assignedTickets Ticket[]             @relation("TicketAssignee")
+  ticketComments  TicketComment[]      @relation("TicketCommentAuthor")
+  ticketActivity  TicketActivity[]     @relation("TicketActivityActor")
+  createdCustomers Customer[]          @relation("CustomerCreator")
+  ownedOpportunities Opportunity[]    @relation("OpportunityOwner")
+  routines        Routine[]            @relation("RoutineAssignee")
+  goals           Goal[]               @relation("GoalCreator")
+  campaigns       Campaign[]           @relation("CampaignOwner")
 }
 
 // ---------- departments (the company's pools: design / dev / IT / sales) ----------
 
 model Department {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   orgId     String
   name      String
   emoji     String?
   color     String? // tailwind-ish token for the chip
   leadId    String? // informational lead shown on the card (must be an org member)
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   memberships  DepartmentMember[]
@@ -117,10 +117,10 @@ model Ticket {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  organization Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  department   Department       @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  creator      User             @relation("TicketCreator", fields: [creatorId], references: [id])
-  assignee     User?            @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  creator      User         @relation("TicketCreator", fields: [creatorId], references: [id])
+  assignee     User?        @relation("TicketAssignee", fields: [assigneeId], references: [id])
   comments     TicketComment[]
   activities   TicketActivity[]
 
@@ -131,12 +131,12 @@ model Ticket {
 }
 
 model TicketComment {
-  id        String    @id @default(cuid())
-  ticketId  String
-  authorId  String
-  body      String
-  editedAt  DateTime?
-  createdAt DateTime  @default(now())
+  id       String    @id @default(cuid())
+  ticketId String
+  authorId String
+  body     String
+  editedAt DateTime?
+  createdAt DateTime @default(now())
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   author User   @relation("TicketCommentAuthor", fields: [authorId], references: [id])
@@ -182,9 +182,9 @@ model Campaign {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
-  organization Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  department   Department     @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  owner        User           @relation("CampaignOwner", fields: [ownerId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  owner        User         @relation("CampaignOwner", fields: [ownerId], references: [id])
   items        CampaignItem[]
 
   @@unique([orgId, number])
@@ -531,23 +531,23 @@ model Organization {
 }
 
 model OrganizationMember {
-  id                  String       @id @default(cuid())
-  organizationId      String
-  userId              String
-  role                OrgRole      @default(MEMBER)
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrgRole      @default(MEMBER)
   // Only ACTIVE members can use the app. A suspended or offboarded member keeps the row (history,
   // authorship) but every guard treats them as absent.
-  status              MemberStatus @default(ACTIVE)
+  status         MemberStatus @default(ACTIVE)
   // Capabilities on top of / taken away from what the rank grants (src/server/policy/capabilities.ts).
-  capabilities        String[]     @default([])
-  revokedCapabilities String[]     @default([])
+  capabilities        String[] @default([])
+  revokedCapabilities String[] @default([])
   // Who escalations go to (the person's manager); null = the owner.
-  managerId           String?
+  managerId      String?
   // The same person's reference in the OMS (staff, penalties, cash custody), for later integration.
-  omsStaffRef         String?
-  statusChangedAt     DateTime?
-  statusChangedById   String?
-  createdAt           DateTime     @default(now())
+  omsStaffRef    String?
+  statusChangedAt   DateTime?
+  statusChangedById String?
+  createdAt      DateTime     @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation("MemberUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -695,9 +695,9 @@ model Project {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team       Team?       @relation(fields: [teamId], references: [id])
-  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  workspace  Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team       Team?           @relation(fields: [teamId], references: [id])
+  department Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   teamId     String?
   boards     Board[]
   tasks      Task[]
@@ -913,15 +913,15 @@ model TaskActivity {
 }
 
 model Notification {
-  id          String    @id @default(cuid())
-  userId      String
-  type        String // task_assigned | mentioned | due_soon | comment ...
-  title       String
-  body        String?
-  linkUrl     String?
-  taskId      String?
-  readAt      DateTime?
-  createdAt   DateTime  @default(now())
+  id        String    @id @default(cuid())
+  userId    String
+  type      String // task_assigned | mentioned | due_soon | comment ...
+  title     String
+  body      String?
+  linkUrl   String?
+  taskId    String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
   // The space the notification belongs to (a task's, a topic's or a DM's, a space one was added to): the bell shows
   // the space the person is in. None: personal (a welcome, a changed rank), shown in every space — and the
   // notifications from before spaces had them.
@@ -935,17 +935,17 @@ model Notification {
 }
 
 model AuditLog {
-  id             String   @id @default(cuid())
-  actorId        String?
-  orgId          String?
-  action         String // auth.login | org.created | task.deleted | chat.oversight_read ...
-  target         String?
-  meta           Json?
+  id        String   @id @default(cuid())
+  actorId   String?
+  orgId     String?
+  action    String // auth.login | org.created | task.deleted | chat.oversight_read ...
+  target    String?
+  meta      Json?
   // Moderation and oversight trails (Phase 3): which space / conversation the entry is about.
   // No foreign keys on purpose: an audit row outlives what it describes.
   workspaceId    String?
   conversationId String?
-  createdAt      DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([orgId, createdAt])
   @@index([action, createdAt])
@@ -1076,37 +1076,37 @@ model IntegrationEvent {
 // ---------- CRM (Sales) ----------
 
 model Customer {
-  id        String   @id @default(cuid())
-  orgId     String
-  name      String
-  company   String?
-  email     String?
-  phone     String?
-  notes     String?
-  creatorId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String       @id @default(cuid())
+  orgId          String
+  name           String
+  company        String?
+  email          String?
+  phone          String?
+  notes          String?
+  creatorId      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  creator       User          @relation("CustomerCreator", fields: [creatorId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  creator      User         @relation("CustomerCreator", fields: [creatorId], references: [id])
   opportunities Opportunity[]
 
   @@index([orgId, name])
 }
 
 model Opportunity {
-  id              String           @id @default(cuid())
-  orgId           String
-  number          Int
-  customerId      String
-  title           String
-  value           Float            @default(0)
-  stage           OpportunityStage @default(LEAD)
+  id          String          @id @default(cuid())
+  orgId       String
+  number      Int
+  customerId  String
+  title       String
+  value       Float           @default(0)
+  stage       OpportunityStage @default(LEAD)
   expectedCloseAt DateTime?
-  notes           String?
-  ownerId         String
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  notes       String?
+  ownerId     String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
