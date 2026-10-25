@@ -154,7 +154,7 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
   }
 
   // DMs: never for a guest, never in the owner's oversight (a DM is not his to read)
-  const dms: DmSummaryDto[] = org?.role === "GUEST" ? [] : await listDms(ctx);
+  const dms: DmSummaryDto[] = org?.role === "GUEST" ? [] : await listDms(ctx, opts.spaceId);
 
   return { spaces, dms, canOversee: isOwner };
 }

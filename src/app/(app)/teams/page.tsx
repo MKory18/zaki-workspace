@@ -1,6 +1,7 @@
 import { pageActor, SectionOffNotice } from "@/app/(app)/_access";
 import { actorCan } from "@/server/policy/actor";
 import { memberDirectory } from "@/server/services/users";
+import { currentSpace } from "@/server/services/current-space";
 import { Avatar } from "@/components/ui/avatar";
 import { getServerT } from "@/lib/i18n/server";
 import { enumLabel } from "@/lib/i18n/enums";
@@ -12,14 +13,18 @@ export default async function TeamsPage() {
   // everybody else needs `directory.view`
   if (!actor.isExternal && !actorCan(actor, "directory.view")) return <SectionOffNotice />;
 
-  const orgs = await memberDirectory(user.id);
+  // the people of the space the person is in (a space is like a separate site)
+  const space = await currentSpace(actor);
+  const orgs = await memberDirectory(user.id, { orgId: actor.orgId, spaceId: space?.id ?? null });
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
       <header>
         <h1 className="text-lg font-semibold text-fg">{t("teams.title")}</h1>
         <p className="text-xs text-fg-muted">
-          {t(actor.isExternal ? "teams.subtitle_restricted" : "teams.subtitle")}
+          {space && !actor.isExternal
+            ? t("teams.subtitle_space", { space: space.name })
+            : t(actor.isExternal ? "teams.subtitle_restricted" : "teams.subtitle")}
         </p>
       </header>
 

@@ -4,6 +4,7 @@ import { loadOrgFacts } from "@/server/policy/conversation";
 import { emitRealtime } from "@/server/realtime/emit";
 import { writeSystemMessage } from "@/server/chat/system";
 import { systemSentenceOfBody } from "@/lib/chat/system-sentence";
+import { isHqSpace, isOfSpace } from "@/server/chat/space-people";
 
 /**
  * DMs. A DM is its two people; nobody else WRITES in it. The OWNER reads it too, silently (decision
@@ -12,12 +13,31 @@ import { systemSentenceOfBody } from "@/lib/chat/system-sentence";
  *
  * `dmKey` is `min|max` of the two user ids in plain code-unit order — the same key the data move
  * wrote, so the second person opening the same DM finds the row instead of creating a twin.
+ *
+ * A DM BELONGS TO A SPACE (the owner's decision, 2026-10-25: each space is like a separate account): it is opened
+ * in the space the person is in, with somebody of that space, and lives there (`spaceId`; its key ends in
+ * `@<spaceId>`, so the same two people have one DM per space). The DMs from before spaces had them (no space) are
+ * «الشركة»'s, and a DM opened in «الشركة» keeps the old key, so it finds them.
  */
 
-export const dmKeyOf = (a: string, b: string): string => (a < b ? `${a}|${b}` : `${b}|${a}`);
+export const dmKeyOf = (a: string, b: string, spaceId: string | null = null): string =>
+  (a < b ? `${a}|${b}` : `${b}|${a}`) + (spaceId ? `@${spaceId}` : "");
 
-/** Opens (or finds) the DM between the viewer and `otherId`. Returns its id. */
-export async function openDm(ctx: OrgAccessContext, otherId: string): Promise<{ id: string; created: boolean }> {
+/** The two people of a DM key (`a|b`, or `a|b@space`). */
+export const dmPairOf = (dmKey: string): string[] => (dmKey.split("@")[0] ?? "").split("|");
+
+/**
+ * Where a person's DMs are listed: the DMs of the space they are in, and in «الشركة» also the ones from before
+ * spaces (no space). `undefined`: everywhere (the owner's oversight, older callers).
+ */
+export async function dmPlaceWhere(spaceId: string | null | undefined) {
+  if (spaceId === undefined) return {};
+  if (!spaceId) return { spaceId: null };
+  return (await isHqSpace(spaceId)) ? { OR: [{ spaceId }, { spaceId: null }] } : { spaceId };
+}
+
+/** Opens (or finds) the DM between the viewer and `otherId` in the space they are in. Returns its id. */
+export async function openDm(ctx: OrgAccessContext, otherId: string, spaceId: string | null = null): Promise<{ id: string; created: boolean }> {
   if (otherId === ctx.userId) throw new ForbiddenError("chat.e.not_found");
   const [me, other] = await Promise.all([
     loadOrgFacts(ctx.userId, ctx.orgId),
@@ -25,8 +45,12 @@ export async function openDm(ctx: OrgAccessContext, otherId: string): Promise<{ 
   ]);
   if (!me || !other || me.status !== "ACTIVE" || other.status !== "ACTIVE") throw new NotFoundError("chat.e.not_found");
   if (me.role === "GUEST" || other.role === "GUEST") throw new ForbiddenError("chat.guest_forbidden");
+  // only with somebody of the space you are in (the owner is in every space)
+  if (spaceId && !(await isOfSpace(ctx.orgId, spaceId, otherId))) throw new ForbiddenError("chat.dm_not_in_space");
 
-  const dmKey = dmKeyOf(ctx.userId, otherId);
+  // «الشركة» keeps the old key (its DMs from before spaces are found); every other space has its own
+  const hq = await isHqSpace(spaceId);
+  const dmKey = dmKeyOf(ctx.userId, otherId, hq ? null : spaceId);
   const existing = await db.conversation.findFirst({
     where: { orgId: ctx.orgId, dmKey },
     select: { id: true },
@@ -48,6 +72,7 @@ export async function openDm(ctx: OrgAccessContext, otherId: string): Promise<{ 
         orgId: ctx.orgId,
         kind: "DM",
         dmKey,
+        spaceId,
         title: null,
         members: { create: [{ userId: ctx.userId }, { userId: otherId }] },
       },
@@ -59,8 +84,8 @@ export async function openDm(ctx: OrgAccessContext, otherId: string): Promise<{ 
   return { id: created.id, created: true };
 }
 
-/** The DM list of a person: peers, last message, unread count. */
-export async function listDms(ctx: OrgAccessContext) {
+/** The DM list of a person (in the space they are in, when given): peers, last message, unread count. */
+export async function listDms(ctx: OrgAccessContext, spaceId?: string | null) {
   const org = await loadOrgFacts(ctx.userId, ctx.orgId);
   if (org?.role === "GUEST") throw new ForbiddenError("chat.guest_forbidden");
   const rows = await db.conversation.findMany({
@@ -68,6 +93,7 @@ export async function listDms(ctx: OrgAccessContext) {
       orgId: ctx.orgId,
       kind: { in: ["DM", "GROUP"] },
       members: { some: { userId: ctx.userId } },
+      ...(await dmPlaceWhere(spaceId)),
     },
     include: {
       members: { include: { user: { select: { id: true, name: true } } } },

@@ -1,5 +1,6 @@
 import { db } from "@/server/db";
 import type { OrgAccessContext } from "@/server/auth";
+import { hqSpaceId } from "@/server/chat/hq";
 
 /**
  * The number on «الدردشة» in the menus: messages waiting for me, in ONE query.
@@ -11,10 +12,11 @@ import type { OrgAccessContext } from "@/server/auth";
  *   the topics he joined and his own DMs, so his silent oversight never adds anything.
  * - A guest: topics only.
  * - A topic of a «مقطع» counts for its people and the space's managers only (the same rule as `canRead`).
- * - Inside a space (`spaceId`, the space the person is in): that space's topics, plus the DMs (they belong to no
- *   space yet). Another space's topics are on the space switcher instead (`unreadBySpace`).
+ * - Inside a space (`spaceId`, the space the person is in): that space's topics and DMs — and in «الشركة»
+ *   (`legacyHere`) the DMs from before spaces had them. Another space's are on the space switcher instead
+ *   (`unreadBySpace`).
  */
-export async function unreadTotal(ctx: OrgAccessContext, spaceId: string | null = null): Promise<number> {
+export async function unreadTotal(ctx: OrgAccessContext, spaceId: string | null = null, legacyHere = false): Promise<number> {
   const isOwner = ctx.orgRole === "OWNER";
   const isGuest = ctx.orgRole === "GUEST";
   const rows = await db.$queryRaw<Array<{ total: number }>>`
@@ -33,7 +35,7 @@ export async function unreadTotal(ctx: OrgAccessContext, spaceId: string | null 
         OR ${isOwner} = true
         OR EXISTS (SELECT 1 FROM "WorkspaceMember" w WHERE w."workspaceId" = c."spaceId" AND w."userId" = ${ctx.userId})
       )
-      AND (c.kind <> 'TOPIC' OR ${spaceId}::text IS NULL OR c."spaceId" = ${spaceId})
+      AND (${spaceId}::text IS NULL OR c."spaceId" = ${spaceId} OR (c."spaceId" IS NULL AND c.kind <> 'TOPIC' AND ${legacyHere} = true))
       AND (
         c."teamId" IS NULL
         OR ${isOwner} = true
@@ -47,25 +49,28 @@ export async function unreadTotal(ctx: OrgAccessContext, spaceId: string | null 
 }
 
 /**
- * The same count per space, topics only (the number beside every space on the switcher, like the accounts of
- * a messaging app): `{ spaceId: count }`, spaces with nothing waiting left out.
+ * The same count per space (the number beside every space on the switcher, like the accounts of a messaging
+ * app): its topics and its DMs — the DMs from before spaces count for «الشركة». `{ spaceId: count }`, spaces with
+ * nothing waiting left out.
  */
 export async function unreadBySpace(ctx: OrgAccessContext): Promise<Record<string, number>> {
   const isOwner = ctx.orgRole === "OWNER";
-  const rows = await db.$queryRaw<Array<{ spaceId: string; total: number }>>`
-    SELECT c."spaceId" AS "spaceId", COUNT(*)::int AS total
+  const isGuest = ctx.orgRole === "GUEST";
+  const hq = await hqSpaceId(ctx.orgId);
+  const rows = await db.$queryRaw<Array<{ spaceId: string | null; total: number }>>`
+    SELECT COALESCE(c."spaceId", ${hq}::text) AS "spaceId", COUNT(*)::int AS total
     FROM "ChatMessage" m
     JOIN "ConversationMember" cm ON cm."conversationId" = m."conversationId" AND cm."userId" = ${ctx.userId}
     JOIN "Conversation" c ON c.id = m."conversationId"
     WHERE c."orgId" = ${ctx.orgId}
-      AND c.kind = 'TOPIC'
-      AND c."spaceId" IS NOT NULL
       AND m."createdAt" > cm."lastReadAt"
       AND m."authorId" <> ${ctx.userId}
       AND m."deletedAt" IS NULL
       AND m.kind <> 'SYSTEM'
+      AND (${isGuest} = false OR c.kind = 'TOPIC')
       AND (
-        ${isOwner} = true
+        c.kind <> 'TOPIC'
+        OR ${isOwner} = true
         OR EXISTS (SELECT 1 FROM "WorkspaceMember" w WHERE w."workspaceId" = c."spaceId" AND w."userId" = ${ctx.userId})
       )
       AND (
@@ -77,6 +82,6 @@ export async function unreadBySpace(ctx: OrgAccessContext): Promise<Record<strin
             AND (w.role = 'ADMIN' OR ${ctx.orgRole === "ADMIN"} = true)
         )
       )
-    GROUP BY c."spaceId"`;
-  return Object.fromEntries(rows.map((r) => [r.spaceId, r.total]));
+    GROUP BY 1`;
+  return Object.fromEntries(rows.filter((r) => r.spaceId).map((r) => [r.spaceId as string, r.total]));
 }

@@ -10,6 +10,6 @@ export async function GET() {
     const ctx = await activeOrgCtx();
     // the space the person is in (another space's count is on the space switcher)
     const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
-    return NextResponse.json({ total: await unreadTotal(ctx, space?.id ?? null) }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ total: await unreadTotal(ctx, space?.id ?? null, space?.kind === "HQ") }, { headers: { "Cache-Control": "no-store" } });
   });
 }
