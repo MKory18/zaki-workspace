@@ -4,7 +4,7 @@ import { log } from "@/server/log";
 
 /**
  * THE CALLS SERVER — LiveKit, free and self-hosted on the owner's Coolify (service «zaki-calls»,
- * https://calls.zakiai.io). This module is the only place that talks to it: it signs the short pass a browser
+ * https://calls.workspace.zakiai.io). This module is the only place that talks to it: it signs the short pass a browser
  * joins a room with, and asks the server who is in a room or takes somebody out of it (its RoomService API).
  *
  * The three settings are read from the CURRENT process.env on every call (like `appUrl()`), so a test or a
@@ -13,7 +13,7 @@ import { log } from "@/server/log";
  */
 
 export interface CallsServer {
-  /** where browsers connect: wss://calls.zakiai.io */
+  /** where browsers connect: wss://calls.workspace.zakiai.io */
   url: string;
   /** the same server over https, for its RoomService API */
   httpUrl: string;
