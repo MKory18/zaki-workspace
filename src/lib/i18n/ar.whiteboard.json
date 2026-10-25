@@ -1,0 +1,16 @@
+{
+  "whiteboard.open": "الصبورة",
+  "whiteboard.title": "الصبورة",
+  "whiteboard.title_of": "الصبورة: {title}",
+  "whiteboard.back": "رجوع للمحادثة",
+  "whiteboard.loading": "عم تفتح الصبورة…",
+  "whiteboard.saving": "عم نحفظ…",
+  "whiteboard.saved": "انحفظت",
+  "whiteboard.save_failed": "ما انحفظ آخر رسم. ارسم كمان شي لنجرّب مرة تانية.",
+  "whiteboard.view_only": "بتتفرّج بس: الرسم لمين بيقدر يكتب بالمحادثة.",
+  "whiteboard.not_found": "الصبورة مش موجودة، أو مش إلك.",
+  "whiteboard.load_failed": "ما قدرنا نفتح الصبورة. جرّب كمان شوي.",
+  "whiteboard.e.cannot_draw": "ما بتقدر ترسم على هالصبورة.",
+  "whiteboard.e.too_big": "الصبورة صارت كتير كبيرة. امسح شي منها أو افتح موضوع جديد.",
+  "whiteboard.e.busy": "في ناس كتير عم يرسموا بنفس اللحظة. جرّب كمان شوي."
+}

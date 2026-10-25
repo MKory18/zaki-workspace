@@ -1,15 +1,29 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 
-export type RealtimeKind =
-  | "message.created"
-  | "message.edited"
-  | "message.deleted"
-  | "message.reacted"
-  | "message.pinned"
-  | "conversation.read"
-  | "conversation.delivered"
-  | "conversation.changed"
-  | "membership.changed";
+/**
+ * Every kind of event, in ONE list: the type below and the listener's check of a stored row both come from it, so a
+ * new kind cannot be written here and then turned into `conversation.changed` on its way to the browsers.
+ */
+export const REALTIME_KINDS = [
+  "message.created",
+  "message.edited",
+  "message.deleted",
+  "message.reacted",
+  "message.pinned",
+  "conversation.read",
+  "conversation.delivered",
+  "conversation.changed",
+  "membership.changed",
+  // somebody drew on a conversation's whiteboard (its readers fetch and merge)
+  "whiteboard.changed",
+] as const;
+
+export type RealtimeKind = (typeof REALTIME_KINDS)[number];
+
+/** Is this stored kind one the clients know? (an unknown one travels as `conversation.changed`) */
+export function isRealtimeKind(kind: string): kind is RealtimeKind {
+  return (REALTIME_KINDS as readonly string[]).includes(kind);
+}
 
 export type RealtimeIds = {
   conversationId?: string;

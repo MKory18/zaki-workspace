@@ -1,7 +1,7 @@
 import type { Client } from "pg";
 import { log } from "@/server/log";
 import { deliverEvent, type RtEvent } from "./hub";
-import type { RealtimeKind, RealtimeIds } from "./emit";
+import { isRealtimeKind, type RealtimeIds } from "./emit";
 
 /**
  * The ONE Postgres LISTEN client per server process (module singleton on
@@ -96,19 +96,7 @@ function pgUrl(): string {
   return s.url;
 }
 
-function isKind(kind: string): kind is RealtimeKind {
-  return [
-    "message.created",
-    "message.edited",
-    "message.deleted",
-    "message.reacted",
-    "message.pinned",
-    "conversation.read",
-    "conversation.delivered",
-    "conversation.changed",
-    "membership.changed",
-  ].includes(kind);
-}
+const isKind = isRealtimeKind;
 
 async function loadAndDeliver(id: string): Promise<void> {
   const { db } = await import("@/server/db");

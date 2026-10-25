@@ -375,6 +375,7 @@ model Conversation {
   team         Team?                @relation(fields: [teamId], references: [id], onDelete: Restrict)
   members      ConversationMember[]
   messages     ChatMessage[]
+  whiteboard   Whiteboard?
 
   @@unique([orgId, dmKey])
   @@unique([spaceId, systemKey])
@@ -523,6 +524,27 @@ model RealtimeEvent {
   @@index([orgId, id])
 }
 
+// The shared whiteboard of a conversation («الصبورة», the owner's ask of 2026-10-25): Excalidraw (MIT) draws in the
+// browser, and its drawing is kept here as the list of its elements. One per conversation, born the first time somebody
+// draws. Whoever reads the conversation sees it; whoever may write there draws (src/server/chat/whiteboard.ts).
+model Whiteboard {
+  id             String   @id @default(cuid())
+  orgId          String
+  conversationId String   @unique
+  // the Excalidraw elements (shapes, arrows, text, freehand); a deleted one stays with `isDeleted` so every screen drops it
+  elements       Json     @default("[]")
+  // goes up by one on every save: a screen that is behind asks again
+  version        Int      @default(0)
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -554,6 +576,7 @@ model Organization {
   routines         Routine[]
   goals            Goal[]
   campaigns        Campaign[]
+  whiteboards      Whiteboard[]
 
   @@index([slug])
 }

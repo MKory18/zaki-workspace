@@ -1,0 +1,33 @@
+import { NextResponse } from "next/server";
+import { withApi } from "@/server/api";
+import { ValidationError } from "@/server/auth";
+import { activeOrgCtx } from "@/server/services/integrations";
+import { saveWhiteboard, whiteboardOf } from "@/server/chat/whiteboard";
+
+/** A board's save is at most this big (a few thousand strokes). */
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
+
+/** GET: the conversation's whiteboard (empty before anybody drew), and whether the viewer may draw. Its readers. */
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  return withApi(async () => {
+    const ctx = await activeOrgCtx();
+    return NextResponse.json(await whiteboardOf(ctx, params.id), { headers: { "cache-control": "no-store" } });
+  });
+}
+
+/** PUT `{ elements }`: what this screen changed, merged with what the others drew. Whoever may write here. */
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  return withApi(async () => {
+    const ctx = await activeOrgCtx();
+    const text = await req.text();
+    if (text.length > MAX_BODY_BYTES) throw new ValidationError([{ path: "elements", message: "whiteboard.e.too_big" }]);
+    let body: unknown;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      throw new ValidationError([{ path: "body", message: "invalid JSON" }]);
+    }
+    const elements = body && typeof body === "object" ? (body as { elements?: unknown }).elements : undefined;
+    return NextResponse.json(await saveWhiteboard(ctx, params.id, elements));
+  });
+}
