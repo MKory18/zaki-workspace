@@ -96,6 +96,10 @@ export interface TopicSummaryDto {
   restricted: boolean;
   /** The «مقطع» the topic belongs to (null: the whole space's). */
   teamId: string | null;
+  /** Pinned on top of the space's list. */
+  pinned: boolean;
+  /** Archived (listed only for the space's managers, under «المؤرشفة»). */
+  archived: boolean;
   canPost: boolean;
   lastMessage: { at: string; preview: string | null; mine: boolean } | null;
 }
@@ -137,6 +141,8 @@ export interface ConversationDto {
   restricted?: boolean;
   /** The «مقطع» the topic belongs to (null: the whole space's, or not a topic). */
   teamId?: string | null;
+  pinned?: boolean;
+  archived?: boolean;
   closed: boolean;
   space?: { id: string; name: string; hasExternal: boolean } | null;
   /** `canJoin`: the OWNER in oversight of an open topic may join it («شارك بالمحادثة») to post there. */

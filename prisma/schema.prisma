@@ -350,6 +350,10 @@ model Conversation {
   // restricted: only the people with a ConversationMember row are its audience, not the whole space.
   restricted    Boolean   @default(false)
   closedAt      DateTime? // closed topics take no new messages; admins reopen
+  // Archived: out of the space's list (its managers find it under «المؤرشفة»), read-only, nothing deleted.
+  archivedAt    DateTime?
+  // Pinned on top of its space's list.
+  pinnedAt      DateTime?
   position      Int       @default(0) // order of the topics inside the space
   // The role of a system topic: announcements | followup | general | ideas | archive (one per space).
   systemKey     String?

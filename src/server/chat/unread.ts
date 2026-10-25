@@ -7,7 +7,7 @@ import { hqSpaceId } from "@/server/chat/hq";
  *
  * - Only conversations I have a row in (I wrote, read or joined there; my DMs): a topic I never opened
  *   is the chat home's business, and counting a company's whole history would make the badge useless.
- * - Never my own messages, deleted ones, or system lines («انضم»، «ثبّت»).
+ * - Never my own messages, deleted ones, or system lines («انضم»، «ثبّت»); never an archived topic.
  * - A topic counts only while I am still in its space (rows outlive leaving it); the OWNER's rows are
  *   the topics he joined and his own DMs, so his silent oversight never adds anything.
  * - A guest: topics only.
@@ -29,6 +29,7 @@ export async function unreadTotal(ctx: OrgAccessContext, spaceId: string | null 
       AND m."authorId" <> ${ctx.userId}
       AND m."deletedAt" IS NULL
       AND m.kind <> 'SYSTEM'
+      AND c."archivedAt" IS NULL
       AND (${isGuest} = false OR c.kind = 'TOPIC')
       AND (
         c.kind <> 'TOPIC'
@@ -67,6 +68,7 @@ export async function unreadBySpace(ctx: OrgAccessContext): Promise<Record<strin
       AND m."authorId" <> ${ctx.userId}
       AND m."deletedAt" IS NULL
       AND m.kind <> 'SYSTEM'
+      AND c."archivedAt" IS NULL
       AND (${isGuest} = false OR c.kind = 'TOPIC')
       AND (
         c.kind <> 'TOPIC'

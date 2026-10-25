@@ -93,5 +93,19 @@
   "chatc.topic.writers.all": "كل اللي بيشوفوه",
   "chatc.topic.writers.admins": "مديرين المساحة بس",
   "chatc.topic.save": "احفظ",
-  "chatc.topic.save_failed": "ما انحفظت الإعدادات. جرّب مرة ثانية."
+  "chatc.topic.save_failed": "ما انحفظت الإعدادات. جرّب مرة ثانية.",
+  "chatc.topic.manage": "إدارة الموضوع",
+  "chatc.topic.close": "اقفل الموضوع",
+  "chatc.topic.reopen": "افتحه من جديد",
+  "chatc.topic.pin": "ثبّته فوق",
+  "chatc.topic.unpin": "شيل التثبيت",
+  "chatc.topic.archive": "أرشفه",
+  "chatc.topic.unarchive": "رجّعه من الأرشيف",
+  "chatc.topic.archive_hint": "المؤرشف بيطلع من القائمة وبيصير للقراية بس. ما بينحذف منه شي، وبترجّعه من «المؤرشفة».",
+  "chatc.topic.delete": "احذف الموضوع",
+  "chatc.topic.delete_confirm": "متأكد؟ احذفه نهائيًا",
+  "chatc.topic.delete_hint": "بينحذف بس الموضوع اللي ما حدا كتب فيه.",
+  "chatc.topic.has_messages": "فيه رسائل، فما بينحذف. أرشفه بدال ما تحذفه.",
+  "chatc.topic.system": "هاد موضوع أساسي للمساحة، ما بينحذف.",
+  "chatc.topic.act_failed": "ما زبطت. جرّب مرة ثانية."
 }

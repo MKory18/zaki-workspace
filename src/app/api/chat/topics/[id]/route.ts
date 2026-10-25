@@ -1,19 +1,55 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { withApi } from "@/server/api";
+import { apiError, withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { activeOrgCtx } from "@/server/services/integrations";
-import { setTopicClosed, updateTopic, updateTopicSchema } from "@/server/chat/topics";
+import {
+  TopicConflictError,
+  deleteTopic,
+  setTopicArchived,
+  setTopicClosed,
+  setTopicPinned,
+  updateTopic,
+  updateTopicSchema,
+} from "@/server/chat/topics";
 
-const patchSchema = updateTopicSchema.extend({ closed: z.boolean().optional() });
+const patchSchema = updateTopicSchema.extend({
+  closed: z.boolean().optional(),
+  archived: z.boolean().optional(),
+  pinned: z.boolean().optional(),
+});
 
-/** PATCH: topic settings (title, emoji, restricted, posting policy) and close/reopen (`closed`). */
+/**
+ * PATCH: topic settings (title, emoji, restricted, posting policy), close/reopen (`closed`), archive/bring back
+ * (`archived`) and pin on top (`pinned`).
+ */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const { closed, ...input } = await parseJson(patchSchema, req);
+    const { closed, archived, pinned, ...input } = await parseJson(patchSchema, req);
     const ctx = await activeOrgCtx();
-    if (closed !== undefined) await setTopicClosed(ctx, params.id, closed);
+    try {
+      if (archived !== undefined) await setTopicArchived(ctx, params.id, archived);
+      if (closed !== undefined) await setTopicClosed(ctx, params.id, closed);
+      if (pinned !== undefined) await setTopicPinned(ctx, params.id, pinned);
+    } catch (err) {
+      if (err instanceof TopicConflictError) return apiError("conflict", err.message);
+      throw err;
+    }
     if (Object.keys(input).length) await updateTopic(ctx, params.id, input);
+    return NextResponse.json({ ok: true });
+  });
+}
+
+/** DELETE: a topic nobody wrote in (one with messages is archived instead: 409), never a system one. */
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  return withApi(async () => {
+    const ctx = await activeOrgCtx();
+    try {
+      await deleteTopic(ctx, params.id);
+    } catch (err) {
+      if (err instanceof TopicConflictError) return apiError("conflict", err.message);
+      throw err;
+    }
     return NextResponse.json({ ok: true });
   });
 }

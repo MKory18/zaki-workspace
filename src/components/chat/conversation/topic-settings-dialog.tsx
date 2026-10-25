@@ -22,8 +22,9 @@ const audienceOf = (topic: ConversationDto): Audience => (topic.restricted ? "pe
 /**
  * «إعدادات الموضوع» (the owner's ask, 2026-10-25: every topic has its own privacy — who sees and reads it, who
  * writes): its name and kind; who sees and reads it (the whole space, one «مقطع» of it, or named people of the
- * space); who writes (everybody who reads it, or the space's admins only). For the space's ADMIN and the OWNER;
- * the server decides again (src/server/chat/topics.ts `updateTopic`).
+ * space); who writes (everybody who reads it, or the space's admins only). Under it the topic's management: close
+ * or reopen it, pin it on top, archive it (or bring it back), delete it (only one nobody wrote in). For the space's
+ * ADMIN and the OWNER; the server decides again (src/server/chat/topics.ts).
  */
 export function TopicSettingsDialog({
   open,
@@ -47,6 +48,7 @@ export function TopicSettingsDialog({
   const [picked, setPicked] = useState<Set<string>>(new Set((topic.members ?? []).map((m) => m.id)));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // every time it opens: what the topic says now
   useEffect(() => {
@@ -58,6 +60,7 @@ export function TopicSettingsDialog({
     setWriters(topic.postingPolicy === "ADMINS" ? "ADMINS" : "ALL");
     setPicked(new Set((topic.members ?? []).map((m) => m.id)));
     setError("");
+    setConfirmDelete(false);
   }, [open, topic]);
 
   // the space's «مقاطع» and people, once
@@ -116,7 +119,40 @@ export function TopicSettingsDialog({
     }
   }
 
+  /** One management step (close, pin, archive — or delete): the server decides again and says why not. */
+  async function act(change: { closed?: boolean; pinned?: boolean; archived?: boolean } | "delete") {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const url = `/api/chat/topics/${encodeURIComponent(topic.id)}`;
+      const r =
+        change === "delete"
+          ? await fetch(url, { method: "DELETE" })
+          : await fetch(url, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(change) });
+      if (!r.ok) {
+        const data = (await r.json().catch(() => ({}))) as { message?: string };
+        if (data.message === "chat.topic_has_messages") return setError(ct("chatc.topic.has_messages"));
+        if (data.message === "chat.topic_system") return setError(ct("chatc.topic.system"));
+        throw new Error("act");
+      }
+      if (change === "delete") {
+        // the topic is gone: back to the chat
+        window.location.assign("/chat");
+        return;
+      }
+      onSaved();
+      onOpenChange(false);
+    } catch {
+      setError(ct("chatc.topic.act_failed"));
+    } finally {
+      setBusy(false);
+      setConfirmDelete(false);
+    }
+  }
+
   const field = "h-11 w-full rounded-lg border border-muted bg-surface px-3 text-base md:h-9 md:text-sm";
+  const manage = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-surface-2 disabled:opacity-60";
   const choice = "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent/10";
 
   return (
@@ -215,6 +251,39 @@ export function TopicSettingsDialog({
               {ct("chatc.topic.save")}
             </button>
           </form>
+
+          <section aria-labelledby="topic-manage" className="mt-6 space-y-2 border-t border-border pt-4">
+            <h3 id="topic-manage" className="text-sm font-medium">{ct("chatc.topic.manage")}</h3>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {!topic.archived && (
+                <button type="button" disabled={busy} onClick={() => void act({ closed: !topic.closed })} className={manage}>
+                  <span aria-hidden="true">{topic.closed ? "🔓" : "🔐"}</span>
+                  {ct(topic.closed ? "chatc.topic.reopen" : "chatc.topic.close")}
+                </button>
+              )}
+              {!topic.archived && (
+                <button type="button" disabled={busy} onClick={() => void act({ pinned: !topic.pinned })} className={manage}>
+                  <span aria-hidden="true">📌</span>
+                  {ct(topic.pinned ? "chatc.topic.unpin" : "chatc.topic.pin")}
+                </button>
+              )}
+              <button type="button" disabled={busy} onClick={() => void act({ archived: !topic.archived })} className={manage}>
+                <span aria-hidden="true">🗄</span>
+                {ct(topic.archived ? "chatc.topic.unarchive" : "chatc.topic.archive")}
+              </button>
+              {confirmDelete ? (
+                <button type="button" disabled={busy} onClick={() => void act("delete")} className={`${manage} border-danger bg-danger/10 text-danger`}>
+                  {ct("chatc.topic.delete_confirm")}
+                </button>
+              ) : (
+                <button type="button" disabled={busy} onClick={() => setConfirmDelete(true)} className={`${manage} text-danger`}>
+                  <span aria-hidden="true">🗑</span>
+                  {ct("chatc.topic.delete")}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-fg-muted">{ct("chatc.topic.archive_hint")} {ct("chatc.topic.delete_hint")}</p>
+          </section>
         </DialogBody>
       </DialogContent>
     </Dialog>
