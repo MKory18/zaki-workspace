@@ -38,7 +38,7 @@ const place = (nav: NavModel, key: PlaceKey): NavPlace => {
 };
 const tabs = (nav: NavModel, key: PlaceKey) => place(nav, key).tabs.map((t) => t.key);
 
-const WORK_ALL: TabKey[] = ["my-work", "projects", "list", "calendar", "goals", "ideas", "production", "departments", "crm"];
+const WORK_ALL: TabKey[] = ["my-work", "projects", "list", "calendar", "goals", "ideas", "production", "departments", "tickets", "campaigns", "crm"];
 // goals and ideas are the team's own (docs/PHASE0-AUDIT.md R10): a guest is offered the four tabs about their own work
 const WORK_GUEST: TabKey[] = ["my-work", "projects", "list", "calendar"];
 const ADMIN_ALL: TabKey[] = ["team", "reports", "automation", "telegram", "settings"];
@@ -189,9 +189,9 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
     ["an unknown rank with every capability", { role: "SUPERUSER" as unknown as NavSubject["role"], caps: [...CAPABILITIES] }],
   ];
 
-  it("the tabs are the sixteen of the map, each once", () => {
-    expect(ALL_TABS).toHaveLength(16);
-    expect(new Set(ALL_TABS).size).toBe(16);
+  it("the tabs are the eighteen of the map, each once", () => {
+    expect(ALL_TABS).toHaveLength(18);
+    expect(new Set(ALL_TABS).size).toBe(18);
   });
 
   it("agrees with buildNav for every tab and every kind of person: a tab is open exactly when the map draws it", () => {
@@ -214,7 +214,7 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
   it("offeredToGuests: exactly my work, projects, list and calendar", () => {
     expect(ALL_TABS.filter((key) => offeredToGuests(key))).toEqual(WORK_GUEST);
     expect(ALL_TABS.filter((key) => !offeredToGuests(key))).toEqual(
-      ["goals", "ideas", "production", "departments", "crm", "files", "team", "reports", "automation", "telegram", "settings", "archive"],
+      ["goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "files", "team", "reports", "automation", "telegram", "settings", "archive"],
     );
   });
 
@@ -338,6 +338,8 @@ describe("the words", () => {
       ideas: "الأفكار",
       production: "الروتين اليومي",
       departments: "الأقسام",
+      tickets: "التذاكر",
+      campaigns: "الحملات",
       crm: "العملاء",
       files: "الملفات",
       team: "الفريق",

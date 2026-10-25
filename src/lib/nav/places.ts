@@ -52,6 +52,8 @@ export type TabKey =
   | "ideas"
   | "production"
   | "departments"
+  | "tickets"
+  | "campaigns"
   | "crm"
   | "files"
   | "team"
@@ -128,6 +130,9 @@ export const PLACES: readonly PlaceDef[] = [
       { key: "ideas", href: "/ideas", labelKey: "nav.ideas", requires: "staff" },
       { key: "production", href: "/production", labelKey: "nav.production", requires: "staff" },
       { key: "departments", href: "/departments", labelKey: "nav.departments", requires: "staff" },
+      // a department's tickets and campaigns, each a page of its own (the owner's ask, 2026-10-25)
+      { key: "tickets", href: "/tickets", labelKey: "nav.tickets", requires: "staff" },
+      { key: "campaigns", href: "/campaigns", labelKey: "nav.campaigns", requires: "staff" },
       { key: "crm", href: "/crm", labelKey: "nav.crm", requires: { capability: "crm.view" } },
     ],
   },
