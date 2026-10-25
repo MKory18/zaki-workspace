@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       select: { id: true },
     });
     if (!dept) throw new NotFoundError("dept.not_found");
-    const campaigns = await listDepartmentCampaigns(dept.id);
+    const campaigns = await listDepartmentCampaigns(dept.id, ctx);
     return NextResponse.json({ campaigns });
   });
 }

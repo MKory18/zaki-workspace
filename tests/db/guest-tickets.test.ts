@@ -121,9 +121,13 @@ describe("tickets: closed to a GUEST", () => {
       expect(res.text).not.toContain(ticket.title);
     }
 
+    // a staff member outside the department (2026-10-25: a department's tickets are its own): the list answers
+    // without the department's tickets, and somebody else's ticket is «not found»
     await loginAs(w.stranger.id);
-    expect((await call(departmentTicketsRoute.GET, { params: { id: w.dept.id } })).status).toBe(200);
-    expect((await call(detailRoute.GET, { params: { id: ticket.id } })).status).toBe(200);
+    const list = await call(departmentTicketsRoute.GET, { params: { id: w.dept.id } });
+    expect(list.status).toBe(200);
+    expect(list.text).not.toContain(ticket.title);
+    expect((await call(detailRoute.GET, { params: { id: ticket.id } })).status).toBe(404);
     expect((await call(mineRoute.GET)).status).toBe(200);
   });
 });
