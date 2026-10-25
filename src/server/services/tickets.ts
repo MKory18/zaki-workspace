@@ -11,8 +11,9 @@ import { assertActiveAssignee } from "@/server/services/active-people";
 
 /**
  * IT tickets live inside a department. Access policy:
- * - org GUESTs: read-only. They cannot create, edit, comment, change a status or
- *   delete anything (assertCanWrite), whatever their ticket/department links are.
+ * - org GUESTs: no access. The read routes refuse them (assertNotGuest, 403), and
+ *   they cannot create, edit, comment, change a status or delete anything
+ *   (assertCanWrite), whatever their ticket/department links are.
  * - org OWNER/ADMIN: full manage
  * - department members and the department lead: create, assign within the
  *   department, transition status
