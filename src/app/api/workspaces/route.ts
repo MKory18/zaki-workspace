@@ -4,6 +4,7 @@ import { audit, ForbiddenError, requireUser } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { db } from "@/server/db";
 import { notifyMembership } from "@/server/notify";
+import { goHref } from "@/lib/space-link";
 import { assertCan, requireActor } from "@/server/policy/actor";
 import { can, effectiveCapabilities } from "@/server/policy/capabilities";
 import { parseJson } from "@/server/validation";
@@ -16,7 +17,7 @@ import { currentSpace } from "@/server/services/current-space";
  * Workspace switcher — only the spaces the caller may open: the OWNER sees every space of the
  * company, everybody else (an ADMIN included) only the spaces they are in, and only while their
  * membership is ACTIVE. `canCreateSpaces` says whether they may open a new one in that organization.
- * Each space carries its emoji and `unread`: the messages waiting for the person in its topics (the number
+ * Each space carries its emoji and `unread`: the messages and the notifications waiting for the person there (the number
  * beside it on the space switcher, like the accounts of a messaging app). «الشركة» comes first, then by name;
  * `currentSpaceId` is the space the person is in (the shell follows it after every navigation).
  */
@@ -50,6 +51,13 @@ export async function GET() {
     // what waits in each space, per organization (one query each)
     const unread: Record<string, number> = {};
     for (const m of orgs) Object.assign(unread, await unreadBySpace({ userId: user.id, orgId: m.organization.id, orgRole: m.role }));
+    // …and the notifications of each space that are not read yet
+    const bells = await db.notification.groupBy({
+      by: ["workspaceId"],
+      where: { userId: user.id, readAt: null, workspaceId: { not: null } },
+      _count: { _all: true },
+    });
+    for (const b of bells) if (b.workspaceId) unread[b.workspaceId] = (unread[b.workspaceId] ?? 0) + b._count._all;
     type Entry = { id: string; name: string; slug: string; emoji: string | null; holdsProjects: boolean; unread: number };
     const byOrg = new Map<string, Entry[]>();
     const hqFirst = [...workspaces.filter((w) => w.kind === "HQ"), ...workspaces.filter((w) => w.kind !== "HQ")];
@@ -119,8 +127,9 @@ export async function POST(req: Request) {
         userIds: added,
         kind: "workspace",
         title: workspace.name,
-        linkUrl: "/projects",
+        linkUrl: goHref(workspace.id),
         actorId: actor.userId,
+        workspaceId: workspace.id,
       });
     }
     await audit("workspace.created", {

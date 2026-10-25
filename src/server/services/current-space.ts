@@ -99,3 +99,11 @@ export async function keepInSpace(who: SpaceSubject, spaceId: string, path: stri
   if (here?.id === spaceId || !spaces.some((s) => s.id === spaceId)) return;
   redirect(goHref(spaceId, path));
 }
+
+/**
+ * The notifications the bell shows inside a space: that space's, and the personal ones (no space: a welcome, a
+ * changed rank, everything from before spaces had them). With no space at all: everything.
+ */
+export function bellWhere(userId: string, spaceId: string | null | undefined) {
+  return spaceId ? { userId, OR: [{ workspaceId: spaceId }, { workspaceId: null }] } : { userId };
+}

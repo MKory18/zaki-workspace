@@ -48,6 +48,7 @@ export async function POST(
       authorName: comment.author.name,
       body: input.body,
       watcherIds: [task.assigneeId, task.creatorId].filter((x): x is string => x !== null),
+      workspaceId: task.workspaceId,
     });
     return NextResponse.json({ comment }, { status: 201 });
   });

@@ -85,6 +85,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         orgPrefix: await orgPrefix(prevAssignee?.orgId ?? task.orgId),
         taskId: task.id,
         title: task.title,
+        workspaceId: ctx.task.workspaceId,
       });
     }
     return NextResponse.json({ task });
