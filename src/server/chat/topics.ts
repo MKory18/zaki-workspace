@@ -253,11 +253,14 @@ export async function deleteTopic(ctx: OrgAccessContext, conversationId: string)
 
 const PAGE = 50;
 
-/** The detail page of one conversation for one viewer (the newest `limit` messages). */
+/**
+ * The detail page of one conversation for one viewer: the newest `limit` messages, the ones before `before`, or the
+ * ones around `around` (a search hit: half older, half newer, the message itself among them).
+ */
 export async function conversationDetail(
   ctx: OrgAccessContext,
   conversationId: string,
-  opts: { before?: string; limit?: number } = {},
+  opts: { before?: string; around?: string; limit?: number } = {},
 ): Promise<ConversationDto> {
   const facts = await loadConversationFacts(ctx.userId, conversationId);
   // another company's conversation does not exist for this viewer, whatever their rank at home
@@ -273,11 +276,25 @@ export async function conversationDetail(
     where.createdAt = { lt: anchor.createdAt };
   }
 
-  const [rows, conv] = await Promise.all([
+  // around one message: its newer half (oldest first, turned round below), then it and its older half
+  let newer: Awaited<ReturnType<typeof newerThan>> = [];
+  let olderLimit = limit;
+  async function newerThan(at: Date, take: number) {
+    return db.chatMessage.findMany({ where: { conversationId, createdAt: { gt: at } }, orderBy: { createdAt: "asc" }, take, include: messageInclude() });
+  }
+  if (opts.around) {
+    const anchor = await db.chatMessage.findFirst({ where: { id: opts.around, conversationId }, select: { createdAt: true } });
+    if (!anchor) throw new NotFoundError("chat.e.not_found");
+    olderLimit = limit - Math.floor(limit / 2);
+    newer = await newerThan(anchor.createdAt, Math.floor(limit / 2));
+    where.createdAt = { lte: anchor.createdAt };
+  }
+
+  const [older, conv] = await Promise.all([
     db.chatMessage.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: limit + 1, // one extra: is there an older page?
+      take: olderLimit + 1, // one extra: is there an older page?
       include: messageInclude(),
     }),
     db.conversation.findUnique({
@@ -296,8 +313,8 @@ export async function conversationDetail(
   ]);
   if (!conv) throw new NotFoundError("chat.e.not_found");
 
-  const hasOlder = rows.length > limit;
-  const page = rows.slice(0, limit);
+  const hasOlder = older.length > olderLimit;
+  const page = [...newer.reverse(), ...older.slice(0, olderLimit)];
 
   // who is online, for the member pills
   const { onlineUserIds } = await import("@/server/realtime/presence");

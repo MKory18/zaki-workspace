@@ -12,7 +12,7 @@ export default async function ChatConversationPage({ params, searchParams = {} }
     const back = searchParams.m ? `/chat/${params.id}?m=${encodeURIComponent(searchParams.m)}` : `/chat/${params.id}`;
     await keepInSpace(actor, topic.spaceId, back);
   }
-  return <ConversationPageClient conversationId={params.id} />;
+  return <ConversationPageClient conversationId={params.id} focusMessageId={searchParams.m} />;
 }
 
 export const dynamic = "force-dynamic";

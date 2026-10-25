@@ -9,6 +9,9 @@ interface SearchBody {
   projects: { id: string; name: string; workspaceId: string; workspaceName: string }[];
 }
 
+/** Nothing found: every list of the answer empty (the space's chat, people and files included). */
+const EMPTY = { tasks: [], projects: [], topics: [], messages: [], people: [], files: [] };
+
 async function search(q: string) {
   const res = await call(searchRoute.GET, { url: `http://localhost/api/search?q=${encodeURIComponent(q)}` });
   return { status: res.status, body: res.json as unknown as SearchBody };
@@ -39,13 +42,13 @@ describe("search: only work in workspaces the caller can access", () => {
     await loginAs(loner.id);
     const { status, body } = await search(f.token);
     expect(status).toBe(200);
-    expect(body).toEqual({ tasks: [], projects: [] });
+    expect(body).toEqual(EMPTY);
   });
 
   it("an ADMIN finds only the work of the spaces they are in: nothing by rank, then just that space", async () => {
     const f = await makeScopedOrg();
     await loginAs(f.admin.id);
-    expect((await search(f.token)).body).toEqual({ tasks: [], projects: [] });
+    expect((await search(f.token)).body).toEqual(EMPTY);
 
     await joinWorkspace(f.admin.id, f.wsOut.id, "MEMBER");
     const { body } = await search(f.token);
@@ -79,7 +82,7 @@ describe("search: only work in workspaces the caller can access", () => {
   it("a GUEST finds nothing unless they were put in a workspace, and then only that one", async () => {
     const f = await makeScopedOrg();
     await loginAs(f.guest.id);
-    expect((await search(f.token)).body).toEqual({ tasks: [], projects: [] });
+    expect((await search(f.token)).body).toEqual(EMPTY);
     await joinWorkspace(f.guest.id, f.wsIn.id, "GUEST");
     const { body } = await search(f.token);
     expect(body.tasks.map((t) => t.id)).toEqual([f.inside.task.id]);
@@ -99,14 +102,14 @@ describe("search: only work in workspaces the caller can access", () => {
     await loginAs(multi.id);
     const forA = (await search(a.token)).body;
     expect(forA.tasks.map((t) => t.id)).toEqual([a.inside.task.id]);
-    expect((await search(b.token)).body).toEqual({ tasks: [], projects: [] });
+    expect((await search(b.token)).body).toEqual(EMPTY);
     // a space of B named in the cookie is not theirs in the company they work in: still nothing of B's
     enter(b.wsOut.id);
-    expect((await search(b.token)).body).toEqual({ tasks: [], projects: [] });
+    expect((await search(b.token)).body).toEqual(EMPTY);
 
     // and a user of only one org cannot find the other org's work at all
     await loginAs(a.owner.id);
-    expect((await search(b.token)).body).toEqual({ tasks: [], projects: [] });
+    expect((await search(b.token)).body).toEqual(EMPTY);
   });
 
   it("an archived task is still left out and the response keeps its shape", async () => {
@@ -158,7 +161,7 @@ describe("search: only work in workspaces the caller can access", () => {
     await loginAs(f.admin.id);
     const short = await search("a");
     expect(short.status).toBe(200);
-    expect(short.body).toEqual({ tasks: [], projects: [] });
+    expect(short.body).toEqual(EMPTY);
   });
 
   it("work in a same-named workspace of an org the caller does not belong to never shows up", async () => {

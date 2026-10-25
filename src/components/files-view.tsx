@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Eye, FileArchive, FileAudio, FileImage, FileText, FileVideo, FolderUp, History, Trash2, UploadCloud } from "lucide-react";
 import { apiDelete, apiGet, ApiError, apiUpload } from "@/lib/api-client";
@@ -58,6 +58,14 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
     queryKey: ["files", "list"],
     queryFn: () => apiGet<{ files: FileRow[] }>("/api/files"),
   });
+
+  // a search hit (`/files#file-<id>`): once the list is here, bring that file into view (the browser's own jump ran
+  // before the list existed)
+  const loaded = !!list.data;
+  useEffect(() => {
+    if (!loaded || !window.location.hash.startsWith("#file-")) return;
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "center" });
+  }, [loaded]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["files", "list"] });
@@ -160,7 +168,7 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
           {files.map((f) => (
-            <li key={f.id} className="rounded-xl border border-border bg-surface-1 p-3">
+            <li key={f.id} id={`file-${f.id}`} className="scroll-mt-24 rounded-xl border border-border bg-surface-1 p-3 target:ring-2 target:ring-accent">
               <div className="flex items-start gap-2">
                 <TypeGlyph mime={f.mimeType} />
                 <div className="min-w-0 flex-1">

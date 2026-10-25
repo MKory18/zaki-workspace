@@ -209,3 +209,21 @@ export interface DirectoryPersonDto {
   name: string;
   jobTitle: string | null;
 }
+
+/** A search hit in the chat (src/server/chat/search.ts). */
+export interface MessageHitDto {
+  id: string;
+  conversationId: string;
+  /** the topic's name, or the other person's name in a DM */
+  conversationTitle: string;
+  authorName: string;
+  at: string;
+  /** a piece of the message around the words searched */
+  snippet: string;
+}
+
+export interface TopicHitDto {
+  id: string;
+  title: string;
+  emoji: string | null;
+}
