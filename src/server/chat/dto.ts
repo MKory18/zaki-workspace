@@ -77,6 +77,10 @@ export interface SpaceSummaryDto {
   kind: string;
   hasExternal: boolean;
   canModerate: boolean;
+  /** May open a topic here: the space's ADMIN or the OWNER («موضوع جديد»). */
+  canCreateTopic: boolean;
+  /** The «مقاطع» of the space the viewer sees (a manager: all of them; anybody else: their own). */
+  sections: { id: string; name: string }[];
   unread: number;
   topics: TopicSummaryDto[];
 }
@@ -90,6 +94,8 @@ export interface TopicSummaryDto {
   mentions: number;
   closed: boolean;
   restricted: boolean;
+  /** The «مقطع» the topic belongs to (null: the whole space's). */
+  teamId: string | null;
   canPost: boolean;
   lastMessage: { at: string; preview: string | null; mine: boolean } | null;
 }

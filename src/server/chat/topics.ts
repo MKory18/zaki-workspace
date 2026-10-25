@@ -12,13 +12,37 @@ import type { Prisma } from "@prisma/client";
 
 /** ---------- create topic ---------- */
 
+/**
+ * The kinds of topic the owner asked for (2026-10-25): نقاش، تنبيهات، مهام، أفكار، متابعة. A kind gives the topic
+ * its mark and, for «التنبيهات», who writes there (the space's admins); both can still be set by hand.
+ */
+export const TOPIC_TYPES = ["DISCUSSION", "ANNOUNCEMENTS", "TASKS", "IDEAS", "FOLLOWUP"] as const;
+export const TOPIC_TYPE_EMOJI: Record<(typeof TOPIC_TYPES)[number], string> = {
+  DISCUSSION: "💬",
+  ANNOUNCEMENTS: "📢",
+  TASKS: "✅",
+  IDEAS: "💡",
+  FOLLOWUP: "🔁",
+};
+
 export const createTopicSchema = z.object({
   spaceId: z.string().min(1),
   title: z.string().trim().min(1, "chat.e.empty").max(120, "chat.e.too_long"),
   emoji: z.string().max(16).optional(),
+  topicType: z.enum(TOPIC_TYPES).optional(),
   restricted: z.boolean().optional(),
   postingPolicy: z.enum(["ALL", "ADMINS"]).optional(),
+  /** Who it is for: the whole space (none), one «مقطع» of it, or (`restricted`) the people named here. */
+  teamId: z.string().min(1).nullable().optional(),
+  memberIds: z.array(z.string().min(1)).max(200).optional(),
 });
+
+/** The «مقطع» must be one of the space's own (a miss reads as «not found», like everything of another space). */
+async function assertTeamOfSpace(spaceId: string, teamId: string | null | undefined): Promise<void> {
+  if (!teamId) return;
+  const team = await db.team.findFirst({ where: { id: teamId, workspaceId: spaceId }, select: { id: true } });
+  if (!team) throw new NotFoundError("teams.not_found");
+}
 
 export async function createTopic(ctx: OrgAccessContext, input: z.infer<typeof createTopicSchema>): Promise<{ id: string }> {
   // only a space admin of THIS space (or the org OWNER) opens a topic
@@ -30,7 +54,23 @@ export async function createTopic(ctx: OrgAccessContext, input: z.infer<typeof c
   const ws = await db.workspace.findFirst({ where: { id: input.spaceId, organizationId: ctx.orgId }, select: { id: true } });
   if (!ws) throw new NotFoundError("chat.e.not_found");
   if (!(org?.role === "OWNER" || isSpaceAdmin(sm?.role ?? null))) throw new ForbiddenError("chat.e.moderator_only");
+  await assertTeamOfSpace(input.spaceId, input.teamId);
 
+  // a topic for named people: they must be people of the space (nobody is pulled in from outside it)
+  const restricted = input.restricted ?? false;
+  const named = restricted ? [...new Set(input.memberIds ?? [])].filter((id) => id !== ctx.userId) : [];
+  if (named.length) {
+    const inSpace = await db.workspaceMember.count({
+      where: {
+        workspaceId: input.spaceId,
+        userId: { in: named },
+        user: { memberships: { some: { organizationId: ctx.orgId, status: "ACTIVE" } } },
+      },
+    });
+    if (inSpace !== named.length) throw new ForbiddenError("teams.member_not_in_space");
+  }
+
+  const topicType = input.topicType ?? "DISCUSSION";
   const topic = await db.$transaction(async (tx) => {
     const t = await tx.conversation.create({
       data: {
@@ -38,11 +78,14 @@ export async function createTopic(ctx: OrgAccessContext, input: z.infer<typeof c
         spaceId: input.spaceId,
         kind: "TOPIC",
         title: input.title,
-        emoji: input.emoji ?? null,
-        topicType: "DISCUSSION",
-        restricted: input.restricted ?? false,
-        postingPolicy: input.postingPolicy ?? "ALL",
-        members: { create: { userId: ctx.userId } }, // the creator is in their own topic
+        emoji: input.emoji ?? TOPIC_TYPE_EMOJI[topicType],
+        topicType,
+        restricted,
+        teamId: input.teamId ?? null,
+        // «التنبيهات»: the space's admins write, everybody reads (unless set otherwise)
+        postingPolicy: input.postingPolicy ?? (topicType === "ANNOUNCEMENTS" ? "ADMINS" : "ALL"),
+        // the creator is in their own topic, and so are the people it was opened for
+        members: { create: [{ userId: ctx.userId }, ...named.map((userId) => ({ userId }))] },
       },
       select: { id: true },
     });
@@ -57,13 +100,17 @@ export async function createTopic(ctx: OrgAccessContext, input: z.infer<typeof c
 export const updateTopicSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
   emoji: z.string().max(16).nullable().optional(),
+  topicType: z.enum(TOPIC_TYPES).optional(),
   restricted: z.boolean().optional(),
   postingPolicy: z.enum(["ALL", "ADMINS"]).optional(),
+  /** Move the topic to a «مقطع» of its space, or back to the whole space (null). */
+  teamId: z.string().min(1).nullable().optional(),
 });
 
 export async function updateTopic(ctx: OrgAccessContext, conversationId: string, input: z.infer<typeof updateTopicSchema>): Promise<void> {
   const { facts, org } = await guardTopic(ctx, conversationId);
   if (!canModerate(facts, org)) throw new ForbiddenError("chat.e.moderator_only");
+  if (input.teamId !== undefined && facts.spaceId) await assertTeamOfSpace(facts.spaceId, input.teamId);
   await db.$transaction(async (tx) => {
     await tx.conversation.update({ where: { id: conversationId }, data: { ...input } });
     await emitRealtime(tx, ctx.orgId, "conversation.changed", { conversationId, spaceId: facts.spaceId ?? undefined });

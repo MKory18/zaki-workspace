@@ -28,6 +28,8 @@ describe("chat message policy", () => {
     restricted: false,
     closedAt: null,
     postingPolicy: "ALL",
+    teamId: null,
+    viewerInTeam: false,
     topicType: "DISCUSSION",
     viewerIsMember: true,
     viewerGroupRole: "member",

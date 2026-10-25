@@ -42,6 +42,10 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
         },
         select: { id: true },
       },
+      teams: {
+        orderBy: [{ position: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, members: { where: { userId: ctx.userId }, select: { id: true } } },
+      },
       conversations: {
         where: { kind: "TOPIC" },
         orderBy: { position: "asc" },
@@ -54,6 +58,7 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
           postingPolicy: true,
           closedAt: true,
           systemKey: true,
+          teamId: true,
           members: { where: { userId: ctx.userId }, select: { lastReadAt: true } },
         },
       },
@@ -67,12 +72,19 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
     const spaceMuted = mySpaceRows.find((r) => r.workspaceId === s.id)?.mutedUntil ?? null;
     const topics: TopicSummaryDto[] = [];
     let spaceUnread = 0;
+    // the «مقاطع»: a manager of the space (the OWNER, its ADMIN, an org ADMIN who is in it) sees them all and
+    // their topics; anybody else their own
+    const manager = isOwner || isSpaceAdmin(spaceRole) || (org?.role === "ADMIN" && spaceRole !== null);
+    const sections = s.teams.filter((team) => manager || team.members.length > 0).map((team) => ({ id: team.id, name: team.name }));
+    const seen = new Set(sections.map((team) => team.id));
 
     for (const t of s.conversations) {
       // a restricted topic is read by its own rows (and by the OWNER); a guest sees what everyone sees
       const passes =
         isOwner || (!t.restricted && spaceRole !== null) || (t.restricted && t.members.length > 0);
       if (!passes) continue;
+      // a مقطع's topic is its people's (and the managers')
+      if (t.teamId && !seen.has(t.teamId)) continue;
 
       const lastRead = t.members[0]?.lastReadAt ?? null;
       // a system line («انضم»، «ثبّت») is not a message to read: it never counts
@@ -112,6 +124,7 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
         mentions,
         closed: !!t.closedAt,
         restricted: t.restricted,
+        teamId: t.teamId,
         canPost,
         lastMessage: last
           ? {
@@ -133,6 +146,8 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
       kind: s.kind,
       hasExternal: s.members.length > 0,
       canModerate: isOwner || isSpaceAdmin(spaceRole),
+      canCreateTopic: isOwner || isSpaceAdmin(spaceRole),
+      sections,
       unread: spaceUnread,
       topics,
     });

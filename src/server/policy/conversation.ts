@@ -11,6 +11,8 @@ import { db } from "@/server/db";
  *  - the OWNER reads everything silently, without being in any row; he may WRITE only where he
  *    has joined (a ConversationMember row of his own) and never in somebody else's DM;
  *  - a GUEST reads the topics of the spaces they are in, never DMs, never HQ;
+ *  - a topic of a «مقطع» (`teamId`, a team of its space) is read by that مقطع's people and the space's managers
+ *    (its ADMINs, an org ADMIN who is in it) — and by the OWNER, silently, like everything;
  *  - a suspended or offboarded person is nobody: rows they left behind do not count.
  */
 
@@ -22,6 +24,10 @@ export type ConversationFacts = {
   closedAt: Date | null;
   postingPolicy: string; // ALL | ADMINS
   topicType: string; // DISCUSSION | ANNOUNCEMENTS | ...
+  /** the «مقطع» (team of the space) the topic belongs to, if any */
+  teamId: string | null;
+  /** the viewer is one of that مقطع's people */
+  viewerInTeam: boolean;
   /** of the viewer's ConversationMember row, when one exists */
   viewerIsMember: boolean;
   /** role of the viewer's group row, when this is a GROUP */
@@ -72,6 +78,8 @@ export function canRead(facts: ConversationFacts | null, org: OrgFacts | null): 
   if (facts.kind === "DM") return facts.viewerIsMember && facts.dmOtherActive;
   if (facts.kind === "GROUP") return facts.viewerIsMember && org!.role !== "GUEST";
   if (!facts.viewerSpaceRole) return false; // not in the space, not in the topic
+  // a مقطع's topic: its people and the space's managers (the space's ADMIN, an org ADMIN who is in it)
+  if (facts.teamId && !facts.viewerInTeam && !(isSpaceAdmin(facts.viewerSpaceRole) || org!.role === "ADMIN")) return false;
   if (!facts.restricted) return true; // the space's people are the audience
   return facts.viewerIsMember; // a restricted topic takes its own rows
 }
@@ -177,6 +185,7 @@ export async function loadConversationFacts(userId: string, conversationId: stri
       closedAt: true,
       postingPolicy: true,
       topicType: true,
+      teamId: true,
       dmKey: true,
       members: { select: { userId: true } },
     },
@@ -198,7 +207,7 @@ export async function loadConversationFacts(userId: string, conversationId: stri
     }
   }
 
-  const [org, spaceRow, convRow] = await Promise.all([
+  const [org, spaceRow, convRow, teamRow] = await Promise.all([
     loadOrgFacts(userId, conv.orgId),
     conv.spaceId
       ? db.workspaceMember.findUnique({
@@ -210,6 +219,9 @@ export async function loadConversationFacts(userId: string, conversationId: stri
       where: { conversationId_userId: { conversationId, userId } },
       select: { userId: true, role: true },
     }),
+    conv.teamId
+      ? db.teamMember.findUnique({ where: { teamId_userId: { teamId: conv.teamId, userId } }, select: { id: true } })
+      : Promise.resolve(null),
   ]);
 
   return {
@@ -220,6 +232,8 @@ export async function loadConversationFacts(userId: string, conversationId: stri
     closedAt: conv.closedAt,
     postingPolicy: conv.postingPolicy,
     topicType: conv.topicType,
+    teamId: conv.teamId,
+    viewerInTeam: !!teamRow,
     viewerIsMember: !!convRow,
     viewerGroupRole: convRow?.role ?? null,
     viewerSpaceRole: spaceRow?.role ?? null,
