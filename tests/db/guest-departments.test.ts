@@ -95,11 +95,14 @@ describe("departments: closed to a GUEST", () => {
     expect((await db.department.findUniqueOrThrow({ where: { id: w.dept.id } })).name).toBe("IT desk");
   });
 
-  it("the ticket and campaign sub-routes stay readable (their own guest rules apply)", async () => {
+  it("the ticket and campaign sub-routes are 403 too", async () => {
     const w = await departmentWorld();
     await loginAs(w.guest.id);
-    expect((await call(departmentTicketsRoute.GET, { params: { id: w.dept.id } })).status).toBe(200);
-    expect((await call(departmentCampaignsRoute.GET, { params: { id: w.dept.id } })).status).toBe(200);
+    for (const route of [departmentTicketsRoute, departmentCampaignsRoute]) {
+      const res = await call(route.GET, { params: { id: w.dept.id } });
+      expect(res.status).toBe(403);
+      expect(res.json?.["message"]).toBe("guest.no_access");
+    }
   });
 
   it("an anonymous caller still gets 401, not 403", async () => {

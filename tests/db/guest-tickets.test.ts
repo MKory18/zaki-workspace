@@ -37,7 +37,7 @@ async function ticketWorld() {
 const patch = (id: string, body: Record<string, unknown>) =>
   call(ticketRoute.PATCH, { method: "PATCH", params: { id }, body });
 
-describe("tickets: a GUEST is read-only", () => {
+describe("tickets: closed to a GUEST", () => {
   it("cannot open a ticket, while a normal member still can", async () => {
     const w = await ticketWorld();
     await loginAs(w.guest.id);
@@ -105,10 +105,23 @@ describe("tickets: a GUEST is read-only", () => {
     expect(comments[0]?.body).toBe("written before the downgrade");
   });
 
-  it("can still read tickets", async () => {
+  it("cannot read tickets either (403 on every read route, nothing of the ticket in the answer)", async () => {
     const w = await ticketWorld();
-    const ticket = await w.openTicket();
+    // even a guest who opened the ticket, holds it and sits in the department
+    await db.departmentMember.create({ data: { departmentId: w.dept.id, userId: w.guest.id } });
+    const ticket = await w.openTicket({ creatorId: w.guest.id, assigneeId: w.guest.id });
     await loginAs(w.guest.id);
+    for (const res of [
+      await call(departmentTicketsRoute.GET, { params: { id: w.dept.id } }),
+      await call(detailRoute.GET, { params: { id: ticket.id } }),
+      await call(mineRoute.GET),
+    ]) {
+      expect(res.status).toBe(403);
+      expect(res.json?.["message"]).toBe("guest.no_access");
+      expect(res.text).not.toContain(ticket.title);
+    }
+
+    await loginAs(w.stranger.id);
     expect((await call(departmentTicketsRoute.GET, { params: { id: w.dept.id } })).status).toBe(200);
     expect((await call(detailRoute.GET, { params: { id: ticket.id } })).status).toBe(200);
     expect((await call(mineRoute.GET)).status).toBe(200);
