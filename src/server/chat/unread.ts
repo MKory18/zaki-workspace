@@ -10,6 +10,7 @@ import type { OrgAccessContext } from "@/server/auth";
  * - A topic counts only while I am still in its space (rows outlive leaving it); the OWNER's rows are
  *   the topics he joined and his own DMs, so his silent oversight never adds anything.
  * - A guest: topics only.
+ * - A topic of a «مقطع» counts for its people and the space's managers only (the same rule as `canRead`).
  * - Inside a space (`spaceId`, the space the person is in): that space's topics, plus the DMs (they belong to no
  *   space yet). Another space's topics are on the space switcher instead (`unreadBySpace`).
  */
@@ -32,7 +33,16 @@ export async function unreadTotal(ctx: OrgAccessContext, spaceId: string | null 
         OR ${isOwner} = true
         OR EXISTS (SELECT 1 FROM "WorkspaceMember" w WHERE w."workspaceId" = c."spaceId" AND w."userId" = ${ctx.userId})
       )
-      AND (c.kind <> 'TOPIC' OR ${spaceId}::text IS NULL OR c."spaceId" = ${spaceId})`;
+      AND (c.kind <> 'TOPIC' OR ${spaceId}::text IS NULL OR c."spaceId" = ${spaceId})
+      AND (
+        c."teamId" IS NULL
+        OR ${isOwner} = true
+        OR EXISTS (SELECT 1 FROM "TeamMember" tm WHERE tm."teamId" = c."teamId" AND tm."userId" = ${ctx.userId})
+        OR EXISTS (
+          SELECT 1 FROM "WorkspaceMember" w WHERE w."workspaceId" = c."spaceId" AND w."userId" = ${ctx.userId}
+            AND (w.role = 'ADMIN' OR ${ctx.orgRole === "ADMIN"} = true)
+        )
+      )`;
   return rows[0]?.total ?? 0;
 }
 
@@ -57,6 +67,15 @@ export async function unreadBySpace(ctx: OrgAccessContext): Promise<Record<strin
       AND (
         ${isOwner} = true
         OR EXISTS (SELECT 1 FROM "WorkspaceMember" w WHERE w."workspaceId" = c."spaceId" AND w."userId" = ${ctx.userId})
+      )
+      AND (
+        c."teamId" IS NULL
+        OR ${isOwner} = true
+        OR EXISTS (SELECT 1 FROM "TeamMember" tm WHERE tm."teamId" = c."teamId" AND tm."userId" = ${ctx.userId})
+        OR EXISTS (
+          SELECT 1 FROM "WorkspaceMember" w WHERE w."workspaceId" = c."spaceId" AND w."userId" = ${ctx.userId}
+            AND (w.role = 'ADMIN' OR ${ctx.orgRole === "ADMIN"} = true)
+        )
       )
     GROUP BY c."spaceId"`;
   return Object.fromEntries(rows.map((r) => [r.spaceId, r.total]));

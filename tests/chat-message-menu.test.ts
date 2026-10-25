@@ -31,6 +31,8 @@ const facts = (kind: ConversationFacts["kind"], w: Who, over: Partial<Conversati
   restricted: false,
   closedAt: null,
   postingPolicy: "ALL",
+  teamId: null,
+  viewerInTeam: false,
   topicType: "DISCUSSION",
   viewerIsMember: w.member,
   viewerGroupRole: null,
