@@ -6,13 +6,15 @@ import { fmtNumber } from "@/lib/format";
 import { goHref } from "@/lib/space-link";
 import { currentSpace } from "@/server/services/current-space";
 import { mayOverview, spacesOverview } from "@/server/services/spaces-overview";
+import { UnplacedPanel } from "@/components/unplaced-panel";
 
 export const metadata = { title: getServerT().t("spaces.overview.title") };
 
 /**
  * «كل المساحات» — the owner's and the admins' look over every space they can open: a card per space with what is
  * open, late and waiting there, and the way in. Entering a space (`/go`) opens its «اليوم»; nothing of its work
- * is shown here. Anybody else is sent to their «اليوم».
+ * is shown here. Under the cards, «أشيا قديمة بلا مساحة»: what has no space yet, moved from here into one. Anybody
+ * else is sent to their «اليوم».
  */
 export default async function SpacesPage() {
   const { t } = getServerT();
@@ -60,6 +62,7 @@ export default async function SpacesPage() {
           ))}
         </ul>
       )}
+      <UnplacedPanel spaces={cards.map((c) => ({ id: c.id, name: c.name }))} />
     </div>
   );
 }
