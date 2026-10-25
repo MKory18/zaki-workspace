@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, FolderKanban, Search, SquareCheck, UserRound } from "lucide-react";
+import { BookOpen, FileText, FolderKanban, MessageSquareText, MessagesSquare, Search, SquareCheck, UserRound } from "lucide-react";
 import { apiGet } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { rankEntries } from "@/lib/guide/match";
@@ -15,6 +15,11 @@ import { NavIcon } from "@/components/shell/nav-icons";
 interface SearchResponse {
   tasks: { id: string; key: string; title: string; priority: string; projectId: string; projectName: string }[];
   projects: { id: string; name: string; workspaceId: string; workspaceName: string }[];
+  /** the space's chat, people and library (src/app/api/search/route.ts) */
+  topics?: { id: string; title: string; emoji: string | null }[];
+  messages?: { id: string; conversationId: string; conversationTitle: string; authorName: string; snippet: string }[];
+  people?: { id: string; name: string }[];
+  files?: { id: string; name: string }[];
 }
 
 /** One way to jump somewhere: a place, a tab, the guide or the person's account. */
@@ -98,8 +103,8 @@ interface Row {
 
 /**
  * Global quick navigation: Ctrl/⌘+K anywhere, or the search button in the top bar. Jumps to the places
- * and tabs of the person's map and searches the tasks and projects they may open (the server decides
- * which). A Radix dialog: focus moves into the search box and stays inside, Escape or a tap outside
+ * and tabs of the person's map and searches the tasks and projects they may open — and, in the space they are
+ * in, its topics, messages, people and files (the server decides which). A Radix dialog: focus moves into the search box and stays inside, Escape or a tap outside
  * closes it, and focus goes back to whoever opened it.
  *
  * `defaultOpen` and `portal={false}` are for server-render tests (a portal draws nothing on the server).
@@ -161,6 +166,35 @@ export function CommandPalette({ nav, defaultOpen = false, portal = true }: { na
       sub: p.workspaceName,
       href: `/projects/${p.id}`,
       icon: <FolderKanban aria-hidden="true" className="size-4" />,
+    })),
+    ...(search.data?.topics ?? []).map((topic) => ({
+      key: `tp:${topic.id}`,
+      main: `${topic.emoji ? `${topic.emoji} ` : ""}${topic.title}`,
+      sub: t("pal.topic"),
+      href: `/chat/${topic.id}`,
+      icon: <MessagesSquare aria-hidden="true" className="size-4" />,
+    })),
+    ...(search.data?.messages ?? []).map((m) => ({
+      key: `m:${m.id}`,
+      main: m.snippet,
+      sub: `${m.conversationTitle} · ${m.authorName}`,
+      // opened around the message, scrolled to it
+      href: `/chat/${m.conversationId}?m=${encodeURIComponent(m.id)}`,
+      icon: <MessageSquareText aria-hidden="true" className="size-4" />,
+    })),
+    ...(search.data?.people ?? []).map((person) => ({
+      key: `u:${person.id}`,
+      main: person.name,
+      sub: t("pal.person"),
+      href: `/u/${person.id}`,
+      icon: <UserRound aria-hidden="true" className="size-4" />,
+    })),
+    ...(search.data?.files ?? []).map((file) => ({
+      key: `f:${file.id}`,
+      main: file.name,
+      sub: t("pal.file"),
+      href: `/files#file-${file.id}`,
+      icon: <FileText aria-hidden="true" className="size-4" />,
     })),
   ];
   const total = rows.length;

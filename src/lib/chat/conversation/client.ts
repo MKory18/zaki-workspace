@@ -1,8 +1,9 @@
 import type { FileKind } from "@/lib/chat/file-kinds";
 
-export function conversationDetailUrl(id: string, before?: string): string {
+export function conversationDetailUrl(id: string, before?: string, around?: string): string {
   const query = new URLSearchParams({ limit: "40" });
   if (before) query.set("before", before);
+  if (around) query.set("around", around);
   return `/api/chat/conversations/${encodeURIComponent(id)}?${query.toString()}`;
 }
 

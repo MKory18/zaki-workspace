@@ -19,6 +19,7 @@ const patchSchema = z.object({
 
 const pageQuery = z.object({
   before: z.string().min(1).max(64).optional(),
+  around: z.string().min(1).max(64).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
@@ -40,7 +41,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     const ctx = await activeOrgCtx();
     await allowGuestTopicOnly(ctx, params.id);
     const q = pageQuery.parse(Object.fromEntries(new URL(req.url).searchParams));
-    const detail = await conversationDetail(ctx, params.id, { before: q.before, limit: q.limit });
+    const detail = await conversationDetail(ctx, params.id, { before: q.before, around: q.around, limit: q.limit });
     return NextResponse.json(detail);
   });
 }

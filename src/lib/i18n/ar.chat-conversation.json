@@ -107,5 +107,13 @@
   "chatc.topic.delete_hint": "بينحذف بس الموضوع اللي ما حدا كتب فيه.",
   "chatc.topic.has_messages": "فيه رسائل، فما بينحذف. أرشفه بدال ما تحذفه.",
   "chatc.topic.system": "هاد موضوع أساسي للمساحة، ما بينحذف.",
-  "chatc.topic.act_failed": "ما زبطت. جرّب مرة ثانية."
+  "chatc.topic.act_failed": "ما زبطت. جرّب مرة ثانية.",
+  "chatc.search.open": "بحث",
+  "chatc.search.label": "ابحث بالمحادثة",
+  "chatc.search.placeholder": "ابحث بالرسائل…",
+  "chatc.search.close": "سكّر",
+  "chatc.search.none": "ما في رسائل فيها هالكلام.",
+  "chatc.search.failed": "ما زبط البحث. جرّب مرة ثانية.",
+  "chatc.search.older": "عم تشوف رسائل أقدم.",
+  "chatc.search.latest": "رجوع لآخر الرسائل"
 }

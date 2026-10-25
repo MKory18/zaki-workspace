@@ -6,14 +6,20 @@ import { ForbiddenError } from "@/server/auth";
 import { currentSpace } from "@/server/services/current-space";
 import { requireActor } from "@/server/policy/actor";
 import { loadWorkScope, narrowScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
+import { searchChat } from "@/server/chat/search";
+import { searchLibrary } from "@/server/services/files";
 
 /** Strip LIKE wildcards so user input is a literal substring. */
 function sanitize(q: string): string {
   return q.replace(/[%_\\]/g, " ").trim().slice(0, 80);
 }
 
+const NOTHING = { tasks: [], projects: [], topics: [], messages: [], people: [], files: [] };
+
 /**
- * Search over the tasks/projects of the workspaces the caller can open.
+ * Search over the tasks/projects of the workspaces the caller can open — and, in the space they are in, its chat
+ * (topics and messages, each one only if they could open it: src/server/chat/search.ts), its people and its library
+ * (never for a guest: no staff directory, no library).
  * Authorization is enforced in SQL by the same rule every other view uses
  * (`accessibleWorkspaceIds`: the org OWNER sees every workspace of the company, everyone
  * else — an ADMIN included — only the workspaces they were put in, and only while they are
@@ -24,7 +30,7 @@ export async function GET(req: Request) {
     const user = await requireUser();
     const url = new URL(req.url);
     const q = sanitize(url.searchParams.get("q") ?? "");
-    if (q.length < 2) return NextResponse.json({ tasks: [], projects: [] });
+    if (q.length < 2) return NextResponse.json(NOTHING);
 
     const memberships = await db.organizationMember.findMany({
       where: { userId: user.id, status: "ACTIVE" },
@@ -36,13 +42,17 @@ export async function GET(req: Request) {
     // the spaces they may open and, inside a space with teams, the space's own work and their teams'
     // …and only in the space they are in, like a separate site
     const actor = await requireActor();
-    const scope = narrowScope(await loadWorkScope(user.id), (await currentSpace(actor))?.id);
+    const space = await currentSpace(actor);
+    const scope = narrowScope(await loadWorkScope(user.id), space?.id);
     const workspaceIds = scopeSpaceIds(scope);
-    if (workspaceIds.length === 0) return NextResponse.json({ tasks: [], projects: [] });
+    if (workspaceIds.length === 0) return NextResponse.json(NOTHING);
 
     const contains = { contains: q, mode: "insensitive" as const };
 
-    const [tasks, projects] = await Promise.all([
+    // the space's own chat, people and library: only inside a space
+    const place = space ? { spaceId: space.id, isHq: space.kind === "HQ" } : null;
+    const ctx = { orgId: actor.orgId, userId: actor.userId, orgRole: actor.role };
+    const [tasks, projects, chat, people, files] = await Promise.all([
       db.task.findMany({
         where: {
           orgId: { in: orgIds },
@@ -76,6 +86,20 @@ export async function GET(req: Request) {
           workspace: { select: { id: true, name: true } },
         },
       }),
+      place ? searchChat(ctx, { id: place.spaceId, isHq: place.isHq }, q) : { topics: [], messages: [] },
+      // the people of this space (a guest gets no staff directory)
+      actor.isExternal || !place
+        ? []
+        : db.workspaceMember.findMany({
+            where: {
+              workspaceId: place.spaceId,
+              user: { name: contains, memberships: { some: { organizationId: actor.orgId, status: "ACTIVE" } } },
+            },
+            orderBy: { user: { name: "asc" } },
+            take: 6,
+            select: { user: { select: { id: true, name: true } } },
+          }),
+      actor.isExternal || !place ? [] : searchLibrary(actor.orgId, place, q),
     ]);
 
     return NextResponse.json({
@@ -93,6 +117,10 @@ export async function GET(req: Request) {
         workspaceId: p.workspace.id,
         workspaceName: p.workspace.name,
       })),
+      topics: chat.topics,
+      messages: chat.messages,
+      people: people.map((m) => m.user),
+      files,
     });
   });
 }

@@ -50,6 +50,24 @@ async function assertOfMySpaces(userId: string, workspaceId: string | null): Pro
 
 /* ---------------- reads ---------------- */
 
+/** The library files of the place whose name carries the words (the search box; newest first). */
+export async function searchLibrary(orgId: string, place: FilePlace, q: string): Promise<Array<{ id: string; name: string }>> {
+  return db.storedFile.findMany({
+    where: {
+      orgId,
+      isLatest: true,
+      deletedAt: null,
+      purpose: "LIBRARY",
+      ...STORED,
+      AND: [filePlaceWhere(place)],
+      name: { contains: q, mode: "insensitive" },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 6,
+    select: { id: true, name: true },
+  });
+}
+
 export async function listFiles(orgId: string, place?: FilePlace): Promise<
   Array<{
     id: string;
