@@ -40,6 +40,8 @@ type MessageRow = {
   attachments?: (Parameters<typeof attachmentView>[0] & { id: string })[];
   revisions?: { body: string; createdAt: Date }[];
   notes?: { id: string; authorId: string; author: { name: string }; body: string; createdAt: Date }[];
+  tasks?: { id: string }[];
+  tickets?: { id: string }[];
 };
 
 /** Reactions grouped by emoji, oldest entry first, `mine` from the viewer's own rows. */
@@ -132,6 +134,12 @@ export function presentMessage(
 
   // DM ticks on my own messages
   if (dmStatus) dto.status = dmStatus;
+
+  // what the message became (a guest never learns of the company's tasks and tickets)
+  if (viewer.role !== "GUEST" && !deleted) {
+    const work = [...(row.tasks ?? []).map((t) => ({ kind: "task" as const, id: t.id })), ...(row.tickets ?? []).map((t) => ({ kind: "ticket" as const, id: t.id }))];
+    if (work.length) dto.work = work;
+  }
 
   // edit history: the OWNER only
   if (isOwner && row.revisions?.length) {

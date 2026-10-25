@@ -123,9 +123,13 @@ model Ticket {
   assignee     User?        @relation("TicketAssignee", fields: [assigneeId], references: [id])
   comments     TicketComment[]
   activities   TicketActivity[]
+  // Made from a chat message («اعمل منها تذكرة»): the message it came from.
+  sourceMessageId String?
+  sourceMessage   ChatMessage? @relation("MessageTickets", fields: [sourceMessageId], references: [id], onDelete: SetNull)
 
   @@unique([orgId, number])
   @@index([departmentId, status])
+  @@index([sourceMessageId])
   @@index([orgId])
   @@index([assigneeId])
 }
@@ -431,6 +435,9 @@ model ChatMessage {
   revisions     MessageRevision[]
   notes         MessageNote[]
   attachments   MessageAttachment[]
+  // the tasks and tickets made from this message
+  tasks         Task[]              @relation("MessageTasks")
+  tickets       Ticket[]            @relation("MessageTickets")
 
   @@unique([authorId, clientId])
   @@index([conversationId, createdAt])
@@ -858,10 +865,14 @@ model Task {
   activities   TaskActivity[]
   dependencies TaskDependency[] @relation("Task")
   blocksTask   TaskDependency[] @relation("BlockedTask")
+  // Made from a chat message («اعمل منها مهمة»): the message it came from.
+  sourceMessageId String?
+  sourceMessage   ChatMessage? @relation("MessageTasks", fields: [sourceMessageId], references: [id], onDelete: SetNull)
 
   @@unique([orgId, number])
   @@index([workspaceId, createdAt])
   @@index([projectId, archived])
+  @@index([sourceMessageId])
   @@index([boardId, columnId, position])
   @@index([assigneeId])
   @@index([creatorId])

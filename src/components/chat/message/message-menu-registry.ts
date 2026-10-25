@@ -10,11 +10,13 @@
  * - edit: my own message only, never a voice note (editMessage: author only; a voice note has no text);
  * - delete: my own message, or a moderator's (deleteMessage), after a confirmation;
  * - note: the moderators (addNote);
- * - copy: a message with text.
+ * - copy: a message with text;
+ * - task / ticket: a message with text, for anybody who may make work of it (not a guest, not the owner in
+ *   silent oversight — src/server/chat/make-work.ts).
  *
  * Nothing at all on a deleted message, a system line, or for the owner in silent oversight.
  */
-export type MessageMenuId = "reply" | "pin" | "forward" | "edit" | "delete" | "note" | "copy";
+export type MessageMenuId = "reply" | "pin" | "forward" | "edit" | "delete" | "note" | "copy" | "task" | "ticket";
 
 export interface MessageMenuContext {
   mine: boolean;
@@ -26,6 +28,8 @@ export interface MessageMenuContext {
   canPost: boolean;
   canModerate: boolean;
   oversight: boolean;
+  /** may turn a message into a task or a ticket (`me.canMakeWork`) */
+  canMakeWork?: boolean;
 }
 
 /** `labelKey`: a key of ar.chat-conversation.json (the strings live there, not here). */
@@ -38,6 +42,8 @@ export const messageMenuItems: MessageMenuAction[] = [
   { id: "edit", labelKey: () => "chatc.menu.edit", available: (c) => c.mine && c.kind === "TEXT" && c.hasText },
   { id: "note", labelKey: () => "chatc.menu.note", available: (c) => c.canModerate },
   { id: "copy", labelKey: () => "chatc.menu.copy", available: (c) => c.hasText },
+  { id: "task", labelKey: () => "chatc.menu.task", available: (c) => c.hasText && !!c.canMakeWork },
+  { id: "ticket", labelKey: () => "chatc.menu.ticket", available: (c) => c.hasText && !!c.canMakeWork },
   { id: "delete", labelKey: () => "chatc.menu.delete", danger: true, available: (c) => c.mine || c.canModerate },
 ];
 

@@ -119,3 +119,15 @@ describe("the message menu offers exactly what the server allows", () => {
     }
   });
 });
+
+describe("«اعمل منها مهمة/تذكرة» in the menu", () => {
+  const base: MessageMenuContext = { mine: false, deleted: false, kind: "TEXT", hasText: true, pinned: false, conversationKind: "TOPIC", canPost: true, canModerate: false, oversight: false };
+  const ids = (c: MessageMenuContext): MessageMenuId[] => menuFor(c).map((i) => i.id);
+
+  it("offered on a message with text to whoever may make work of it; never without text or the right", () => {
+    expect(ids({ ...base, canMakeWork: true })).toEqual(expect.arrayContaining(["task", "ticket"]));
+    expect(ids(base)).not.toContain("task");
+    expect(ids({ ...base, canMakeWork: true, hasText: false })).not.toContain("ticket");
+    expect(ids({ ...base, canMakeWork: true, deleted: true })).toEqual([]);
+  });
+});
