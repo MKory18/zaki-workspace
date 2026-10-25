@@ -18,7 +18,7 @@ async function campaignWorld() {
 
 const NEW_CAMPAIGN = { title: "Ramadan push", startDate: "2026-12-01", endDate: "2026-12-30" };
 
-describe("campaigns: a GUEST cannot write", () => {
+describe("campaigns: closed to a GUEST", () => {
   it("cannot create a campaign, while a normal member still can", async () => {
     const w = await campaignWorld();
     await loginAs(w.guest.id);
@@ -74,13 +74,25 @@ describe("campaigns: a GUEST cannot write", () => {
     expect((await db.campaignItem.findUniqueOrThrow({ where: { id: item.id } })).doneAt).toBeNull();
   });
 
-  it("can still read campaigns", async () => {
+  it("cannot read campaigns either (403 on every read route, nothing of the campaign in the answer)", async () => {
     const w = await campaignWorld();
-    const campaign = await makeCampaign({ orgId: w.org.id, departmentId: w.dept.id, ownerId: w.deptMember.id });
+    // even a guest who owns the campaign and sits in the department
+    await db.departmentMember.create({ data: { departmentId: w.dept.id, userId: w.guest.id } });
+    const campaign = await makeCampaign({ orgId: w.org.id, departmentId: w.dept.id, ownerId: w.guest.id });
     await loginAs(w.guest.id);
+    for (const res of [
+      await call(departmentCampaignsRoute.GET, { params: { id: w.dept.id } }),
+      await call(campaignRoute.GET, { params: { id: campaign.id } }),
+      await call(mineRoute.GET),
+    ]) {
+      expect(res.status).toBe(403);
+      expect(res.json?.["message"]).toBe("guest.no_access");
+      expect(res.text).not.toContain(campaign.title);
+    }
+
+    await loginAs(w.stranger.id);
     expect((await call(departmentCampaignsRoute.GET, { params: { id: w.dept.id } })).status).toBe(200);
     expect((await call(campaignRoute.GET, { params: { id: campaign.id } })).status).toBe(200);
-    expect((await call(mineRoute.GET)).status).toBe(200);
   });
 });
 

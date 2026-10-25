@@ -6,14 +6,14 @@ import { activeOrgCtx } from "@/server/services/integrations";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { ingest, PENDING_PATH } from "@/server/services/files";
 
-/** POST multipart/form-data: file= — stores a NEW VERSION in the same family (never for guests). */
+/** POST multipart/form-data: file= — stores a NEW VERSION in the same family of a LIBRARY file (never for guests). */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
     assertNotGuest(ctx);
-    // any surviving member of the family identifies it
+    // any surviving member of the family identifies it; a chat file is never a library family
     const anchor = await db.storedFile.findFirst({
-      where: { id: params.id, orgId: ctx.orgId, deletedAt: null, path: { not: PENDING_PATH } },
+      where: { id: params.id, orgId: ctx.orgId, deletedAt: null, purpose: "LIBRARY", path: { not: PENDING_PATH } },
       select: { familyId: true },
     });
     if (!anchor) throw new NotFoundError("files.not_found");
