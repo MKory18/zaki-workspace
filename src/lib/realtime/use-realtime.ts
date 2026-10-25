@@ -18,6 +18,7 @@ export type RealtimeEventPayload = {
   messageId?: string;
   spaceId?: string;
   userId?: string;
+  callId?: string;
 };
 
 type Handler = (e: RealtimeEventPayload) => void;

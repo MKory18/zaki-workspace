@@ -58,6 +58,13 @@ export const PAGE_HELP: readonly PageHelp[] = [
     article: "chat",
   },
   {
+    id: "call",
+    pattern: "/calls/:id",
+    whatKey: "guide.page.call.what",
+    nextKey: "guide.page.call.next",
+    article: "calls",
+  },
+  {
     id: "archive",
     pattern: "/archive",
     whatKey: "guide.page.archive.what",

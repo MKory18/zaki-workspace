@@ -130,7 +130,7 @@ export function typingIn(conversationId: string, now: number = Date.now()): { us
 
 export function frameOf(event: RtEvent, extra: Record<string, unknown> = {}): string {
   const payload: Record<string, unknown> = { kind: event.kind };
-  for (const key of ["conversationId", "messageId", "spaceId", "userId"] as const) {
+  for (const key of ["conversationId", "messageId", "spaceId", "userId", "callId"] as const) {
     const v = event.ids[key];
     if (v !== undefined) payload[key] = v;
   }
