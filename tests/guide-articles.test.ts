@@ -198,7 +198,8 @@ describe("the articles: the data itself", () => {
   it("describes only what exists today: nothing of the later phases (assistant, calls, cash, penalties, owner's eye)", () => {
     // «المساعدة» (help) is an ordinary word and fine; «المساعد» (the assistant) is a later phase
     // voice messages shipped with the chat (P2): «رسالة صوتية» is today's, no longer a later phase
-    const later = [/المساعد(?!ة)/, /مكالمة|المكالمات/, /الجزاءات/, /الصندوق/, /عين المالك/, /بحث بالمعنى/, /الفويس/];
+    // calls shipped on 2026-10-25 (their own article, «المكالمات والاجتماعات»): no longer a later phase
+    const later = [/المساعد(?!ة)/, /الجزاءات/, /الصندوق/, /عين المالك/, /بحث بالمعنى/, /الفويس/];
     for (const article of ARTICLES) {
       const text = strings(article).join("\n");
       for (const pattern of later) expect(text, `${article.slug}: ${pattern}`).not.toMatch(pattern);

@@ -68,6 +68,8 @@ model User {
   routines        Routine[]            @relation("RoutineAssignee")
   goals           Goal[]               @relation("GoalCreator")
   campaigns       Campaign[]           @relation("CampaignOwner")
+  startedCalls    Call[]               @relation("CallStarter")
+  callSeats       CallPerson[]
 }
 
 // ---------- departments (the company's pools: design / dev / IT / sales) ----------
@@ -375,6 +377,7 @@ model Conversation {
   team         Team?                @relation(fields: [teamId], references: [id], onDelete: Restrict)
   members      ConversationMember[]
   messages     ChatMessage[]
+  calls        Call[]
 
   @@unique([orgId, dmKey])
   @@unique([spaceId, systemKey])
@@ -523,6 +526,51 @@ model RealtimeEvent {
   @@index([orgId, id])
 }
 
+// A voice / video call on the company's own calls server (LiveKit, self-hosted on Coolify: calls.zakiai.io). The
+// sound and the picture never touch this database: these rows say WHO may be in a call. A call belongs to a
+// conversation (a topic, a DM: its readers are its people) or, with no conversation, it is a meeting of a space
+// opened by its link (the space's people). src/server/policy/call.ts decides; src/server/calls/ acts.
+model Call {
+  id             String    @id @default(cuid())
+  orgId          String
+  // the space it lives in (a meeting's, or its conversation's); null only for a DM from before spaces had DMs
+  spaceId        String?
+  conversationId String?
+  title          String? // a meeting's name
+  video          Boolean   @default(false) // started with the camera on
+  startedById    String
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  space        Workspace?    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  startedBy    User          @relation("CallStarter", fields: [startedById], references: [id], onDelete: Cascade)
+  people       CallPerson[]
+
+  @@index([conversationId, endedAt])
+  @@index([spaceId, startedAt])
+  @@index([orgId, startedAt])
+}
+
+// One person's seat in a call: brought in by «ضيف حدا» (`invitedById`: they may join without reading the
+// conversation, the call only), or taken out (`removedAt`: no new pass for this call).
+model CallPerson {
+  id          String    @id @default(cuid())
+  callId      String
+  userId      String
+  invitedById String?
+  removedAt   DateTime?
+  removedById String?
+  createdAt   DateTime  @default(now())
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, userId])
+  @@index([userId])
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -554,6 +602,7 @@ model Organization {
   routines         Routine[]
   goals            Goal[]
   campaigns        Campaign[]
+  calls            Call[]
 
   @@index([slug])
 }
@@ -634,6 +683,7 @@ model Workspace {
   routines      Routine[]
   customers     Customer[]
   opportunities Opportunity[]
+  calls         Call[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, systemKey])

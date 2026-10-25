@@ -24,6 +24,8 @@
   "chatc.sys.member_added": "إضافة عضو بواسطة {name}",
   "chatc.sys.member_removed": "إزالة عضو بواسطة {name}",
   "chatc.sys.forwarded": "تحويل رسالة بواسطة {name}",
+  "chatc.sys.call_started": "بلّش {name} مكالمة",
+  "chatc.sys.call_ended": "خلصت المكالمة",
   "chatc.sys.other": "تحديث في المحادثة",
   "chatc.tick.sent": "أُرسلت",
   "chatc.tick.delivered": "وصلت",

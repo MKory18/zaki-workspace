@@ -9,7 +9,11 @@ export type RealtimeKind =
   | "conversation.read"
   | "conversation.delivered"
   | "conversation.changed"
-  | "membership.changed";
+  | "membership.changed"
+  // a call of a conversation started or ended (its readers refresh the «in a call» bar)
+  | "call.changed"
+  // somebody is ringing this ONE person (`targetUserId`) into a call
+  | "call.ring";
 
 export type RealtimeIds = {
   conversationId?: string;
@@ -17,6 +21,8 @@ export type RealtimeIds = {
   spaceId?: string;
   /** WHO the event is about (the reader, the person who joined): it goes to everybody allowed to see it. */
   userId?: string;
+  /** The call the event is about (call.changed, call.ring). */
+  callId?: string;
   /** The ONE person the event is for, when it is for one person only (a mute in a space). */
   targetUserId?: string;
 };
