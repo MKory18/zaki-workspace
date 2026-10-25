@@ -8,9 +8,10 @@ import { assertCanWrite } from "@/server/services/guest-guard";
 /**
  * Campaigns live inside a department (marketing calendars).
  * Policy mirrors tickets: any org member reads/creates; dept members and org
- * admins manage (edit, transition, items). Org GUESTs may read but never
- * write: every mutation below starts with assertCanWrite, so a guest who is
- * also a department member or the owner of an old campaign is still refused.
+ * admins manage (edit, transition, items). Org GUESTs get nothing: the read
+ * routes refuse them (assertNotGuest, 403) and every mutation below starts with
+ * assertCanWrite, so a guest who is also a department member or the owner of
+ * an old campaign is still refused.
  */
 
 export const CAMPAIGN_STATUSES: CampaignStatus[] = ["DRAFT", "SCHEDULED", "RUNNING", "DONE", "CANCELLED"];

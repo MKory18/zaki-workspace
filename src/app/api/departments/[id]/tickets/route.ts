@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { activeOrgCtx } from "@/server/services/integrations";
 import { withApi } from "@/server/api";
+import { assertNotGuest } from "@/server/services/guest-guard";
 import { db } from "@/server/db";
 import { NotFoundError } from "@/server/auth";
 import { parseJson } from "@/server/validation";
@@ -10,10 +11,11 @@ import {
   listDepartmentTickets,
 } from "@/server/services/tickets";
 
-/** GET: all tickets of the caller's org department. */
+/** GET: all tickets of the caller's org department (never for guests: 403). */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
+    assertNotGuest(ctx);
     const dept = await db.department.findFirst({
       where: { id: params.id, orgId: ctx.orgId },
       select: { id: true },

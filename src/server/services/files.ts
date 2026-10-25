@@ -5,6 +5,7 @@ import { db } from "@/server/db";
 import type { Prisma } from "@prisma/client";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { logEvent } from "@/server/services/integrations";
+import { canReadConversation } from "@/server/policy/conversation";
 import { MAX_FILE_BYTES, canManageFile, checksumHex, safeStoredName, sniffMimeType } from "@/server/files/sniff";
 
 export const fileLibrary = process.env.UPLOAD_DIR || join(process.cwd(), ".data", "uploads");
@@ -68,6 +69,35 @@ export async function listFiles(orgId: string): Promise<
   }));
 }
 
+/**
+ * The gate of the library routes (meta and bytes) for one stored file. A LIBRARY file is open to
+ * the caller (the route has already refused guests). A CHAT/VOICE file is not a library file: it
+ * opens only for someone who may read the conversation of a message it is attached to (the
+ * OWNER silently; the file of a deleted message for the OWNER only), or for its uploader while no
+ * message has claimed it yet - the same rule as /api/chat/attachments/[id]. Anything else is
+ * 404, never 403, so a file id from another conversation says nothing.
+ */
+export async function assertMayReadFile(ctx: OrgAccessContext, id: string): Promise<void> {
+  const f = await db.storedFile.findFirst({
+    where: { id, orgId: ctx.orgId, deletedAt: null, ...STORED },
+    select: {
+      purpose: true,
+      uploaderId: true,
+      chatLinks: { select: { message: { select: { conversationId: true, deletedAt: true } } } },
+    },
+  });
+  if (!f) throw new NotFoundError("files.not_found");
+  if (f.purpose === "LIBRARY") return;
+  const messages = f.chatLinks.flatMap((l) => (l.message ? [l.message] : []));
+  if (messages.length === 0 && f.uploaderId === ctx.userId) return;
+  for (const m of messages) {
+    if (m.deletedAt && ctx.orgRole !== "OWNER") continue;
+    if (await canReadConversation(ctx.userId, m.conversationId)) return;
+  }
+  throw new NotFoundError("files.not_found");
+}
+
+/** Meta of the family of a file the caller may read (`assertMayReadFile` first). */
 export async function getFileMeta(orgId: string, id: string) {
   const anchor = await db.storedFile.findFirst({
     where: { id, orgId, deletedAt: null, ...STORED },
@@ -105,7 +135,10 @@ export async function getFileMeta(orgId: string, id: string) {
   };
 }
 
-/** Raw bytes for the proxy/download endpoints. Permission gate is in the route. */
+/**
+ * Raw bytes for the proxy/download endpoints. Permission gate is in the caller: `assertMayReadFile`
+ * for the library route, the conversation rule for the chat attachment route.
+ */
 export async function readStored(orgId: string, id: string): Promise<{ buffer: Buffer; mimeType: string; name: string }> {
   const f = await db.storedFile.findFirst({ where: { id, orgId, deletedAt: null, ...STORED } });
   if (!f) throw new NotFoundError("files.not_found");
@@ -213,9 +246,10 @@ export async function ingest(
   return { id: updated.id, version: updated.version, mimeType: updated.mimeType };
 }
 
+/** Library files only: a chat file goes with its message, never through the library. */
 export async function softDelete(ctx: OrgAccessContext, id: string): Promise<void> {
   const f = await db.storedFile.findFirst({
-    where: { id, orgId: ctx.orgId, deletedAt: null, ...STORED },
+    where: { id, orgId: ctx.orgId, deletedAt: null, purpose: "LIBRARY", ...STORED },
     select: { id: true, uploaderId: true, isLatest: true, familyId: true },
   });
   if (!f) throw new NotFoundError("files.not_found");

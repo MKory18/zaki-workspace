@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { activeOrgCtx } from "@/server/services/integrations";
 import { withApi } from "@/server/api";
+import { assertNotGuest } from "@/server/services/guest-guard";
 import { parseJson } from "@/server/validation";
 import {
   addTicketComment,
@@ -8,10 +9,11 @@ import {
   ticketDetail,
 } from "@/server/services/tickets";
 
-/** GET: full ticket detail (comments + activity log) — org-scoped. */
+/** GET: full ticket detail (comments + activity log) — org-scoped, never for guests (403). */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
+    assertNotGuest(ctx);
     const ticket = await ticketDetail(ctx, params.id);
     return NextResponse.json({ ticket });
   });
