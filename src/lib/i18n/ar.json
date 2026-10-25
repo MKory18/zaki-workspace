@@ -145,6 +145,7 @@
   "role.guest": "زائر",
   "teams.title": "الفريق",
   "teams.subtitle": "دليل أعضاء شركاتك — اضغط أي عضو لملفه",
+  "teams.subtitle_space": "الناس اللي معك بـ{space} — اضغط أي حدا لملفه",
   "teams.yourRole": "رتبتك",
   "teams.subtitle_restricted": "الأشخاص الذين تشاركهم العمل",
   "teams.noTitle": "بدون مسمّى وظيفي",

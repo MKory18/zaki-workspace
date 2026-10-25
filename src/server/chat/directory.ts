@@ -1,14 +1,23 @@
 import { db } from "@/server/db";
 import type { DirectoryPersonDto } from "@/server/chat/dto";
+import { spacePeopleWhere } from "@/server/chat/space-people";
 
 /**
  * The people picker: ACTIVE non-guests of the company, the viewer excluded. It is the staff
  * directory, so its route keeps the `directory.view` capability and a guest is refused with
  * `chat.guest_forbidden` — a guest has no DMs and no new groups.
+ *
+ * Inside a space (`spaceId`, the space the person is in) only that space's people: you write privately to the
+ * colleagues you share the space with, like the contacts of one account.
  */
-export async function chatDirectory(orgId: string): Promise<DirectoryPersonDto[]> {
+export async function chatDirectory(orgId: string, spaceId?: string | null): Promise<DirectoryPersonDto[]> {
   const rows = await db.organizationMember.findMany({
-    where: { organizationId: orgId, role: { not: "GUEST" }, status: "ACTIVE" },
+    where: {
+      organizationId: orgId,
+      role: { not: "GUEST" },
+      status: "ACTIVE",
+      ...(spaceId !== undefined ? { AND: [spaceId ? spacePeopleWhere(orgId, spaceId) : { userId: { in: [] } }] } : {}),
+    },
     select: { userId: true, role: true, user: { select: { id: true, name: true, jobTitle: true } } },
     orderBy: { createdAt: "asc" },
   });

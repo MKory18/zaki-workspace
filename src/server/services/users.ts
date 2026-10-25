@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { spacePeopleWhere } from "@/server/chat/space-people";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
 import { can } from "@/server/policy/capabilities";
@@ -216,8 +217,11 @@ type DirectoryOrg = {
  * Everybody else needs the `directory.view` capability (403 `insufficient_role` when it was taken
  * away), sees ACTIVE people only, and sees e-mail addresses and the manager's panel only with
  * `users.manage`. A viewer who is suspended or offboarded is a member nowhere: an empty list.
+ *
+ * Inside a space (`space`, the space the person is in): that company lists the space's people only (a space is
+ * like a separate site; the whole company's people are on «الإدارة»'s members page).
  */
-export async function memberDirectory(viewerId: string): Promise<DirectoryOrg[]> {
+export async function memberDirectory(viewerId: string, space?: { orgId: string; spaceId: string | null }): Promise<DirectoryOrg[]> {
   const memberships = await db.organizationMember.findMany({
     where: { userId: viewerId, status: "ACTIVE" },
     select: {
@@ -244,8 +248,12 @@ export async function memberDirectory(viewerId: string): Promise<DirectoryOrg[]>
       }
       if (!can(m, "directory.view")) return "refused";
       const canManage = can(m, "users.manage");
+      const inSpace =
+        space && space.orgId === m.organizationId
+          ? { AND: [space.spaceId ? spacePeopleWhere(m.organizationId, space.spaceId) : { userId: { in: [] as string[] } }] }
+          : {};
       const rows = await db.organizationMember.findMany({
-        where: { organizationId: m.organizationId, status: "ACTIVE" },
+        where: { organizationId: m.organizationId, status: "ACTIVE", ...inSpace },
         select: {
           role: true,
           user: { select: { id: true, name: true, jobTitle: true, email: true } },

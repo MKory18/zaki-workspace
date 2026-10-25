@@ -32,7 +32,7 @@ import * as n8nRoute from "@/app/api/integrations/n8n/route";
 import { CrmView } from "@/components/crm-view";
 import { DepartmentsView } from "@/components/departments-view";
 import { getServerT } from "@/lib/i18n/server";
-import { call, db, loginAs, makeTeam, makeUser } from "./helpers";
+import { call, db, loginAs, makeTeam, makeUser, makeWorkspace } from "./helpers";
 import { makeCustomer, makeDepartment, makeOpportunity } from "./guest-helpers";
 import { HOOK_URL, connectN8nDirect } from "./integrations-helpers";
 import { html, setCapabilities, type PageElement } from "./pages-access-helpers";
@@ -219,6 +219,8 @@ describe("the staff directory routes follow directory.view", () => {
 describe("the people pages follow directory.view", () => {
   it("/teams lists the colleagues for the default ranks, a notice (and no names) when it is switched off", async () => {
     const w = await company();
+    // /teams lists the people of the space one is in (2026-10-25): the member and their colleague share one
+    await makeWorkspace(w.org.id, [{ userId: w.member.id }, { userId: w.colleague.id }], "Shared space");
     await loginAs(w.member.id);
     expect(await html(TeamsPage())).toContain("Colleague Nour");
 
