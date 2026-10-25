@@ -62,5 +62,17 @@
   "chath.topic.people_failed": "ما قدرنا نجيب أعضاء المساحة.",
   "chath.topic.failed": "ما انفتح الموضوع. جرّب مرة ثانية.",
   "chath.topic.create": "افتح الموضوع",
-  "chat.dm_not_in_space": "هالشخص مش معك بهالمساحة. الرسائل الخاصة بين ناس المساحة الوحدة."
+  "chat.dm_not_in_space": "هالشخص مش معك بهالمساحة. الرسائل الخاصة بين ناس المساحة الوحدة.",
+  "chath.pinned": "مثبّت",
+  "chath.archived": "المؤرشفة ({n})",
+  "chath.filter.label": "فلترة المواضيع",
+  "chath.filter.all": "الكل",
+  "chath.filter.unread": "غير المقروء",
+  "chath.filter.mentions": "اللي ذكروني فيها",
+  "chath.filter.kind": "النوع",
+  "chath.filter.kind_all": "كل الأنواع",
+  "chath.filter.section": "المقطع",
+  "chath.filter.section_all": "كل المقاطع",
+  "chath.filter.section_space": "مواضيع المساحة",
+  "chath.filter.none": "ما في مواضيع بتطابق هالفلتر."
 }

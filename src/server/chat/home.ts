@@ -57,6 +57,8 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
           restricted: true,
           postingPolicy: true,
           closedAt: true,
+          archivedAt: true,
+          pinnedAt: true,
           systemKey: true,
           teamId: true,
           members: { where: { userId: ctx.userId }, select: { lastReadAt: true } },
@@ -85,12 +87,15 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
       if (!passes) continue;
       // a مقطع's topic is its people's (and the managers')
       if (t.teamId && !seen.has(t.teamId)) continue;
+      // an archived topic is out of the list: its space's managers find it under «المؤرشفة»
+      const archived = !!t.archivedAt;
+      if (archived && !(isOwner || isSpaceAdmin(spaceRole))) continue;
 
       const lastRead = t.members[0]?.lastReadAt ?? null;
       // a system line («انضم»، «ثبّت») is not a message to read: it never counts
       const countable = { conversationId: t.id, authorId: { not: ctx.userId }, deletedAt: null, kind: { not: "SYSTEM" as const } };
       // the OWNER's oversight never marks anything read, so a count there could never clear: 0
-      const silentOversight = isOwner && t.members.length === 0;
+      const silentOversight = (isOwner && t.members.length === 0) || archived;
       const [last, unread, mentions] = await Promise.all([
         db.chatMessage.findFirst({
           where: { conversationId: t.id },
@@ -102,7 +107,7 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
           : lastRead
             ? db.chatMessage.count({ where: { ...countable, createdAt: { gt: lastRead } } })
             : db.chatMessage.count({ where: countable }),
-        lastRead
+        lastRead && !archived
           ? db.chatMessage.count({ where: { ...countable, createdAt: { gt: lastRead }, mentions: { has: ctx.userId } } })
           : 0,
       ]);
@@ -125,6 +130,8 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
         closed: !!t.closedAt,
         restricted: t.restricted,
         teamId: t.teamId,
+        pinned: !!t.pinnedAt,
+        archived,
         canPost,
         lastMessage: last
           ? {
@@ -136,6 +143,9 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
       });
       spaceUnread += unread;
     }
+    // pinned topics on top (the last pinned first), then the space's own order
+    const pinnedAt = new Map(s.conversations.map((t) => [t.id, t.pinnedAt?.getTime() ?? 0]));
+    topics.sort((a, b) => (pinnedAt.get(b.id) ?? 0) - (pinnedAt.get(a.id) ?? 0));
     // a space where I read nothing is not on my list — except the space I am in: its page is never blank
     if (!topics.length && opts.spaceId === undefined) continue;
 

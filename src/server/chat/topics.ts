@@ -185,10 +185,67 @@ export async function removeMember(ctx: OrgAccessContext, conversationId: string
 export async function setTopicClosed(ctx: OrgAccessContext, conversationId: string, closed: boolean): Promise<void> {
   const { facts, org } = await guardTopic(ctx, conversationId);
   if (!canModerate(facts, org)) throw new ForbiddenError("chat.e.moderator_only");
+  // an archived topic stays read-only until it is brought back from «المؤرشفة»
+  if (!closed && (await db.conversation.findUnique({ where: { id: conversationId }, select: { archivedAt: true } }))?.archivedAt) {
+    throw new TopicConflictError("chat.topic_archived");
+  }
   await db.$transaction(async (tx) => {
     await tx.conversation.update({ where: { id: conversationId }, data: { closedAt: closed ? new Date() : null } });
     await writeSystemMessage(tx, { orgId: ctx.orgId, conversationId, authorId: ctx.userId, k: closed ? "close" : "reopen", spaceId: facts.spaceId });
     await emitRealtime(tx, ctx.orgId, "conversation.changed", { conversationId, spaceId: facts.spaceId ?? undefined });
+  });
+}
+
+/**
+ * ---------- archive / pin / delete (space admins + owner) ----------
+ * The owner's ask (2026-10-25): a topic can be closed, pinned on top, and deleted. A topic people wrote in is never
+ * deleted (their words would go with it): it is ARCHIVED instead — out of the list, read-only, found by the space's
+ * managers under «المؤرشفة» and brought back from there. Only a topic nobody wrote in is deleted, and never one the
+ * system made (a space's «عام» and «التنبيهات», «الشركة»'s topics).
+ */
+
+/** A topic that cannot go as asked (somebody wrote in it): 409, the route says so. */
+export class TopicConflictError extends Error {
+  constructor(msg: string) {
+    super(msg);
+    this.name = "TopicConflictError";
+  }
+}
+
+export async function setTopicArchived(ctx: OrgAccessContext, conversationId: string, archived: boolean): Promise<void> {
+  const { facts, org } = await guardTopic(ctx, conversationId);
+  if (!canModerate(facts, org)) throw new ForbiddenError("chat.e.moderator_only");
+  await db.$transaction(async (tx) => {
+    // archived is read-only (closed); brought back, it opens again
+    await tx.conversation.update({
+      where: { id: conversationId },
+      data: archived ? { archivedAt: new Date(), closedAt: new Date(), pinnedAt: null } : { archivedAt: null, closedAt: null },
+    });
+    await emitRealtime(tx, ctx.orgId, "conversation.changed", { conversationId, spaceId: facts.spaceId ?? undefined });
+  });
+}
+
+export async function setTopicPinned(ctx: OrgAccessContext, conversationId: string, pinned: boolean): Promise<void> {
+  const { facts, org } = await guardTopic(ctx, conversationId);
+  if (!canModerate(facts, org)) throw new ForbiddenError("chat.e.moderator_only");
+  await db.$transaction(async (tx) => {
+    await tx.conversation.update({ where: { id: conversationId }, data: { pinnedAt: pinned ? new Date() : null } });
+    await emitRealtime(tx, ctx.orgId, "conversation.changed", { conversationId, spaceId: facts.spaceId ?? undefined });
+  });
+}
+
+export async function deleteTopic(ctx: OrgAccessContext, conversationId: string): Promise<void> {
+  const { facts, org } = await guardTopic(ctx, conversationId);
+  if (!canModerate(facts, org)) throw new ForbiddenError("chat.e.moderator_only");
+  const conv = await db.conversation.findUniqueOrThrow({ where: { id: conversationId }, select: { systemKey: true } });
+  if (conv.systemKey) throw new ForbiddenError("chat.topic_system");
+  // somebody wrote here: archive it instead (system lines «انضم»، «ثبّت» are not somebody's words)
+  if ((await db.chatMessage.count({ where: { conversationId, kind: { not: "SYSTEM" } } })) > 0) {
+    throw new TopicConflictError("chat.topic_has_messages");
+  }
+  await db.$transaction(async (tx) => {
+    await tx.conversation.delete({ where: { id: conversationId } });
+    await emitRealtime(tx, ctx.orgId, "conversation.changed", { spaceId: facts.spaceId ?? undefined });
   });
 }
 
@@ -296,6 +353,8 @@ export async function conversationDetail(
     restricted: conv.restricted,
     teamId: conv.teamId,
     closed: !!conv.closedAt,
+    pinned: !!conv.pinnedAt,
+    archived: !!conv.archivedAt,
     space: conv.space ? { id: conv.space.id, name: conv.space.name, hasExternal: false } : null,
     me: {
       canPost: canPost(facts, org!, { ownerJoined: facts.viewerIsMember }),
