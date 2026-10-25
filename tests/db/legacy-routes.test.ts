@@ -46,6 +46,8 @@ import PublicProfilePage from "@/app/(app)/u/[id]/page";
 import GuidePage from "@/app/(app)/guide/page";
 import GuideArticlePage from "@/app/(app)/guide/[slug]/page";
 import SpacesPage from "@/app/(app)/spaces/page";
+import TicketsPage from "@/app/(app)/tickets/page";
+import CampaignsPage from "@/app/(app)/campaigns/page";
 import * as goRoute from "@/app/go/route";
 import LoginPage from "@/app/login/page";
 import RegisterPage from "@/app/register/page";
@@ -85,9 +87,10 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
 /**
  * The pages of the shell that are not an old address: the in-app guide (Phase 2), reached from the help
  * button, from Phase 3 one conversation (`/chat/[id]`) and the owner's archive (`/archive`), and the owner's
- * and admins' look over every space (`/spaces`, «كل المساحات»).
+ * and admins' look over every space (`/spaces`, «كل المساحات»), and «التذاكر» and «الحملات» as pages of their own
+ * under «الشغل» (`/tickets`, `/campaigns`).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/tickets", "/campaigns"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -162,6 +165,8 @@ const PAGES: Record<string, PageCall> = {
   "/guide": () => GuidePage(),
   "/guide/[slug]": ({ params }) => GuideArticlePage({ params: { slug: params["slug"] ?? "" } }),
   "/spaces": () => SpacesPage(),
+  "/tickets": () => TicketsPage(),
+  "/campaigns": () => CampaignsPage(),
   "/login": () => LoginPage(),
   "/register": () => RegisterPage(),
   "/register/check-email": () => RegisterCheckEmailPage(),
