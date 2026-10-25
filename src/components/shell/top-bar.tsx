@@ -33,6 +33,7 @@ export function TopBar({
   user,
   rank,
   title,
+  space = null,
   newActions = [],
 }: {
   nav: NavModel;
@@ -42,6 +43,8 @@ export function TopBar({
   rank: NavRole;
   /** The name of the current place, shown on a computer. */
   title?: string;
+  /** The space the person is in: on a phone (no side menu) its name sits beside the mark. */
+  space?: { name: string; emoji: string | null } | null;
   /** What «جديد» offers this person (computed on the server); none, no button. */
   newActions?: readonly NewActionKey[];
 }) {
@@ -54,6 +57,12 @@ export function TopBar({
             <DolphinMark className="size-8" />
           </span>
         </Link>
+        {space ? (
+          <p className="min-w-0 max-w-[45vw] truncate text-sm font-semibold text-fg md:hidden">
+            {space.emoji ? <span aria-hidden="true">{space.emoji} </span> : null}
+            <bdi>{space.name}</bdi>
+          </p>
+        ) : null}
         {title ? <p className="hidden shrink-0 font-display text-2xl leading-tight text-fg md:block">{title}</p> : null}
         <div data-tour="search" className="order-last min-w-0 basis-full md:order-none md:max-w-[440px] md:flex-1 md:basis-auto">
           <CommandPalette nav={nav} />

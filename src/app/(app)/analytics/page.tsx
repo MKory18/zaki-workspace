@@ -1,10 +1,11 @@
 import { pageActor } from "@/app/(app)/_access";
 import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { getServerT } from "@/lib/i18n/server";
-import { loadWorkScope, scopeSpaceIds } from "@/server/services/team-scope";
+import { loadWorkScope, narrowScope, scopeSpaceIds } from "@/server/services/team-scope";
 import { loadAnalytics } from "@/server/services/analytics";
 import { fmtNumber } from "@/lib/format";
 import { enumLabel } from "@/lib/i18n/enums";
+import { currentSpace } from "@/server/services/current-space";
 import type { TaskPriority, IdeaStatus } from "@prisma/client";
 
 export default async function AnalyticsPage() {
@@ -15,7 +16,8 @@ export default async function AnalyticsPage() {
   // member of the team over the spaces they can open).
   if (refusedToGuest(actor, "reports")) return <GuestNotice />;
   // numbers for the active org (oldest ACTIVE membership), over the workspaces the user can open
-  const teams = await loadWorkScope(user.id);
+  // …inside the space they are in (src/server/services/current-space.ts)
+  const teams = narrowScope(await loadWorkScope(user.id), (await currentSpace(actor))?.id);
   const data = await loadAnalytics(actor.orgId, scopeSpaceIds(teams), undefined, teams);
   const byPriority = new Map(data.byPriority.map((row) => [row.priority, row._count._all]));
   const byStatus = new Map(data.byStatus30.map((row) => [row.status, row._count._all]));

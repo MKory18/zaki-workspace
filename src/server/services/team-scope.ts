@@ -67,6 +67,15 @@ export async function loadWorkScope(userId: string): Promise<WorkScope> {
   return { full, partial, teamIds };
 }
 
+/**
+ * The scope inside ONE space: the space the person is in (src/server/services/current-space.ts). Lists read
+ * through it so another space's work never shows; a space outside the scope leaves nothing.
+ */
+export function narrowScope(scope: WorkScope, spaceId: string | null | undefined): WorkScope {
+  const only = (ids: ReadonlySet<string>) => new Set(spaceId && ids.has(spaceId) ? [spaceId] : []);
+  return { full: only(scope.full), partial: only(scope.partial), teamIds: scope.teamIds };
+}
+
 /** Every space id of the scope (what `accessibleWorkspaceIds` answers). */
 export function scopeSpaceIds(scope: WorkScope): string[] {
   return [...scope.full, ...scope.partial];

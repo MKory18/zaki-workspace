@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { pageUser } from "@/server/auth";
+import { pageActor } from "@/app/(app)/_access";
+import { currentSpace } from "@/server/services/current-space";
 import { MY_WORK_TABS, getMyWork, type MyWorkTab } from "@/server/services/my-work";
 import { TaskRow } from "@/components/task-row";
 import { getServerT } from "@/lib/i18n/server";
@@ -16,15 +16,15 @@ const TAB_KEYS: Record<MyWorkTab, string> = {
 
 export default async function MyWorkPage({ searchParams }: { searchParams: { tab?: string } }) {
   const { t } = getServerT();
-  const user = await pageUser();
-  if (!user) redirect("/login");
+  const { user, actor } = await pageActor();
 
   const wanted = (searchParams.tab ?? "") as MyWorkTab;
   const tab: MyWorkTab = MY_WORK_TABS.includes(wanted) ? wanted : "today";
 
   // which tasks belong in each tab (and which workspaces they may come from) is
   // decided by the service; this page only renders the rows it returns
-  const data = await getMyWork(user.id);
+  // …of the space they are in
+  const data = await getMyWork(user.id, new Date(), { spaceId: (await currentSpace(actor))?.id ?? null });
   const rows = data[tab];
 
   return (

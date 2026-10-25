@@ -8,6 +8,7 @@ import { TodayHero } from "@/components/today/today-hero";
 import { TodayTasksCard } from "@/components/today/today-tasks";
 import { getServerT } from "@/lib/i18n/server";
 import { getToday } from "@/server/services/today";
+import { currentSpace } from "@/server/services/current-space";
 import { missionOf } from "@/lib/today";
 
 /** The browser tab says «اليوم» (the root layout adds the app name). */
@@ -32,7 +33,9 @@ export const metadata = { title: getServerT().t("today.title") };
 export default async function TodayPage() {
   const { t } = getServerT();
   const { actor } = await pageActor();
-  const data = await getToday(actor);
+  // the space the person is in: its «اليوم» only (entering a space opens here)
+  const space = await currentSpace(actor);
+  const data = await getToday(actor, { spaceId: space?.id ?? null });
 
   const name = data.greeting.firstName;
   const greeting = data.greeting.period === "morning" ? t("today.greeting.morning", { name }) : t("today.greeting.evening", { name });

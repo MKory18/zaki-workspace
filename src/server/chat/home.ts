@@ -12,7 +12,7 @@ import { systemSentenceOfBody } from "@/lib/chat/system-sentence";
  * and per DM — all computed from `lastReadAt`, never from a stored counter.
  */
 
-export async function chatHome(ctx: OrgAccessContext): Promise<HomeDto> {
+export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string | null } = {}): Promise<HomeDto> {
   const org = await loadOrgFacts(ctx.userId, ctx.orgId);
   const isOwner = org?.role === "OWNER";
 
@@ -24,7 +24,12 @@ export async function chatHome(ctx: OrgAccessContext): Promise<HomeDto> {
   const mySpaceIds = new Set(mySpaceRows.map((r) => r.workspaceId));
 
   const spacesRows = await db.workspace.findMany({
-    where: isOwner ? { organizationId: ctx.orgId } : { organizationId: ctx.orgId, id: { in: [...mySpaceIds] } },
+    where: {
+      organizationId: ctx.orgId,
+      ...(isOwner ? {} : { id: { in: [...mySpaceIds] } }),
+      // inside the space the person is in (the route passes it): that space alone, like a separate site
+      ...(opts.spaceId !== undefined ? { AND: [{ id: opts.spaceId ?? "" }] } : {}),
+    },
     select: {
       id: true,
       name: true,
@@ -118,7 +123,8 @@ export async function chatHome(ctx: OrgAccessContext): Promise<HomeDto> {
       });
       spaceUnread += unread;
     }
-    if (!topics.length) continue; // a space where I read nothing is not on my list
+    // a space where I read nothing is not on my list — except the space I am in: its page is never blank
+    if (!topics.length && opts.spaceId === undefined) continue;
 
     spaces.push({
       id: s.id,

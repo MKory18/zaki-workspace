@@ -1,5 +1,5 @@
 import { db } from "@/server/db";
-import { loadWorkScope, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
+import { loadWorkScope, narrowScope, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 import {
   dayWindow,
   queryTasksForView,
@@ -57,7 +57,7 @@ function sortRows(rows: MyWorkRow[], by: "due" | "completed"): MyWorkRow[] {
   return sorted.map((task) => ({ task, editable: editableById.get(task.id) ?? false }));
 }
 
-export async function getMyWork(userId: string, now: Date = new Date()): Promise<MyWorkData> {
+export async function getMyWork(userId: string, now: Date = new Date(), opts: { spaceId?: string | null } = {}): Promise<MyWorkData> {
   const results = {} as MyWorkData;
   for (const tab of MY_WORK_TABS) results[tab] = [];
 
@@ -68,7 +68,8 @@ export async function getMyWork(userId: string, now: Date = new Date()): Promise
       where: { userId, status: "ACTIVE" },
       select: { organizationId: true, role: true },
     }),
-    loadWorkScope(userId),
+    // inside the space the person is in (the page passes it): that space's tasks only
+    loadWorkScope(userId).then((scope) => (opts.spaceId === undefined ? scope : narrowScope(scope, opts.spaceId))),
   ]);
   if (memberships.length === 0 || scopeSpaceIds(accessible).length === 0) return results;
   const visible = taskVisibleWhere(accessible);

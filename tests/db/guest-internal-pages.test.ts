@@ -47,6 +47,7 @@ import { PLACES, buildNav, canOpenTab, type NavRole, type NavSubject, type Place
 import { requireActor } from "@/server/policy/actor";
 import { listGoals } from "@/server/services/goals";
 import { listIdeas } from "@/server/services/ideas";
+import { SPACE_COOKIE } from "@/server/services/current-space";
 import { call, db, loginAs, makeProject, makeTask, makeTeam, makeUser, makeWorkspace, uid } from "./helpers";
 import {
   CUSTOMER_CHAT_TITLE,
@@ -238,8 +239,10 @@ describe("everybody else keeps the four pages exactly as before", () => {
       expect(initial.find((i) => i.title === `Idea ${w.secret}`)?.creatorName, who).toBe(`Staffer ${w.secret}`);
     }
 
-    // somebody who opens the team's space still reads the workload with the colleague's name in it
+    // somebody who opens the team's space (inside it: the reports are the current space's) still reads the
+    // workload with the colleague's name in it
     await loginAs(w.member.id);
+    (globalThis as { __zkCookieJar?: Map<string, string> }).__zkCookieJar?.set(SPACE_COOKIE, w.space.id);
     expect(await html(AnalyticsPage())).toContain(`Staffer ${w.secret}`);
   });
 });

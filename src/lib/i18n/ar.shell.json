@@ -18,6 +18,8 @@
   "shell.avatar.theme_title": "المظهر والزخرفة",
   "shell.spaces.open": "اختر مساحة عمل",
   "shell.spaces.all": "كل المساحات",
+  "shell.spaces.current": "أنت في {name} — بدّل المساحة",
+  "shell.spaces.waiting": "{name}: {n} بانتظارك",
   "shell.spaces.empty": "لست في أي مساحة بعد",
   "shell.spaces.error": "ما قدرنا نجيب قائمة المساحات",
   "shell.spaces.retry": "حاول من جديد",

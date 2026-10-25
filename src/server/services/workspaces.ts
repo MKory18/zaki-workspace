@@ -5,6 +5,7 @@ import { ForbiddenError, NotFoundError, requireUser, type OrgAccessContext } fro
 import { canManageWorkspaceMembers } from "@/server/services/access";
 import { workspaceRoleOf, type WorkspaceRoleName } from "@/server/workspace-role";
 import { emitRealtime } from "@/server/realtime/emit";
+import { ensureStarterTopics, SPACE_STARTER_TOPICS, spaceTopicIdOf } from "@/server/chat/space-topics";
 
 /**
  * Spaces (workspaces): who is in one, who may change it.
@@ -76,6 +77,8 @@ export async function createWorkspace(userId: string, input: CreateWorkspaceInpu
     },
     select: { id: true, name: true, slug: true },
   });
+  // its own talk from the first day: entering a new space opens on «عام» and «التنبيهات», never a blank chat
+  await ensureStarterTopics(input.organizationId, workspace.id);
   return { workspace, added: people.map((p) => p.userId) };
 }
 
@@ -307,7 +310,13 @@ export async function deleteEmptyWorkspace(workspaceId: string): Promise<void> {
     if ((await tx.project.count({ where: { workspaceId } })) > 0) throw new SpaceConflictError("spaces.not_empty");
     // a topic (the HQ's, a migrated group's, one somebody opened) keeps the space: the database refuses
     // too (Conversation.spaceId ON DELETE RESTRICT), but that answered a bare 409 without a reason
-    if ((await tx.conversation.count({ where: { spaceId: workspaceId } })) > 0) throw new SpaceConflictError("spaces.not_empty");
+    // …except the starter topics every space is given («عام»، «التنبيهات»): while nobody has written there, they
+    // go with the space
+    const starters = SPACE_STARTER_TOPICS.map((t) => spaceTopicIdOf(workspaceId, t.key));
+    const talk = { spaceId: workspaceId, OR: [{ id: { notIn: starters } }, { messages: { some: {} } }] };
+    if ((await tx.conversation.count({ where: talk })) > 0) throw new SpaceConflictError("spaces.not_empty");
+    await tx.conversationMember.deleteMany({ where: { conversationId: { in: starters } } });
+    await tx.conversation.deleteMany({ where: { id: { in: starters } } });
     await tx.workspace.delete({ where: { id: workspaceId } });
   });
 }

@@ -3,14 +3,11 @@
 import { useRouter } from "next/navigation";
 import { enumOptions } from "@/lib/i18n/enums";
 
-export interface FilterWorkspace {
-  id: string;
-  name: string;
-}
-
-/** Filter bar for the global List view; every control maps to a real URL/API param. */
+/**
+ * Filter bar for the List view; every control maps to a real URL/API param. The list is the CURRENT space's
+ * (src/server/services/current-space.ts): another space is entered from the space switcher, not from here.
+ */
 export function ListFilters({
-  workspaces,
   wsId,
   group,
   priority,
@@ -19,7 +16,6 @@ export function ListFilters({
   members,
   labels,
 }: {
-  workspaces: FilterWorkspace[];
   wsId: string;
   group: string;
   priority: string;
@@ -45,19 +41,6 @@ export function ListFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-4 py-2">
-      <select
-        aria-label={labels.workspace}
-        className={selectCls}
-        value={wsId}
-        onChange={(e) => router.push(`/list?workspace=${e.target.value}&group=${group}`)}
-      >
-        {workspaces.map((w) => (
-          <option key={w.id} value={w.id}>
-            {w.name}
-          </option>
-        ))}
-      </select>
-
       <select
         aria-label={labels.groupBy}
         className={selectCls}

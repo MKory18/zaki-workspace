@@ -45,6 +45,8 @@ import ProfilePage from "@/app/(app)/profile/page";
 import PublicProfilePage from "@/app/(app)/u/[id]/page";
 import GuidePage from "@/app/(app)/guide/page";
 import GuideArticlePage from "@/app/(app)/guide/[slug]/page";
+import SpacesPage from "@/app/(app)/spaces/page";
+import * as goRoute from "@/app/go/route";
 import LoginPage from "@/app/login/page";
 import RegisterPage from "@/app/register/page";
 import RegisterCheckEmailPage from "@/app/register/check-email/page";
@@ -53,6 +55,7 @@ import OnboardingPage from "@/app/onboarding/page";
 import { ARTICLES } from "@/lib/guide/articles";
 import { LEGACY_ROUTES, type NavRole } from "@/lib/nav/places";
 import { requireActor } from "@/server/policy/actor";
+import { SPACE_COOKIE } from "@/server/services/current-space";
 import { db, loginAs, makeProject, makeTask, makeTeam, makeUser, makeWorkspace, uid } from "./helpers";
 import { html } from "./pages-access-helpers";
 import { resolveServerTree } from "./today-helpers";
@@ -81,9 +84,10 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
 
 /**
  * The pages of the shell that are not an old address: the in-app guide (Phase 2), reached from the help
- * button, and from Phase 3 one conversation (`/chat/[id]`) and the owner's archive (`/archive`).
+ * button, from Phase 3 one conversation (`/chat/[id]`) and the owner's archive (`/archive`), and the owner's
+ * and admins' look over every space (`/spaces`, «كل المساحات»).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -157,6 +161,7 @@ const PAGES: Record<string, PageCall> = {
   "/u/[id]": (args) => PublicProfilePage({ params: idOf(args) }),
   "/guide": () => GuidePage(),
   "/guide/[slug]": ({ params }) => GuideArticlePage({ params: { slug: params["slug"] ?? "" } }),
+  "/spaces": () => SpacesPage(),
   "/login": () => LoginPage(),
   "/register": () => RegisterPage(),
   "/register/check-email": () => RegisterCheckEmailPage(),
@@ -220,16 +225,38 @@ async function open(address: string): Promise<Outcome> {
   return { kind: "rendered" };
 }
 
+const jar = () => (globalThis as { __zkCookieJar?: Map<string, string> }).__zkCookieJar as Map<string, string>;
+
+/**
+ * `/go?space=…&next=…` (a route, not a page: it enters a space and sends on), passed the way a browser does: the
+ * cookie it sets is kept, and its Location is the next step.
+ */
+async function throughGo(address: string): Promise<string> {
+  const res = await goRoute.GET(new Request(new URL(address, "http://localhost")));
+  const set = /zk-space=([^;]+)/.exec(res.headers.get("set-cookie") ?? "")?.[1];
+  if (set) jar().set(SPACE_COOKIE, decodeURIComponent(set));
+  return res.headers.get("location") ?? "/";
+}
+
 /** Opens an address and follows its redirects like a browser: where it ends, and the way there. */
 async function land(address: string): Promise<{ end: Outcome; chain: string[] }> {
   const chain = [address];
+  // a step is the address AND the space the person is in: coming back to a page after entering its space is
+  // not a loop, coming back to it in the same space is
+  const here = () => jar().get(SPACE_COOKIE) ?? "";
+  const seen = new Set([`${pathOf(address)}|${here()}`]);
   let end = await open(address);
   while (end.kind === "redirect") {
-    const target = end.to;
+    let target = end.to;
+    if (pathOf(target) === "/go") {
+      chain.push(target);
+      target = await throughGo(target);
+    }
     if (!matchRoute(pathOf(target))) return { end: { kind: "broken", error: `redirects to ${target}, which no page serves` }, chain };
-    if (chain.some((step) => pathOf(step) === pathOf(target))) {
+    if (seen.has(`${pathOf(target)}|${here()}`)) {
       return { end: { kind: "broken", error: `redirect loop ${[...chain, target].join(" -> ")}` }, chain };
     }
+    seen.add(`${pathOf(target)}|${here()}`);
     chain.push(target);
     end = await open(target);
   }
@@ -344,12 +371,17 @@ describe("an old link to a board ends on the shell's not-found page, never on «
 
   it("who may open a board is unchanged: the owner opens every space's board, a member the boards of their own spaces", async () => {
     const w = await linkWorld();
+    // (inside the board's own space: from another one, the page first enters it — tests/db/current-space.test.ts)
+    const openIn = async (space: { space: { id: string }; board: { id: string } }) => {
+      jar().set(SPACE_COOKIE, space.space.id);
+      return isValidElement(await BoardPage({ params: { id: space.board.id } }));
+    };
     await loginAs(w.owner.id);
-    for (const space of [w.teamSpace, w.shared, w.closed]) expect(isValidElement(await BoardPage({ params: { id: space.board.id } }))).toBe(true);
+    for (const space of [w.teamSpace, w.shared, w.closed]) expect(await openIn(space)).toBe(true);
     await loginAs(w.member.id);
-    for (const space of [w.teamSpace, w.shared]) expect(isValidElement(await BoardPage({ params: { id: space.board.id } }))).toBe(true);
+    for (const space of [w.teamSpace, w.shared]) expect(await openIn(space)).toBe(true);
     await loginAs(w.guest.id);
-    expect(isValidElement(await BoardPage({ params: { id: w.shared.board.id } }))).toBe(true);
+    expect(await openIn(w.shared)).toBe(true);
   });
 });
 

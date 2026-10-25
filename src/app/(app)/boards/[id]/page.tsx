@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { pageUser } from "@/server/auth";
+import { requireActor } from "@/server/policy/actor";
+import { keepInSpace } from "@/server/services/current-space";
 import { db } from "@/server/db";
 import { loadWorkScope, projectVisibleWhere } from "@/server/services/team-scope";
 import { TASK_INCLUDE } from "@/server/services/tasks";
@@ -31,6 +33,8 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     },
   });
   if (!board) notFound();
+  // a thing of another space of theirs: enter that space first, so the name at the top says where it is
+  await keepInSpace(await requireActor(), board.project.workspace.id, `/boards/${board.id}`);
 
   const member = await db.organizationMember.findFirst({
     where: { organizationId: board.project.workspace.organizationId, userId: user.id, status: "ACTIVE" },
