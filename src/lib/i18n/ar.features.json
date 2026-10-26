@@ -6,5 +6,7 @@
   "features.off": "هالميزة مطفية.",
   "features.owner_only": "بس صاحب الشركة بيشغّل ويطفّي الميزات.",
   "features.watch.name": "نتفرّج سوا",
-  "features.watch.hint": "تتفرّجوا على فيديو من يوتيوب مع بعض وتحكوا عنه."
+  "features.watch.hint": "تتفرّجوا على فيديو من يوتيوب مع بعض وتحكوا عنه.",
+  "features.sectionPermissions.name": "صلاحيات الأقسام",
+  "features.sectionPermissions.hint": "مربعات «يشوف، يضيف ويعدّل، يحذف» لكل شخص بكل قسم. إذا طفيتها، كل واحد بياخد قالب رتبته، والمربعات المحفوظة بترجع لما تشغّلها."
 }

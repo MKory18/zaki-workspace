@@ -12,6 +12,7 @@ import {
   CAPABILITIES,
   RANK_DEFAULTS,
   SECTIONS,
+  SECTION_CAPABILITIES,
   WIRED_CAPABILITIES,
   effectiveCapabilities,
   isCapability,
@@ -83,6 +84,8 @@ export interface MembersResponse {
   members: ContractMember[];
   actorRole: OrgRoleName;
   actorPrimaryOwner?: boolean;
+  /** «صلاحيات الأقسام» in «الميزات» (absent: on). */
+  sectionGrid?: boolean;
   spaces: ContractSpace[];
 }
 
@@ -94,6 +97,11 @@ export interface ActorInfo {
   caps: readonly string[];
   /** The company's primary owner: he alone makes or unmakes a partner and takes a permission away from one. */
   primaryOwner?: boolean;
+  /**
+   * «صلاحيات الأقسام» is on in «الميزات» (absent: on). Off, the sheet has no section grid, the customers' two switches
+   * are back among the switches, and every other section is the rank's template.
+   */
+  sectionGrid?: boolean;
 }
 
 export const STATUS_ORDER: readonly MemberStatusName[] = ["ACTIVE", "SUSPENDED", "OFFBOARDED"];
@@ -293,7 +301,12 @@ export interface CapabilityGroupRows {
  */
 export function capabilityGroups(member: CapabilityTarget, actor: ActorInfo, editable: boolean): CapabilityGroupRows[] {
   const rowOf = rowBuilder(member, actor, editable);
-  const groups = CAPABILITY_GROUPS.map((group) => ({
+  // the grid switched off in «الميزات»: the customers' read and write are the two switches they were before it
+  const groupsShown =
+    actor.sectionGrid === false
+      ? CAPABILITY_GROUPS.map((g) => (g.id === "customers" ? { ...g, capabilities: ["crm.view", "crm.edit", ...g.capabilities] as Capability[] } : g))
+      : CAPABILITY_GROUPS;
+  const groups = groupsShown.map((group) => ({
     id: group.id,
     rows: group.capabilities.filter(isOffered).map(rowOf),
   }));
@@ -302,7 +315,7 @@ export function capabilityGroups(member: CapabilityTarget, actor: ActorInfo, edi
 
 /** One switch's state and lock for this person, as the server would judge it (shared by the switches and the grid). */
 function rowBuilder(member: CapabilityTarget, actor: ActorInfo, editable: boolean): (capability: Capability) => CapabilityRow {
-  const effective = effectiveCapabilities(member);
+  const effective = effectiveCapabilities(member, { sectionGrid: actor.sectionGrid !== false });
   const defaults = new Set<Capability>(RANK_DEFAULTS[member.role]);
   const holder = holderOf(actor);
   return (capability) => {
@@ -348,6 +361,7 @@ export const SECTION_ACTIONS: readonly SectionAction[] = ["view", "edit", "delet
  * off and locked, since the server ignores them until «يشوف» is back.
  */
 export function sectionGrid(member: CapabilityTarget, actor: ActorInfo, editable: boolean): SectionGridRow[] {
+  if (actor.sectionGrid === false) return [];
   const rowOf = rowBuilder(member, actor, editable);
   return SECTIONS.map((section) => {
     const viewCap = sectionCapability(section.id, "view");
@@ -401,8 +415,14 @@ export function toggleCapability(member: CapabilityTarget, capability: Capabilit
 export function resetCapabilityLists(member: CapabilityTarget, actor: ActorInfo): CapabilityLists {
   const holder = holderOf(actor);
   // offered, and the actor may switch it for a person of this rank (the server's own question: it also asks that they hold it)
+  // with the grid switched off its boxes are not on the screen either: they stay stored for when it is on again
+  const shown = (capability: Capability) =>
+    actor.sectionGrid !== false || !SECTION_CAPABILITIES.includes(capability) || capability === "crm.view" || capability === "crm.edit";
   const clearable = (capability: string) =>
-    isCapability(capability) && isOffered(capability) && capabilityChangeProblem(holder, member.role, capability, partnerOf(member)) === null;
+    isCapability(capability) &&
+    isOffered(capability) &&
+    shown(capability) &&
+    capabilityChangeProblem(holder, member.role, capability, partnerOf(member)) === null;
   return {
     capabilities: cleanList(member.capabilities.filter((c) => !clearable(c))),
     revokedCapabilities: cleanList(member.revokedCapabilities.filter((c) => !clearable(c))),

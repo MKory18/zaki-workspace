@@ -13,12 +13,14 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch"] as const;
+export const FEATURES = ["watch", "sectionPermissions"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
 export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   watch: true,
+  // the per-person section grid «الأقسام» (src/server/policy/capabilities.ts): off, everyone has their rank's template
+  sectionPermissions: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

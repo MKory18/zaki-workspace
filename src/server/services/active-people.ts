@@ -1,6 +1,7 @@
 import { db, type DbClient } from "@/server/db";
 import { ForbiddenError } from "@/server/auth";
 import { can, type Capability } from "@/server/policy/capabilities";
+import { sectionGridOn } from "@/server/policy/section-grid";
 
 /**
  * "Nobody who was suspended or removed still counts."
@@ -46,5 +47,5 @@ export async function assertCapability(
 ): Promise<void> {
   const member = await activeMember(ctx.orgId, ctx.userId, client);
   if (!member) throw new ForbiddenError("not_org_member");
-  if (!can(member, capability)) throw new ForbiddenError("insufficient_role");
+  if (!can(member, capability, { sectionGrid: await sectionGridOn(ctx.orgId, client) })) throw new ForbiddenError("insufficient_role");
 }
