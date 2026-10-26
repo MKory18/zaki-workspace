@@ -45,9 +45,9 @@ const ADMIN_ALL: TabKey[] = ["team", "reports", "automation", "telegram", "setti
 const ADMIN_OWNER: TabKey[] = [...ADMIN_ALL, "archive"];
 
 describe("the five places, for each kind of person", () => {
-  it("OWNER: the five places; the work place has its nine tabs and the admin place includes the owner-only archive tab", () => {
+  it("OWNER: the six places; the work place has its nine tabs and the admin place includes the owner-only archive tab", () => {
     const nav = buildNav(who("OWNER"));
-    expect(keys(nav)).toEqual(["today", "chat", "work", "library", "admin"]);
+    expect(keys(nav)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
     expect(tabs(nav, "work")).toEqual(WORK_ALL);
     expect(tabs(nav, "admin")).toEqual(ADMIN_OWNER);
     expect(place(nav, "admin")).toMatchObject({ labelKey: "nav.place.admin", href: "/members", icon: "admin" });
@@ -55,7 +55,7 @@ describe("the five places, for each kind of person", () => {
 
   it("ADMIN (rank defaults): the same map as the owner", () => {
     const nav = buildNav(who("ADMIN"));
-    expect(keys(nav)).toEqual(["today", "chat", "work", "library", "admin"]);
+    expect(keys(nav)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
     expect(tabs(nav, "work")).toEqual(WORK_ALL);
     expect(tabs(nav, "admin")).toEqual(ADMIN_ALL);
     expect(place(nav, "admin").labelKey).toBe("nav.place.admin");
@@ -63,14 +63,14 @@ describe("the five places, for each kind of person", () => {
 
   it("LEAD: the team and the reports; no integrations, no settings", () => {
     const nav = buildNav(who("LEAD"));
-    expect(keys(nav)).toEqual(["today", "chat", "work", "library", "admin"]);
+    expect(keys(nav)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
     expect(tabs(nav, "admin")).toEqual(["team", "reports"]);
     expect(place(nav, "admin").labelKey).toBe("nav.place.admin");
   });
 
   it("MEMBER (rank defaults): the admin place is a single tab, so it is called «الفريق» and opens the directory", () => {
     const nav = buildNav(who("MEMBER"));
-    expect(keys(nav)).toEqual(["today", "chat", "work", "library", "admin"]);
+    expect(keys(nav)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
     expect(tabs(nav, "work")).toEqual(WORK_ALL);
     expect(tabs(nav, "admin")).toEqual(["team"]);
     expect(place(nav, "admin")).toMatchObject({ labelKey: "nav.tab.team", href: "/members", icon: "team" });
@@ -104,9 +104,9 @@ describe("the five places, for each kind of person", () => {
     expect(tabs(nav, "admin")).toEqual(["team", "automation", "telegram"]);
   });
 
-  it("MEMBER whose directory.view was switched off: no admin place at all", () => {
+  it("MEMBER whose directory.view was switched off: no admin place at all («نتفرّج سوا» stays)", () => {
     const nav = buildNav(who("MEMBER", { revokedCapabilities: ["directory.view"] }));
-    expect(keys(nav)).toEqual(["today", "chat", "work", "library"]);
+    expect(keys(nav)).toEqual(["today", "chat", "work", "library", "watch"]);
   });
 
   it("LEAD whose directory.view was switched off still has the reports, which then name the place", () => {
@@ -145,6 +145,7 @@ describe("the five places, for each kind of person", () => {
       work: "/my-work",
       library: "/files",
       admin: "/members",
+      watch: "/watch",
     });
     expect(place(nav, "today").tabs).toEqual([]);
     expect(place(nav, "chat").tabs).toEqual([]);
@@ -323,8 +324,8 @@ describe("every link of the map points at a page that exists", () => {
 });
 
 describe("the words", () => {
-  it("the five places are called اليوم · الدردشة · الشغل · المكتبة · الإدارة", () => {
-    expect(PLACES.map((p) => AR[p.labelKey])).toEqual(["اليوم", "الدردشة", "الشغل", "المكتبة", "الإدارة"]);
+  it("the places are called اليوم · الدردشة · الشغل · المكتبة · الإدارة · نتفرّج سوا (the sixth by the owner's ask, 2026-10-26)", () => {
+    expect(PLACES.map((p) => AR[p.labelKey])).toEqual(["اليوم", "الدردشة", "الشغل", "المكتبة", "الإدارة", "نتفرّج سوا"]);
   });
 
   it("the tabs have the owner's names", () => {

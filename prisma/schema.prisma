@@ -69,6 +69,7 @@ model User {
   goals           Goal[]               @relation("GoalCreator")
   campaigns       Campaign[]           @relation("CampaignOwner")
   startedCalls    Call[]               @relation("CallStarter")
+  hostedWatches   WatchSession[]       @relation("WatchHost")
   callSeats       CallPerson[]
   pushDevices     PushSubscription[]
 }
@@ -380,6 +381,7 @@ model Conversation {
   messages     ChatMessage[]
   whiteboard   Whiteboard?
   calls        Call[]
+  watch        WatchSession?
 
   @@unique([orgId, dmKey])
   @@unique([spaceId, systemKey])
@@ -613,6 +615,37 @@ model PushSubscription {
   @@index([userId])
 }
 
+// «نتفرّج سوا» (the owner's ask, 2026-10-26): people of a space watch ONE link together. Its talk is a restricted
+// topic (🎬) of that space, so who may see it, the chat, the call and the whiteboard are the topic's own rules.
+// Links only: nothing is uploaded or stored but the link. The playback fields are the host's remote: what plays,
+// from where, as of when (a late joiner computes where the others are from them).
+model WatchSession {
+  id             String    @id @default(cuid())
+  orgId          String
+  spaceId        String
+  conversationId String    @unique
+  hostId         String
+  title          String
+  sourceKind     String // YOUTUBE
+  sourceRef      String // the video's own id at its site
+  sourceUrl      String // the link as it was pasted
+  playing        Boolean   @default(false)
+  positionSec    Float     @default(0)
+  stateAt        DateTime  @default(now())
+  endedAt        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  space        Workspace    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  host         User         @relation("WatchHost", fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, createdAt])
+  @@index([orgId])
+  @@index([hostId])
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -646,6 +679,7 @@ model Organization {
   campaigns        Campaign[]
   whiteboards      Whiteboard[]
   calls            Call[]
+  watchSessions    WatchSession[]
 
   @@index([slug])
 }
@@ -734,6 +768,7 @@ model Workspace {
   customers     Customer[]
   opportunities Opportunity[]
   calls         Call[]
+  watchSessions WatchSession[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, systemKey])

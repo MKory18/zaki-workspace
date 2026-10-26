@@ -1,5 +1,5 @@
 import { getServerT } from "@/lib/i18n/server";
-import { offeredToGuests, type TabKey } from "@/lib/nav/places";
+import { offeredToGuests, placeOfferedToGuests, type PlaceKey, type TabKey } from "@/lib/nav/places";
 import type { Actor } from "@/server/policy/actor";
 
 /**
@@ -16,6 +16,11 @@ import type { Actor } from "@/server/policy/actor";
  */
 export function refusedToGuest(actor: Pick<Actor, "isExternal">, tab: TabKey): boolean {
   return actor.isExternal && !offeredToGuests(tab);
+}
+
+/** The same question for a place that is one page, with no tabs («نتفرّج سوا»). */
+export function placeRefusedToGuest(actor: Pick<Actor, "isExternal">, place: PlaceKey): boolean {
+  return actor.isExternal && !placeOfferedToGuests(place);
 }
 
 /** Shown to an external partner in place of an area that is not shared with them (the same notice /crm and /files show). */

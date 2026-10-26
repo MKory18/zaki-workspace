@@ -36,6 +36,7 @@ import AutomationPage from "@/app/(app)/automation/page";
 import TelegramPage from "@/app/(app)/telegram/page";
 import SettingsPage from "@/app/(app)/settings/page";
 import ArchivePage from "@/app/(app)/archive/page";
+import WatchPage from "@/app/(app)/watch/page";
 import * as goalsRoute from "@/app/api/goals/route";
 import * as goalRoute from "@/app/api/goals/[id]/route";
 import * as ideasRoute from "@/app/api/ideas/route";
@@ -390,6 +391,7 @@ const TAB_PAGES: Record<TabKey, PageCall> = {
 const PLACE_PAGES: Partial<Record<PlaceKey, PageCall>> = {
   today: () => TodayPage(),
   chat: () => ChatPage(),
+  watch: () => WatchPage(),
 };
 
 interface Entry {

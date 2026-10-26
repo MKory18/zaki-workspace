@@ -60,11 +60,11 @@ const WORK_GUEST = ["my-work", "projects", "list", "calendar"];
 beforeEach(() => logout());
 
 describe("the layout draws each person's own places", () => {
-  it("the owner: the five places, every work tab, «الإدارة» with all six tabs (the archive is his alone); the managers' guide", async () => {
+  it("the owner: the six places, every work tab, «الإدارة» with all six tabs (the archive is his alone); the managers' guide", async () => {
     const { owner } = await makeTeam();
     await loginAs(owner.id);
     const shell = await frame();
-    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin"]);
+    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
     expect(tabs(shell, "work")).toEqual(WORK_ALL);
     // Phase 3: «الأرشيف» (archive.view, the owner's alone) joined the admin place
     expect(tabs(shell, "admin")).toEqual(["team", "reports", "automation", "telegram", "settings", "archive"]);
@@ -79,11 +79,11 @@ describe("the layout draws each person's own places", () => {
     expect(shell.props.user).not.toHaveProperty("locale");
   });
 
-  it("an admin: the same five places and admin tabs", async () => {
+  it("an admin: the same six places and admin tabs", async () => {
     const { admin } = await makeTeam();
     await loginAs(admin.id);
     const shell = await frame();
-    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin"]);
+    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
     expect(tabs(shell, "admin")).toEqual(["team", "reports", "automation", "telegram", "settings"]);
     expect(shell.props).toMatchObject({ rank: "ADMIN", isGuest: false, audience: "managers" });
   });
@@ -101,7 +101,7 @@ describe("the layout draws each person's own places", () => {
     const { member } = await makeTeam();
     await loginAs(member.id);
     const shell = await frame();
-    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin"]);
+    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
     expect(tabs(shell, "work")).toEqual(WORK_ALL);
     expect(placeOf(shell, "admin")).toMatchObject({ labelKey: "nav.tab.team", href: "/members", tabs: [{ key: "team" }] });
     expect(shell.props).toMatchObject({ rank: "MEMBER", isGuest: false, audience: "staff" });
@@ -125,7 +125,7 @@ describe("the layout draws each person's own places", () => {
       data: { revokedCapabilities: ["directory.view", "crm.view"] },
     });
     let shell = await frame();
-    expect(places(shell)).toEqual(["today", "chat", "work", "library"]);
+    expect(places(shell)).toEqual(["today", "chat", "work", "library", "watch"]);
     expect(tabs(shell, "work")).toEqual(WORK_ALL.filter((t) => t !== "crm"));
 
     await db.organizationMember.update({
@@ -160,10 +160,10 @@ describe("the layout draws each person's own places", () => {
     await loginAs(b.member.id);
     const shell = await frame();
     expect(shell.props.isGuest).toBe(false);
-    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin"]);
+    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
   });
 
-  it("the map reaches the screen: the member's bottom bar and side menu link to their five places", async () => {
+  it("the map reaches the screen: the member's bottom bar and side menu link to their six places", async () => {
     const { member } = await makeTeam();
     await loginAs(member.id);
     const shell = await frame();
@@ -173,7 +173,7 @@ describe("the layout draws each person's own places", () => {
     const html = renderToStaticMarkup(
       createElement(Translations, { initial: "ar" }, createElement(Queries, { client: new QueryClient() }, createElement(Toasts, null, shell))),
     );
-    for (const href of ["/", "/chat", "/my-work", "/files", "/members"]) expect(html.split(`href="${href}"`).length - 1, href).toBeGreaterThanOrEqual(2);
+    for (const href of ["/", "/chat", "/my-work", "/files", "/members", "/watch"]) expect(html.split(`href="${href}"`).length - 1, href).toBeGreaterThanOrEqual(2);
     expect(html).toContain('data-tour="places"');
     expect(html).toContain('data-tour="tabs"');
   });

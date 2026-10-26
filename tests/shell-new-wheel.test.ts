@@ -42,12 +42,12 @@ function render(element: ReactElement, theme = "night"): string {
 const who = (role: NavRole, caps?: string[]) => ({ role, caps: caps ?? [...effectiveCapabilities({ role })] });
 
 describe("«جديد»: what each person is offered", () => {
-  it("the owner and an admin: all six — مهمّة · مشروع · مستند · رسالة · مساحة · عضو", () => {
+  it("the owner and an admin: all seven — مهمّة · مشروع · مستند · رسالة · نتفرّج سوا · مساحة · عضو", () => {
     for (const role of ["OWNER", "ADMIN"] as const) expect(newActionsFor(who(role)), role).toEqual([...NEW_ACTIONS]);
   });
 
   it("a lead or a member: no «مساحة» (only the owner and the admins open spaces by default) and no «عضو» (`users.manage`)", () => {
-    for (const role of ["LEAD", "MEMBER"] as const) expect(newActionsFor(who(role)), role).toEqual(["task", "project", "doc", "message"]);
+    for (const role of ["LEAD", "MEMBER"] as const) expect(newActionsFor(who(role)), role).toEqual(["task", "project", "doc", "message", "watch"]);
   });
 
   it("…unless the owner switched «فتح مساحة» on for that person by name", () => {
@@ -87,7 +87,7 @@ describe("«جديد»: every action opens something real", () => {
 
   it("each page form it sends a person to answers its `?new=` value (useNewIntent)", () => {
     const sent = Object.values(NEW_HREF).filter((h): h is string => h !== null);
-    expect(sent).toHaveLength(4);
+    expect(sent).toHaveLength(5);
     for (const href of sent) {
       const value = new URL(href, "http://x").searchParams.get("new");
       expect(all, href).toContain(`useNewIntent("${value}"`);

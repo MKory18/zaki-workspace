@@ -65,6 +65,20 @@ export const PAGE_HELP: readonly PageHelp[] = [
     article: "calls",
   },
   {
+    id: "watch",
+    pattern: "/watch",
+    whatKey: "guide.page.watch.what",
+    nextKey: "guide.page.watch.next",
+    guestNextKey: INTERNAL,
+  },
+  {
+    id: "watch-session",
+    pattern: "/watch/:id",
+    whatKey: "guide.page.watch-session.what",
+    nextKey: "guide.page.watch-session.next",
+    guestNextKey: INTERNAL,
+  },
+  {
     id: "archive",
     pattern: "/archive",
     whatKey: "guide.page.archive.what",
