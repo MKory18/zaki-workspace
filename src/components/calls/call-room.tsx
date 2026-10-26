@@ -184,9 +184,17 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
       </header>
 
       {main ? (
-        <Stage main={main} everyone={everyone} me={me} onMain={() => setPinned(null)} onPick={(id) => setPinned(id)} />
+        <Stage main={main} everyone={everyone} me={me} away={call.away} onMain={() => setPinned(null)} onPick={(id) => setPinned(id)} />
       ) : (
-        <Tiles everyone={everyone} me={me} onPick={(id) => setPinned(id)} />
+        <Tiles everyone={everyone} me={me} away={call.away} onPick={(id) => setPinned(id)} />
+      )}
+
+      {/* the phone stopped the microphone (back from another app, a phone call): one tap starts it again */}
+      {call.state.micHeld && !call.state.needsAudioTap && (
+        <button type="button" onClick={() => void call.reviveMic()} className="absolute inset-x-0 top-16 z-10 mx-auto flex w-fit items-center gap-2 rounded-full bg-warn px-5 py-3 font-semibold text-fg shadow-lg">
+          <span aria-hidden="true">⚠️</span>
+          {ct("calls.mic_held")} · {ct("calls.mic_revive")}
+        </button>
       )}
 
       {call.state.needsAudioTap && (
@@ -242,7 +250,11 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
       )}
 
       <nav aria-label={ct("calls.controls")} className="flex items-center justify-center gap-3 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
-        <Round on={!!me?.isMicrophoneEnabled} onClick={() => void call.toggle("mic")} label={me?.isMicrophoneEnabled ? ct("calls.mic_off") : ct("calls.mic_on")} icon={me?.isMicrophoneEnabled ? "🎙️" : "🔇"} />
+        {call.state.micHeld ? (
+          <Round on={false} onClick={() => void call.toggle("mic")} label={ct("calls.mic_revive")} icon="⚠️" />
+        ) : (
+          <Round on={!!me?.isMicrophoneEnabled} onClick={() => void call.toggle("mic")} label={me?.isMicrophoneEnabled ? ct("calls.mic_off") : ct("calls.mic_on")} icon={me?.isMicrophoneEnabled ? "🎙️" : "🔇"} />
+        )}
         <Round on={!!me?.isCameraEnabled} onClick={() => void call.toggle("cam")} label={me?.isCameraEnabled ? ct("calls.cam_off") : ct("calls.cam_on")} icon={me?.isCameraEnabled ? "🎥" : "📷"} />
         {canShareScreen() && (
           <Round on={!!me?.isScreenShareEnabled} onClick={() => void call.toggle("screen")} label={me?.isScreenShareEnabled ? ct("calls.screen_stop") : ct("calls.screen_start")} icon="🖥️" />
@@ -270,7 +282,7 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
 }
 
 /** Everybody's picture, sharing the room by count and by the shape of the screen. */
-function Tiles({ everyone, me, onPick }: { everyone: Participant[]; me: Participant | undefined; onPick: (identity: string) => void }) {
+function Tiles({ everyone, me, away, onPick }: { everyone: Participant[]; me: Participant | undefined; away: ReadonlySet<string>; onPick: (identity: string) => void }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const size = useSize(ref);
   const grid = bestGrid(everyone.length, size.width, size.height);
@@ -281,7 +293,7 @@ function Tiles({ everyone, me, onPick }: { everyone: Participant[]; me: Particip
         style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${grid.rows}, minmax(0, 1fr))` }}
       >
         {everyone.map((p) => (
-          <Tile key={p.identity} p={p} me={me} onPick={everyone.length > 1 ? () => onPick(p.identity) : undefined} />
+          <Tile key={p.identity} p={p} me={me} away={away.has(p.identity)} onPick={everyone.length > 1 ? () => onPick(p.identity) : undefined} />
         ))}
       </ul>
     </div>
@@ -292,10 +304,11 @@ function Tiles({ everyone, me, onPick }: { everyone: Participant[]; me: Particip
  * The stage: a shared screen, or the picture somebody enlarged; the people sit in a strip beside it (sideways) or under
  * it (upright). A tap on the stage puts everybody back (an enlarged picture); a tap in the strip enlarges that one.
  */
-function Stage({ main, everyone, me, onMain, onPick }: {
+function Stage({ main, everyone, me, away, onMain, onPick }: {
   main: { p: Participant; source: Track.Source };
   everyone: Participant[];
   me: Participant | undefined;
+  away: ReadonlySet<string>;
   onMain: () => void;
   onPick: (identity: string) => void;
 }) {
@@ -318,7 +331,7 @@ function Stage({ main, everyone, me, onMain, onPick }: {
         {everyone.map((p) => (
           <li key={p.identity} className={sideways ? "aspect-video w-full shrink-0" : "aspect-video h-full shrink-0"}>
             <ul className="h-full">
-              <Tile p={p} me={me} small onPick={() => onPick(p.identity)} />
+              <Tile p={p} me={me} small away={away.has(p.identity)} onPick={() => onPick(p.identity)} />
             </ul>
           </li>
         ))}
@@ -327,7 +340,7 @@ function Stage({ main, everyone, me, onMain, onPick }: {
   );
 }
 
-function Tile({ p, me, small = false, onPick }: { p: Participant; me: Participant | undefined; small?: boolean; onPick?: () => void }) {
+function Tile({ p, me, small = false, away = false, onPick }: { p: Participant; me: Participant | undefined; small?: boolean; away?: boolean; onPick?: () => void }) {
   return (
     <li className={`relative h-full min-h-0 overflow-hidden rounded-xl bg-surface-2 ${p.isSpeaking ? "ring-2 ring-ok" : ""}`}>
       <PersonPicture p={p} me={me} small={small} />
@@ -339,6 +352,8 @@ function Tile({ p, me, small = false, onPick }: { p: Participant; me: Participan
       <span className="absolute bottom-1.5 start-1.5 flex max-w-[90%] items-center gap-1 truncate rounded bg-scrim/70 px-2 text-xs text-on-photo">
         {!p.isMicrophoneEnabled && <span aria-label={ct("calls.muted")}>🔇</span>}
         {nameOf(p, me)}
+        {/* stepped out to another app on the phone: why they are quiet */}
+        {away && <span className="rounded bg-warn/80 px-1 text-fg">{ct("calls.away")}</span>}
         {!small && <Quality quality={p.connectionQuality} />}
       </span>
     </li>

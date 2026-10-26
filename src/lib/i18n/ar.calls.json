@@ -77,5 +77,10 @@
   "calls.e.cannot_mute": "ما بتقدر تكتم هالشخص.",
   "calls.push.ring_title": "{name} عم يرنّ عليك",
   "calls.push.missed_title": "مكالمة فايتة من {name}",
-  "calls.push.missed_body": "اضغط لتفتح المحادثة وترنّ عليه."
+  "calls.push.missed_body": "اضغط لتفتح المحادثة وترنّ عليه.",
+  "calls.mic_back": "رجع المايك، صوتك واصل",
+  "calls.mic_held": "الجهاز وقّف المايك",
+  "calls.mic_revive": "رجّع المايك",
+  "calls.away": "برّا التطبيق",
+  "calls.pip_card": "مكالمة شغّالة"
 }
