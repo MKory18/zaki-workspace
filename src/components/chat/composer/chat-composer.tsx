@@ -4,7 +4,7 @@ import type { ConversationDto, MessageDto } from "@/server/chat/dto";
 import { useI18n } from "@/lib/i18n";
 import { classifyFile, exceedsKindLimit, MAX_ATTACHMENTS_PER_MESSAGE, type FileKind } from "@/lib/chat/file-kinds";
 import { compressImage } from "@/lib/chat/compress-image";
-import { buildChatMessagePayload, createChatUploadFormData, createVoiceUploadFormData, messageClientId } from "@/lib/chat/conversation/client";
+import { buildChatMessagePayload, createChatUploadFormData, createVoiceUploadFormData, enterSends, messageClientId } from "@/lib/chat/conversation/client";
 import { findMentionQuery, insertMention, selectedMentionIds } from "@/lib/chat/conversation/mentions";
 import { uploadWithProgress } from "@/lib/chat/upload-with-progress";
 import { VoiceRecorder, type VoiceTake } from "@/lib/chat/voice-recorder";
@@ -331,6 +331,9 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
      rows={1}
      value={body}
      onChange={event => { setClientId(messageClientId()); setBody(event.currentTarget.value); }}
+     // Enter sends (the owner, 2026-10-26), Shift+Enter is a new line; never while an input method is composing a word
+     onKeyDown={event => { if (enterSends({ key: event.key, shiftKey: event.shiftKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (body.trim()) event.currentTarget.form?.requestSubmit(); } }}
+     enterKeyHint="send"
      className="max-h-40 min-h-11 flex-1 resize-none rounded-2xl border border-border bg-surface px-3 py-2 text-base"
      placeholder={t("chatc.message")}
     />
