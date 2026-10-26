@@ -1,7 +1,6 @@
-import { createReadStream, promises as fs } from "node:fs";
+import { promises as fs } from "node:fs";
 import { assertMemberCan } from "@/server/policy/actor";
 import { join } from "node:path";
-import { Readable } from "node:stream";
 import { z } from "zod";
 import { db } from "@/server/db";
 import type { Prisma } from "@prisma/client";
@@ -247,9 +246,40 @@ export async function openStored(
     mimeType: f.mimeType,
     name: f.name,
     size: stat.size,
-    stream: async (range) =>
-      Readable.toWeb(createReadStream(full, range ? { start: range.start, end: range.end } : {})) as unknown as ReadableStream<Uint8Array>,
+    stream: (range) => fileStream(full, range ?? { start: 0, end: stat.size - 1 }),
   };
+}
+
+/**
+ * The bytes start..end (inclusive) of a file on the server's disk, read 64 KB at a time as the response is
+ * consumed. (A web stream by hand: `node:stream` is not resolvable in every bundle that imports this file.)
+ */
+async function fileStream(full: string, range: { start: number; end: number }): Promise<ReadableStream<Uint8Array>> {
+  const handle = await fs.open(full, "r");
+  let at = range.start;
+  const done = async (controller: ReadableStreamDefaultController<Uint8Array>) => {
+    await handle.close().catch(() => undefined);
+    controller.close();
+  };
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const want = Math.min(64 * 1024, range.end - at + 1);
+        if (want <= 0) return done(controller);
+        const chunk = new Uint8Array(want);
+        const { bytesRead } = await handle.read(chunk, 0, want, at);
+        if (bytesRead === 0) return done(controller);
+        at += bytesRead;
+        controller.enqueue(chunk.subarray(0, bytesRead));
+      } catch (err) {
+        await handle.close().catch(() => undefined);
+        controller.error(err);
+      }
+    },
+    async cancel() {
+      await handle.close().catch(() => undefined);
+    },
+  });
 }
 
 /* ---------------- writes ---------------- */
