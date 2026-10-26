@@ -3,12 +3,13 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AudioPresets, Room, RoomEvent, ScreenSharePresets, Track, VideoPresets, type DisconnectReason, type Participant, type Track as LkTrack } from "livekit-client";
+import { AudioPresets, Room, RoomEvent, ScreenSharePresets, Track, VideoPresets, type DisconnectReason, type LocalTrack, type Participant, type Track as LkTrack } from "livekit-client";
 import { ct } from "@/lib/chat/text";
+import { AWAY_TOPIC, decodeAway, encodeAway, micHeld, type MicFacts } from "@/lib/calls/mic";
 import { isDrop, isFresh, MAX_REJOINS, miniVisible, rejoinDelayMs } from "@/lib/calls/session";
 import { useOptionalToast } from "@/components/ui/toast";
 import { callApi, callErrorText, type CallView } from "./call-api";
-import { AudioOut, mainPicture, PersonPicture } from "./call-media";
+import { AudioOut, mainPicture, nameOf, PersonPicture } from "./call-media";
 import { ensurePush } from "./push-client";
 
 /**
@@ -21,6 +22,11 @@ import { ensurePush } from "./push-client";
  *
  * The connection favours the voice: adaptive stream and dynacast, simulcast layers, Opus speech with DTX and RED, a
  * muted microphone kept open; the picture degrades first when the network weakens.
+ *
+ * Stepping out to another app on a phone: the call asks the phone to stay (its floating picture window where the
+ * browser opens one by itself, the system's call controls), the others see «برّا التطبيق» on the person's picture, and
+ * a microphone the phone stopped or silenced meanwhile is started again the moment the person is back, with «رجع
+ * المايك» — never left silently off; if the phone still refuses, a button says so and starts it with one tap.
  */
 
 export type CallPhase = "idle" | "connecting" | "in" | "lost" | "left" | "ended" | "removed" | "denied";
@@ -31,6 +37,8 @@ interface CallState {
   error: string;
   reconnecting: boolean;
   needsAudioTap: boolean;
+  /** the phone stopped or silenced the microphone the person left on (see src/lib/calls/mic.ts) */
+  micHeld: boolean;
 }
 
 export interface CallApi {
@@ -38,6 +46,13 @@ export interface CallApi {
   room: Room | null;
   /** everybody in the room, the person first */
   everyone: Participant[];
+  /** the people who stepped out to another app on their phone */
+  away: ReadonlySet<string>;
+  /** start a microphone the phone took away again (a tap helps where the phone wants one) */
+  reviveMic: () => Promise<boolean>;
+  /** the call's picture in the browser's floating window, where it has one */
+  canPip: boolean;
+  pip: () => void;
   join: (callId: string, video: boolean) => Promise<void>;
   leave: () => Promise<void>;
   toggle: (what: "mic" | "cam" | "screen") => Promise<void>;
@@ -109,10 +124,36 @@ interface Pass {
   token: string;
 }
 
+/** What the phone did to this call's microphone, read for the rules in src/lib/calls/mic.ts. */
+function micFactsOf(room: Room): MicFacts {
+  const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+  const track = pub?.track as LocalTrack | undefined;
+  const capture = track?.mediaStreamTrack;
+  return {
+    published: !!track,
+    chosenMute: !!pub?.isMuted,
+    readyState: capture?.readyState === "live" ? "live" : "ended",
+    silenced: !!capture?.muted,
+    upstreamPaused: !!track?.isUpstreamPaused,
+  };
+}
+
+const MEDIA_ACTIONS = ["enterpictureinpicture", "togglemicrophone", "togglecamera", "hangup"] as const;
+
+function setMediaAction(action: (typeof MEDIA_ACTIONS)[number], handler: (() => void) | null): void {
+  try {
+    navigator.mediaSession.setActionHandler(action as MediaSessionAction, handler);
+  } catch {
+    // this browser has no such action: nothing to do
+  }
+}
+
 export function CallProvider({ children }: { children: React.ReactNode }) {
   const toast = useOptionalToast();
   const pathname = usePathname();
-  const [state, setState] = React.useState<CallState>({ callId: null, phase: "idle", error: "", reconnecting: false, needsAudioTap: false });
+  const [state, setState] = React.useState<CallState>({ callId: null, phase: "idle", error: "", reconnecting: false, needsAudioTap: false, micHeld: false });
+  const [away, setAway] = React.useState<ReadonlySet<string>>(new Set());
+  const pipRef = React.useRef<HTMLVideoElement | null>(null);
   const roomRef = React.useRef<Room | null>(null);
   const joining = React.useRef(false);
   const lastVideo = React.useRef(false);
@@ -156,7 +197,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const old = roomRef.current;
     roomRef.current = null;
     if (old) await old.disconnect().catch(() => undefined);
-    setState({ callId, phase: "connecting", error: "", reconnecting: false, needsAudioTap: false });
+    setState({ callId, phase: "connecting", error: "", reconnecting: false, needsAudioTap: false, micHeld: false });
+    setAway(new Set());
     const room = newRoom();
     for (const ev of [
       RoomEvent.ParticipantConnected,
@@ -175,6 +217,26 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     room.on(RoomEvent.Reconnecting, () => patch({ reconnecting: true }));
     room.on(RoomEvent.Reconnected, () => patch({ reconnecting: false }));
     room.on(RoomEvent.AudioPlaybackStatusChanged, () => patch({ needsAudioTap: !room.canPlaybackAudio }));
+    // somebody stepped out to another app on their phone, or came back
+    room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
+      if (topic !== AWAY_TOPIC || !participant) return;
+      const isAway = decodeAway(payload);
+      if (isAway === null) return;
+      setAway((s) => {
+        const next = new Set(s);
+        if (isAway) next.add(participant.identity);
+        else next.delete(participant.identity);
+        return next;
+      });
+    });
+    room.on(RoomEvent.ParticipantDisconnected, (p) =>
+      setAway((s) => {
+        if (!s.has(p.identity)) return s;
+        const next = new Set(s);
+        next.delete(p.identity);
+        return next;
+      }),
+    );
     room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
       if (roomRef.current !== room || unloading.current) return; // «اطلع», a newer call, or the page reloading (it comes back)
       roomRef.current = null;
@@ -241,22 +303,67 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [state.phase, state.callId, join, patch]);
 
-  // back from another app on a phone: a camera or microphone the system stopped while the app was hidden is started
-  // again, so the picture and the voice come back without a tap
+  // a microphone the phone stopped or silenced is started again (a new capture, in the same place in the call). The
+  // published microphone is never taken out on the way: if the phone still refuses, it stays «held», so the person
+  // sees it and starts it with a tap — never a microphone quietly off.
+  const reviveMic = React.useCallback(async (): Promise<boolean> => {
+    const room = roomRef.current;
+    if (!room) return true;
+    if (micHeld(micFactsOf(room))) {
+      const track = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalTrack | undefined;
+      try {
+        if (track) {
+          await track.restartTrack();
+          await track.resumeUpstream();
+        }
+      } catch {
+        // the phone still refuses: the button asks again with a tap
+      }
+    }
+    const held = micHeld(micFactsOf(room));
+    patch({ micHeld: held });
+    return !held;
+  }, [patch]);
+
+  // stepping out to another app and back: the others are told, and on the way back the camera and the microphone the
+  // phone stopped are started again, the microphone with «رجع المايك» so the person knows they are heard again
   React.useEffect(() => {
-    const revive = () => {
+    let later: ReturnType<typeof setTimeout> | undefined;
+    const changed = () => {
+      const room = roomRef.current;
+      if (!room || room.state !== "connected") return;
+      const hidden = document.visibilityState === "hidden";
+      void room.localParticipant.publishData(encodeAway(hidden), { reliable: true, topic: AWAY_TOPIC }).catch(() => undefined);
+      clearTimeout(later);
+      if (hidden) return;
+      const camera = room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
+      if (camera && !camera.isMuted && camera.mediaStreamTrack.readyState === "ended") void camera.restartTrack().catch(() => undefined);
+      const wasHeld = micHeld(micFactsOf(room));
+      // a moment for the phone to hand the microphone back by itself (the calls library tries too)
+      later = setTimeout(() => {
+        void reviveMic().then((ok) => {
+          if (wasHeld && ok) toast?.toast(ct("calls.mic_back"), "success");
+        });
+      }, 700);
+    };
+    document.addEventListener("visibilitychange", changed);
+    return () => {
+      clearTimeout(later);
+      document.removeEventListener("visibilitychange", changed);
+    };
+  }, [reviveMic, toast]);
+
+  // while the call is on screen, a microphone the phone holds (a phone call came in, the system took it) is shown
+  React.useEffect(() => {
+    if (state.phase !== "in") return;
+    const look = setInterval(() => {
       const room = roomRef.current;
       if (!room || document.visibilityState !== "visible") return;
-      for (const source of [Track.Source.Camera, Track.Source.Microphone]) {
-        const track = room.localParticipant.getTrackPublication(source)?.track;
-        if (track && !track.isMuted && track.mediaStreamTrack.readyState === "ended") {
-          void track.restartTrack().catch(() => undefined);
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", revive);
-    return () => document.removeEventListener("visibilitychange", revive);
-  }, []);
+      const held = micHeld(micFactsOf(room));
+      setState((s) => (s.micHeld === held ? s : { ...s, micHeld: held }));
+    }, 2000);
+    return () => clearInterval(look);
+  }, [state.phase]);
 
   // back on the tab, or back online: a lost call is tried again at once
   React.useEffect(() => {
@@ -305,6 +412,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const room = roomRef.current;
     if (!room) return;
     const me = room.localParticipant;
+    // the microphone the phone holds: the tap starts it again (it was never the person's choice to mute it)
+    if (what === "mic" && micHeld(micFactsOf(room))) {
+      if (!(await reviveMic())) say(ct("calls.no_media"));
+      redraw();
+      return;
+    }
     try {
       if (what === "mic") await me.setMicrophoneEnabled(!me.isMicrophoneEnabled);
       else if (what === "cam") await me.setCameraEnabled(!me.isCameraEnabled);
@@ -313,7 +426,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       if (what !== "screen") say(ct("calls.no_media"));
     }
     redraw();
-  }, [redraw, say]);
+  }, [redraw, reviveMic, say]);
 
   const startAudio = React.useCallback(async () => {
     await roomRef.current?.startAudio();
@@ -331,9 +444,44 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const pip = React.useCallback(() => {
+    void pipRef.current?.requestPictureInPicture().catch(() => undefined);
+  }, []);
+  const canPip = typeof document !== "undefined" && "pictureInPictureEnabled" in document && document.pictureInPictureEnabled;
+
+  // the system's call controls (the phone's and the floating window's): microphone, camera, hang up, and the floating
+  // window opened by the browser itself when the person steps out, where it does that for calls
+  const actions = React.useRef({ toggle, leave, pip });
+  actions.current = { toggle, leave, pip };
+  const inCall = state.phase === "in";
+  React.useEffect(() => {
+    if (!inCall || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    setMediaAction("enterpictureinpicture", () => actions.current.pip());
+    setMediaAction("togglemicrophone", () => void actions.current.toggle("mic"));
+    setMediaAction("togglecamera", () => void actions.current.toggle("cam"));
+    setMediaAction("hangup", () => void actions.current.leave());
+    return () => {
+      for (const action of MEDIA_ACTIONS) setMediaAction(action, null);
+    };
+  }, [inCall]);
+
   const room = roomRef.current;
+  const me = room?.localParticipant;
+  const micOn = !!me?.isMicrophoneEnabled && !state.micHeld;
+  const camOn = !!me?.isCameraEnabled;
+  React.useEffect(() => {
+    if (!inCall || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const session = navigator.mediaSession as MediaSession & { setMicrophoneActive?: (on: boolean) => void; setCameraActive?: (on: boolean) => void };
+    try {
+      session.setMicrophoneActive?.(micOn);
+      session.setCameraActive?.(camOn);
+    } catch {
+      // older browsers: the controls just show no state
+    }
+  }, [inCall, micOn, camOn]);
+
   const everyone: Participant[] = room ? [room.localParticipant, ...room.remoteParticipants.values()] : [];
-  const api: CallApi = { state, room, everyone, join, leave, toggle, startAudio, prefetch };
+  const api: CallApi = { state, room, everyone, away, reviveMic, canPip, pip, join, leave, toggle, startAudio, prefetch };
   const sounds = everyone
     .filter((p) => p !== room?.localParticipant)
     .flatMap((p) => [p.getTrackPublication(Track.Source.Microphone)?.track, p.getTrackPublication(Track.Source.ScreenShareAudio)?.track])
@@ -347,6 +495,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         <AudioOut key={t.sid} track={t} />
       ))}
       {showMini && <MiniCall api={api} />}
+      {room && (state.phase === "in" || state.phase === "lost") && <PipFeed ref={pipRef} everyone={everyone} me={me} />}
     </CallContext.Provider>
   );
 }
@@ -356,9 +505,8 @@ function MiniCall({ api }: { api: CallApi }) {
   const { state, room, everyone } = api;
   const me = room?.localParticipant;
   const main = mainPicture(everyone, me);
-  const video = React.useRef<HTMLVideoElement>(null);
   const href = `/calls/${encodeURIComponent(state.callId ?? "")}`;
-  const canPip = typeof document !== "undefined" && "pictureInPictureEnabled" in document && document.pictureInPictureEnabled;
+  const micOn = !!me?.isMicrophoneEnabled && !state.micHeld;
 
   return (
     <aside dir="rtl" lang="ar" aria-label={ct("calls.mini")} className="fixed bottom-20 end-3 z-[55] w-44 overflow-hidden rounded-2xl border border-border bg-surface-1 shadow-lg md:bottom-4">
@@ -369,18 +517,24 @@ function MiniCall({ api }: { api: CallApi }) {
           <span className="flex h-full items-center justify-center text-xs text-fg-muted">{ct("calls.connecting")}</span>
         )}
         {state.reconnecting && <span className="absolute inset-x-0 top-0 bg-warn/80 px-1 text-center text-xs text-fg">{ct("calls.reconnecting_short")}</span>}
-        {/* a hidden copy of the main picture for picture-in-picture */}
-        {main && room && <HiddenVideo ref={video} p={main.p} source={main.source} />}
+        {state.micHeld && !state.reconnecting && <span className="absolute inset-x-0 top-0 bg-warn/80 px-1 text-center text-xs text-fg">{ct("calls.mic_held")}</span>}
       </Link>
       <div className="flex items-center justify-between gap-1 p-1.5">
-        <button type="button" onClick={() => void api.toggle("mic")} aria-pressed={!!me?.isMicrophoneEnabled} aria-label={me?.isMicrophoneEnabled ? ct("calls.mic_off") : ct("calls.mic_on")} className="h-9 w-9 rounded-full border border-border text-base">
-              <span aria-hidden="true">{me?.isMicrophoneEnabled ? "🎙️" : "🔇"}</span>
-            </button>
-            {canPip && main && (
-              <button type="button" onClick={() => void video.current?.requestPictureInPicture().catch(() => undefined)} aria-label={ct("calls.pip")} title={ct("calls.pip")} className="h-9 w-9 rounded-full border border-border text-base">
-                <span aria-hidden="true">🪟</span>
-              </button>
-            )}
+        <button
+          type="button"
+          onClick={() => void api.toggle("mic")}
+          aria-pressed={micOn}
+          aria-label={state.micHeld ? ct("calls.mic_revive") : micOn ? ct("calls.mic_off") : ct("calls.mic_on")}
+          title={state.micHeld ? ct("calls.mic_revive") : undefined}
+          className={`h-9 w-9 rounded-full border text-base ${state.micHeld ? "border-warn bg-warn/15" : "border-border"}`}
+        >
+          <span aria-hidden="true">{state.micHeld ? "⚠️" : micOn ? "🎙️" : "🔇"}</span>
+        </button>
+        {api.canPip && main && (
+          <button type="button" onClick={api.pip} aria-label={ct("calls.pip")} title={ct("calls.pip")} className="h-9 w-9 rounded-full border border-border text-base">
+            <span aria-hidden="true">🪟</span>
+          </button>
+        )}
             <button type="button" onClick={() => void api.leave()} aria-label={ct("calls.leave")} title={ct("calls.leave")} className="h-9 w-9 rounded-full bg-danger text-base text-danger-fg">
           <span aria-hidden="true">📴</span>
         </button>
@@ -389,18 +543,71 @@ function MiniCall({ api }: { api: CallApi }) {
   );
 }
 
-/** The main picture again, off screen, for the browser's picture-in-picture window. */
-const HiddenVideo = React.forwardRef<HTMLVideoElement, { p: Participant; source: Track.Source }>(function HiddenVideo({ p, source }, outer) {
-  const track = p.getTrackPublication(source)?.track;
+/** A theme colour for the drawn card (the canvas has no classes). */
+function tokenColour(name: string, fallback: string): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v ? `rgb(${v})` : fallback;
+}
+
+/**
+ * The picture of the browser's floating window, kept off screen for the whole call: the main picture when somebody has
+ * a camera or a shared screen, otherwise a small drawn card with who the call is with (a voice call has no picture, and
+ * a floating window needs one). It is what the browser floats by itself when the person steps out, where it does that
+ * (an iPhone: the video's own automatic picture-in-picture; Chrome: the media session's action), keeping the call in
+ * front so the phone has less reason to take the microphone.
+ */
+const PipFeed = React.forwardRef<HTMLVideoElement, { everyone: Participant[]; me: Participant | undefined }>(function PipFeed({ everyone, me }, outer) {
   const inner = React.useRef<HTMLVideoElement | null>(null);
+  const since = React.useRef(Date.now());
+  const main = mainPicture(everyone, me);
+  const track = main ? main.p.getTrackPublication(main.source)?.track : undefined;
+  const others = everyone.filter((p) => p !== me);
+  const label = others.length === 1 && others[0] ? nameOf(others[0], me) : ct("calls.pip_card");
+
   React.useEffect(() => {
     const el = inner.current;
-    if (!el || !track) return;
-    track.attach(el);
-    return () => {
-      track.detach(el);
+    if (!el) return;
+    el.setAttribute("autopictureinpicture", "");
+    if (track) {
+      track.attach(el);
+      return () => {
+        track.detach(el);
+      };
+    }
+    // no picture: the card, drawn again every second (the floating window shows the last frame)
+    const canvas = document.createElement("canvas");
+    const pen = canvas.getContext("2d");
+    if (!pen || typeof canvas.captureStream !== "function") return;
+    canvas.width = 480;
+    canvas.height = 270;
+    const paper = tokenColour("--surface-1", "black");
+    const ink = tokenColour("--fg", "white");
+    const faint = tokenColour("--fg-muted", "gray");
+    const draw = () => {
+      const secs = Math.floor((Date.now() - since.current) / 1000);
+      pen.fillStyle = paper;
+      pen.fillRect(0, 0, canvas.width, canvas.height);
+      pen.textAlign = "center";
+      pen.direction = "rtl";
+      pen.fillStyle = ink;
+      pen.font = "bold 32px system-ui, sans-serif";
+      pen.fillText(label, 240, 125, 440);
+      pen.fillStyle = faint;
+      pen.font = "24px system-ui, sans-serif";
+      pen.fillText(`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`, 240, 172);
     };
-  }, [track]);
+    draw();
+    const stream = canvas.captureStream(1);
+    el.srcObject = stream;
+    void el.play().catch(() => undefined);
+    const tick = setInterval(draw, 1000);
+    return () => {
+      clearInterval(tick);
+      for (const t of stream.getTracks()) t.stop();
+      if (el.srcObject === stream) el.srcObject = null;
+    };
+  }, [track, label]);
+
   return (
     <video
       ref={(el) => {
@@ -412,7 +619,7 @@ const HiddenVideo = React.forwardRef<HTMLVideoElement, { p: Participant; source:
       playsInline
       muted
       aria-hidden="true"
-      className="pointer-events-none absolute h-px w-px opacity-0"
+      className="pointer-events-none fixed bottom-0 start-0 h-px w-px opacity-0"
     />
   );
 });
