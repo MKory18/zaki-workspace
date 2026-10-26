@@ -10,7 +10,7 @@ import { useOptionalToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 import { watchErrorKey } from "./watch-home";
 import { WatchPlayer, type WatchPlayerHandle, type WatchRemote } from "./watch-player";
-import { WatchComments } from "./watch-comments";
+import { WatchComments, type ConvertRights } from "./watch-comments";
 
 export interface WatchRoomData {
   id: string;
@@ -23,6 +23,7 @@ export interface WatchRoomData {
   people: { id: string; name: string }[];
   live: boolean;
   conversationId: string;
+  spaceId: string;
   remote: WatchRemote;
   can: { end: boolean };
 }
@@ -31,7 +32,18 @@ export interface WatchRoomData {
  * One session: the video on top, on the same second on every screen (src/components/watch/watch-player.tsx), who is
  * in it, and one tap to the talk — the session's topic, where the call and the whiteboard already are.
  */
-export function WatchRoom({ session, viewerId }: { session: WatchRoomData; viewerId: string }) {
+export function WatchRoom({
+  session,
+  viewerId,
+  startAt = null,
+  convert = { idea: false, task: false, project: false },
+}: {
+  session: WatchRoomData;
+  viewerId: string;
+  /** open the video at this second (`?t=`) */
+  startAt?: number | null;
+  convert?: ConvertRights;
+}) {
   const { t } = useI18n();
   const toast = useOptionalToast();
   const router = useRouter();
@@ -66,6 +78,7 @@ export function WatchRoom({ session, viewerId }: { session: WatchRoomData; viewe
         {/* the video is never taller than most of the screen (a phone on its side): the title and the buttons stay in view */}
         <WatchPlayer
           ref={player}
+          jumpTo={startAt}
           overlay={
             <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
               {floating.map((f) => (
@@ -147,6 +160,8 @@ export function WatchRoom({ session, viewerId }: { session: WatchRoomData; viewe
       <div className="mt-3 px-4 pb-4 md:px-0 lg:mt-0">
         <WatchComments
           conversationId={session.conversationId}
+          session={{ id: session.id, title: session.title, spaceId: session.spaceId }}
+          convert={convert}
           timeSec={() => player.current?.timeSec() ?? 0}
           seekMine={(sec) => player.current?.seekMine(sec)}
           onReaction={float}

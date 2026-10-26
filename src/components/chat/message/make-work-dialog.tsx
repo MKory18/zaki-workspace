@@ -32,7 +32,7 @@ export function MakeWorkDialog({
   onClose,
   onDone,
 }: {
-  message: MessageDto | null;
+  message: Pick<MessageDto, "id" | "body"> | null;
   kind: WorkKind;
   onClose: () => void;
   onDone: (made: { kind: WorkKind; id: string }) => void;
