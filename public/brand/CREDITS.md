@@ -17,6 +17,11 @@ Everything in `public/brand/`, `public/fonts/` and `public/icons/` is listed her
 IBM Plex Sans Arabic (the body font) and Lalezar (the wordmark «زاكي» of «نجمة وطريق») are loaded
 through `next/font/google` at build time and served from this site; both are SIL OFL 1.1.
 
+The whiteboard («الصبورة») is Excalidraw (`@excalidraw/excalidraw`, MIT). Its fonts are copied from that package
+into `public/excalidraw/fonts` at build (`scripts/copy-whiteboard-assets.mjs`, not tracked) and served from this site:
+Excalifont, Virgil, Nunito, Cascadia Code, Assistant, Liberation Sans and Lilita One are SIL OFL 1.1, Comic Shanns is
+MIT; the Chinese / Japanese face Xiaolai is left out.
+
 The field of eight-pointed stars of the "ليل" and "نهار" themes is no file: it is drawn in code
 (`patternTileSvg` in `src/lib/themes/decor.ts`), plain geometry, the project's own.
 

@@ -14,6 +14,8 @@ export const REALTIME_KINDS = [
   "conversation.delivered",
   "conversation.changed",
   "membership.changed",
+  // somebody drew on a conversation's whiteboard (its readers fetch and merge)
+  "whiteboard.changed",
   // a call of a conversation started or ended (its readers refresh the «in a call» bar)
   "call.changed",
   // somebody is ringing this ONE person (`targetUserId`) into a call

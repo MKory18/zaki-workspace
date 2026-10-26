@@ -17,3 +17,6 @@ docker-compose.override.yml
 
 # uploaded files land here at run time (src/server/files); never committed
 data/files/
+
+# Excalidraw's fonts, copied by scripts/copy-whiteboard-assets.mjs at build
+/public/excalidraw/

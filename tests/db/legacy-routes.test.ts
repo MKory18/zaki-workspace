@@ -19,6 +19,7 @@ vi.mock("next/navigation", () => ({
 import TodayPage from "@/app/(app)/page";
 import ChatPage from "@/app/(app)/chat/page";
 import ChatConversationPage from "@/app/(app)/chat/[id]/page";
+import WhiteboardPage from "@/app/(app)/chat/[id]/whiteboard/page";
 import CallPage from "@/app/(app)/calls/[id]/page";
 import ArchivePage from "@/app/(app)/archive/page";
 import MyWorkPage from "@/app/(app)/my-work/page";
@@ -89,10 +90,10 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * The pages of the shell that are not an old address: the in-app guide (Phase 2), reached from the help
  * button, from Phase 3 one conversation (`/chat/[id]`) and the owner's archive (`/archive`), and the owner's
  * and admins' look over every space (`/spaces`, «كل المساحات»), «التذاكر» and «الحملات» as pages of their own
- * under «الشغل» (`/tickets`, `/campaigns`), and one call (`/calls/[id]`: a conversation's call or a meeting's link,
- * 2026-10-25).
+ * under «الشغل» (`/tickets`, `/campaigns`), one call (`/calls/[id]`: a conversation's call or a meeting's link) and a
+ * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25.
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/tickets", "/campaigns", "/calls/[id]"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -140,6 +141,7 @@ const PAGES: Record<string, PageCall> = {
   "/": () => TodayPage(),
   "/chat": () => ChatPage(),
   "/chat/[id]": (args) => ChatConversationPage({ params: idOf(args) }),
+  "/chat/[id]/whiteboard": (args) => WhiteboardPage({ params: idOf(args) }),
   "/calls/[id]": (args) => CallPage({ params: idOf(args) }),
   "/archive": () => ArchivePage(),
   "/my-work": ({ searchParams }) => MyWorkPage({ searchParams }),
@@ -330,6 +332,8 @@ function addressesOf(route: string, w: World): string[] {
     case "/chat/[id]":
       // a topic of the team's space, one of the space nobody is in, and one that is gone
       return [w.teamTopic.id, w.closedTopic.id, GONE].map((id) => `/chat/${id}`);
+    case "/chat/[id]/whiteboard":
+      return [w.teamTopic.id, w.closedTopic.id, GONE].map((id) => `/chat/${id}/whiteboard`);
     case "/calls/[id]":
       return [w.topicCall.id, w.closedMeeting.id, GONE].map((id) => `/calls/${id}`);
     case "/u/[id]":

@@ -377,6 +377,7 @@ model Conversation {
   team         Team?                @relation(fields: [teamId], references: [id], onDelete: Restrict)
   members      ConversationMember[]
   messages     ChatMessage[]
+  whiteboard   Whiteboard?
   calls        Call[]
 
   @@unique([orgId, dmKey])
@@ -526,7 +527,28 @@ model RealtimeEvent {
   @@index([orgId, id])
 }
 
-// A voice / video call on the company's own calls server (LiveKit, self-hosted on Coolify: calls.zakiai.io). The
+// The shared whiteboard of a conversation («الصبورة», the owner's ask of 2026-10-25): Excalidraw (MIT) draws in the
+// browser, and its drawing is kept here as the list of its elements. One per conversation, born the first time somebody
+// draws. Whoever reads the conversation sees it; whoever may write there draws (src/server/chat/whiteboard.ts).
+model Whiteboard {
+  id             String   @id @default(cuid())
+  orgId          String
+  conversationId String   @unique
+  // the Excalidraw elements (shapes, arrows, text, freehand); a deleted one stays with `isDeleted` so every screen drops it
+  elements       Json     @default("[]")
+  // goes up by one on every save: a screen that is behind asks again
+  version        Int      @default(0)
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+// A voice / video call on the company's own calls server (LiveKit, self-hosted on Coolify: calls.workspace.zakiai.io). The
 // sound and the picture never touch this database: these rows say WHO may be in a call. A call belongs to a
 // conversation (a topic, a DM: its readers are its people) or, with no conversation, it is a meeting of a space
 // opened by its link (the space's people). src/server/policy/call.ts decides; src/server/calls/ acts.
@@ -602,6 +624,7 @@ model Organization {
   routines         Routine[]
   goals            Goal[]
   campaigns        Campaign[]
+  whiteboards      Whiteboard[]
   calls            Call[]
 
   @@index([slug])
