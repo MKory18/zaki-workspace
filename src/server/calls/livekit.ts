@@ -127,3 +127,40 @@ export async function dropFromRoom(callId: string, userId: string): Promise<void
     log.warn("calls.server_unreachable", { method: "RemoveParticipant", message: err instanceof Error ? err.message : String(err) });
   }
 }
+
+/** Ends a call's room for everybody now: the calls server closes it and every browser hears that the call ended. */
+export async function closeRoom(callId: string): Promise<void> {
+  const server = callsServer();
+  if (!server) return;
+  try {
+    await roomService(server, "DeleteRoom", roomOf(callId), {});
+  } catch (err) {
+    log.warn("calls.server_unreachable", { method: "DeleteRoom", message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+/**
+ * Mutes one person's microphone in a call's room (the host's «اكتم»). They unmute themselves when they want to speak:
+ * the calls server never turns a microphone on from afar. False when the calls server could not be asked.
+ */
+export async function muteInRoom(callId: string, userId: string): Promise<boolean> {
+  const server = callsServer();
+  if (!server) return false;
+  try {
+    const out = await roomService<{ participants?: { identity?: string; tracks?: { sid?: string; type?: string; source?: string }[] }[] }>(
+      server,
+      "ListParticipants",
+      roomOf(callId),
+      {},
+    );
+    const person = (out?.participants ?? []).find((p) => p.identity === userId);
+    const mics = (person?.tracks ?? []).filter((t) => t.sid && (t.source === "MICROPHONE" || (t.source === undefined && t.type === "AUDIO")));
+    for (const track of mics) {
+      await roomService(server, "MutePublishedTrack", roomOf(callId), { identity: userId, track_sid: track.sid, muted: true });
+    }
+    return true;
+  } catch (err) {
+    log.warn("calls.server_unreachable", { method: "MutePublishedTrack", message: err instanceof Error ? err.message : String(err) });
+    return false;
+  }
+}

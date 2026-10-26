@@ -23,8 +23,8 @@ import {
  *  - a meeting (a call with no conversation, opened by its link) is for the people of its space;
  *  - «ضيف حدا» brings in one of the space's people (a seat with `invitedById`): they join the CALL only, never the
  *    conversation; anybody in the call may do it, a guest excepted;
- *  - taking somebody out: whoever started the call, the conversation's moderators (a meeting: the space's ADMIN),
- *    the OWNER — never the owner himself, and never yourself (you leave);
+ *  - the hosts — whoever started the call, the conversation's moderators (a meeting: the space's ADMIN), the OWNER —
+ *    take somebody out, mute them (never the owner himself, never yourself), and end the call for everybody;
  *  - an ended call takes nobody, and a removed seat gets no new pass.
  */
 
@@ -78,17 +78,33 @@ export function canInviteToCall(call: CallFacts | null, org: OrgFacts | null): b
   return canJoinCall(call, org) && org!.role !== "GUEST";
 }
 
-/** May the viewer take `target` out of this call? */
+/**
+ * Does the viewer run this call: whoever started it, the conversation's moderators (a meeting: the space's ADMIN), the
+ * OWNER? They take people out, mute them, and end the call for everybody (the owner's «زر انهاء مكالمة لمنشئ»).
+ */
+export function isCallHost(call: CallFacts | null, org: OrgFacts | null, viewerId: string): boolean {
+  if (!canJoinCall(call, org)) return false;
+  if (isOwnerOf(org) || call!.startedById === viewerId) return true;
+  return call!.conversationId ? call!.moderatesConversation : isSpaceAdmin(call!.viewerSpaceRole);
+}
+
+/** May the viewer take `target` out of this call? A host, never the owner, never themselves (they leave). */
 export function canRemoveFromCall(
   call: CallFacts | null,
   org: OrgFacts | null,
   viewerId: string,
   target: { userId: string; role: string },
 ): boolean {
-  if (!canJoinCall(call, org)) return false;
   if (target.role === "OWNER" || target.userId === viewerId) return false;
-  if (isOwnerOf(org) || call!.startedById === viewerId) return true;
-  return call!.conversationId ? call!.moderatesConversation : isSpaceAdmin(call!.viewerSpaceRole);
+  return isCallHost(call, org, viewerId);
+}
+
+/** May the viewer mute `target`'s microphone? The same as taking them out: a host, never the owner, never themselves. */
+export const canMuteInCall = canRemoveFromCall;
+
+/** May the viewer end the call for everybody? A host. Everybody else only leaves (the call goes on without them). */
+export function canEndCall(call: CallFacts | null, org: OrgFacts | null, viewerId: string): boolean {
+  return isCallHost(call, org, viewerId);
 }
 
 // ---------- DB loader ----------

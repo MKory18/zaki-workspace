@@ -92,6 +92,38 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
     }
   }
 
+  async function mutePerson(userId: string) {
+    try {
+      await callApi(`${api}/mute`, { userId });
+      say(ct("calls.muted_ok"));
+    } catch (e) {
+      say(e instanceof Error ? e.message : ct("calls.action_failed"), "error");
+    }
+  }
+
+  // «إنهاء للكل» asks once: the first tap turns the button into «أكيد؟», the second ends the call for everybody
+  const [confirming, setConfirming] = React.useState(false);
+  React.useEffect(() => {
+    if (!confirming) return;
+    const t = setTimeout(() => setConfirming(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirming]);
+  async function endForAll() {
+    if (!confirming) return setConfirming(true);
+    setConfirming(false);
+    try {
+      await callApi(`${api}/end`, {});
+    } catch (e) {
+      say(e instanceof Error ? e.message : ct("calls.action_failed"), "error");
+      return;
+    }
+    await call.leave();
+    void load();
+  }
+
+  // a tap on somebody's picture makes it the big one; a tap on the big one puts everybody back
+  const [pinned, setPinned] = React.useState<string | null>(null);
+
   function copyLink() {
     if (!view) return;
     void navigator.clipboard?.writeText(`${window.location.origin}${view.path}`).then(() => say(ct("calls.link_copied")), () => say(ct("calls.action_failed"), "error"));
@@ -133,6 +165,9 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
   const me = call.room?.localParticipant;
   const everyone = call.everyone;
   const sharer = everyone.find((p) => p.isScreenShareEnabled && p.getTrackPublication(Track.Source.ScreenShare)?.track);
+  const pinnedPerson = pinned ? everyone.find((p) => p.identity === pinned) : undefined;
+  // the stage: a shared screen first; otherwise the picture somebody chose to enlarge
+  const main = sharer ? { p: sharer, source: Track.Source.ScreenShare } : pinnedPerson ? { p: pinnedPerson, source: Track.Source.Camera } : null;
 
   return (
     // the call takes the whole screen, over the app's bars (toasts stay above it)
@@ -148,7 +183,11 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
         {(call.state.reconnecting || phase === "lost") && <p role="status" className="rounded-full bg-warn/15 px-3 py-1 text-xs text-warn">{ct("calls.reconnecting")}</p>}
       </header>
 
-      {sharer ? <Stage sharer={sharer} everyone={everyone} me={me} /> : <Tiles everyone={everyone} me={me} />}
+      {main ? (
+        <Stage main={main} everyone={everyone} me={me} onMain={() => setPinned(null)} onPick={(id) => setPinned(id)} />
+      ) : (
+        <Tiles everyone={everyone} me={me} onPick={(id) => setPinned(id)} />
+      )}
 
       {call.state.needsAudioTap && (
         <button type="button" onClick={() => void call.startAudio()} className="absolute inset-x-0 top-16 mx-auto w-fit rounded-full bg-accent px-5 py-3 font-semibold text-accent-fg shadow-lg">
@@ -175,6 +214,11 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
                       <Avatar name={p.name || p.identity} className="h-8 w-8" />
                       <span className="min-w-0 flex-1 truncate">{nameOf(p, me)}</span>
                       <Quality quality={p.connectionQuality} />
+                      {row?.canMute && p.isMicrophoneEnabled && (
+                        <button type="button" onClick={() => void mutePerson(p.identity)} className="min-h-11 rounded-lg px-2 text-sm hover:bg-surface-2">
+                          {ct("calls.mute")}
+                        </button>
+                      )}
                       {row?.canRemove && (
                         <button type="button" onClick={() => void removePerson(p.identity)} className="min-h-11 rounded-lg px-2 text-sm text-danger hover:bg-danger/10">
                           {ct("calls.remove")}
@@ -204,17 +248,29 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
           <Round on={!!me?.isScreenShareEnabled} onClick={() => void call.toggle("screen")} label={me?.isScreenShareEnabled ? ct("calls.screen_stop") : ct("calls.screen_start")} icon="🖥️" />
         )}
         <Round on={panel !== "none"} onClick={() => setPanel((v) => (v === "none" ? "people" : "none"))} label={ct("calls.people")} icon="👥" />
-        <button type="button" onClick={() => void call.leave()} aria-label={ct("calls.leave")} title={ct("calls.leave")} className="inline-flex h-12 min-w-12 items-center justify-center gap-1 rounded-full bg-danger px-4 font-semibold text-danger-fg">
+        {/* «اطلع»: alone, the call goes on; a host also has «إنهاء للكل» (the owner's «زر انهاء مكالمة لمنشئ + خروج») */}
+        <button
+          type="button"
+          onClick={() => void call.leave()}
+          aria-label={ct("calls.leave")}
+          title={ct("calls.leave")}
+          className={`inline-flex h-12 min-w-12 items-center justify-center gap-1 rounded-full px-4 font-semibold ${view?.can.end ? "border border-danger text-danger hover:bg-danger/10" : "bg-danger text-danger-fg"}`}
+        >
           <span aria-hidden="true">📴</span>
           <span className="max-sm:sr-only">{ct("calls.leave")}</span>
         </button>
+        {view?.can.end && (
+          <button type="button" onClick={() => void endForAll()} className="inline-flex h-12 items-center justify-center gap-1 rounded-full bg-danger px-4 text-sm font-semibold text-danger-fg">
+            {confirming ? ct("calls.end_confirm") : ct("calls.end_all")}
+          </button>
+        )}
       </nav>
     </section>
   );
 }
 
 /** Everybody's picture, sharing the room by count and by the shape of the screen. */
-function Tiles({ everyone, me }: { everyone: Participant[]; me: Participant | undefined }) {
+function Tiles({ everyone, me, onPick }: { everyone: Participant[]; me: Participant | undefined; onPick: (identity: string) => void }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const size = useSize(ref);
   const grid = bestGrid(everyone.length, size.width, size.height);
@@ -225,29 +281,44 @@ function Tiles({ everyone, me }: { everyone: Participant[]; me: Participant | un
         style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${grid.rows}, minmax(0, 1fr))` }}
       >
         {everyone.map((p) => (
-          <Tile key={p.identity} p={p} me={me} />
+          <Tile key={p.identity} p={p} me={me} onPick={everyone.length > 1 ? () => onPick(p.identity) : undefined} />
         ))}
       </ul>
     </div>
   );
 }
 
-/** A shared screen is the stage; the people sit in a strip beside it (sideways) or under it (upright). */
-function Stage({ sharer, everyone, me }: { sharer: Participant; everyone: Participant[]; me: Participant | undefined }) {
+/**
+ * The stage: a shared screen, or the picture somebody enlarged; the people sit in a strip beside it (sideways) or under
+ * it (upright). A tap on the stage puts everybody back (an enlarged picture); a tap in the strip enlarges that one.
+ */
+function Stage({ main, everyone, me, onMain, onPick }: {
+  main: { p: Participant; source: Track.Source };
+  everyone: Participant[];
+  me: Participant | undefined;
+  onMain: () => void;
+  onPick: (identity: string) => void;
+}) {
+  const screen = main.source === Track.Source.ScreenShare;
   const ref = React.useRef<HTMLDivElement>(null);
   const size = useSize(ref);
   const sideways = size.width > size.height;
   return (
     <div ref={ref} className={`flex min-h-0 flex-1 gap-2 px-2 ${sideways ? "flex-row" : "flex-col"}`}>
       <figure className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl bg-scrim">
-        <PersonPicture p={sharer} me={me} source={Track.Source.ScreenShare} fit="contain" />
-        <figcaption className="absolute bottom-2 start-2 rounded bg-scrim/70 px-2 text-xs text-on-photo">{ct("calls.screen_of", { name: nameOf(sharer, me) })}</figcaption>
+        <PersonPicture p={main.p} me={me} source={main.source} fit={screen ? "contain" : "cover"} />
+        <figcaption className="absolute bottom-2 start-2 rounded bg-scrim/70 px-2 text-xs text-on-photo">{screen ? ct("calls.screen_of", { name: nameOf(main.p, me) }) : nameOf(main.p, me)}</figcaption>
+        {!screen && (
+          <button type="button" onClick={onMain} aria-label={ct("calls.unpin")} title={ct("calls.unpin")} className="absolute inset-0 cursor-zoom-out">
+            <span className="sr-only">{ct("calls.unpin")}</span>
+          </button>
+        )}
       </figure>
       <ul className={`flex shrink-0 gap-2 overflow-auto ${sideways ? "w-40 flex-col" : "h-24 flex-row"}`}>
         {everyone.map((p) => (
           <li key={p.identity} className={sideways ? "aspect-video w-full shrink-0" : "aspect-video h-full shrink-0"}>
             <ul className="h-full">
-              <Tile p={p} me={me} small />
+              <Tile p={p} me={me} small onPick={() => onPick(p.identity)} />
             </ul>
           </li>
         ))}
@@ -256,10 +327,15 @@ function Stage({ sharer, everyone, me }: { sharer: Participant; everyone: Partic
   );
 }
 
-function Tile({ p, me, small = false }: { p: Participant; me: Participant | undefined; small?: boolean }) {
+function Tile({ p, me, small = false, onPick }: { p: Participant; me: Participant | undefined; small?: boolean; onPick?: () => void }) {
   return (
     <li className={`relative h-full min-h-0 overflow-hidden rounded-xl bg-surface-2 ${p.isSpeaking ? "ring-2 ring-ok" : ""}`}>
       <PersonPicture p={p} me={me} small={small} />
+      {onPick && (
+        <button type="button" onClick={onPick} aria-label={`${ct("calls.pin")}: ${nameOf(p, me)}`} className="absolute inset-0 cursor-zoom-in">
+          <span className="sr-only">{ct("calls.pin")}</span>
+        </button>
+      )}
       <span className="absolute bottom-1.5 start-1.5 flex max-w-[90%] items-center gap-1 truncate rounded bg-scrim/70 px-2 text-xs text-on-photo">
         {!p.isMicrophoneEnabled && <span aria-label={ct("calls.muted")}>🔇</span>}
         {nameOf(p, me)}
