@@ -78,6 +78,7 @@ export async function registerOrganization(
           memberships: {
             create: {
               role: "OWNER" satisfies OrgRole,
+              primaryOwner: true,
               organization: { create: { name: input.orgName, slug, keyPrefix, joinCode } },
             },
           },
