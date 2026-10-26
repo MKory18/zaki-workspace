@@ -641,6 +641,9 @@ model OrganizationMember {
   // Capabilities on top of / taken away from what the rank grants (src/server/policy/capabilities.ts).
   capabilities        String[] @default([])
   revokedCapabilities String[] @default([])
+  // The company's first OWNER: the only one who makes or unmakes another OWNER (a partner, «شريك») and takes a
+  // permission away from one. Nobody administers him. Other OWNERs are partners with everything he leaves them.
+  primaryOwner        Boolean  @default(false)
   // Who escalations go to (the person's manager); null = the owner.
   managerId      String?
   // The same person's reference in the OMS (staff, penalties, cash custody), for later integration.

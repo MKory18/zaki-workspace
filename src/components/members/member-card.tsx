@@ -61,7 +61,7 @@ export function MemberCard({
             </span>
           ) : null}
           <span className="flex flex-wrap gap-1.5">
-            <RankBadge role={member.role} />
+            <RankBadge role={member.role} primaryOwner={member.primaryOwner} />
             <StatusBadge status={member.status} />
             {member.mustChangePassword ? <PendingPasswordBadge /> : null}
           </span>

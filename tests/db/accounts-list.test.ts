@@ -30,6 +30,7 @@ const FIELDS = [
   "mustChangePassword",
   "name",
   "openWork",
+  "primaryOwner",
   "revokedCapabilities",
   "role",
   "status",
@@ -52,7 +53,7 @@ describe("the roster", () => {
     const res = await accountsApi.list(org.id);
     expect(res.status).toBe(200);
     const roster = res.json as unknown as Roster;
-    expect(Object.keys(roster).sort()).toEqual(["actorRole", "members", "spaces"]);
+    expect(Object.keys(roster).sort()).toEqual(["actorPrimaryOwner", "actorRole", "members", "spaces"]);
     expect(roster.actorRole).toBe("OWNER");
     expect(roster.members).toHaveLength(5);
     for (const m of roster.members) expect(Object.keys(m).sort()).toEqual(FIELDS);

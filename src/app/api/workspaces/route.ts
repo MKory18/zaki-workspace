@@ -108,7 +108,7 @@ export async function POST(req: Request) {
     if (input.organizationId && input.organizationId !== actor.orgId) {
       const member = await db.organizationMember.findUnique({
         where: { organizationId_userId: { organizationId: input.organizationId, userId: actor.userId } },
-        select: { role: true, status: true, capabilities: true, revokedCapabilities: true },
+        select: { role: true, status: true, capabilities: true, revokedCapabilities: true, primaryOwner: true },
       });
       if (!member || member.status !== "ACTIVE") throw new ForbiddenError("spaces.wrong_org");
       orgId = input.organizationId;

@@ -365,8 +365,8 @@ describe("loading the list", () => {
   });
 
   it("an empty or broken answer is an empty list, not a crash", () => {
-    expect(normalizeMembersResponse(null)).toEqual({ members: [], actorRole: "GUEST", spaces: [] });
-    expect(normalizeMembersResponse({} as never)).toEqual({ members: [], actorRole: "GUEST", spaces: [] });
+    expect(normalizeMembersResponse(null)).toEqual({ members: [], actorRole: "GUEST", actorPrimaryOwner: false, spaces: [] });
+    expect(normalizeMembersResponse({} as never)).toEqual({ members: [], actorRole: "GUEST", actorPrimaryOwner: false, spaces: [] });
   });
 
   it("encodes a person's id in the address", async () => {
