@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertMemberCan } from "@/server/policy/actor";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { NotFoundError, requireTeamWork } from "@/server/auth";
@@ -21,7 +22,8 @@ export async function GET(
       include: { project: { select: { id: true, name: true, workspaceId: true, teamId: true, workspace: { select: { name: true } } } } },
     });
     if (!board) throw new NotFoundError("board.not_found");
-    await requireTeamWork(board.project.workspaceId, board.project.teamId, undefined, "board.not_found");
+    const access = await requireTeamWork(board.project.workspaceId, board.project.teamId, undefined, "board.not_found");
+    await assertMemberCan(access, "projects.view", "section.view_denied", { spaceGuestsPass: true });
 
     const [columns, tasks] = await Promise.all([
       db.boardColumn.findMany({
@@ -80,7 +82,8 @@ export async function PATCH(
       select: { id: true, projectId: true, project: { select: { workspaceId: true, teamId: true } } },
     });
     if (!board) throw new NotFoundError("board.not_found");
-    await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
+    const access = await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
+    await assertMemberCan(access, "projects.edit", "section.edit_denied", { spaceGuestsPass: true });
     const updated = await db.board.update({
       where: { id: board.id },
       data: input,
@@ -107,7 +110,8 @@ export async function POST(
       select: { id: true, project: { select: { workspaceId: true, teamId: true } } },
     });
     if (!board) throw new NotFoundError("board.not_found");
-    await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
+    const access = await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
+    await assertMemberCan(access, "projects.edit", "section.edit_denied", { spaceGuestsPass: true });
     const txs = order.map((columnId, position) =>
       db.boardColumn.updateMany({
         where: { id: columnId, boardId: board.id },

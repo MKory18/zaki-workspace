@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { actorCanWork } from "@/server/policy/actor";
 import {
   listWorkspacePeople,
   queryTasksForView,
@@ -9,7 +10,7 @@ import {
 import { TaskRow, type RowMember } from "@/components/task-row";
 import { ListFilters } from "@/components/list-filters";
 import { getServerT } from "@/lib/i18n/server";
-import { pageActor } from "@/app/(app)/_access";
+import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
 import { currentSpace } from "@/server/services/current-space";
 import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 
@@ -26,6 +27,8 @@ export default async function ListPage({
   const { t } = getServerT();
   // the space the person is in, never one named in the address (that is entered through the switcher)
   const { actor } = await pageActor();
+  // the tasks row of the person's grid (a guest works in their shared spaces by the space's rules)
+  if (!actorCanWork(actor, "tasks.view")) return <SectionOffNotice />;
   const space = await currentSpace(actor);
   const result = await resolveWorkspaceView(space?.id ?? "");
   if ("pageRedirect" in result) redirect("/login");

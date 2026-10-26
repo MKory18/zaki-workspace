@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
-import { actorCan, type Actor } from "@/server/policy/actor";
+import { actorCan, actorCanWork, type Actor } from "@/server/policy/actor";
 import { loadWorkScope, narrowScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { fmtLongDate, fmtRelative } from "@/lib/format";
@@ -129,9 +129,12 @@ export async function getToday(actor: Actor, opts: { now?: Date; spaceId?: strin
 
   // every query below carries the company and the allow-list of spaces; an empty list matches nothing
   // and inside a space with teams, only the space's own work and the person's teams' (a manager sees all)
+  // the section grid: without the tasks / projects «يشوف» box nothing of them is listed here (an empty list matches nothing)
+  const taskSpaces = actorCanWork(actor, "tasks.view") ? spaceIds : [];
+  const projectSpaces = actorCanWork(actor, "projects.view") ? spaceIds : [];
   const open = {
     orgId: actor.orgId,
-    workspaceId: { in: spaceIds },
+    workspaceId: { in: taskSpaces },
     archived: false,
     completedAt: null,
     AND: [taskVisibleWhere(scope)],
@@ -169,7 +172,7 @@ export async function getToday(actor: Actor, opts: { now?: Date; spaceId?: strin
     const counted = actor.isExternal ? { archived: false, completedAt: null, assigneeId: actor.userId } : { archived: false, completedAt: null };
     const found = await db.project.findMany({
       where: {
-        workspaceId: { in: spaceIds },
+        workspaceId: { in: projectSpaces },
         AND: [projectVisibleWhere(scope)],
         status: { in: [...LIVE_PROJECT_STATUSES] },
         ...(actor.isExternal ? { tasks: { some: counted } } : {}),
@@ -228,7 +231,8 @@ export async function getToday(actor: Actor, opts: { now?: Date; spaceId?: strin
     const usableBoard = { archived: false, columns: { some: {} } } satisfies Prisma.BoardWhereInput;
     const found = await db.project.findMany({
       where: {
-        workspaceId: { in: writable.map((s) => s.id) },
+        // the quick add makes a task: it takes the tasks «يضيف ويعدّل» box
+        workspaceId: { in: actorCanWork(actor, "tasks.edit") ? writable.map((s) => s.id) : [] },
         AND: [projectVisibleWhere(scope)],
         status: { notIn: [...CLOSED_PROJECT_STATUSES] },
         boards: { some: usableBoard },

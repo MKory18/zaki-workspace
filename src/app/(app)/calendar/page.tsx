@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { actorCanWork } from "@/server/policy/actor";
 import {
   queryTasksForView,
   resolveWorkspaceView,
@@ -8,7 +9,7 @@ import { pageUser } from "@/server/auth";
 import { monthName } from "@/lib/format";
 import { CalendarGrid, type CalTask } from "@/components/calendar-grid";
 import { getServerT } from "@/lib/i18n/server";
-import { pageActor } from "@/app/(app)/_access";
+import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
 import { currentSpace } from "@/server/services/current-space";
 
 import Link from "next/link";
@@ -20,6 +21,8 @@ export default async function CalendarPage({
   const { t } = getServerT();
   // the space the person is in, never one named in the address (that is entered through the switcher)
   const { actor } = await pageActor();
+  // the tasks row of the person's grid (a guest works in their shared spaces by the space's rules)
+  if (!actorCanWork(actor, "tasks.view")) return <SectionOffNotice />;
   const space = await currentSpace(actor);
   const view = await resolveWorkspaceView(space?.id ?? "");
   if ("pageRedirect" in view) redirect("/login");

@@ -1,4 +1,5 @@
-import { pageActor } from "@/app/(app)/_access";
+import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
+import { actorCanWork } from "@/server/policy/actor";
 import { currentSpace } from "@/server/services/current-space";
 import { MY_WORK_TABS, getMyWork, type MyWorkTab } from "@/server/services/my-work";
 import { TaskRow } from "@/components/task-row";
@@ -18,6 +19,8 @@ const TAB_KEYS: Record<MyWorkTab, string> = {
 export default async function MyWorkPage({ searchParams }: { searchParams: { tab?: string } }) {
   const { t } = getServerT();
   const { user, actor } = await pageActor();
+  // the tasks row of the person's grid (a guest works in their shared spaces by the space's rules)
+  if (!actorCanWork(actor, "tasks.view")) return <SectionOffNotice />;
 
   const wanted = (searchParams.tab ?? "") as MyWorkTab;
   const tab: MyWorkTab = MY_WORK_TABS.includes(wanted) ? wanted : "today";

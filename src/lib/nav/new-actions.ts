@@ -41,17 +41,18 @@ const holds = (s: NavSubject, cap: string) => staff(s) && s.caps.includes(cap);
 /**
  * Who is offered each action. An external partner (guest) is offered none: the wheel is not drawn for
  * them at all (they are put in a space by a person, and start nothing company-wide).
- *   task, project   any staff member (a project needs a space they belong to: the form lists those)
- *   doc             whoever has the library
+ *   task, project   staff holding that row's «يضيف ويعدّل» box of the section grid (a project needs a space they
+ *                   belong to: the form lists those)
+ *   doc             whoever has the library and its «يضيف ويعدّل» box
  *   message         any staff member (the chat is everybody's place)
  *   watch           any staff member (the «نتفرّج سوا» place is the staff's)
  *   space           `spaces.create`
  *   person          `users.manage`
  */
 const REQUIRES: Record<NewActionKey, (s: NavSubject) => boolean> = {
-  task: staff,
-  project: staff,
-  doc: (s) => staff(s) && canOpenTab(s, "files"),
+  task: (s) => holds(s, "tasks.edit"),
+  project: (s) => holds(s, "projects.edit"),
+  doc: (s) => holds(s, "files.edit") && canOpenTab(s, "files"),
   message: staff,
   watch: (s) => staff(s) && canOpenPlace(s, "watch"),
   space: (s) => holds(s, "spaces.create"),

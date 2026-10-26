@@ -1,4 +1,5 @@
 import { Prisma, type Task } from "@prisma/client";
+import { assertMemberCan } from "@/server/policy/actor";
 import { userSeesProject } from "./team-scope";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
@@ -138,6 +139,8 @@ async function assertTaskScope(taskId: string, orgId: string, tx: Tx): Promise<S
 }
 
 export async function createTask(actor: ActorContext, input: CreateTaskInput): Promise<TaskDTO> {
+  // the tasks row of the person's grid (every way a task is born comes here: the board, a message, an idea)
+  await assertMemberCan(actor, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
   return db.$transaction(async (tx) => {
     // integrity: ids must chain to the actor's organization
     const chain = await tx.project.findFirst({
@@ -222,6 +225,7 @@ export async function moveTask(
   taskId: string,
   input: MoveTaskInput,
 ): Promise<TaskDTO> {
+  await assertMemberCan(actor, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
   return db.$transaction(async (tx) => {
     const task = await assertTaskScope(taskId, actor.orgId, tx);
     const column = await tx.boardColumn.findFirst({
@@ -271,6 +275,7 @@ export async function updateTask(
   taskId: string,
   data: TaskUpdateData,
 ): Promise<TaskDTO> {
+  await assertMemberCan(actor, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
   return db.$transaction(async (tx) => {
     const before = await assertTaskScope(taskId, actor.orgId, tx);
     const updateData: Prisma.TaskUpdateInput = {};
@@ -352,6 +357,7 @@ export async function updateTask(
 }
 
 export async function deleteTask(actor: ActorContext, taskId: string): Promise<void> {
+  await assertMemberCan(actor, "tasks.delete", "section.delete_denied", { spaceGuestsPass: true });
   await assertTaskScope(taskId, actor.orgId, db);
   await db.task.delete({ where: { id: taskId } });
 }
@@ -365,6 +371,7 @@ export async function setTaskCompletion(
   taskId: string,
   complete: boolean,
 ): Promise<TaskDTO> {
+  await assertMemberCan(actor, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
   return db.$transaction(async (tx) => {
     const task = await assertTaskScope(taskId, actor.orgId, tx);
     const target = await tx.boardColumn.findFirst({
@@ -413,6 +420,7 @@ export interface ListFilters {
 }
 
 export async function listTasks(actor: ActorContext, filters: ListFilters): Promise<TaskDTO[]> {
+  await assertMemberCan(actor, "tasks.view", "section.view_denied", { spaceGuestsPass: true });
   const where: Prisma.TaskWhereInput = {
     orgId: actor.orgId,
     // before teams this listed the whole company's tasks for anyone in ANY one space: now only that space
