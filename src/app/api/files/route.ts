@@ -5,6 +5,7 @@ import { assertMemberCan } from "@/server/policy/actor";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { ingest, listFiles } from "@/server/services/files";
 import { currentSpace } from "@/server/services/current-space";
+import { libraryOnDrive } from "@/server/services/google";
 
 /**
  * The file library is closed to org GUESTs on every route (list, details, bytes, versions,
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   });
 }
 
-/** GET: the library of the space the person is in — heads only (latest version of every family). */
+/** GET: the library of the space the person is in — heads only (latest version of every family); `onDrive`: new files go to Drive. */
 export async function GET() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
@@ -38,6 +39,7 @@ export async function GET() {
     // the library row of the person's grid («يشوف»); uploading is checked by `ingest` («يضيف ويعدّل»)
     await assertMemberCan(ctx, "files.view", "section.view_denied");
     const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
-    return NextResponse.json({ files: await listFiles(ctx.orgId, { spaceId: space?.id ?? null, isHq: space?.kind === "HQ" }) });
+    const [files, onDrive] = await Promise.all([listFiles(ctx.orgId, { spaceId: space?.id ?? null, isHq: space?.kind === "HQ" }), libraryOnDrive(ctx.orgId)]);
+    return NextResponse.json({ files, onDrive });
   });
 }

@@ -85,7 +85,7 @@ const LATIN_IN_DICTIONARY = [
   "GOOGLE_CLIENT_SECRET",
   "GOOGLE_CLIENT_SECRET",
   "/api/integrations/google/callback", // the address to give Google's console
-  "drive.readonly", // the access scope to ask for
+  "drive.file", // the access scope to ask for
   "workspaceId", // JSON fields an n8n sender must write
   "projectId",
   "boardId",
