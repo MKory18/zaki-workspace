@@ -104,6 +104,8 @@ export interface TopicSummaryDto {
   pinned: boolean;
   /** Archived (listed only for the space's managers, under «المؤرشفة»). */
   archived: boolean;
+  /** One of the space's starter topics («عام», «التنبيهات»): never deleted. */
+  system?: boolean;
   canPost: boolean;
   lastMessage: { at: string; preview: string | null; mine: boolean } | null;
 }
@@ -119,6 +121,10 @@ export interface HomeDto {
   spaces: SpaceSummaryDto[];
   dms: DmSummaryDto[];
   canOversee: boolean;
+  /** «⋯» next to each topic and chat (the «قائمة المحادثة» switch in «الميزات»; absent: off). */
+  rowMenu?: boolean;
+  /** «حذف نهائي» of any topic or chat with everything in it: the OWNER's, while the menu is on. */
+  canPurge?: boolean;
 }
 
 export interface MemberDto {
