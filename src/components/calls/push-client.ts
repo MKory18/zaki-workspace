@@ -25,6 +25,20 @@ function keyBytes(base64url: string): ArrayBuffer {
   return out;
 }
 
+export type PushState = "unsupported" | "ios_home" | "default" | "granted" | "denied";
+
+/**
+ * Where this browser stands: no push at all; an iPhone that needs the site on its home screen first; not asked yet;
+ * allowed; refused (only the browser's own settings turn it back on).
+ */
+export function pushState(): PushState {
+  if (typeof window === "undefined") return "unsupported";
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+  if (!supported()) return ios && !standalone ? "ios_home" : "unsupported";
+  return Notification.permission as "default" | "granted" | "denied";
+}
+
 /** `ask`: may show the browser's question (only from a tap). Never throws: ringing is a convenience. */
 export async function ensurePush(ask: boolean): Promise<void> {
   if (!supported()) return;

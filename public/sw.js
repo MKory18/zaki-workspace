@@ -1,6 +1,7 @@
 /*
- * Zaki Workspace's service worker. One job: show a ring (or a missed call) that arrives while the site is closed,
- * and open the call on a tap (src/server/calls/push.ts sends them). No fetch handler and no cache: the site works
+ * Zaki Workspace's service worker. One job: show a ring, a missed call or one of the bell's notifications that arrives
+ * while the site is closed, and open its page on a tap (src/server/calls/push.ts sends them, src/server/notify.ts the
+ * notes). No fetch handler and no cache: the site works
  * exactly as without it. The words come from the server, already in Arabic.
  */
 self.addEventListener("install", () => self.skipWaiting());
@@ -17,8 +18,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      // the open app rings by itself (its own card and tone): no second ring on top of it
-      if (data.kind === "ring" && windows.some((w) => w.visibilityState === "visible")) return;
+      // the open app rings by itself (its own card and tone) and has its bell: nothing on top of it
+      if ((data.kind === "ring" || data.kind === "note") && windows.some((w) => w.visibilityState === "visible")) return;
       await self.registration.showNotification(data.title, {
         body: data.body || "",
         tag: data.tag || data.url,

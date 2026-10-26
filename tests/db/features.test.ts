@@ -45,7 +45,12 @@ describe("«الميزات»: who switches", () => {
     await as(w.member.id, w.ws.id);
     const res = await call(featuresRoute.GET);
     expect(res.status).toBe(200);
-    expect(res.json?.["features"]).toEqual([{ key: "watch", on: true }, { key: "sectionPermissions", on: true }]);
+    expect(res.json?.["features"]).toEqual([
+      { key: "watch", on: true },
+      { key: "sectionPermissions", on: true },
+      { key: "libraryDrive", on: true },
+      { key: "pushEverything", on: true },
+    ]);
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
   });
 

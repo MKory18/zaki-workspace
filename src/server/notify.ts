@@ -1,5 +1,42 @@
 import { AR } from "@/lib/i18n/dict";
+import { featureOn } from "@/lib/features";
+import { goHref } from "@/lib/space-link";
 import { db } from "./db";
+import { log } from "./log";
+import { pushTo } from "./calls/push";
+
+/**
+ * THE BELL ON THE PHONE AND THE LAPTOP (the owner's first feature after the research, 2026-10-26): every notification
+ * written here also goes out as a Web Push to the browsers its person allowed, so it reaches them while the site is
+ * closed. It rides the calls' ringing base (src/server/calls/push.ts, public/sw.js); the switch «إشعارات على التلفون
+ * واللابتوب» (`pushEverything`) in «الميزات» turns it off company by company. Best effort and never in the way: it is
+ * sent after the row is written and never fails the request that wrote it.
+ */
+const pending = new Set<Promise<void>>();
+
+/** Test hook: wait for the pushes sent so far (never call from server code). */
+export async function flushPushesForTests(): Promise<void> {
+  await Promise.all([...pending]);
+}
+
+function pushOut(userIds: readonly string[], note: { type: string; title: string; body?: string | null; linkUrl?: string | null; workspaceId?: string | null }): void {
+  const job = (async () => {
+    if (userIds.length === 0) return;
+    // the switch of each person's company (their ACTIVE membership)
+    const rows = await db.organizationMember.findMany({
+      where: { userId: { in: [...userIds] }, status: "ACTIVE" },
+      select: { userId: true, organization: { select: { settings: true } } },
+    });
+    const on = [...new Set(rows.filter((r) => featureOn(r.organization.settings, "pushEverything")).map((r) => r.userId))];
+    if (on.length === 0) return;
+    const target = note.linkUrl ?? "/";
+    // a notification of a space opens through /go: the right space first, then the page
+    const url = note.workspaceId && !target.startsWith("/go?") ? goHref(note.workspaceId, target) : target;
+    await pushTo(on, { kind: "note", title: note.title, body: note.body ?? "", url, tag: `${note.type}:${target}` });
+  })().catch((err) => log.warn("push.note_failed", { message: err instanceof Error ? err.message : String(err) }));
+  pending.add(job);
+  void job.finally(() => pending.delete(job));
+}
 
 /**
  * Only people who are IN receive notifications. A suspended or offboarded person gets nothing new
@@ -43,6 +80,7 @@ export async function pushNotification(input: {
       workspaceId: input.workspaceId ?? null,
     },
   });
+  pushOut([input.userId], input);
 }
 
 /** Pushes the same notification to many users (dedupes the actor). */
@@ -70,6 +108,7 @@ export async function pushNotificationToMany(
       workspaceId: input.workspaceId ?? null,
     })),
   });
+  pushOut(unique, input);
 }
 
 /** creates an in-app notification for a task assignment. */

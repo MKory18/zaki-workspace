@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Eye, FileArchive, FileAudio, FileImage, FileText, FileVideo, FolderUp, History, Trash2, UploadCloud } from "lucide-react";
+import { Cloud, Download, Eye, FileArchive, FileAudio, FileImage, FileText, FileVideo, FolderUp, History, Trash2, UploadCloud } from "lucide-react";
 import { apiDelete, apiGet, ApiError, apiUpload } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -57,7 +57,7 @@ export function FilesView({ me, may = { edit: true, delete: true } }: { me: { id
 
   const list = useQuery({
     queryKey: ["files", "list"],
-    queryFn: () => apiGet<{ files: FileRow[] }>("/api/files"),
+    queryFn: () => apiGet<{ files: FileRow[]; onDrive?: boolean }>("/api/files"),
   });
 
   // a search hit (`/files#file-<id>`): once the list is here, bring that file into view (the browser's own jump ran
@@ -126,6 +126,12 @@ export function FilesView({ me, may = { edit: true, delete: true } }: { me: { id
         <div>
           <h1 className="text-lg font-semibold">{t("files.title")}</h1>
           <p className="text-xs text-muted">{t("files.empty_desktop")}</p>
+          {list.data?.onDrive && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-ok">
+              <Cloud className="size-3.5" />
+              {t("files.on_drive")}
+            </p>
+          )}
         </div>
         {canUpload && (
           <Button ref={uploadRef} size="sm" onClick={() => fileInputRef.current?.click()}>
