@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ChatComposer } from "../src/components/chat/composer/chat-composer";
-import { buildChatMessagePayload, createChatUploadFormData } from "../src/lib/chat/conversation/client";
+import { buildChatMessagePayload, createChatUploadFormData, enterSends } from "../src/lib/chat/conversation/client";
 import { findMentionQuery, insertMention, selectedMentionIds } from "../src/lib/chat/conversation/mentions";
 
 describe("chat composer", () => {
@@ -38,5 +38,12 @@ describe("chat composer", () => {
     })).toEqual({
       body: "مرحباً", attachmentIds: ["file-1"], mentions: ["member-1"], replyToId: "parent-1", clientId: "client-1",
     });
+  });
+
+  it("Enter sends; Shift+Enter is a new line; nothing while an input method composes (the owner, 2026-10-26)", () => {
+    expect(enterSends({ key: "Enter", shiftKey: false })).toBe(true);
+    expect(enterSends({ key: "Enter", shiftKey: true })).toBe(false);
+    expect(enterSends({ key: "Enter", shiftKey: false, isComposing: true })).toBe(false);
+    expect(enterSends({ key: "a", shiftKey: false })).toBe(false);
   });
 });

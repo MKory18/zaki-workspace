@@ -49,3 +49,8 @@ export function createVoiceUploadFormData(take: { blob: Blob; mime: string; dura
 export function messageClientId(): string {
   return globalThis.crypto.randomUUID();
 }
+
+/** The composer's Enter: it sends (the owner, 2026-10-26), Shift+Enter is a new line, and never while an input method composes. */
+export function enterSends(event: { key: string; shiftKey: boolean; isComposing?: boolean }): boolean {
+  return event.key === "Enter" && !event.shiftKey && !event.isComposing;
+}

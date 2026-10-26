@@ -59,7 +59,8 @@ export function CallButton({ conversationId, isDm, canStart }: { conversationId:
       <DropdownMenuTrigger asChild>
         <button type="button" disabled={busy} aria-label={ct("calls.menu_label")} className={`${look} border-border hover:bg-surface-2 disabled:opacity-60`}>
           <span aria-hidden="true">📞</span>
-          {busy ? ct("calls.starting") : ct("calls.button")}
+          {/* a phone keeps the head to one row: the icon alone there */}
+          <span className="hidden sm:inline">{busy ? ct("calls.starting") : ct("calls.button")}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

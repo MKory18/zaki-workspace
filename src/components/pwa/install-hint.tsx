@@ -4,6 +4,7 @@ import * as React from "react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Check, Download, Share, Smartphone, SquarePlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -186,5 +187,66 @@ function Step({ icon, text, icon_text }: { icon: React.ReactNode; text: string; 
         {icon_text ? <span className="ms-1 text-fg-muted">{icon_text}</span> : null}
       </span>
     </li>
+  );
+}
+
+/**
+ * «ثبّت التطبيق», always there in the side menu until the app is installed (the owner, 2026-10-26: «زر تثبيت التطبيق
+ * وينو؟» — the Today hint can be dismissed and is gone). Where the browser offers its prompt (Android, Chrome and Edge on
+ * a computer) one tap opens it; on an iPhone, and in a browser that offers none, it shows the steps.
+ */
+export function InstallAppButton({ collapsed = false }: { collapsed?: boolean }): React.JSX.Element | null {
+  const { t } = useI18n();
+  const prompt = useSyncExternalStore(subscribe, getCaptured, getServerCaptured);
+  const [env, setEnv] = useState<{ ready: boolean; standalone: boolean; ios: IosKind | null }>({ ready: false, standalone: false, ios: null });
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setEnv({
+      ready: true,
+      standalone: isStandaloneDisplay({
+        displayModeStandalone: window.matchMedia("(display-mode: standalone)").matches,
+        navigatorStandalone: (navigator as Navigator & { standalone?: boolean }).standalone,
+      }),
+      ios: detectIos({ userAgent: navigator.userAgent, platform: navigator.platform, maxTouchPoints: navigator.maxTouchPoints }),
+    });
+  }, []);
+
+  if (!env.ready || env.standalone) return null;
+
+  const click = async () => {
+    const event = prompt ?? captured;
+    if (!event) return setOpen(true);
+    captured = null; // a browser prompt can be used once
+    notify();
+    try {
+      await event.prompt();
+    } catch {
+      setOpen(true);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => void click()}
+        title={collapsed ? t("pwa.install_button") : undefined}
+        className={cn(
+          "flex h-11 w-full items-center gap-2.5 rounded-xl text-sm font-semibold text-fg transition-colors hover:bg-surface-2",
+          collapsed ? "justify-center px-0" : "px-3",
+        )}
+      >
+        <Download aria-hidden="true" className="size-5 shrink-0 text-accent" />
+        <span className={cn("truncate", collapsed && "sr-only")}>{t("pwa.install_button")}</span>
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title={t("pwa.install_title")}>
+        {env.ios ? (
+          <InstallHintView mode={env.ios === "safari" ? "ios-safari" : "ios-other"} onInstall={() => undefined} onDismiss={() => setOpen(false)} />
+        ) : (
+          <p className="text-sm leading-relaxed">{t("pwa.desktop_steps")}</p>
+        )}
+      </Modal>
+    </>
   );
 }
