@@ -38,7 +38,7 @@ export const createTopicSchema = z.object({
 });
 
 /** Named people must be people of the space (nobody is pulled in from outside it). */
-async function assertPeopleOfSpace(orgId: string, spaceId: string, ids: string[]): Promise<void> {
+export async function assertPeopleOfSpace(orgId: string, spaceId: string, ids: string[]): Promise<void> {
   if (!ids.length) return;
   const inSpace = await db.workspaceMember.count({
     where: { workspaceId: spaceId, userId: { in: ids }, user: { memberships: { some: { organizationId: orgId, status: "ACTIVE" } } } },

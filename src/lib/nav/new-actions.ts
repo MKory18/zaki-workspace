@@ -9,15 +9,16 @@
  *   project   the projects page's «مشروع جديد» form (`/projects?new=project`)
  *   doc       the library, its upload button ready (`/files?new=upload`)
  *   message   the chat's «محادثة جديدة» dialog, opened in place by the wheel
+ *   watch     «نتفرّج سوا»: its page, the link box ready (`/watch?new=watch`)
  *   space     the «مساحة عمل جديدة» form of the space switcher, opened in place by the wheel
  *   person    the team page's «إضافة شخص» form (`/members?new=person`)
  *
  * ⚠️ Like the map, this is discoverability only: each form is refused by the server on its own.
  * 🔧 When a form's rule changes, change its `requires` here too (tests/shell-new-actions.test.ts pins it).
  */
-import { canOpenTab, type NavSubject } from "./places";
+import { canOpenPlace, canOpenTab, type NavSubject } from "./places";
 
-export const NEW_ACTIONS = ["task", "project", "doc", "message", "space", "person"] as const;
+export const NEW_ACTIONS = ["task", "project", "doc", "message", "watch", "space", "person"] as const;
 export type NewActionKey = (typeof NEW_ACTIONS)[number];
 
 /** The query parameter a page reads to open its own form (`useNewIntent`). */
@@ -29,6 +30,7 @@ export const NEW_HREF: Record<NewActionKey, string | null> = {
   project: "/projects?new=project",
   doc: "/files?new=upload",
   message: null,
+  watch: "/watch?new=watch",
   space: null,
   person: "/members?new=person",
 };
@@ -42,6 +44,7 @@ const holds = (s: NavSubject, cap: string) => staff(s) && s.caps.includes(cap);
  *   task, project   any staff member (a project needs a space they belong to: the form lists those)
  *   doc             whoever has the library
  *   message         any staff member (the chat is everybody's place)
+ *   watch           any staff member (the «نتفرّج سوا» place is the staff's)
  *   space           `spaces.create`
  *   person          `users.manage`
  */
@@ -50,6 +53,7 @@ const REQUIRES: Record<NewActionKey, (s: NavSubject) => boolean> = {
   project: staff,
   doc: (s) => staff(s) && canOpenTab(s, "files"),
   message: staff,
+  watch: (s) => staff(s) && canOpenPlace(s, "watch"),
   space: (s) => holds(s, "spaces.create"),
   person: (s) => holds(s, "users.manage"),
 };

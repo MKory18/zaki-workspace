@@ -1,7 +1,8 @@
 /**
  * THE FIVE PLACES — the one map of the navigation.
  *
- * The owner's plan for Phase 2: five places and no more — اليوم · الدردشة · الشغل · المكتبة · الإدارة.
+ * The owner's plan for Phase 2: five places and no more — اليوم · الدردشة · الشغل · المكتبة · الإدارة; and a sixth
+ * by his own ask (2026-10-26), after them: نتفرّج سوا.
  * A place has tabs, and every tab is a page that already existed: nothing was removed and no old
  * address broke, the pages were only grouped (LEGACY_ROUTES lists them, and a test proves each one
  * is still a page and still has a home here).
@@ -41,7 +42,7 @@ export interface NavSubject {
   caps: readonly string[];
 }
 
-export type PlaceKey = "today" | "chat" | "work" | "library" | "admin";
+export type PlaceKey = "today" | "chat" | "work" | "library" | "admin" | "watch";
 
 export type TabKey =
   | "my-work"
@@ -64,7 +65,7 @@ export type TabKey =
   | "archive";
 
 /** An icon by NAME: the shell maps it to a drawing (src/components/shell/nav-icons.tsx). Data only, so it crosses from server to browser. */
-export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings";
+export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings" | "watch";
 
 /**
  * Who may see a place or a tab:
@@ -176,6 +177,10 @@ export const PLACES: readonly PlaceDef[] = [
       { key: "archive", href: "/archive", labelKey: "nav.archive", requires: { capability: "archive.view" } },
     ],
   },
+  // «نتفرّج سوا» (the owner's ask, 2026-10-26: «الشغل، تحتها المكتبة، الإدارة، ثم نتفرّج سوا»): a place of its own,
+  // one page, after «الإدارة». People of a space watch one link together; the sessions are the team's own talk,
+  // so not an external partner's (the page and /api/watch refuse a guest too: `placeOfferedToGuests`).
+  { key: "watch", href: "/watch", labelKey: "nav.place.watch", icon: "watch", requires: "staff", tabs: [] },
 ];
 
 /**
@@ -258,6 +263,16 @@ export function canOpenTab(subject: NavSubject, tabKey: TabKey): boolean {
  */
 export function offeredToGuests(tabKey: TabKey): boolean {
   return canOpenTab({ role: "GUEST", caps: [] }, tabKey);
+}
+
+/** Is this place (of any kind: one page, or tabs) on this person's map? Exactly when `buildNav` draws it. */
+export function canOpenPlace(subject: NavSubject, placeKey: PlaceKey): boolean {
+  return buildNav(subject).places.some((drawn) => drawn.key === placeKey);
+}
+
+/** `offeredToGuests` for a place that is one page (Today, the chat, «نتفرّج سوا»). */
+export function placeOfferedToGuests(placeKey: PlaceKey): boolean {
+  return canOpenPlace({ role: "GUEST", caps: [] }, placeKey);
 }
 
 // ───────────────────────────────────────── the person's map ─────────────────────────────────────────
