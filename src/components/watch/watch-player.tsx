@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { Hand, Play, Radio, RotateCcw, Users } from "lucide-react";
 import { apiGet, apiPatch, apiPost } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
@@ -27,30 +27,37 @@ const PRESS_CHECK_MS = 1_000;
 /** A play the browser refused (no tap yet): asked again with a button after this long. */
 const PLAY_REFUSED_MS = 1_500;
 
+/** What the rest of the session page may ask of the player (the comments: «at which second», «take me there»). */
+export interface WatchPlayerHandle {
+  /** the second this screen's player is at */
+  timeSec(): number;
+  /**
+   * Take this screen to a second (a comment's moment). Whoever holds the remote takes everybody there (it is a
+   * jump like any other); anybody else goes there alone, stepped away from the others until «ارجع مع الجماعة».
+   */
+  seekMine(sec: number): void;
+}
+
 /**
  * The video of a session, on the same second on every screen. Whoever holds the remote plays, pauses and jumps for
  * everybody; everybody else follows, and may step away (pause on their own) and come back with one tap. A late
  * joiner lands where the others are. The press travels as a few numbers over the app's own realtime channel.
  */
-export function WatchPlayer({
-  sessionId,
-  conversationId,
-  videoRef,
-  startSec,
-  title,
-  initial,
-  viewerId,
-  people,
-}: {
-  sessionId: string;
-  conversationId: string;
-  videoRef: string;
-  startSec: number;
-  title: string;
-  initial: WatchRemote;
-  viewerId: string;
-  people: { id: string; name: string }[];
-}) {
+export const WatchPlayer = forwardRef<
+  WatchPlayerHandle,
+  {
+    sessionId: string;
+    conversationId: string;
+    videoRef: string;
+    startSec: number;
+    title: string;
+    initial: WatchRemote;
+    viewerId: string;
+    people: { id: string; name: string }[];
+    /** drawn over the video (the reactions that float up) */
+    overlay?: ReactNode;
+  }
+>(function WatchPlayer({ sessionId, conversationId, videoRef, startSec, title, initial, viewerId, people, overlay }, ref) {
   const { t } = useI18n();
   const toast = useOptionalToast();
   const box = useRef<HTMLDivElement>(null);
@@ -201,6 +208,25 @@ export function WatchPlayer({
     };
   }, [ready, follow, press]);
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      timeSec: () => player.current?.getCurrentTime() ?? 0,
+      seekMine: (sec: number) => {
+        const p = player.current;
+        if (!p) return;
+        const r = live.current.remote;
+        if (!(r.can.press && r.live)) {
+          // somebody who follows goes there alone (the others are not moved by a comment)
+          live.current.detached = true;
+          setDetached(true);
+        }
+        p.seekTo(Math.max(0, sec), true);
+      },
+    }),
+    [],
+  );
+
   function rejoin() {
     setDetached(false);
     live.current.detached = false;
@@ -235,6 +261,7 @@ export function WatchPlayer({
     <div className="space-y-2">
       <div className="relative mx-auto aspect-video w-full max-w-[calc(65vh*16/9)] overflow-hidden bg-scrim md:rounded-lg">
         <div ref={box} className="absolute inset-0 [&>iframe]:h-full [&>iframe]:w-full" aria-label={t("watch.player", { title })} />
+        {overlay}
         {needsTap ? (
           <button
             type="button"
@@ -306,4 +333,4 @@ export function WatchPlayer({
       ) : null}
     </div>
   );
-}
+});
