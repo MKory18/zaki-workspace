@@ -1,4 +1,6 @@
+import { notFound } from "next/navigation";
 import { pageActor } from "@/app/(app)/_access";
+import { actorFeatureOn } from "@/server/services/features";
 import { getServerT } from "@/lib/i18n/server";
 import { GuestNotice, placeRefusedToGuest } from "@/app/(app)/_guest";
 import { currentSpace } from "@/server/services/current-space";
@@ -11,6 +13,8 @@ export default async function WatchPage() {
   const { user, actor } = await pageActor();
   // the sessions are the team's own talk: not an external partner's (the place is not offered to them, /api/watch refuses)
   if (placeRefusedToGuest(actor, "watch")) return <GuestNotice />;
+  // switched off in «الميزات»: the feature is not there at all
+  if (!(await actorFeatureOn(actor, "watch"))) notFound();
 
   const ctx = { orgId: actor.orgId, orgRole: actor.role, userId: user.id };
   const space = await currentSpace(actor);
