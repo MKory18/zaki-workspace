@@ -142,6 +142,7 @@
   "profile.passwordChanged": "تم تغيير كلمة المرور",
   "profile.wrongCurrent": "كلمة المرور الحالية غير صحيحة",
   "role.owner": "مالك",
+  "role.partner": "شريك (مالك)",
   "role.admin": "مشرف",
   "role.lead": "قائد فريق",
   "role.member": "عضو",

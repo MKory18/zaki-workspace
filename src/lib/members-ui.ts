@@ -19,11 +19,13 @@ import {
 // The server's own rank rules: pure functions with no database (member-rules.ts says so), imported
 // so that the screen offers exactly what the server will accept, not a copy of it.
 import {
+  canAdministratePerson,
   canAdministrateTarget,
   canChangeRole,
   canTransitionStatus,
   capabilityChangeProblem,
   grantableRoles,
+  grantableRolesFor,
   inCatalogueOrder,
   replaceCapabilityList,
   unheldRankDefaults,
@@ -58,6 +60,8 @@ export interface ContractMember {
   managerName: string | null;
   capabilities: string[];
   revokedCapabilities: string[];
+  /** OWNER rows: true for the primary owner, false for a partner «شريك» (absent: read as the primary owner). */
+  primaryOwner?: boolean;
   effectiveCapabilities: string[];
   lastLoginAt: string | null;
   mustChangePassword: boolean;
@@ -74,6 +78,7 @@ export interface ContractSpace {
 export interface MembersResponse {
   members: ContractMember[];
   actorRole: OrgRoleName;
+  actorPrimaryOwner?: boolean;
   spaces: ContractSpace[];
 }
 
@@ -83,6 +88,8 @@ export interface ActorInfo {
   role: OrgRoleName;
   /** The capabilities the actor holds (what they may hand out). */
   caps: readonly string[];
+  /** The company's primary owner: he alone makes or unmakes a partner and takes a permission away from one. */
+  primaryOwner?: boolean;
 }
 
 export const STATUS_ORDER: readonly MemberStatusName[] = ["ACTIVE", "SUSPENDED", "OFFBOARDED"];
@@ -120,9 +127,10 @@ export function normalizeMember(raw: Partial<ContractMember> & { id: string }): 
     managerName: raw.managerName ?? null,
     capabilities,
     revokedCapabilities,
+    primaryOwner: role === "OWNER" ? raw.primaryOwner !== false : false,
     effectiveCapabilities: Array.isArray(raw.effectiveCapabilities)
       ? asStringArray(raw.effectiveCapabilities)
-      : [...effectiveCapabilities({ role, capabilities, revokedCapabilities })],
+      : [...effectiveCapabilities({ role, capabilities, revokedCapabilities, primaryOwner: role === "OWNER" && raw.primaryOwner !== false })],
     lastLoginAt: raw.lastLoginAt ?? null,
     mustChangePassword: raw.mustChangePassword === true,
     openWork: typeof raw.openWork === "number" && raw.openWork > 0 ? raw.openWork : 0,
@@ -134,6 +142,7 @@ export function normalizeMembersResponse(raw: Partial<MembersResponse> | null | 
   return {
     members: Array.isArray(raw?.members) ? raw.members.map(normalizeMember) : [],
     actorRole: raw?.actorRole ?? "GUEST",
+    actorPrimaryOwner: raw?.actorPrimaryOwner === true,
     spaces: Array.isArray(raw?.spaces) ? raw.spaces : [],
   };
 }
@@ -179,16 +188,24 @@ export interface OfferedActions {
  */
 export function offeredActions(actor: ActorInfo, target: ContractMember): OfferedActions {
   const isSelf = target.id === actor.id;
-  const manageable = !isSelf && canAdministrate(actor.role, target.role);
+  // the primary owner also administers the partners (other OWNERs); nobody administers him
+  const manageable = !isSelf && canAdministratePerson({ role: actor.role, primaryOwner: actor.primaryOwner }, target);
   const live = target.status !== "OFFBOARDED";
   const active = target.status === "ACTIVE";
+  const partner = target.role === "OWNER" && target.primaryOwner === false;
   const capabilities: CapabilityPanelMode =
-    target.role === "OWNER" ? "owner" : target.role === "GUEST" ? "guest" : manageable && live ? "editable" : "readonly";
+    target.role === "OWNER" && !(partner && manageable)
+      ? "owner"
+      : target.role === "GUEST"
+        ? "guest"
+        : manageable && live
+          ? "editable"
+          : "readonly";
   return {
     isSelf,
     manageable,
     edit: manageable && live,
-    rankChoices: manageable && live ? creatableRoles(actor.role) : [],
+    rankChoices: manageable && live ? grantableRolesFor({ role: actor.role, primaryOwner: actor.primaryOwner }) : [],
     capabilities,
     suspend: manageable && canTransitionStatus("suspend", target.status),
     offboard: manageable && canTransitionStatus("offboard", target.status),
@@ -229,14 +246,19 @@ export function isOffered(capability: Capability): boolean {
 
 /** What a person holds as far as handing capabilities out goes (the OWNER holds everything, whatever list the page was given). */
 function holderOf(actor: ActorInfo): CapabilityHolder {
-  return { role: actor.role, caps: new Set<string>(actor.role === "OWNER" ? CAPABILITIES : actor.caps) };
+  return { role: actor.role, caps: new Set<string>(actor.role === "OWNER" && actor.primaryOwner !== false ? CAPABILITIES : actor.caps) };
 }
 
 export interface CapabilityTarget {
   role: OrgRoleName;
   capabilities: readonly string[];
   revokedCapabilities: readonly string[];
+  /** OWNER rows: false for a partner, whose capabilities the primary owner switches off one by one. */
+  primaryOwner?: boolean;
 }
+
+/** An OWNER who is not the primary owner. */
+const partnerOf = (member: CapabilityTarget): boolean => member.role === "OWNER" && member.primaryOwner === false;
 
 export type CapabilityLock = "readonly" | "not_grantable" | "actor_lacks";
 
@@ -278,7 +300,7 @@ export function capabilityGroups(member: CapabilityTarget, actor: ActorInfo, edi
         locked = "readonly";
       } else {
         // the server's own question: may this actor switch this capability for a person of this rank?
-        const problem = capabilityChangeProblem(holder, member.role, capability);
+        const problem = capabilityChangeProblem(holder, member.role, capability, partnerOf(member));
         if (problem === "accounts.cap_not_held") locked = "actor_lacks";
         else if (problem) locked = "not_grantable";
       }
@@ -330,7 +352,7 @@ export function resetCapabilityLists(member: CapabilityTarget, actor: ActorInfo)
   const holder = holderOf(actor);
   // offered, and the actor may switch it for a person of this rank (the server's own question: it also asks that they hold it)
   const clearable = (capability: string) =>
-    isCapability(capability) && isOffered(capability) && capabilityChangeProblem(holder, member.role, capability) === null;
+    isCapability(capability) && isOffered(capability) && capabilityChangeProblem(holder, member.role, capability, partnerOf(member)) === null;
   return {
     capabilities: cleanList(member.capabilities.filter((c) => !clearable(c))),
     revokedCapabilities: cleanList(member.revokedCapabilities.filter((c) => !clearable(c))),
@@ -367,7 +389,7 @@ export function capabilityListsAfterRankChange(actor: ActorInfo, member: Capabil
 export function capabilityPatch(member: Pick<ContractMember, "role">, lists: CapabilityLists): Pick<ContractMember, "capabilities" | "revokedCapabilities" | "effectiveCapabilities"> {
   return {
     ...lists,
-    effectiveCapabilities: inCatalogueOrder(effectiveCapabilities({ role: member.role, ...lists })),
+    effectiveCapabilities: inCatalogueOrder(effectiveCapabilities({ role: member.role, primaryOwner: (member as { primaryOwner?: boolean }).primaryOwner, ...lists })),
   };
 }
 

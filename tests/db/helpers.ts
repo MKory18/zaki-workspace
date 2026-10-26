@@ -63,7 +63,8 @@ export async function makeUser(opts: { orgId?: string; role?: OrgRole; name?: st
       // fixture users are fully onboarded: nothing to change, notice accepted
       transparencyVersion: 1,
       transparencyAcceptedAt: new Date(),
-      ...(opts.orgId ? { memberships: { create: { organizationId: opts.orgId, role: opts.role ?? "MEMBER" } } } : {}),
+      // an OWNER made here is the company's primary owner, as the data move marks the first OWNER of every company
+      ...(opts.orgId ? { memberships: { create: { organizationId: opts.orgId, role: opts.role ?? "MEMBER", primaryOwner: opts.role === "OWNER" } } } : {}),
     },
   });
   // fixtures always have an e-mail, so tests can use it as a plain string

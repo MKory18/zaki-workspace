@@ -79,10 +79,25 @@ export interface CapabilitySource {
   role: OrgRole;
   capabilities?: readonly string[] | null;
   revokedCapabilities?: readonly string[] | null;
+  /** OWNER rows: false for a partner («شريك»), whose permissions the primary owner may take away one by one. */
+  primaryOwner?: boolean | null;
 }
 
-/** rank defaults + extras - revoked, then the hard limits (guests none, owner-only capabilities). */
+/** An OWNER who is not the primary owner: a partner. */
+export function isPartner(member: Pick<CapabilitySource, "role" | "primaryOwner">): boolean {
+  return member.role === "OWNER" && member.primaryOwner === false;
+}
+
+/**
+ * rank defaults + extras - revoked, then the hard limits (guests none, owner-only capabilities). The primary owner holds
+ * everything; a partner everything but what the primary owner took away from him.
+ */
 export function effectiveCapabilities(member: CapabilitySource): Set<Capability> {
+  if (isPartner(member)) {
+    const caps = new Set<Capability>(CAPABILITIES);
+    for (const c of member.revokedCapabilities ?? []) if (isCapability(c)) caps.delete(c);
+    return caps;
+  }
   if (member.role === "OWNER") return new Set(CAPABILITIES);
   if (member.role === "GUEST") return new Set();
   const caps = new Set<Capability>(RANK_DEFAULTS[member.role]);
@@ -98,10 +113,13 @@ export function can(source: CapabilitySource, capability: Capability): boolean {
 
 export type GrantProblem = "unknown_capability" | "owner_only" | "not_for_guests" | "owner_has_all";
 
-/** Why this capability may not be switched on for a person with this role (null = fine). */
-export function grantProblem(role: OrgRole, capability: string): GrantProblem | null {
+/**
+ * Why this capability may not be switched on for a person with this role (null = fine). A partner (`partner`: an OWNER
+ * who is not the primary owner) can hold or lose any capability, the owner-only ones included.
+ */
+export function grantProblem(role: OrgRole, capability: string, partner = false): GrantProblem | null {
   if (!isCapability(capability)) return "unknown_capability";
-  if (role === "OWNER") return "owner_has_all";
+  if (role === "OWNER") return partner ? null : "owner_has_all";
   if (OWNER_ONLY.includes(capability)) return "owner_only";
   if (role === "GUEST") return "not_for_guests";
   return null;

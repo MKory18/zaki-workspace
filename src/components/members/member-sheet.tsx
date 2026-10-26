@@ -335,7 +335,7 @@ export function MemberSheet({
               <p className="break-words text-sm text-fg-muted">{member.jobTitle}</p>
             ) : null}
             <div className="flex flex-wrap gap-1.5">
-              <RankBadge role={member.role} />
+              <RankBadge role={member.role} primaryOwner={member.primaryOwner} />
               <StatusBadge status={member.status} />
               {acts.isSelf ? (
                 <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">{t("members.you")}</span>
@@ -404,7 +404,8 @@ export function MemberSheet({
                 >
                   {roleOptions.map((role) => (
                     <option key={role} value={role}>
-                      {t(ROLE_KEYS[role] ?? "role.member")}
+                      {/* whoever the primary owner makes an OWNER is a partner */}
+                      {t(role === "OWNER" && member.primaryOwner !== true ? "role.partner" : (ROLE_KEYS[role] ?? "role.member"))}
                     </option>
                   ))}
                 </Select>

@@ -24,8 +24,8 @@ import { generateTemporaryPassword, passwordSchema, usernameSchema } from "@/ser
 import {
   STATUS_TRANSITIONS,
   activeRoutineWhere,
-  canAdministrateTarget,
-  canChangeRole,
+  canAdministratePerson,
+  canChangeRoleOf,
   canTransitionStatus,
   grantableRoles,
   inCatalogueOrder,
@@ -97,6 +97,10 @@ const idSchema = z.string().trim().min(1).max(64);
 const roleSchema = z.enum(CREATABLE_ROLES as [OrgRole, ...OrgRole[]], {
   errorMap: () => ({ message: "accounts.role_invalid" }),
 });
+/** A rank change may also make a partner (OWNER): who may do it is decided in `updateAccount` (the primary owner only). */
+const rankChangeSchema = z.enum(["OWNER", ...CREATABLE_ROLES] as [OrgRole, ...OrgRole[]], {
+  errorMap: () => ({ message: "accounts.role_invalid" }),
+});
 const capabilityListSchema = z
   .array(z.enum(CAPABILITIES, { errorMap: () => ({ message: "accounts.cap_unknown" }) }))
   .max(CAPABILITIES.length * 2);
@@ -125,7 +129,7 @@ export const updateAccountSchema = z
     /** Corrects or clears (null / "") the e-mail address. */
     email: z.preprocess(blankToNull, emailSchema.nullable().optional()),
     jobTitle: z.preprocess(blankToNull, jobTitleSchema.nullable().optional()),
-    role: roleSchema.optional(),
+    role: rankChangeSchema.optional(),
     managerId: z.preprocess(blankToNull, idSchema.nullable().optional()),
     capabilities: capabilityListSchema.optional(),
     revokedCapabilities: capabilityListSchema.optional(),
@@ -165,7 +169,11 @@ interface Target {
   capabilities: string[];
   revokedCapabilities: string[];
   managerId: string | null;
+  primaryOwner: boolean;
 }
+
+/** The caller as far as rank goes (the primary owner also administers the partners). */
+const rankedActor = (actor: Actor) => ({ role: actor.role, primaryOwner: actor.isPrimaryOwner === true });
 
 /**
  * The person an action is about: never the caller (403 `accounts.self_denied`; their own password
@@ -183,11 +191,12 @@ async function administrableTarget(actor: Actor, userId: string): Promise<Target
       capabilities: true,
       revokedCapabilities: true,
       managerId: true,
+      primaryOwner: true,
       user: { select: { name: true } },
     },
   });
   if (!row) throw new NotFoundError("orgm.not_member");
-  if (!canAdministrateTarget(actor.role, row.role)) throw new ForbiddenError("orgm.role_denied");
+  if (!canAdministratePerson(rankedActor(actor), row)) throw new ForbiddenError("orgm.role_denied");
   return {
     id: row.id,
     userId,
@@ -197,6 +206,7 @@ async function administrableTarget(actor: Actor, userId: string): Promise<Target
     capabilities: row.capabilities,
     revokedCapabilities: row.revokedCapabilities,
     managerId: row.managerId,
+    primaryOwner: row.primaryOwner,
   };
 }
 
@@ -411,11 +421,14 @@ export async function updateAccount(actor: Actor, userId: string, input: UpdateA
   assertNotOffboarded(target); // the quick answer; decided again on the locked row below
   const role = input.role ?? target.role;
   const roleChanged = role !== target.role;
-  if (roleChanged && !canChangeRole(actor.role, target.role, role)) throw new ForbiddenError("orgm.role_denied");
+  if (roleChanged && !canChangeRoleOf(rankedActor(actor), target, role)) throw new ForbiddenError("orgm.role_denied");
 
-  const caps = replaceCapabilityList(actor, role, target.capabilities, input.capabilities);
+  // a partner (an OWNER who is not the primary owner) holds everything but what is taken away: no extras, and any
+  // capability may be taken away — only by the primary owner, the only one who administers him
+  const partner = role === "OWNER";
+  const caps = partner ? { next: [] as string[], problem: null } : replaceCapabilityList(actor, role, target.capabilities, input.capabilities);
   if (caps.problem) throw new ForbiddenError(caps.problem);
-  const revoked = replaceCapabilityList(actor, role, target.revokedCapabilities, input.revokedCapabilities);
+  const revoked = replaceCapabilityList(actor, role, roleChanged && partner ? [] : target.revokedCapabilities, input.revokedCapabilities, partner);
   if (revoked.problem) throw new ForbiddenError(revoked.problem);
   // re-ranked by a non-owner: the new rank's defaults the caller does not hold start switched off
   const revokedNext = roleChanged ? inCatalogueOrder([...revoked.next, ...unheldRankDefaults(actor, role, caps.next)]) : revoked.next;

@@ -148,7 +148,8 @@ describe("editing an account: rank", () => {
     await loginAs(admin.id);
     expect(reason(await accountsApi.update(org.id, member.id, { role: "ADMIN" }))).toBe("orgm.role_denied");
     expect(reason(await accountsApi.update(org.id, otherAdmin.id, { role: "MEMBER" }))).toBe("orgm.role_denied");
-    expect(reason(await accountsApi.update(org.id, member.id, { role: "OWNER" }))).toBe("accounts.role_invalid");
+    // OWNER is a rank one may ask for (a partner), but only the primary owner gives it
+    expect(reason(await accountsApi.update(org.id, member.id, { role: "OWNER" }))).toBe("orgm.role_denied");
     expect((await accountsApi.update(org.id, member.id, { role: "LEAD" })).status).toBe(200);
   });
 

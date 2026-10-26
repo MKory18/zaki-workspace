@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { BookOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { InstallAppButton } from "@/components/pwa/install-hint";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { NavModel, NavRole, PlaceKey } from "@/lib/nav/places";
@@ -146,22 +147,28 @@ export function Sidebar({
           <BookOpen aria-hidden="true" className="size-5 shrink-0 text-accent-2" />
           <span className={cn("truncate", collapsed && "sr-only")}>{t("shell.guide")}</span>
         </Link>
+        <InstallAppButton collapsed={collapsed} />
+        {/* the fold, with its word: an icon alone in the corner was missed (the owner, 2026-10-26: «زر يضب القائمة ع جنب») */}
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")}
+          title={collapsed ? t("shell.sidebar.expand") : undefined}
+          className={cn(
+            "flex h-11 w-full items-center gap-2.5 rounded-xl text-sm text-muted transition-colors hover:bg-surface-2 hover:text-fg",
+            collapsed ? "justify-center px-0" : "px-3",
+          )}
+        >
+          {collapsed ? <PanelRightOpen aria-hidden="true" className="size-5 shrink-0" /> : <PanelRightClose aria-hidden="true" className="size-5 shrink-0" />}
+          <span className={cn("truncate", collapsed && "sr-only")}>{collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")}</span>
+        </button>
       </div>
 
       <div className={cn("flex shrink-0 items-center gap-1 border-t border-border p-3", collapsed && "flex-col")}>
         <div className={cn("min-w-0", collapsed ? "flex justify-center" : "flex-1")}>
           <AvatarMenu user={user} rank={rank} variant={collapsed ? "rail" : "sidebar"} />
         </div>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")}
-          aria-expanded={!collapsed}
-          title={collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")}
-          className="grid size-11 shrink-0 place-items-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-fg"
-        >
-          {collapsed ? <PanelRightOpen aria-hidden="true" className="size-5" /> : <PanelRightClose aria-hidden="true" className="size-5" />}
-        </button>
       </div>
     </aside>
   );

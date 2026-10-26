@@ -7,10 +7,11 @@ import { ROLE_KEYS } from "@/lib/i18n/roles";
 import { STATUS_KEYS, type MemberStatusName, type OrgRoleName } from "@/lib/members-ui";
 import { PILL, RANK_BADGE, STATUS_BADGE } from "./badge-styles";
 
-/** The person's rank in Arabic (مالك، مشرف، قائد فريق، عضو، زائر). */
-export function RankBadge({ role }: { role: OrgRoleName }) {
+/** The person's rank in Arabic (مالك، شريك، مشرف، قائد فريق، عضو، زائر): an OWNER who is not the primary owner is a partner. */
+export function RankBadge({ role, primaryOwner }: { role: OrgRoleName; primaryOwner?: boolean }) {
   const { t } = useI18n();
-  return <span className={cn(PILL, RANK_BADGE[role])}>{t(ROLE_KEYS[role] ?? "role.member")}</span>;
+  const key = role === "OWNER" && primaryOwner === false ? "role.partner" : (ROLE_KEYS[role] ?? "role.member");
+  return <span className={cn(PILL, RANK_BADGE[role])}>{t(key)}</span>;
 }
 
 /** فعّال / موقوف / مُخرَج. */

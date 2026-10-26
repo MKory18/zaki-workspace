@@ -1,5 +1,5 @@
 import type { MemberStatus, OrgRole } from "@prisma/client";
-import { CAPABILITIES, RANK_DEFAULTS, grantProblem, type GrantProblem } from "@/server/policy/capabilities";
+import { CAPABILITIES, RANK_DEFAULTS, grantProblem, isPartner, type GrantProblem } from "@/server/policy/capabilities";
 import { CREATABLE_ROLES, outranks } from "@/server/policy/rank";
 
 /**
@@ -16,8 +16,35 @@ import { CREATABLE_ROLES, outranks } from "@/server/policy/rank";
  *    strictly below one's own — so only the OWNER creates ADMINs, and nobody creates an OWNER;
  *  - nobody administers themselves (checked by id in accounts.ts);
  *  - nobody hands out more than they hold: a capability is granted only by someone who holds it,
- *    and the rank defaults a non-owner does not hold are switched off (`unheldRankDefaults`).
+ *    and the rank defaults a non-owner does not hold are switched off (`unheldRankDefaults`);
+ *  - PARTNERS (the owner's decision, 2026-10-26): the company's primary owner alone makes a person an OWNER (a
+ *    partner, «شريك»), unmakes one, and takes a permission away from one — which that partner then cannot give back
+ *    to himself or to anybody. Nobody administers the primary owner; a partner administers what an OWNER does, but
+ *    never another OWNER.
  */
+
+/** A person as far as rank goes: their role, and for an OWNER whether they are the primary owner. */
+export interface RankedPerson {
+  role: OrgRole;
+  primaryOwner?: boolean | null;
+}
+
+/** May this caller administer this person? The primary owner also administers the partners; nobody administers him. */
+export function canAdministratePerson(actor: RankedPerson, target: RankedPerson): boolean {
+  if (target.role === "OWNER") return actor.role === "OWNER" && actor.primaryOwner === true && target.primaryOwner !== true;
+  return canAdministrateTarget(actor.role, target.role);
+}
+
+/** The roles this caller may give: those strictly below their own, and OWNER for the primary owner. */
+export function grantableRolesFor(actor: RankedPerson): OrgRole[] {
+  const below = grantableRoles(actor.role);
+  return actor.role === "OWNER" && actor.primaryOwner === true ? ["OWNER", ...below] : below;
+}
+
+/** A rank change: the caller administers the person AND may give the new rank. */
+export function canChangeRoleOf(actor: RankedPerson, target: RankedPerson, newRole: OrgRole): boolean {
+  return canAdministratePerson(actor, target) && grantableRolesFor(actor).includes(newRole);
+}
 
 /** Roles an account can be created with or changed to (never OWNER). */
 export const ASSIGNABLE_ROLES: OrgRole[] = [...CREATABLE_ROLES];
@@ -76,8 +103,8 @@ export interface CapabilityHolder {
  * error key — null when they may. It must be grantable to that role at all (never to a guest,
  * never `archive.view`) and the caller must hold it themselves (the OWNER holds everything).
  */
-export function capabilityChangeProblem(actor: CapabilityHolder, targetRole: OrgRole, capability: string): string | null {
-  const problem = grantProblem(targetRole, capability);
+export function capabilityChangeProblem(actor: CapabilityHolder, targetRole: OrgRole, capability: string, partner = false): string | null {
+  const problem = grantProblem(targetRole, capability, partner);
   if (problem) return GRANT_PROBLEM_KEY[problem];
   if (!actor.caps.has(capability)) return "accounts.cap_not_held";
   return null;
@@ -112,23 +139,26 @@ export function replaceCapabilityList(
   role: OrgRole,
   stored: readonly string[],
   requested: readonly string[] | undefined,
+  partner = false,
 ): { next: string[]; problem: string | null } {
   if (requested !== undefined) {
     const before = new Set(stored);
     const after = new Set(requested);
     for (const cap of after) {
       if (before.has(cap)) continue;
-      const problem = capabilityChangeProblem(actor, role, cap);
+      const problem = capabilityChangeProblem(actor, role, cap, partner);
       if (problem) return { next: [], problem };
     }
     for (const cap of before) {
-      if (after.has(cap) || grantProblem(role, cap) !== null) continue;
+      if (after.has(cap) || grantProblem(role, cap, partner) !== null) continue;
       if (!actor.caps.has(cap)) return { next: [], problem: "accounts.cap_not_held" };
     }
   }
-  const next = inCatalogueOrder((requested ?? stored).filter((cap) => grantProblem(role, cap) === null));
+  const next = inCatalogueOrder((requested ?? stored).filter((cap) => grantProblem(role, cap, partner) === null));
   return { next, problem: null };
 }
+
+export { isPartner };
 
 // ---------- managers ----------
 
