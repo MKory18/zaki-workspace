@@ -6,6 +6,7 @@ import { ct } from "@/lib/chat/text";
 import { dayDiff, fmtShort, fmtTime } from "@/lib/format";
 import { NewTopicDialog } from "./new-topic-dialog";
 
+import Link from "next/link";
 /** Today's last message shows its time, an older one its day (the app's own formatting, src/lib/format.ts). */
 function whenOf(at: string): string {
   return dayDiff(at) === 0 ? fmtTime(at) : fmtShort(at);
@@ -14,7 +15,7 @@ function whenOf(at: string): string {
 function TopicRow({ topic }: { topic: TopicSummaryDto }) {
   return (
     <li>
-      <a
+      <Link
         href={`/chat/${topic.id}`}
         className="flex min-h-14 items-center gap-3 rounded-xl px-2 py-2 hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
       >
@@ -37,7 +38,7 @@ function TopicRow({ topic }: { topic: TopicSummaryDto }) {
             )}
           </span>
         </span>
-      </a>
+      </Link>
     </li>
   );
 }

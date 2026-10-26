@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ct } from "@/lib/chat/text";
 
@@ -11,6 +12,7 @@ type Person = { userId: string; user: { name: string; jobTitle: string | null } 
  * The list is the chat directory (ACTIVE non-guests, the viewer excluded); the server decides again.
  */
 export function NewDmDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const router = useRouter();
   const [people, setPeople] = useState<Person[] | null>(null);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
@@ -32,7 +34,7 @@ export function NewDmDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       const r = await fetch("/api/chat/conversations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "DM", userId }) });
       if (!r.ok) throw new Error("dm");
       const { id } = await r.json() as { id: string };
-      window.location.assign(`/chat/${encodeURIComponent(id)}`);
+      router.push(`/chat/${encodeURIComponent(id)}`);
     } catch {
       setError(ct("chath.dm.open_failed"));
       setBusy(false);

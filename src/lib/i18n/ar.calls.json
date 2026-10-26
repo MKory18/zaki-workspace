@@ -61,5 +61,21 @@
   "calls.quality.excellent": "الاتصال ممتاز",
   "calls.quality.good": "الاتصال منيح",
   "calls.quality.poor": "الاتصال ضعيف",
-  "calls.quality.lost": "الاتصال مقطوع"
+  "calls.quality.lost": "الاتصال مقطوع",
+  "calls.mini": "المكالمة شغّالة",
+  "calls.back_to_call": "ارجع للمكالمة",
+  "calls.reconnecting_short": "عم نرجّعك…",
+  "calls.pip": "صورة فوق كل شي",
+  "calls.minimize": "صغّر المكالمة وكمّل بالموقع",
+  "calls.end_all": "إنهاء للكل",
+  "calls.end_confirm": "أكيد؟ إنهاء للكل",
+  "calls.mute": "اكتم",
+  "calls.muted_ok": "انكتم المايك",
+  "calls.pin": "كبّر الصورة",
+  "calls.unpin": "رجّع الصور كلها",
+  "calls.e.cannot_end": "بس اللي بلّش المكالمة أو مدير المساحة بيقدر ينهيها للكل.",
+  "calls.e.cannot_mute": "ما بتقدر تكتم هالشخص.",
+  "calls.push.ring_title": "{name} عم يرنّ عليك",
+  "calls.push.missed_title": "مكالمة فايتة من {name}",
+  "calls.push.missed_body": "اضغط لتفتح المحادثة وترنّ عليه."
 }

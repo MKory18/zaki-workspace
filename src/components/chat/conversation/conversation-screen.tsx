@@ -17,6 +17,7 @@ import { ConversationSearch } from "./conversation-search";
 import { CallButton } from "@/components/calls/call-button";
 import { MakeWorkDialog, type WorkKind } from "@/components/chat/message/make-work-dialog";
 import { TicketDetailModal } from "@/components/ticket-detail-modal";
+import Link from "next/link";
 export interface ConversationScreenProps { conversationId: string; onBack: () => void; onOpenSettings?: () => void;
   /** open around this message (a search hit, `?m=`), scrolled to it and marked */
   focusMessageId?: string }

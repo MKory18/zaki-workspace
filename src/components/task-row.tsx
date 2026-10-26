@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
+import Link from "next/link";
 export interface RowTask {
   id: string;
   key: string;
@@ -119,7 +120,7 @@ export function TaskRow({
         {done ? <Check className="h-3 w-3" /> : null}
       </button>
 
-      <a href={`/tasks/${task.id}`} className="flex min-w-0 flex-1 items-center gap-2">
+      <Link href={`/tasks/${task.id}`} className="flex min-w-0 flex-1 items-center gap-2">
         <span dir="ltr" className="shrink-0 font-mono text-xs text-muted">{task.key}</span>
         <span className={cn("truncate text-sm", done ? "text-muted line-through" : "text-fg")}>
           {task.title}
@@ -134,7 +135,7 @@ export function TaskRow({
             {columnLabel(task.columnName)}
           </span>
         ) : null}
-      </a>
+      </Link>
 
       <span
         role="img"

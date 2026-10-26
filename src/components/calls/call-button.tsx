@@ -7,6 +7,7 @@ import { ct } from "@/lib/chat/text";
 import { useOptionalToast } from "@/components/ui/toast";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { callApi } from "./call-api";
+import { ensurePush } from "./push-client";
 
 /**
  * «مكالمة» in a conversation's header. While a call is going on here it is «انضم للمكالمة»; otherwise, for
@@ -30,6 +31,8 @@ export function CallButton({ conversationId, isDm, canStart }: { conversationId:
   });
 
   async function start(video: boolean) {
+    // the first call is the moment to agree to be rung when the site is closed (a tap: browsers ask only then)
+    void ensurePush(true);
     setBusy(true);
     try {
       const out = await callApi<{ id: string }>(base, { video, ring: isDm || ring });
