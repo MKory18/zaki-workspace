@@ -12,6 +12,8 @@ const PAGES: [string, string][] = [
   ["/chat", "chat"],
   ["/chat/x", "conversation"],
   ["/calls/x", "call"],
+  ["/watch", "watch"],
+  ["/watch/x", "watch-session"],
   ["/archive", "archive"],
   ["/spaces", "spaces"],
   ["/my-work", "my-work"],
