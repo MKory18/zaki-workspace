@@ -5,6 +5,7 @@ import { TaskRow } from "@/components/task-row";
 import { getServerT } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
 
+import Link from "next/link";
 const TAB_KEYS: Record<MyWorkTab, string> = {
   today: "mywork.tab.today",
   upcoming: "mywork.tab.upcoming",
@@ -36,7 +37,7 @@ export default async function MyWorkPage({ searchParams }: { searchParams: { tab
 
       <nav className="flex gap-1 overflow-x-auto border-b border-border bg-surface px-4" aria-label={t("mywork.title")}>
         {MY_WORK_TABS.map((k) => (
-          <a
+          <Link
             key={k}
             href={`/my-work?tab=${k}`}
             aria-current={k === tab ? "true" : undefined}
@@ -51,7 +52,7 @@ export default async function MyWorkPage({ searchParams }: { searchParams: { tab
             <span className="rounded-full bg-surface-2 px-1.5 text-xs text-fg-muted">
               {data[k].length}
             </span>
-          </a>
+          </Link>
         ))}
       </nav>
 

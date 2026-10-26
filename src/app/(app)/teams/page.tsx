@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { getServerT } from "@/lib/i18n/server";
 import { enumLabel } from "@/lib/i18n/enums";
 
+import Link from "next/link";
 export default async function TeamsPage() {
   const { t } = getServerT();
   const { user, actor } = await pageActor();
@@ -62,9 +63,9 @@ export default async function TeamsPage() {
                   {org.restricted ? (
                     <div className={rowClass}>{content}</div>
                   ) : (
-                    <a href={`/u/${m.userId}`} className={`${rowClass} hover:bg-surface-2`}>
+                    <Link href={`/u/${m.userId}`} className={`${rowClass} hover:bg-surface-2`}>
                       {content}
-                    </a>
+                    </Link>
                   )}
                 </li>
               );
