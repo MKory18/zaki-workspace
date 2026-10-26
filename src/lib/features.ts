@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -24,6 +24,9 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // new library files go to the owner's Google Drive (src/server/files/drive-store.ts): off, they are written to the
   // server as before; the files already on Drive still open
   libraryDrive: true,
+  // every notification of the bell also reaches the person's phone and laptop while the site is closed (Web Push);
+  // off: only a ringing call does, as before
+  pushEverything: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

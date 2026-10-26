@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { apiDelete, apiGet, apiPost } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { fmtAgo } from "@/lib/format";
+import { ensurePush, pushState, type PushState } from "@/components/calls/push-client";
 
 interface NotificationItem {
   id: string;
@@ -127,6 +128,7 @@ export function NotificationBell({ defaultOpen = false }: { defaultOpen?: boolea
               </button>
             ) : null}
           </div>
+          <PushOffer />
           <ul className="max-h-[min(20rem,60dvh)] overflow-y-auto overscroll-contain">
             {items.length === 0 ? (
               <li className="px-4 py-8 text-center text-sm text-muted">{t("notif.empty")}</li>
@@ -192,5 +194,37 @@ function NotificationRow({ n }: { n: NotificationItem }) {
       </div>
       {n.body ? <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-fg-muted">{n.body}</p> : null}
     </>
+  );
+}
+
+/**
+ * «فعّل الإشعارات على هالجهاز»: the bell's notifications then reach this phone or laptop while the site is closed
+ * (src/server/notify.ts). Shown only while the browser has not been asked yet; the browser asks on the tap itself.
+ * Refused in the browser's settings: one line on where to turn it back on. An iPhone needs the site on its home screen.
+ */
+function PushOffer() {
+  const { t } = useI18n();
+  const [state, setState] = useState<PushState>("unsupported");
+  useEffect(() => setState(pushState()), []);
+  if (state === "granted" || state === "unsupported") return null;
+  return (
+    <div className="flex items-center gap-2 border-b border-border bg-accent/5 px-4 py-2 text-xs leading-5 text-fg">
+      {state === "denied" ? (
+        <p className="flex-1 text-muted">{t("notif.push_denied")}</p>
+      ) : (
+        <>
+          <p className="flex-1">{state === "ios_home" ? t("notif.push_ios") : t("notif.push_offer")}</p>
+          {state === "default" ? (
+            <button
+              type="button"
+              onClick={() => void ensurePush(true).then(() => setState(pushState()))}
+              className="min-h-11 shrink-0 rounded-lg bg-accent px-3 font-semibold text-accent-fg"
+            >
+              {t("notif.push_on")}
+            </button>
+          ) : null}
+        </>
+      )}
+    </div>
   );
 }
