@@ -77,7 +77,7 @@ describe("CRM routes: crm.view opens the reads, crm.edit opens the writes", () =
     }
   });
 
-  it("switching crm.view off closes every CRM read for that person, and only the reads", async () => {
+  it("switching crm.view off closes every CRM read for that person, and with the grid their writes too", async () => {
     const w = await company();
     await setCapabilities(w.org.id, w.member.id, { revoke: ["crm.view"] });
     await loginAs(w.member.id);
@@ -91,14 +91,15 @@ describe("CRM routes: crm.view opens the reads, crm.edit opens the writes", () =
       expect(res.json?.["message"]).toBe("insufficient_role");
       expect(res.text).not.toContain(w.customer.name);
     }
-    // the switches are independent: this person may still write
-    expect((await call(customersRoute.POST, { body: { name: "Still allowed to write" } })).status).toBe(201);
+    // the customers are a row of the section grid (2026-10-26): without «يشوف», «يضيف ويعدّل» and «يحذف» fall too
+    expect((await call(customersRoute.POST, { body: { name: "Not without view" } })).status).toBe(403);
+    expect((await call(customerRoute.DELETE, { method: "DELETE", params: { id: w.customer.id } })).status).toBe(403);
     // and a colleague whose switches were not touched still reads
     await loginAs(w.colleague.id);
     expect((await call(customersRoute.GET)).status).toBe(200);
   });
 
-  it("switching crm.edit off closes every CRM write for that person (an ADMIN included), and only the writes", async () => {
+  it("switching crm.edit off closes every CRM add and change for that person (an ADMIN included), and only those", async () => {
     const w = await company();
     for (const person of [w.member, w.admin]) {
       await setCapabilities(w.org.id, person.id, { revoke: ["crm.edit"] });
@@ -106,10 +107,8 @@ describe("CRM routes: crm.view opens the reads, crm.edit opens the writes", () =
       const attempts = [
         await call(customersRoute.POST, { body: { name: "Not allowed" } }),
         await call(customerRoute.PATCH, { method: "PATCH", params: { id: w.customer.id }, body: { name: "Renamed" } }),
-        await call(customerRoute.DELETE, { method: "DELETE", params: { id: w.customer.id } }),
         await call(opportunitiesRoute.POST, { body: { customerId: w.customer.id, title: "Not allowed either" } }),
         await call(opportunityRoute.PATCH, { method: "PATCH", params: { id: w.opportunity.id }, body: { stage: "WON" } }),
-        await call(opportunityRoute.DELETE, { method: "DELETE", params: { id: w.opportunity.id } }),
       ];
       for (const res of attempts) {
         expect(res.status, person.name).toBe(403);
@@ -124,6 +123,22 @@ describe("CRM routes: crm.view opens the reads, crm.edit opens the writes", () =
     expect(customer.name).toBe(w.customer.name);
     expect(await db.opportunity.count({ where: { id: w.opportunity.id } })).toBe(1);
     expect(await db.customer.count({ where: { orgId: w.org.id, name: "Not allowed" } })).toBe(0);
+  });
+
+  it("switching crm.delete off closes every CRM delete for that person, and only the deletes (its own box since 2026-10-26)", async () => {
+    const w = await company();
+    await setCapabilities(w.org.id, w.member.id, { revoke: ["crm.delete"] });
+    await loginAs(w.member.id);
+    for (const res of [
+      await call(customerRoute.DELETE, { method: "DELETE", params: { id: w.customer.id } }),
+      await call(opportunityRoute.DELETE, { method: "DELETE", params: { id: w.opportunity.id } }),
+    ]) {
+      expect(res.status).toBe(403);
+      expect(res.json?.["message"]).toBe("insufficient_role");
+    }
+    expect((await call(customerRoute.PATCH, { method: "PATCH", params: { id: w.customer.id }, body: { name: "Renamed by the member" } })).status).toBe(200);
+    expect(await db.customer.count({ where: { id: w.customer.id } })).toBe(1);
+    expect(await db.opportunity.count({ where: { id: w.opportunity.id } })).toBe(1);
   });
 });
 

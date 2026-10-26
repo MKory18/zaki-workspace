@@ -138,8 +138,8 @@ export const PLACES: readonly PlaceDef[] = [
       { key: "production", href: "/production", labelKey: "nav.production", requires: { capability: "production.view" } },
       { key: "departments", href: "/departments", labelKey: "nav.departments", requires: "staff" },
       // a department's tickets and campaigns, each a page of its own (the owner's ask, 2026-10-25)
-      { key: "tickets", href: "/tickets", labelKey: "nav.tickets", requires: "staff" },
-      { key: "campaigns", href: "/campaigns", labelKey: "nav.campaigns", requires: "staff" },
+      { key: "tickets", href: "/tickets", labelKey: "nav.tickets", requires: { capability: "tickets.view" } },
+      { key: "campaigns", href: "/campaigns", labelKey: "nav.campaigns", requires: { capability: "campaigns.view" } },
       { key: "crm", href: "/crm", labelKey: "nav.crm", requires: { capability: "crm.view" } },
     ],
   },
@@ -148,9 +148,9 @@ export const PLACES: readonly PlaceDef[] = [
     href: "/files",
     labelKey: "nav.place.library",
     icon: "library",
-    requires: "staff",
+    requires: { capability: "files.view" },
     // /documents was an empty "coming soon" page: it is a redirect to /files now
-    tabs: [{ key: "files", href: "/files", labelKey: "nav.files", requires: "staff", also: ["/documents"] }],
+    tabs: [{ key: "files", href: "/files", labelKey: "nav.files", requires: { capability: "files.view" }, also: ["/documents"] }],
   },
   {
     key: "admin",

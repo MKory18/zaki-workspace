@@ -6,6 +6,7 @@ import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { nextTaskNumber, type Tx } from "@/server/services/tasks";
 import { pushNotificationToMany } from "@/server/notify";
+import { assertMemberCan } from "@/server/policy/actor";
 import { assertCanWrite } from "@/server/services/guest-guard";
 import { assertActiveAssignee } from "@/server/services/active-people";
 
@@ -123,6 +124,7 @@ async function ticketEditFacts(
  * only the ones they raised or hold (the owner's decision, 2026-10-25: each department works like its own site).
  */
 export async function listDepartmentTickets(departmentId: string, viewer?: OrgAccessContext) {
+  if (viewer) await assertMemberCan(viewer, "tickets.view", "section.view_denied");
   const insider = viewer ? await seesDepartment(viewer, departmentId) : true;
   const mine = insider || !viewer ? {} : { OR: [{ creatorId: viewer.userId }, { assigneeId: viewer.userId }] };
   return db.ticket.findMany({
@@ -149,6 +151,7 @@ export async function createTicket(
   input: z.infer<typeof createTicketSchema>,
 ) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "tickets.edit", "section.edit_denied");
   const { dept } = await departmentContext(ctx, departmentId);
   if (input.assigneeId) {
     const ok = dept.memberships.some((m) => m.userId === input.assigneeId) || ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
@@ -209,6 +212,7 @@ export async function loadTicketForOrg(orgId: string, ticketId: string) {
 
 /** One ticket: for the department's people, the OWNER and the ADMINs, and for whoever raised or holds it. */
 export async function ticketDetail(ctx: OrgAccessContext, ticketId: string) {
+  await assertMemberCan(ctx, "tickets.view", "section.view_denied");
   const ticket = await db.ticket.findFirst({
     where: { id: ticketId, orgId: ctx.orgId },
     select: {
@@ -239,6 +243,7 @@ export async function ticketDetail(ctx: OrgAccessContext, ticketId: string) {
 /** Comments: any org member except a guest may comment; author or org admin may edit/delete. */
 export async function addTicketComment(ctx: OrgAccessContext, ticketId: string, body: string) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "tickets.edit", "section.edit_denied");
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   const comment = await db.$transaction(async (tx) => {
     const c = await tx.ticketComment.create({
@@ -285,6 +290,7 @@ export async function listTicketActivity(ticketId: string) {
 
 export async function editTicketComment(ctx: OrgAccessContext, ticketId: string, commentId: string, body: string) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "tickets.edit", "section.edit_denied");
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   const comment = await db.ticketComment.findFirst({ where: { id: commentId, ticketId: ticket.id }, select: { id: true, authorId: true } });
   if (!comment) throw new NotFoundError("comment.not_found");
@@ -296,6 +302,7 @@ export async function editTicketComment(ctx: OrgAccessContext, ticketId: string,
 
 export async function deleteTicketComment(ctx: OrgAccessContext, ticketId: string, commentId: string) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "tickets.edit", "section.edit_denied");
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   const comment = await db.ticketComment.findFirst({ where: { id: commentId, ticketId: ticket.id }, select: { id: true, authorId: true } });
   if (!comment) throw new NotFoundError("comment.not_found");
@@ -307,6 +314,7 @@ export async function deleteTicketComment(ctx: OrgAccessContext, ticketId: strin
 
 /** "تذاكري" — tickets assigned to the caller (or created by them) in their org. */
 export async function myTickets(ctx: OrgAccessContext) {
+  await assertMemberCan(ctx, "tickets.view", "section.view_denied");
   return db.ticket.findMany({
     where: { orgId: ctx.orgId, OR: [{ assigneeId: ctx.userId }, { creatorId: ctx.userId }] },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
@@ -325,6 +333,7 @@ export async function updateTicket(
   input: z.infer<typeof updateTicketSchema>,
 ) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "tickets.edit", "section.edit_denied");
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   if (!canEditTicket(await ticketEditFacts(ctx, ticket))) throw new ForbiddenError("ticket.admin_only");
   if (input.assigneeId) {
@@ -403,6 +412,7 @@ export async function updateTicket(
 /** Deleting follows the same rule as editing (canEditTicket): the creator only while the ticket is OPEN. */
 export async function deleteTicket(ctx: OrgAccessContext, ticketId: string): Promise<void> {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "tickets.delete", "section.delete_denied");
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   if (!canEditTicket(await ticketEditFacts(ctx, ticket))) throw new ForbiddenError("ticket.admin_only");
   await db.ticket.delete({ where: { id: ticket.id } });

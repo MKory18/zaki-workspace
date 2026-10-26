@@ -12,13 +12,13 @@ import { assertNotGuest } from "@/server/services/guest-guard";
  */
 
 /**
- * The CRM (customers and opportunities) is staff-only: `crm.view` opens it for reading,
- * `crm.edit` for changing. The two switches are independent.
+ * The CRM (customers and opportunities) is staff-only, on the customers row of the person's grid: `crm.view` opens it
+ * for reading, `crm.edit` for adding and changing, `crm.delete` for deleting.
  */
-export async function crmContext(mode: "view" | "edit"): Promise<OrgAccessContext> {
+export async function crmContext(mode: "view" | "edit" | "delete"): Promise<OrgAccessContext> {
   const actor = await requireActor();
   assertNotGuest({ orgRole: actor.role });
-  assertCan(actor, mode === "edit" ? "crm.edit" : "crm.view");
+  assertCan(actor, mode === "delete" ? "crm.delete" : mode === "edit" ? "crm.edit" : "crm.view");
   return { orgId: actor.orgId, orgRole: actor.role, userId: actor.userId };
 }
 

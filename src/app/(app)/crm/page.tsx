@@ -21,7 +21,7 @@ export default async function CrmPage() {
 		);
 	}
 	if (!actorCan(actor, "crm.view")) return <SectionOffNotice />;
-	return <CrmView canEdit={actorCan(actor, "crm.edit")} />;
+	return <CrmView canEdit={actorCan(actor, "crm.edit")} canDelete={actorCan(actor, "crm.delete")} />;
 }
 
 export const dynamic = "force-dynamic";

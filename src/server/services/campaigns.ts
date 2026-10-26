@@ -3,6 +3,7 @@ import type { CampaignStatus } from "@prisma/client";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { nextTaskNumber, type Tx } from "@/server/services/tasks";
+import { assertMemberCan } from "@/server/policy/actor";
 import { assertCanWrite } from "@/server/services/guest-guard";
 
 /**
@@ -70,6 +71,7 @@ async function loadCampaign(ctx: OrgAccessContext, campaignId: string) {
 
 /** A department's campaigns: all of them for its people and the managers; anybody else sees the ones they own. */
 export async function listDepartmentCampaigns(departmentId: string, viewer?: OrgAccessContext) {
+  if (viewer) await assertMemberCan(viewer, "campaigns.view", "section.view_denied");
   const insider = viewer ? canManage(viewer, (await deptContext(viewer, departmentId)).isMember) : true;
   return db.campaign.findMany({
     where: { departmentId, ...(insider || !viewer ? {} : { ownerId: viewer.userId }) },
@@ -89,6 +91,7 @@ export async function createCampaign(
   input: z.infer<typeof createCampaignSchema>,
 ) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "campaigns.edit", "section.edit_denied");
   const { dept } = await deptContext(ctx, departmentId);
   return db.$transaction(async (tx: Tx) => {
     const number = await nextTaskNumber(ctx.orgId, tx);
@@ -117,6 +120,7 @@ export async function updateCampaign(
   input: z.infer<typeof updateCampaignSchema>,
 ) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "campaigns.edit", "section.edit_denied");
   const c = await loadCampaign(ctx, campaignId);
   const { isMember } = await deptContext(ctx, c.departmentId);
   if (!canManage(ctx, isMember)) throw new ForbiddenError("campaign.admin_only");
@@ -139,6 +143,7 @@ export async function updateCampaign(
 
 export async function deleteCampaign(ctx: OrgAccessContext, campaignId: string) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "campaigns.delete", "section.delete_denied");
   const c = await loadCampaign(ctx, campaignId);
   const { isMember } = await deptContext(ctx, c.departmentId);
   if (!canManage(ctx, isMember)) throw new ForbiddenError("campaign.admin_only");
@@ -146,6 +151,7 @@ export async function deleteCampaign(ctx: OrgAccessContext, campaignId: string) 
 }
 
 export async function campaignDetail(ctx: OrgAccessContext, campaignId: string) {
+  await assertMemberCan(ctx, "campaigns.view", "section.view_denied");
   const c = await db.campaign.findFirst({
     where: { id: campaignId, orgId: ctx.orgId },
     select: {
@@ -170,6 +176,7 @@ export async function addCampaignItem(
   input: z.infer<typeof campaignItemSchema>,
 ) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "campaigns.edit", "section.edit_denied");
   const c = await loadCampaign(ctx, campaignId);
   const { isMember } = await deptContext(ctx, c.departmentId);
   if (!canManage(ctx, isMember)) throw new ForbiddenError("campaign.admin_only");
@@ -185,6 +192,7 @@ export async function addCampaignItem(
 
 export async function toggleCampaignItem(ctx: OrgAccessContext, itemId: string) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "campaigns.edit", "section.edit_denied");
   const item = await db.campaignItem.findUnique({
     where: { id: itemId },
     select: { id: true, doneAt: true, campaign: { select: { orgId: true, departmentId: true } } },
@@ -200,6 +208,7 @@ export async function toggleCampaignItem(ctx: OrgAccessContext, itemId: string) 
 
 export async function deleteCampaignItem(ctx: OrgAccessContext, itemId: string) {
   assertCanWrite(ctx);
+  await assertMemberCan(ctx, "campaigns.edit", "section.edit_denied");
   const item = await db.campaignItem.findUnique({
     where: { id: itemId },
     select: { id: true, campaign: { select: { orgId: true, departmentId: true } } },
@@ -212,6 +221,7 @@ export async function deleteCampaignItem(ctx: OrgAccessContext, itemId: string) 
 
 /** «حملاتي» — campaigns the caller owns in their org. */
 export async function myCampaigns(ctx: OrgAccessContext) {
+  await assertMemberCan(ctx, "campaigns.view", "section.view_denied");
   return db.campaign.findMany({
     where: { orgId: ctx.orgId, ownerId: ctx.userId },
     orderBy: [{ status: "asc" }, { startDate: "asc" }],

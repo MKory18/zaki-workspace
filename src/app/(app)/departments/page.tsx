@@ -1,5 +1,6 @@
 import { pageActor, SectionOffNotice } from "@/app/(app)/_access";
 import { actorCan } from "@/server/policy/actor";
+import { sectionMay } from "@/lib/section-may";
 import { getServerT } from "@/lib/i18n/server";
 import { DepartmentsView } from "@/components/departments-view";
 
@@ -22,7 +23,11 @@ export default async function DepartmentsPage() {
   }
   if (!actorCan(actor, "directory.view")) return <SectionOffNotice />;
 
-  return <DepartmentsView me={{ role: actor.role, id: user.id }} />;
+  return (
+    <DepartmentsView
+      me={{ role: actor.role, id: user.id, tickets: sectionMay(actor.caps, "tickets"), campaigns: sectionMay(actor.caps, "campaigns") }}
+    />
+  );
 }
 
 export const dynamic = "force-dynamic";

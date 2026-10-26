@@ -1,4 +1,5 @@
-import { pageActor } from "@/app/(app)/_access";
+import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
+import { actorCan } from "@/server/policy/actor";
 import { getServerT } from "@/lib/i18n/server";
 import { FilesView } from "@/components/files-view";
 
@@ -13,7 +14,9 @@ export default async function FilesPage() {
     return <div className="mx-auto max-w-2xl p-10 text-center text-sm text-muted">{t("guest.no_access")}</div>;
   }
 
-  return <FilesView me={{ id: user.id, role: actor.role }} />;
+  // the library row of the person's grid
+  if (!actorCan(actor, "files.view")) return <SectionOffNotice />;
+  return <FilesView me={{ id: user.id, role: actor.role }} may={{ edit: actorCan(actor, "files.edit"), delete: actorCan(actor, "files.delete") }} />;
 }
 
 export const dynamic = "force-dynamic";
