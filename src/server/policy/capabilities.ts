@@ -20,6 +20,11 @@ export const CAPABILITIES = [
   "penalties.view", // everybody's penalties and rewards (data comes from the OMS)
   "archive.view", // the owner's archive and "all of the company" chat view: never grantable
   // the sections, each with «يشوف» (view), «يضيف ويعدّل» (edit) and «يحذف» (delete): the per-person grid
+  "projects.view",
+  "projects.edit",
+  "tasks.view",
+  "tasks.edit",
+  "tasks.delete",
   "ideas.view",
   "ideas.edit",
   "ideas.delete",
@@ -55,6 +60,8 @@ export type SectionAction = "view" | "edit" | "delete";
  * Only wired sections are here: a box that does nothing is a lie on the screen, so each later phase adds its own.
  */
 export const SECTIONS = [
+  { id: "projects", actions: ["view", "edit"] },
+  { id: "tasks", actions: ["view", "edit", "delete"] },
   { id: "ideas", actions: ["view", "edit", "delete"] },
   { id: "goals", actions: ["view", "edit", "delete"] },
   { id: "production", actions: ["view", "edit", "delete"] },
@@ -116,7 +123,9 @@ export const WIRED_CAPABILITIES: readonly Capability[] = [
  *
  * The sections give each rank exactly what it could do before the grid existed, so nothing changes until the owner
  * flips a box: ideas are everyone's; goals and production routines are seen by all staff and managed by the
- * admins; the reports are a lead's and up; the library, the tickets, the campaigns and the customers are all staff's.
+ * admins; the reports are a lead's and up; the library, the tickets, the campaigns and the customers are all staff's;
+ * the projects and the tasks too (an external partner works in their shared spaces by the space's own rules, not the
+ * grid; deleting a task still takes the space's admin).
  */
 export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
   OWNER: CAPABILITIES,
@@ -150,6 +159,11 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "campaigns.edit",
     "campaigns.delete",
     "crm.delete",
+    "projects.view",
+    "projects.edit",
+    "tasks.view",
+    "tasks.edit",
+    "tasks.delete",
   ],
   LEAD: [
     "directory.view",
@@ -172,6 +186,11 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "campaigns.edit",
     "campaigns.delete",
     "crm.delete",
+    "projects.view",
+    "projects.edit",
+    "tasks.view",
+    "tasks.edit",
+    "tasks.delete",
   ],
   MEMBER: [
     "directory.view",
@@ -192,6 +211,11 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "campaigns.edit",
     "campaigns.delete",
     "crm.delete",
+    "projects.view",
+    "projects.edit",
+    "tasks.view",
+    "tasks.edit",
+    "tasks.delete",
   ],
   GUEST: [],
 };

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertMemberCan } from "@/server/policy/actor";
 import { db } from "@/server/db";
 import { requireTeamWork, NotFoundError } from "@/server/auth";
 import { withApi } from "@/server/api";
@@ -13,7 +14,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       select: { workspaceId: true, teamId: true },
     });
     if (!project) throw new NotFoundError("project.not_found");
-    await requireTeamWork(project.workspaceId, project.teamId, undefined, "project.not_found");
+    const access = await requireTeamWork(project.workspaceId, project.teamId, undefined, "project.not_found");
+    await assertMemberCan(access, "projects.view", "section.view_denied", { spaceGuestsPass: true });
     const data = await getProjectTimeline(params.id);
     return NextResponse.json(data);
   });

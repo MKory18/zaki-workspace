@@ -78,13 +78,15 @@ export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team
  *   { capability }        holds that switch (a guest never does, whatever was stored)
  *   { rankAtLeast }       that rank or above
  *   { anyOf }             one of these
+ *   { workCapability }    an external partner (the space's own rules decide for them), or staff holding that box
  */
 export type Requirement =
   | "everyone"
   | "staff"
   | { readonly capability: string }
   | { readonly rankAtLeast: NavRole }
-  | { readonly anyOf: readonly Requirement[] };
+  | { readonly anyOf: readonly Requirement[] }
+  | { readonly workCapability: string };
 
 export interface TabDef {
   readonly key: TabKey;
@@ -126,10 +128,10 @@ export const PLACES: readonly PlaceDef[] = [
     requires: "everyone",
     owns: ["/tasks"],
     tabs: [
-      { key: "my-work", href: "/my-work", labelKey: "nav.tab.myWork", requires: "everyone" },
-      { key: "projects", href: "/projects", labelKey: "nav.projects", requires: "everyone", also: ["/boards"] },
-      { key: "list", href: "/list", labelKey: "nav.listView", requires: "everyone" },
-      { key: "calendar", href: "/calendar", labelKey: "nav.calendar", requires: "everyone" },
+      { key: "my-work", href: "/my-work", labelKey: "nav.tab.myWork", requires: { workCapability: "tasks.view" } },
+      { key: "projects", href: "/projects", labelKey: "nav.projects", requires: { workCapability: "projects.view" }, also: ["/boards"] },
+      { key: "list", href: "/list", labelKey: "nav.listView", requires: { workCapability: "tasks.view" } },
+      { key: "calendar", href: "/calendar", labelKey: "nav.calendar", requires: { workCapability: "tasks.view" } },
       // The company's own goals and ideas (titles, descriptions, who wrote them): not shared with an external
       // partner. The pages and /api/goals, /api/ideas refuse a guest too (docs/PHASE0-AUDIT.md R10).
       { key: "goals", href: "/goals", labelKey: "nav.goals", requires: { capability: "goals.view" } },
@@ -238,6 +240,8 @@ function meets(req: Requirement, subject: NavSubject): boolean {
   if (req === "everyone") return true;
   if (req === "staff") return !outsider;
   if ("anyOf" in req) return req.anyOf.some((r) => meets(r, subject));
+  // an outsider works in what is shared with them by the space's rules; staff need the box
+  if ("workCapability" in req) return outsider || subject.caps.includes(req.workCapability);
   if ("capability" in req) return !outsider && subject.caps.includes(req.capability);
   return rankAtLeast(subject.role, req.rankAtLeast);
 }

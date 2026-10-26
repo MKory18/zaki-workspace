@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertMemberCan } from "@/server/policy/actor";
 import { withApi } from "@/server/api";
 import { db } from "@/server/db";
 import { NotFoundError, requireTeamWork } from "@/server/auth";
@@ -11,7 +12,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       select: { id: true, workspaceId: true, teamId: true },
     });
     if (!project) throw new NotFoundError("project.not_found");
-    await requireTeamWork(project.workspaceId, project.teamId, undefined, "project.not_found");
+    const access = await requireTeamWork(project.workspaceId, project.teamId, undefined, "project.not_found");
+    await assertMemberCan(access, "projects.view", "section.view_denied", { spaceGuestsPass: true });
     const boards = await db.board.findMany({
       where: { projectId: project.id },
       orderBy: { createdAt: "asc" },

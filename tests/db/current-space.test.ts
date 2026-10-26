@@ -12,6 +12,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
 }));
 
+import { effectiveCapabilities } from "@/server/policy/capabilities";
 import * as goRoute from "@/app/go/route";
 import * as searchRoute from "@/app/api/search/route";
 import * as chatHomeRoute from "@/app/api/chat/home/route";
@@ -105,7 +106,8 @@ describe("/go enters a space", () => {
 describe("inside a space, only that space's work", () => {
   it("«اليوم» and «مهامي» show the current space's tasks only", async () => {
     const w = await world();
-    const actor = { userId: w.member.id, orgId: w.org.id, role: "MEMBER" as const, caps: new Set<never>(), isOwner: false, isExternal: false };
+    // a member as the server builds them: their rank's boxes (the tasks «يشوف» of the section grid among them)
+    const actor = { userId: w.member.id, orgId: w.org.id, role: "MEMBER" as const, caps: effectiveCapabilities({ role: "MEMBER" }), isOwner: false, isExternal: false };
     const today = await getToday(actor, { spaceId: w.a.id });
     const ids = [...today.tasks.overdue, ...today.tasks.today, ...today.tasks.later].map((t) => t.id);
     expect(ids).toContain(w.ta.id);

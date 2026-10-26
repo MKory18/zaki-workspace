@@ -244,5 +244,17 @@
   "members.cap.campaigns.delete.title": "يحذف من الحملات",
   "members.cap.campaigns.delete.hint": "بيحذف من الحملات.",
   "members.cap.crm.delete.title": "يحذف من العملاء",
-  "members.cap.crm.delete.hint": "بيحذف العملاء والفرص."
+  "members.cap.crm.delete.hint": "بيحذف العملاء والفرص.",
+  "members.section.projects": "المشاريع",
+  "members.section.tasks": "المهام",
+  "members.cap.projects.view.title": "يشوف المشاريع",
+  "members.cap.projects.view.hint": "بيفتح المشاريع ولوحاتها.",
+  "members.cap.projects.edit.title": "يضيف ويعدّل بالمشاريع",
+  "members.cap.projects.edit.hint": "بيفتح مشروع أو لوحة أو عمود، وبيعدّلهم وبيأرشف المشروع.",
+  "members.cap.tasks.view.title": "يشوف المهام",
+  "members.cap.tasks.view.hint": "بيشوف المهام: مهامي، القائمة، التقويم، اللوحات.",
+  "members.cap.tasks.edit.title": "يضيف ويعدّل بالمهام",
+  "members.cap.tasks.edit.hint": "بيضيف مهمة، بيعدّلها، بينقلها، بيخلّصها، وبيعلّق عليها.",
+  "members.cap.tasks.delete.title": "يحذف مهام",
+  "members.cap.tasks.delete.hint": "بيحذف مهمة (وبيضل بدها مدير المساحة)."
 }

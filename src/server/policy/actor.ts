@@ -51,6 +51,14 @@ export function actorCan(actor: Pick<Actor, "caps">, capability: Capability): bo
   return actor.caps.has(capability);
 }
 
+/**
+ * The signed-in person's box for a section that also serves the spaces' external partners (projects, tasks): a GUEST
+ * passes (the space's own rules decide for them), anyone else needs the box.
+ */
+export function actorCanWork(actor: Pick<Actor, "caps" | "isExternal">, capability: Capability): boolean {
+  return actor.isExternal || actor.caps.has(capability);
+}
+
 /** 403 `code` (`insufficient_role` unless told otherwise) unless the actor holds the capability (a guest holds none). */
 export function assertCan(actor: Pick<Actor, "caps">, capability: Capability, code = "insufficient_role"): void {
   if (!actorCan(actor, capability)) throw new ForbiddenError(code);
@@ -67,6 +75,11 @@ export async function assertMemberCan(
   ctx: { orgId: string; userId: string },
   capability: Capability,
   code = "insufficient_role",
+  /**
+   * `spaceGuestsPass`: an external partner (GUEST) holds no capability, yet works in the spaces shared with them under
+   * the space's own rules (projects and tasks): for them those rules decide, not the grid.
+   */
+  opts: { spaceGuestsPass?: boolean } = {},
 ): Promise<void> {
   const member = await db.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } },
@@ -80,5 +93,6 @@ export async function assertMemberCan(
     },
   });
   if (!member || member.status !== "ACTIVE") throw new ForbiddenError("not_org_member");
+  if (opts.spaceGuestsPass && member.role === "GUEST") return;
   if (!can(member, capability, { sectionGrid: sectionGridOf(member.organization.settings) })) throw new ForbiddenError(code);
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertMemberCan } from "@/server/policy/actor";
 import { z } from "zod";
 import { audit, ForbiddenError, NotFoundError, requireTeamWork } from "@/server/auth";
 import { apiError } from "@/server/api";
@@ -19,7 +20,8 @@ export async function PATCH(
   return withApi(async () => {
     const input = await parseJson(patchSchema, req);
     const { board } = await resolveBoard(params.id);
-    await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
+    const access = await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
+    await assertMemberCan(access, "projects.edit", "section.edit_denied", { spaceGuestsPass: true });
     const column = await db.boardColumn.findFirst({
       where: { id: params.columnId, boardId: board.id },
       select: { id: true },
@@ -42,7 +44,8 @@ export async function DELETE(
 ) {
   return withApi(async () => {
     const { board } = await resolveBoard(params.id);
-    await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
+    const access = await requireTeamWork(board.project.workspaceId, board.project.teamId, ["ADMIN", "MEMBER"], "board.not_found");
+    await assertMemberCan(access, "projects.edit", "section.edit_denied", { spaceGuestsPass: true });
     const column = await db.boardColumn.findFirst({
       where: { id: params.columnId, boardId: board.id },
       select: { id: true, _count: { select: { tasks: true } } },

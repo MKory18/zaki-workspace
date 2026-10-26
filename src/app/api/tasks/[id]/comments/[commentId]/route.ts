@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertMemberCan } from "@/server/policy/actor";
 import { z } from "zod";
 import { ForbiddenError, NotFoundError, requireTeamWork } from "@/server/auth";
 import { withApi } from "@/server/api";
@@ -29,6 +30,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string; co
     const input = await parseJson(editSchema, req);
     const { task, comment } = await loadTaskComment(params.id, params.commentId);
     const ctx = await requireTeamWork(task.workspaceId, task.project.teamId, ["ADMIN", "MEMBER"], "task.not_found");
+    await assertMemberCan(ctx, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
     if (comment.authorId !== ctx.userId) throw new ForbiddenError("comment.not_yours");
     const updated = await db.taskComment.update({
       where: { id: comment.id },
@@ -44,6 +46,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string; 
   return withApi(async () => {
     const { task, comment } = await loadTaskComment(params.id, params.commentId);
     const ctx = await requireTeamWork(task.workspaceId, task.project.teamId, ["ADMIN", "MEMBER"], "task.not_found");
+    await assertMemberCan(ctx, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
     if (comment.authorId !== ctx.userId) throw new ForbiddenError("comment.not_yours");
     await db.taskComment.delete({ where: { id: comment.id } });
     return NextResponse.json({ ok: true });

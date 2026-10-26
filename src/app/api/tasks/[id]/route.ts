@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertMemberCan } from "@/server/policy/actor";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { requireTaskAccess, audit, ForbiddenError, NotFoundError } from "@/server/auth";
@@ -13,7 +14,8 @@ import { notifyAssignment } from "@/server/notify";
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     // its space, then its project's team: outside the team it is «not found»
-    await requireTaskAccess(params.id);
+    const access = await requireTaskAccess(params.id);
+    await assertMemberCan(access, "tasks.view", "section.view_denied", { spaceGuestsPass: true });
     const task = await db.task.findFirst({
       where: { id: params.id },
       include: {
