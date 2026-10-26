@@ -6,15 +6,17 @@ import { writeSystemMessage } from "@/server/chat/system";
 import { emitRealtime } from "@/server/realtime/emit";
 import { canRead, loadConversationFacts, loadOrgFacts } from "@/server/policy/conversation";
 import {
+  canEndCall,
   canInviteToCall,
   canJoinCall,
+  canMuteInCall,
   canRemoveFromCall,
   canStartCall,
   canStartMeeting,
   isCompanyStaff,
   loadCallFacts,
 } from "@/server/policy/call";
-import { dropFromRoom, passFor, peopleInRoom, requireCallsServer, roomOf } from "./livekit";
+import { closeRoom, dropFromRoom, muteInRoom, passFor, peopleInRoom, requireCallsServer, roomOf } from "./livekit";
 
 /**
  * CALLS — voice and video on the company's own calls server (the owner's decision, 2026-10-25): the call of a
@@ -41,8 +43,9 @@ export interface CallDto {
   /** the page of the call: share it, it opens the call for whoever may join */
   path: string;
   /** who is in the room now (from the calls server; [] when it cannot be asked) */
-  people: { userId: string; name: string; canRemove: boolean }[];
-  can: { invite: boolean };
+  people: { userId: string; name: string; canRemove: boolean; canMute: boolean }[];
+  /** `end`: the viewer is a host and may end the call for everybody («إنهاء للكل»); everybody may leave */
+  can: { invite: boolean; end: boolean };
 }
 
 async function ownCall(ctx: OrgAccessContext, callId: string) {
@@ -214,9 +217,10 @@ export async function callDetail(ctx: OrgAccessContext, callId: string): Promise
       .filter((p) => byId.has(p.identity))
       .map((p) => {
         const row = byId.get(p.identity)!;
-        return { userId: p.identity, name: row.user.name, canRemove: canRemoveFromCall(facts, org, ctx.userId, { userId: p.identity, role: row.role }) };
+        const target = { userId: p.identity, role: row.role };
+        return { userId: p.identity, name: row.user.name, canRemove: canRemoveFromCall(facts, org, ctx.userId, target), canMute: canMuteInCall(facts, org, ctx.userId, target) };
       }),
-    can: { invite: canInviteToCall(facts, org) },
+    can: { invite: canInviteToCall(facts, org), end: !facts.endedAt && canEndCall(facts, org, ctx.userId) },
   };
 }
 
@@ -268,4 +272,36 @@ export async function removeFromCall(ctx: OrgAccessContext, callId: string, user
 export async function leaveCall(ctx: OrgAccessContext, callId: string): Promise<void> {
   await ownCall(ctx, callId);
   await settleCall(callId);
+}
+
+/**
+ * «إنهاء للكل»: a host ends the call for everybody — its end time, «خلصت المكالمة» in its conversation, `call.changed`
+ * so every screen closes it, and the calls server closes the room (every browser hears the call ended). Done on the
+ * server; the others can only leave, and the call goes on without them.
+ */
+export async function endCall(ctx: OrgAccessContext, callId: string): Promise<void> {
+  const { facts, org } = await ownCall(ctx, callId);
+  if (facts.endedAt) return;
+  if (!canEndCall(facts, org, ctx.userId)) throw new ForbiddenError("calls.e.cannot_end");
+  const call = await db.call.findUniqueOrThrow({ where: { id: callId }, select: { orgId: true, spaceId: true, conversationId: true } });
+  await db.$transaction(async (tx) => {
+    const ended = await tx.call.updateMany({ where: { id: callId, endedAt: null }, data: { endedAt: new Date() } });
+    if (ended.count === 0) return;
+    if (call.conversationId) {
+      await writeSystemMessage(tx, { orgId: call.orgId, conversationId: call.conversationId, authorId: ctx.userId, k: "call_ended", spaceId: call.spaceId });
+    }
+    await emitRealtime(tx, call.orgId, "call.changed", { ...(call.conversationId ? { conversationId: call.conversationId } : {}), callId });
+  });
+  await closeRoom(callId);
+}
+
+/** «اكتم»: a host mutes one person's microphone (they unmute themselves when they want to speak). */
+export async function muteInCall(ctx: OrgAccessContext, callId: string, userId: string): Promise<void> {
+  const { facts, org } = await ownCall(ctx, callId);
+  const target = await db.organizationMember.findUnique({ // all-statuses: the rank only guards the owner, like taking out
+    where: { organizationId_userId: { organizationId: ctx.orgId, userId } },
+    select: { role: true },
+  });
+  if (!target || !canMuteInCall(facts, org, ctx.userId, { userId, role: target.role })) throw new ForbiddenError("calls.e.cannot_mute");
+  await muteInRoom(callId, userId);
 }
