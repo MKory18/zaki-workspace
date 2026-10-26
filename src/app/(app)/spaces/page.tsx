@@ -7,6 +7,7 @@ import { goHref } from "@/lib/space-link";
 import { currentSpace } from "@/server/services/current-space";
 import { mayOverview, spacesOverview } from "@/server/services/spaces-overview";
 import { UnplacedPanel } from "@/components/unplaced-panel";
+import { SpaceDeleteButton } from "@/components/space-delete-button";
 
 export const metadata = { title: getServerT().t("spaces.overview.title") };
 
@@ -33,7 +34,13 @@ export default async function SpacesPage() {
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {cards.map((s) => (
-            <li key={s.id}>
+            <li key={s.id} className="relative">
+              {/* the OWNER deletes a space with its work (never «الشركة» or a department's space) */}
+              {actor.role === "OWNER" && s.kind === "STANDARD" ? (
+                <div className="absolute end-2 top-2 z-10">
+                  <SpaceDeleteButton id={s.id} name={s.name} />
+                </div>
+              ) : null}
               <a href={goHref(s.id)} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
                 <Card className="h-full transition-colors hover:border-accent/40">
                   <CardBody className="space-y-3">
