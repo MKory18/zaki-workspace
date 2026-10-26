@@ -43,9 +43,10 @@ export async function GET() {
     const wsIds = await accessibleWorkspaceIds(user.id);
     const workspaces = wsIds.length
       ? await db.workspace.findMany({
-          where: { id: { in: wsIds } },
+          // archived spaces are off the switcher; the order is the one set on «كل المساحات»
+          where: { id: { in: wsIds }, archivedAt: null },
           select: { id: true, name: true, slug: true, organizationId: true, kind: true, emoji: true },
-          orderBy: { name: "asc" },
+          orderBy: [{ position: "asc" }, { name: "asc" }],
         })
       : [];
     // what waits in each space, per organization (one query each)
