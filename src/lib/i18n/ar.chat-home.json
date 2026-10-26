@@ -74,5 +74,15 @@
   "chath.filter.section": "المقطع",
   "chath.filter.section_all": "كل المقاطع",
   "chath.filter.section_space": "مواضيع المساحة",
-  "chath.filter.none": "ما في مواضيع بتطابق هالفلتر."
+  "chath.filter.none": "ما في مواضيع بتطابق هالفلتر.",
+  "chath.menu.open": "خيارات «{title}»",
+  "chath.menu.done": "تم",
+  "chath.menu.deleted": "انحذف",
+  "chath.menu.failed": "ما زبطت، جرّب كمان مرة",
+  "chath.menu.has_messages": "فيه رسائل: أرشفه، أو احذفه نهائيًا إذا إنت المالك",
+  "chath.menu.purge": "حذف نهائي مع كل الرسائل",
+  "chath.menu.purge_title": "حذف «{title}» نهائيًا؟",
+  "chath.menu.purge_body": "رح تنحذف المحادثة مع كل رسائلها وملفاتها وإشعاراتها، وما بترجع. حتى أعضاؤها ما رح يشوفوها بعد هيك.",
+  "chath.menu.purge_confirm": "احذف نهائيًا",
+  "chath.menu.cancel": "إلغاء"
 }

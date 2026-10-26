@@ -6,10 +6,13 @@ import { WorkspaceCreateModal } from "@/components/create-forms";
 import type { OrgsResponse } from "@/components/shell/space-switcher";
 import { NewDmDialog } from "./new-dm-dialog";
 import { SpaceTopics } from "./space-topics";
+import { RowMenu } from "./row-menu";
 import { ct, ctCount } from "@/lib/chat/text";
 
 import Link from "next/link";
-export function ChatHome({ home, guest }: { home: HomeDto; guest: boolean }) {
+export function ChatHome({ home, guest, onChanged = () => undefined }: { home: HomeDto; guest: boolean; onChanged?: () => void }) {
+  // «⋯» next to each topic and chat (the «قائمة المحادثة» switch); the owner's «حذف نهائي» among it
+  const menu = home.rowMenu ? { menu: true, canPurge: Boolean(home.canPurge), onChanged } : undefined;
   const [allCompany, setAllCompany] = useState(false);
   const [newDm, setNewDm] = useState(false);
   const [creatingSpace, setCreatingSpace] = useState(false);
@@ -47,7 +50,7 @@ export function ChatHome({ home, guest }: { home: HomeDto; guest: boolean }) {
       </header>
       {allCompany ? <section className="rounded-2xl border border-border bg-surface-1 p-4"><h2 className="font-semibold">{ct("chath.company.title")}</h2><p className="mt-2 text-sm text-fg-muted">{ct("chath.company.hint")}</p>{oversightError && <p role="alert" className="mt-2 text-sm text-danger">{ct("chath.load_failed")}</p>}{!oversight && !oversightError && <p role="status" className="mt-2 text-sm text-fg-muted">{ct("chath.loading")}</p>}<ul className="mt-3 divide-y divide-border">{oversight?.items.map((item) => <li key={item.id} className="flex min-h-12 items-center gap-3 py-2"><span className="min-w-0 flex-1 truncate">{item.kind === "DM" ? (item.names?.length === 2 ? ct("chath.company.dm", { a: item.names[0]!, b: item.names[1]! }) : ct("chath.company.dm_fallback")) : item.title || ct("chatc.title_fallback")}<small className="block text-fg-muted">{item.spaceName ?? ct("chath.company.no_space")} · {ctCount("chath.participants", item.membersCount)}</small></span><Link className="inline-flex min-h-11 items-center text-accent underline" href={`/chat/${item.id}`}>{ct("chath.company.open")}</Link></li>)}</ul>{oversight?.nextCursor && <p className="mt-2 text-xs text-fg-muted">{ct("chath.company.more")}</p>}</section> : <>
         {home.spaces.length ? (
-          <div className="space-y-3">{home.spaces.map((space) => <SpaceTopics key={space.id} space={space} />)}</div>
+          <div className="space-y-3">{home.spaces.map((space) => <SpaceTopics key={space.id} space={space} menu={menu} />)}</div>
         ) : (
           <section aria-labelledby="chat-spaces" className="rounded-2xl border border-border bg-surface-1 p-4">
             <h2 id="chat-spaces" className="mb-3 font-semibold">{ct("chath.spaces")}</h2>
@@ -56,7 +59,7 @@ export function ChatHome({ home, guest }: { home: HomeDto; guest: boolean }) {
           </section>
         )}
         {!guest && <section aria-labelledby="chat-dms" className="rounded-2xl border border-border bg-surface-1 p-4"><h2 id="chat-dms" className="mb-3 font-semibold">{ct("chath.dms")}</h2>
-          {home.dms.length ? <ul className="divide-y divide-border">{home.dms.map((dm) => <li key={dm.id}><Link href={`/chat/${dm.id}`} className="flex min-h-12 items-center gap-3 py-2"><span className="grid size-9 place-items-center rounded-full bg-accent/10">{dm.peer.name.slice(0, 1)}</span><span className="min-w-0 flex-1 truncate">{dm.peer.name}<small className="block truncate text-fg-muted">{dm.lastMessage?.preview ?? ct("chath.start")}</small></span>{dm.lastMessage?.mine && <span role="img" aria-label={ct("chath.sent")}>✓</span>}{dm.unread > 0 && <span className="rounded-full bg-accent/10 px-2 text-xs">{dm.unread}</span>}</Link></li>)}</ul> : <p className="text-sm text-fg-muted">{ct("chath.no_dms")}</p>}
+          {home.dms.length ? <ul className="divide-y divide-border">{home.dms.map((dm) => <li key={dm.id} className="flex items-center gap-1"><Link href={`/chat/${dm.id}`} className="flex min-h-12 min-w-0 flex-1 items-center gap-3 py-2"><span className="grid size-9 place-items-center rounded-full bg-accent/10">{dm.peer.name.slice(0, 1)}</span><span className="min-w-0 flex-1 truncate">{dm.peer.name}<small className="block truncate text-fg-muted">{dm.lastMessage?.preview ?? ct("chath.start")}</small></span>{dm.lastMessage?.mine && <span role="img" aria-label={ct("chath.sent")}>✓</span>}{dm.unread > 0 && <span className="rounded-full bg-accent/10 px-2 text-xs">{dm.unread}</span>}</Link>{menu && <RowMenu id={dm.id} title={dm.peer.name} kind="dm" canPurge={menu.canPurge} onChanged={onChanged} />}</li>)}</ul> : <p className="text-sm text-fg-muted">{ct("chath.no_dms")}</p>}
           <button type="button" onClick={() => setNewDm(true)} className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-accent px-3 text-sm text-accent-fg">{ct("chath.new_dm")}</button>
         </section>}
       </>}

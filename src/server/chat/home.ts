@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { isFeatureOn } from "@/server/services/features";
 import type { OrgAccessContext } from "@/server/auth";
 import { loadOrgFacts, isSpaceAdmin } from "@/server/policy/conversation";
 import { listDms } from "@/server/chat/dm";
@@ -132,6 +133,7 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
         teamId: t.teamId,
         pinned: !!t.pinnedAt,
         archived,
+        system: !!t.systemKey,
         canPost,
         lastMessage: last
           ? {
@@ -166,5 +168,6 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
   // DMs: never for a guest, never in the owner's oversight (a DM is not his to read)
   const dms: DmSummaryDto[] = org?.role === "GUEST" ? [] : await listDms(ctx, opts.spaceId);
 
-  return { spaces, dms, canOversee: isOwner };
+  const rowMenu = await isFeatureOn(ctx.orgId, "chatRowMenu");
+  return { spaces, dms, canOversee: isOwner, rowMenu, canPurge: rowMenu && isOwner };
 }

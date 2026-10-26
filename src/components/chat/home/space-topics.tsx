@@ -5,6 +5,7 @@ import type { SpaceSummaryDto, TopicSummaryDto } from "@/server/chat/dto";
 import { ct } from "@/lib/chat/text";
 import { dayDiff, fmtShort, fmtTime } from "@/lib/format";
 import { NewTopicDialog } from "./new-topic-dialog";
+import { RowMenu } from "./row-menu";
 
 import Link from "next/link";
 /** Today's last message shows its time, an older one its day (the app's own formatting, src/lib/format.ts). */
@@ -12,12 +13,20 @@ function whenOf(at: string): string {
   return dayDiff(at) === 0 ? fmtTime(at) : fmtShort(at);
 }
 
-function TopicRow({ topic }: { topic: TopicSummaryDto }) {
+/** What the list's «⋯» may offer (from the chat home: the switch, the space's managers, the owner). */
+export interface RowActions {
+  menu: boolean;
+  canModerate: boolean;
+  canPurge: boolean;
+  onChanged: () => void;
+}
+
+function TopicRow({ topic, actions }: { topic: TopicSummaryDto; actions?: RowActions }) {
   return (
-    <li>
+    <li className="flex items-center gap-1">
       <Link
         href={`/chat/${topic.id}`}
-        className="flex min-h-14 items-center gap-3 rounded-xl px-2 py-2 hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+        className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
       >
         <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-full bg-accent/10 text-lg">
           {topic.emoji ?? "💬"}
@@ -39,6 +48,19 @@ function TopicRow({ topic }: { topic: TopicSummaryDto }) {
           </span>
         </span>
       </Link>
+      {actions?.menu ? (
+        <RowMenu
+          id={topic.id}
+          title={topic.title}
+          kind="topic"
+          pinned={topic.pinned}
+          archived={topic.archived}
+          system={topic.system}
+          canModerate={actions.canModerate}
+          canPurge={actions.canPurge}
+          onChanged={actions.onChanged}
+        />
+      ) : null}
     </li>
   );
 }
@@ -63,7 +85,8 @@ export function filterTopics(topics: TopicSummaryDto[], f: { show: Show; kind: K
  * and the OWNER. Pinned topics come first (the server's order); the filters narrow the list (unread, mentioning me,
  * a kind, a مقطع); the archived topics (the managers get them) wait folded under «المؤرشفة».
  */
-export function SpaceTopics({ space }: { space: SpaceSummaryDto }) {
+export function SpaceTopics({ space, menu }: { space: SpaceSummaryDto; menu?: Omit<RowActions, "canModerate"> }) {
+  const actions: RowActions | undefined = menu ? { ...menu, canModerate: space.canModerate } : undefined;
   const [creating, setCreating] = useState(false);
   const [show, setShow] = useState<Show>("all");
   const [kind, setKind] = useState<Kind>("");
@@ -123,7 +146,7 @@ export function SpaceTopics({ space }: { space: SpaceSummaryDto }) {
         </div>
       )}
 
-      {own.length ? <ul className="space-y-0.5">{own.map((t) => <TopicRow key={t.id} topic={t} />)}</ul> : null}
+      {own.length ? <ul className="space-y-0.5">{own.map((t) => <TopicRow key={t.id} topic={t} actions={actions} />)}</ul> : null}
       {!own.length && !groups.some((g) => g.topics.length) && (
         <p className="py-2 text-sm text-fg-muted">{ct(filtering ? "chath.filter.none" : "chath.no_topics")}</p>
       )}
@@ -135,7 +158,7 @@ export function SpaceTopics({ space }: { space: SpaceSummaryDto }) {
             <span aria-hidden="true" className="h-px flex-1 bg-border" />
           </h3>
           {g.topics.length ? (
-            <ul className="space-y-0.5">{g.topics.map((t) => <TopicRow key={t.id} topic={t} />)}</ul>
+            <ul className="space-y-0.5">{g.topics.map((t) => <TopicRow key={t.id} topic={t} actions={actions} />)}</ul>
           ) : (
             <p className="px-2 py-1 text-sm text-fg-muted">{ct("chath.section.empty")}</p>
           )}
@@ -147,7 +170,7 @@ export function SpaceTopics({ space }: { space: SpaceSummaryDto }) {
           <summary className="flex min-h-11 cursor-pointer items-center px-2 text-sm font-semibold text-fg-muted">
             {ct("chath.archived", { n: archived.length })}
           </summary>
-          <ul className="space-y-0.5 opacity-80">{archived.map((t) => <TopicRow key={t.id} topic={t} />)}</ul>
+          <ul className="space-y-0.5 opacity-80">{archived.map((t) => <TopicRow key={t.id} topic={t} actions={actions} />)}</ul>
         </details>
       )}
 
