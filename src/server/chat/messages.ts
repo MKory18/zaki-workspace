@@ -45,6 +45,8 @@ export const sendSchema = z
     // a voice note: exactly one recorded audio attachment (the schema used to drop this flag, so
     // every recording arrived as an ordinary message with a file)
     voice: z.boolean().optional(),
+    // «نتفرّج سوا»: the second of the video it was written at; kept only in a watching session's topic
+    videoAtSec: z.number().finite().min(0).max(86_400).optional(),
   })
   .refine((v) => (v.body?.trim().length ?? 0) > 0 || (v.attachmentIds?.length ?? 0) > 0, {
     message: "chat.e.empty",
@@ -105,6 +107,10 @@ export async function sendMessage(
 
   const kind = input.voice === true && isVoice ? "VOICE" : "TEXT";
 
+  // a moment of the video means something only in a «نتفرّج سوا» session's talk; anywhere else it is dropped
+  const videoAtSec =
+    input.videoAtSec !== undefined && (await db.watchSession.count({ where: { conversationId } })) > 0 ? input.videoAtSec : null;
+
   // the reply target must belong to the same conversation
   if (input.replyToId) {
     const parent = await db.chatMessage.findFirst({ where: { id: input.replyToId, conversationId }, select: { id: true } });
@@ -137,6 +143,7 @@ export async function sendMessage(
         replyToId: input.replyToId ?? null,
         mentions: mentionIds,
         ...(input.clientId ? { clientId: input.clientId } : {}),
+        ...(videoAtSec !== null ? { videoAtSec } : {}),
       },
       include: messageInclude(),
     });

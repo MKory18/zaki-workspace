@@ -24,6 +24,7 @@ type MessageRow = {
   body: string;
   createdAt: Date;
   clientId?: string | null;
+  videoAtSec?: number | null;
   replyToId?: string | null;
   replyTo?: { id: string; body: string; deletedAt: Date | null; author: { name: string } } | null;
   forwardedFromId?: string | null;
@@ -115,6 +116,7 @@ export function presentMessage(
     reactions: deleted && !isOwner ? [] : groupReactions(row.reactions, viewer.userId),
     system: systemMeta(row),
   };
+  if (row.videoAtSec !== null && row.videoAtSec !== undefined) dto.videoAtSec = row.videoAtSec;
 
   // reply preview: a deleted parent shows the placeholder, never its text
   if (row.replyTo) {

@@ -429,6 +429,8 @@ model ChatMessage {
   mentions        String[]  @default([]) // user ids
   // Sending is idempotent: a client retry with the same clientId never creates a second message.
   clientId        String?
+  // «نتفرّج سوا»: the second of the video the comment was written at (only in a watching session's topic)
+  videoAtSec      Float?
   createdAt       DateTime  @default(now())
 
   organization  Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)

@@ -3,6 +3,8 @@ import * as listRoute from "@/app/api/watch/route";
 import * as sessionRoute from "@/app/api/watch/[id]/route";
 import * as endRoute from "@/app/api/watch/[id]/end/route";
 import * as remoteRoute from "@/app/api/watch/[id]/remote/route";
+import * as messagesRoute from "@/app/api/chat/conversations/[id]/messages/route";
+import * as conversationRoute from "@/app/api/chat/conversations/[id]/route";
 import { SPACE_COOKIE } from "@/server/services/current-space";
 import { setWatchFetchForTests } from "@/server/watch/title";
 import { call, db, loginAs, makeTeam, makeUser, makeWorkspace } from "./helpers";
@@ -368,5 +370,64 @@ describe("«نتفرّج سوا»: the remote keeps every screen on the same sec
     await loginAs(foreign.owner.id);
     expect((await remoteOf(w.id)).status).toBe(404);
     expect((await hand(w.id, { everyoneControls: true })).status).toBe(404);
+  });
+});
+
+describe("«نتفرّج سوا»: a comment keeps the moment of the video it was written at", () => {
+  async function started() {
+    const w = await world();
+    await as(w.member.id, w.ws.id);
+    const id = (await start({ url: LINK, memberIds: [w.colleague.id] })).json?.["id"] as string;
+    const session = await db.watchSession.findUniqueOrThrow({ where: { id } });
+    return { ...w, id, conversationId: session.conversationId };
+  }
+  const comment = (conversationId: string, body: Record<string, unknown>) =>
+    call(messagesRoute.POST, { method: "POST", params: { id: conversationId }, body });
+
+  it("a comment in the session's talk is stored with its second, and every reader of the talk sees it", async () => {
+    const w = await started();
+    const res = await comment(w.conversationId, { body: "هون الفكرة كلها", videoAtSec: 754.25 });
+    expect(res.status).toBe(201);
+    expect(res.json).toMatchObject({ body: "هون الفكرة كلها", videoAtSec: 754.25 });
+    const row = await db.chatMessage.findUniqueOrThrow({ where: { id: res.json?.["id"] as string } });
+    expect(row.videoAtSec).toBe(754.25);
+
+    await as(w.colleague.id, w.ws.id);
+    const detail = await call(conversationRoute.GET, { params: { id: w.conversationId }, url: `http://localhost/api/chat/conversations/${w.conversationId}?limit=50` });
+    expect(detail.status).toBe(200);
+    expect((detail.json?.["messages"] as { body: string | null; videoAtSec?: number }[]).find((m) => m.body === "هون الفكرة كلها")).toMatchObject({ videoAtSec: 754.25 });
+  });
+
+  it("a comment without a moment stays an ordinary message (no second on it)", async () => {
+    const w = await started();
+    const res = await comment(w.conversationId, { body: "مرحبا" });
+    expect(res.status).toBe(201);
+    expect(res.json?.["videoAtSec"]).toBeUndefined();
+  });
+
+  it("a moment means nothing outside a watching session: in an ordinary topic it is dropped", async () => {
+    const w = await world();
+    await as(w.member.id, w.ws.id);
+    const topic = await db.conversation.create({ data: { orgId: w.org.id, kind: "TOPIC", spaceId: w.ws.id, title: "General" } });
+    const res = await comment(topic.id, { body: "عادي", videoAtSec: 30 });
+    expect(res.status).toBe(201);
+    expect(res.json?.["videoAtSec"]).toBeUndefined();
+    expect((await db.chatMessage.findUniqueOrThrow({ where: { id: res.json?.["id"] as string } })).videoAtSec).toBeNull();
+  });
+
+  it("a wrong second (negative, more than a day, not a number) is refused and nothing is written", async () => {
+    const w = await started();
+    const before = await db.chatMessage.count({ where: { conversationId: w.conversationId } });
+    for (const videoAtSec of [-1, 86_401, "12"]) {
+      expect((await comment(w.conversationId, { body: "x", videoAtSec })).status, String(videoAtSec)).toBe(422);
+    }
+    expect(await db.chatMessage.count({ where: { conversationId: w.conversationId } })).toBe(before);
+  });
+
+  it("somebody the session was not started for cannot comment in it", async () => {
+    const w = await started();
+    await as(w.admin.id, w.ws.id);
+    const res = await comment(w.conversationId, { body: "أنا كمان", videoAtSec: 3 });
+    expect([403, 404]).toContain(res.status);
   });
 });
