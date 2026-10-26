@@ -4,6 +4,7 @@ import { sectionGrid, type ActorInfo } from "@/lib/members-ui";
 import { ADMIN_ACTOR, MEMBER, OWNER_ACTOR, contractMember } from "./members-ui-fixtures";
 import { buildNav } from "@/lib/nav/places";
 import { newActionsFor } from "@/lib/nav/new-actions";
+import { menuFor } from "@/components/chat/message/message-menu-registry";
 
 /**
  * The per-person section grid (the owner's decision, 2026-10-26): «يشوف / يضيف ويعدّل / يحذف» for every section. The
@@ -137,5 +138,17 @@ describe("batch 3: the projects and the tasks on the map and the «جديد» wh
     const places = (caps: readonly string[]) => buildNav({ role: "MEMBER", caps }).places.map((p) => p.key);
     expect(places(memberCaps)).toContain("watch");
     expect(places(memberCaps.filter((c) => c !== "watch.view"))).not.toContain("watch");
+  });
+});
+
+describe("polish: a message's «حوّلها لمهمة / لتذكرة» follow the tasks / tickets boxes", () => {
+  const base = { mine: false, deleted: false, kind: "TEXT", hasText: true, pinned: false, conversationKind: "TOPIC", canPost: true, canModerate: false, oversight: false, canMakeWork: true } as const;
+  const ids = (extra: Record<string, unknown>) => menuFor({ ...base, ...extra } as Parameters<typeof menuFor>[0]).map((a) => a.id);
+
+  it("both by the template; each gone without its box", () => {
+    expect(ids({})).toEqual(expect.arrayContaining(["task", "ticket"]));
+    expect(ids({ canMakeTask: false })).not.toContain("task");
+    expect(ids({ canMakeTask: false })).toContain("ticket");
+    expect(ids({ canMakeTicket: false })).not.toContain("ticket");
   });
 });

@@ -383,6 +383,8 @@ export async function conversationDetail(
       canJoin: org!.role === "OWNER" && !facts.viewerIsMember && facts.kind === "TOPIC" && !conv.closedAt,
       canMakeWork: org!.role !== "GUEST" && !(org!.role === "OWNER" && !facts.viewerIsMember),
       canCall: (await memberCan(ctx, "calls.edit", { spaceGuestsPass: true })) === true,
+      canMakeTask: (await memberCan(ctx, "tasks.edit")) === true,
+      canMakeTicket: (await memberCan(ctx, "tickets.edit")) === true,
       id: ctx.userId,
     },
     pinnedMessages: (
