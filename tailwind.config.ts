@@ -36,9 +36,12 @@ const config: Config = {
       },
       keyframes: {
         "fade-in": { from: { opacity: "0", transform: "translateY(2px)" }, to: { opacity: "1", transform: "none" } },
+        // «نتفرّج سوا»: a reaction rises over the video and fades
+        "float-up": { "0%": { opacity: "0", transform: "translateY(0) scale(0.8)" }, "15%": { opacity: "1" }, "100%": { opacity: "0", transform: "translateY(-160px) scale(1.2)" } },
       },
       animation: {
         "fade-in": "fade-in 150ms ease-out",
+        "float-up": "float-up 2.5s ease-out forwards",
       },
     },
   },

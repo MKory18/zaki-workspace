@@ -70,6 +70,8 @@ export interface MessageDto {
   system?: SystemMeta | null;
   /** the tasks and tickets made from this message («صارت مهمة»). */
   work?: { kind: "task" | "ticket"; id: string }[];
+  /** «نتفرّج سوا»: the second of the video it was written at. */
+  videoAtSec?: number | null;
 }
 
 export interface SpaceSummaryDto {
