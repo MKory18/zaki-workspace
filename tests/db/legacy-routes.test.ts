@@ -20,6 +20,7 @@ import TodayPage from "@/app/(app)/page";
 import ChatPage from "@/app/(app)/chat/page";
 import ChatConversationPage from "@/app/(app)/chat/[id]/page";
 import WhiteboardPage from "@/app/(app)/chat/[id]/whiteboard/page";
+import CallPage from "@/app/(app)/calls/[id]/page";
 import ArchivePage from "@/app/(app)/archive/page";
 import MyWorkPage from "@/app/(app)/my-work/page";
 import ProjectsPage from "@/app/(app)/projects/page";
@@ -89,9 +90,10 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * The pages of the shell that are not an old address: the in-app guide (Phase 2), reached from the help
  * button, from Phase 3 one conversation (`/chat/[id]`) and the owner's archive (`/archive`), and the owner's
  * and admins' look over every space (`/spaces`, «كل المساحات»), «التذاكر» and «الحملات» as pages of their own
- * under «الشغل» (`/tickets`, `/campaigns`), and a conversation's whiteboard (`/chat/[id]/whiteboard`, 2026-10-25).
+ * under «الشغل» (`/tickets`, `/campaigns`), one call (`/calls/[id]`: a conversation's call or a meeting's link) and a
+ * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25.
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/tickets", "/campaigns", "/chat/[id]/whiteboard"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -140,6 +142,7 @@ const PAGES: Record<string, PageCall> = {
   "/chat": () => ChatPage(),
   "/chat/[id]": (args) => ChatConversationPage({ params: idOf(args) }),
   "/chat/[id]/whiteboard": (args) => WhiteboardPage({ params: idOf(args) }),
+  "/calls/[id]": (args) => CallPage({ params: idOf(args) }),
   "/archive": () => ArchivePage(),
   "/my-work": ({ searchParams }) => MyWorkPage({ searchParams }),
   "/projects": ({ searchParams }) => ProjectsPage({ searchParams }),
@@ -306,7 +309,10 @@ async function linkWorld() {
   const closed = await spaceWithWork([], "Closed", null);
   const teamTopic = await db.conversation.create({ data: { orgId, kind: "TOPIC", spaceId: teamSpace.space.id, title: "Team topic" } });
   const closedTopic = await db.conversation.create({ data: { orgId, kind: "TOPIC", spaceId: closed.space.id, title: "Closed topic" } });
-  return { ...team, lead, teamSpace, shared, closed, teamTopic, closedTopic };
+  // a call of a topic, and a meeting of the space nobody is in
+  const topicCall = await db.call.create({ data: { orgId, spaceId: teamSpace.space.id, conversationId: teamTopic.id, startedById: team.member.id } });
+  const closedMeeting = await db.call.create({ data: { orgId, spaceId: closed.space.id, startedById: team.owner.id } });
+  return { ...team, lead, teamSpace, shared, closed, teamTopic, closedTopic, topicCall, closedMeeting };
 }
 
 type World = Awaited<ReturnType<typeof linkWorld>>;
@@ -328,6 +334,8 @@ function addressesOf(route: string, w: World): string[] {
       return [w.teamTopic.id, w.closedTopic.id, GONE].map((id) => `/chat/${id}`);
     case "/chat/[id]/whiteboard":
       return [w.teamTopic.id, w.closedTopic.id, GONE].map((id) => `/chat/${id}/whiteboard`);
+    case "/calls/[id]":
+      return [w.topicCall.id, w.closedMeeting.id, GONE].map((id) => `/calls/${id}`);
     case "/u/[id]":
       return [w.owner.id, w.admin.id, w.lead.id, w.member.id, w.guest.id, GONE].map((id) => `/u/${id}`);
     case "/guide/[slug]":

@@ -52,6 +52,7 @@ export const ARTICLE_AUDIENCE = {
   places: "everyone",
   spaces: "everyone",
   chat: "everyone",
+  calls: "everyone",
   tasks: "staff",
   projects: "everyone",
   "ideas-goals": "everyone",
