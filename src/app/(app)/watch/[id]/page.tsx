@@ -22,7 +22,7 @@ export default async function WatchSessionPage({ params }: { params: { id: strin
     if (err instanceof NotFoundError) notFound();
     throw err;
   });
-  return <WatchRoom session={session} />;
+  return <WatchRoom session={session} viewerId={user.id} />;
 }
 
 export const metadata = { title: getServerT().t("watch.title") };

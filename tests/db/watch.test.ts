@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import * as listRoute from "@/app/api/watch/route";
 import * as sessionRoute from "@/app/api/watch/[id]/route";
 import * as endRoute from "@/app/api/watch/[id]/end/route";
+import * as remoteRoute from "@/app/api/watch/[id]/remote/route";
 import { SPACE_COOKIE } from "@/server/services/current-space";
 import { setWatchFetchForTests } from "@/server/watch/title";
 import { call, db, loginAs, makeTeam, makeUser, makeWorkspace } from "./helpers";
@@ -239,5 +240,133 @@ describe("«نتفرّج سوا»: ending a session", () => {
     const id = (await start({ url: LINK, memberIds: [w.colleague.id] })).json?.["id"] as string;
     await db.conversation.deleteMany({ where: { spaceId: w.ws.id } });
     expect(await db.watchSession.count({ where: { id } })).toBe(0);
+  });
+});
+
+describe("«نتفرّج سوا»: the remote keeps every screen on the same second", () => {
+  async function started(extra: Record<string, unknown> = {}) {
+    const w = await world();
+    await as(w.member.id, w.ws.id);
+    const id = (await start({ url: LINK, memberIds: [w.colleague.id], ...extra })).json?.["id"] as string;
+    return { ...w, id };
+  }
+  const press = (id: string, body: Record<string, unknown>) => call(remoteRoute.POST, { method: "POST", params: { id }, body });
+  const remoteOf = (id: string) => call(remoteRoute.GET, { params: { id } });
+  const hand = (id: string, body: Record<string, unknown>) => call(remoteRoute.PATCH, { method: "PATCH", params: { id }, body });
+
+  it("a new session waits paused at the link's second, held by its starter, with the server's clock", async () => {
+    const w = await started();
+    const before = Date.now();
+    const res = await remoteOf(w.id);
+    expect(res.status).toBe(200);
+    const remote = res.json?.["remote"] as Record<string, unknown>;
+    expect(remote).toMatchObject({ hostId: w.member.id, everyoneControls: false, live: true, can: { press: true, handOver: true } });
+    expect(remote["state"]).toMatchObject({ playing: false, positionSec: 90, version: 0 });
+    expect(remote["serverNow"] as number).toBeGreaterThanOrEqual(before);
+  });
+
+  it("the host presses play: the state is written with the server's clock, one version up, and the session's people are told", async () => {
+    const w = await started();
+    const session = await db.watchSession.findUniqueOrThrow({ where: { id: w.id } });
+    const events = await db.realtimeEvent.count({ where: { kind: "watch.changed" } });
+    const at = Date.now();
+    const res = await press(w.id, { playing: true, positionSec: 95.5 });
+    expect(res.status).toBe(200);
+    expect((res.json?.["remote"] as { state: Record<string, unknown> }).state).toMatchObject({ playing: true, positionSec: 95.5, version: 1 });
+    const row = await db.watchSession.findUniqueOrThrow({ where: { id: w.id } });
+    expect(row.stateAt.getTime()).toBeGreaterThanOrEqual(at - 5);
+    // the event carries ids only: the conversation (so only its readers get it), never the state itself
+    const rows = await db.realtimeEvent.findMany({ where: { kind: "watch.changed" }, orderBy: { createdAt: "desc" } });
+    expect(rows.length).toBe(events + 1);
+    expect(rows[0]!.ids).toMatchObject({ conversationId: session.conversationId, spaceId: w.ws.id });
+    expect(JSON.stringify(rows[0]!.ids)).not.toContain("95.5");
+
+    // the colleague (who follows) reads the same state
+    await as(w.colleague.id, w.ws.id);
+    const theirs = await remoteOf(w.id);
+    expect(theirs.json?.["remote"]).toMatchObject({ state: { playing: true, positionSec: 95.5, version: 1 }, can: { press: false, handOver: false } });
+  });
+
+  it("somebody who follows cannot press, and the state does not move", async () => {
+    const w = await started();
+    await as(w.colleague.id, w.ws.id);
+    const res = await press(w.id, { playing: true, positionSec: 10 });
+    expect(res.status).toBe(403);
+    expect(res.json?.["message"]).toBe("watch.e.not_remote");
+    expect(await db.watchSession.findUniqueOrThrow({ where: { id: w.id } })).toMatchObject({ playing: false, positionSec: 90, version: 0 });
+  });
+
+  it("a wrong second (negative, more than a day, not a number) is refused before anything moves", async () => {
+    const w = await started();
+    for (const positionSec of [-1, 86_401, "12"]) expect((await press(w.id, { playing: true, positionSec })).status, String(positionSec)).toBe(422);
+    expect((await db.watchSession.findUniqueOrThrow({ where: { id: w.id } })).version).toBe(0);
+  });
+
+  it("the host hands the remote to the colleague: now they press, the starter follows", async () => {
+    const w = await started();
+    const res = await hand(w.id, { hostId: w.colleague.id });
+    expect(res.status).toBe(200);
+    expect(res.json?.["remote"]).toMatchObject({ hostId: w.colleague.id, can: { press: false } });
+    expect((await press(w.id, { playing: true, positionSec: 1 })).status).toBe(403);
+    await as(w.colleague.id, w.ws.id);
+    expect((await press(w.id, { playing: true, positionSec: 1 })).status).toBe(200);
+    // the session still says who started it, and the starter may still end it
+    await as(w.member.id, w.ws.id);
+    const one = await call(sessionRoute.GET, { params: { id: w.id } });
+    expect(one.json?.["session"]).toMatchObject({ host: { id: w.member.id }, remote: { hostId: w.colleague.id }, can: { end: true } });
+    expect((await call(listRoute.GET)).json?.["sessions"]).toMatchObject([{ host: { id: w.member.id } }]);
+    expect((await call(endRoute.POST, { method: "POST", params: { id: w.id } })).status).toBe(200);
+  });
+
+  it("the remote goes only to one of the session's people: not to somebody of the space it was not started for, not to a guest", async () => {
+    const w = await started();
+    for (const person of [w.admin, w.guest, w.outsider]) {
+      const res = await hand(w.id, { hostId: person.id });
+      expect(res.status, person.name).toBe(403);
+      expect(res.json?.["message"], person.name).toBe("watch.e.not_member");
+    }
+    expect((await db.watchSession.findUniqueOrThrow({ where: { id: w.id } })).hostId).toBe(w.member.id);
+  });
+
+  it("«الكل بيتحكّم»: with it on, everybody of the session presses; only the host may switch it", async () => {
+    const w = await started();
+    await as(w.colleague.id, w.ws.id);
+    expect((await hand(w.id, { everyoneControls: true })).status).toBe(403);
+    await as(w.member.id, w.ws.id);
+    expect((await hand(w.id, { everyoneControls: true })).json?.["remote"]).toMatchObject({ everyoneControls: true });
+    await as(w.colleague.id, w.ws.id);
+    const res = await press(w.id, { playing: true, positionSec: 30 });
+    expect(res.status).toBe(200);
+    expect((res.json?.["remote"] as { can: Record<string, boolean> }).can).toMatchObject({ press: true, handOver: false });
+  });
+
+  it("the owner may hand the remote over (silently, he follows like everybody), but does not press it himself", async () => {
+    const w = await started();
+    await as(w.owner.id, w.ws.id);
+    expect((await remoteOf(w.id)).json?.["remote"]).toMatchObject({ can: { press: false, handOver: true } });
+    expect((await press(w.id, { playing: true, positionSec: 1 })).status).toBe(403);
+    expect((await hand(w.id, { hostId: w.colleague.id })).status).toBe(200);
+  });
+
+  it("an ended session takes no press and no hand-over, and stops playing for everybody", async () => {
+    const w = await started();
+    await press(w.id, { playing: true, positionSec: 100 });
+    expect((await call(endRoute.POST, { method: "POST", params: { id: w.id } })).status).toBe(200);
+    expect((await press(w.id, { playing: true, positionSec: 1 })).json?.["message"]).toBe("watch.e.ended");
+    expect((await hand(w.id, { everyoneControls: true })).json?.["message"]).toBe("watch.e.ended");
+    expect((await remoteOf(w.id)).json?.["remote"]).toMatchObject({ live: false, state: { playing: false }, can: { press: false, handOver: false } });
+  });
+
+  it("nobody outside the session learns its remote: the space's admin who was not picked, another company, a guest", async () => {
+    const w = await started();
+    await as(w.admin.id, w.ws.id);
+    expect((await remoteOf(w.id)).status).toBe(404);
+    expect((await press(w.id, { playing: true, positionSec: 1 })).status).toBe(404);
+    await as(w.guest.id, w.ws.id);
+    expect((await remoteOf(w.id)).status).toBe(403);
+    const foreign = await makeTeam();
+    await loginAs(foreign.owner.id);
+    expect((await remoteOf(w.id)).status).toBe(404);
+    expect((await hand(w.id, { everyoneControls: true })).status).toBe(404);
   });
 });

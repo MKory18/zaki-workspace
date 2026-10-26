@@ -20,6 +20,8 @@ export const REALTIME_KINDS = [
   "call.changed",
   // somebody is ringing this ONE person (`targetUserId`) into a call
   "call.ring",
+  // the remote of a «نتفرّج سوا» session was pressed or handed over (its people fetch the new state)
+  "watch.changed",
 ] as const;
 
 export type RealtimeKind = (typeof REALTIME_KINDS)[number];

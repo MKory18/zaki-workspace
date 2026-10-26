@@ -9,24 +9,28 @@ import { Button } from "@/components/ui/button";
 import { useOptionalToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 import { watchErrorKey } from "./watch-home";
+import { WatchPlayer, type WatchRemote } from "./watch-player";
 
 export interface WatchRoomData {
   id: string;
   title: string;
-  embedUrl: string;
+  /** the video's own id at its site */
+  ref: string;
+  startSec: number;
   pageUrl: string;
   host: { id: string; name: string };
   people: { id: string; name: string }[];
   live: boolean;
   conversationId: string;
+  remote: WatchRemote;
   can: { end: boolean };
 }
 
 /**
- * One session: the video on top (it plays from its own site, inline on a phone), who is in it, and one tap to the
- * talk — the session's topic, where the call and the whiteboard already are.
+ * One session: the video on top, on the same second on every screen (src/components/watch/watch-player.tsx), who is
+ * in it, and one tap to the talk — the session's topic, where the call and the whiteboard already are.
  */
-export function WatchRoom({ session }: { session: WatchRoomData }) {
+export function WatchRoom({ session, viewerId }: { session: WatchRoomData; viewerId: string }) {
   const { t } = useI18n();
   const toast = useOptionalToast();
   const router = useRouter();
@@ -48,17 +52,17 @@ export function WatchRoom({ session }: { session: WatchRoomData }) {
   return (
     <div className="mx-auto max-w-5xl space-y-3 p-0 md:p-6">
       <div className="md:rounded-xl md:border md:border-border md:bg-surface md:p-2">
-        {/* never taller than most of the screen (a phone on its side): the title and the buttons stay in view */}
-        <div className="relative mx-auto aspect-video w-full max-w-[calc(65vh*16/9)] overflow-hidden bg-scrim md:rounded-lg">
-          <iframe
-            src={session.embedUrl}
-            title={t("watch.player", { title: session.title })}
-            className="absolute inset-0 h-full w-full"
-            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
-            referrerPolicy="strict-origin-when-cross-origin"
-          />
-        </div>
+        {/* the video is never taller than most of the screen (a phone on its side): the title and the buttons stay in view */}
+        <WatchPlayer
+          sessionId={session.id}
+          conversationId={session.conversationId}
+          videoRef={session.ref}
+          startSec={session.startSec}
+          title={session.title}
+          initial={session.remote}
+          viewerId={viewerId}
+          people={session.people}
+        />
       </div>
 
       <div className="space-y-3 px-4 md:px-0">
