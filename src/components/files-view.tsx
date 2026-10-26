@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import { fmtShort, fmtSize } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { useNewIntent } from "@/lib/nav/use-new-intent";
 
 interface FileRow {
   id: string;
@@ -42,6 +43,13 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLButtonElement>(null);
+  // «جديد» → «مستند» lands here with ?new=upload: the upload button is ready under the finger (a browser opens
+  // a file picker only for the person's own press, so the page cannot open it for them)
+  useNewIntent("upload", () => {
+    uploadRef.current?.scrollIntoView({ block: "center" });
+    uploadRef.current?.focus();
+  });
   const [preview, setPreview] = useState<FileRow | null>(null);
   const [versioning, setVersioning] = useState<FileRow | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -110,7 +118,7 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
           <p className="text-xs text-muted">{t("files.empty_desktop")}</p>
         </div>
         {me.role !== "GUEST" && (
-          <Button size="sm" onClick={() => fileInputRef.current?.click()}>
+          <Button ref={uploadRef} size="sm" onClick={() => fileInputRef.current?.click()}>
             <FolderUp className="size-4" />
             {t("files.upload")}
           </Button>

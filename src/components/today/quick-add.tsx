@@ -10,42 +10,78 @@ import { ApiError, apiPost } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { quickTaskBody, TASK_TITLE_MAX, type QuickDue, type TodayQuickAddData } from "@/lib/today";
 import { cn } from "@/lib/utils";
+import { useNewIntent } from "@/lib/nav/use-new-intent";
 
 type Post = (path: string, body?: unknown) => Promise<unknown>;
 
 /**
- * «إضافة سريعة»: one tap from Today to a task of your own.
+ * «إضافة سريعة» at the foot of «مهمّاتي اليوم» («نجمة وطريق»): a dashed line to type a title into and press
+ * Enter — the task is YOURS, due TODAY, in your first project with a board (the owner's defaults), so typing is
+ * the whole job. «المشروع والموعد» opens the full sheet for the other cases, and so does «جديد» → «مهمّة»
+ * (`?new=task`). It sends exactly what the sheet sends (`quickTaskBody`, `POST /api/tasks`) through the same
+ * server rules, then refreshes the page so the task is in the list.
  *
- * The button is the page's main action (big, at the top, the tour's hook `quick-add`). It opens a sheet - a bottom
- * sheet on a phone - with the three things a task needs and nothing else: a title, a project, a day. The
- * defaults are the owner's: the task is YOURS and it is due TODAY, so typing a title and pressing «أضف المهمة» is
- * the whole job. It sends the request the board's own quick add sends (`POST /api/tasks`), through the same rules
- * (the server checks the space, the project, the board and the assignee again), then refreshes the page so the
- * task is there.
- *
- * Reused, not rebuilt: the endpoint, the toast, the dictionary words of the board's form (`task.new`,
- * `task.title`, `task.createFailed`) and the sheet of the UI kit. What is new is only the small form, because the
- * board's quick add lives inside a column and Today has none.
- *
- * With no project that has a board yet there is nothing to add to: the sheet says so and points to «المشاريع».
+ * The field is the tour's hook `quick-add`. With no project that has a board yet there is nothing to add to:
+ * only «المشروع والموعد» is shown, and its sheet says so and points to «المشاريع».
  */
-export function TodayQuickAdd({ quickAdd, timeZone }: { quickAdd: TodayQuickAddData; timeZone: string }) {
+export function TodayQuickAdd({ quickAdd, timeZone, post = apiPost }: { quickAdd: TodayQuickAddData; timeZone: string; post?: Post }) {
   const { t } = useI18n();
+  const { toast } = useToast();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [pending, setPending] = useState(false);
+  // «جديد» → «مهمّة» lands here with ?new=task
+  useNewIntent("task", () => setOpen(true));
+  const target = quickAdd.targets[0];
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending || !target) return;
+    const body = quickTaskBody(quickAdd, { projectId: target.projectId, title, due: "today", timeZone });
+    if (!body) return;
+    setPending(true);
+    try {
+      await post("/api/tasks", body);
+      setTitle("");
+      toast(t("today.quick.inline_added"), "success");
+      router.refresh();
+    } catch (err) {
+      toast(err instanceof ApiError && err.code === "forbidden" ? t("forbidden") : t("task.createFailed"), "error");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <>
+    <div className="flex flex-wrap items-center gap-2 px-2 pt-2">
+      {target ? (
+        <form onSubmit={submit} className="min-w-0 flex-1 basis-60">
+          <input
+            type="text"
+            data-tour="quick-add"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            disabled={pending}
+            maxLength={TASK_TITLE_MAX}
+            enterKeyHint="done"
+            aria-label={t("today.quick.inline_aria")}
+            placeholder={t("today.quick.inline_placeholder")}
+            className="min-h-11 w-full rounded-lg border border-dashed border-muted bg-transparent px-3 text-base text-fg placeholder:text-fg-muted transition-colors focus:border-solid focus:border-accent focus:bg-surface-2 disabled:opacity-60 md:text-sm"
+          />
+        </form>
+      ) : null}
       <button
         type="button"
-        data-tour="quick-add"
+        data-tour={target ? undefined : "quick-add"}
         onClick={() => setOpen(true)}
-        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-card bg-accent px-5 text-base font-semibold text-accent-fg shadow-card transition-opacity hover:opacity-90 md:w-fit"
+        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-accent transition-colors hover:bg-surface-2"
       >
-        <Plus className="size-5" aria-hidden="true" />
-        {t("today.quick_add")}
+        <Plus className="size-4" aria-hidden="true" />
+        {target ? t("today.quick.more") : t("today.quick_add")}
       </button>
       <QuickAddSheet open={open} onOpenChange={setOpen} quickAdd={quickAdd} timeZone={timeZone} />
-    </>
+    </div>
   );
 }
 

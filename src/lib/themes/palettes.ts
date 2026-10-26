@@ -159,7 +159,7 @@ export const PALETTES: Record<ThemeKey, Palette> = {
       "warn-fg": "#FFFFFF",
       "danger-fg": "#FFFFFF",
       "info-fg": "#FFFFFF",
-      scrim: "#0C1A2B", // the navy of the text, deepened
+      scrim: "#0A1625", // the navy of the text, deepened — and the label on the gold «جديد» (4.5:1)
       "cat-1": "#624F91", // violet
       "cat-2": "#9A3B8B", // fuchsia
       "cat-3": "#8F4A62", // rose

@@ -134,7 +134,8 @@ export const SCRIM_BACKDROP_ALPHA = 0.6;
  * Every pair a screen actually draws, measured. Returns the failures (empty = the palette passes):
  *  - text  >= 4.5:1  fg, fg-muted and muted on the page, a card and a hover row; every colour that is
  *                    also used as text (accent, ok, warn, danger, info, cat-1..6) on the same three;
- *                    the label colour on each solid meaning (accent-fg on accent, ok-fg on ok, ...).
+ *                    the label colour on each solid meaning (accent-fg on accent, ok-fg on ok, ...), and
+ *                    the scrim's dark on the gold of accent-2 (the «جديد» button's label).
  *  - chip  >= 4.5:1  the same text colours on their OWN 10% tint over the page, a card and a hover row
  *                    (`bg-ok/10 text-ok` is how the code draws a status chip).
  *  - ui    >= 3:1    accent and accent-2 as shapes on the page and a card.
@@ -157,6 +158,8 @@ export function checkPalette(colors: Readonly<Record<ColorToken, string>>): Gate
     }
   }
   for (const [text, ground] of ON) need("text", `${text} on ${ground}`, contrastRatio(colors[text], colors[ground]), AA_TEXT);
+  // the gold button («جديد») and a wheel action under the finger are labelled in the scrim's dark
+  need("text", "scrim on accent-2 (the gold button's label)", contrastRatio(colors.scrim, colors["accent-2"]), AA_TEXT);
 
   // a chip sits on every ground text does, a hover row (surface-2) included (review C item 15)
   for (const ground of GROUNDS) {

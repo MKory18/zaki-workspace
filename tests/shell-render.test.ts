@@ -31,6 +31,7 @@ import { I18nProvider } from "@/lib/i18n";
 import { AR } from "@/lib/i18n/dict";
 import { audienceOf } from "@/lib/guide/audience";
 import { buildNav, type NavRole, type NavSubject } from "@/lib/nav/places";
+import { newActionsFor } from "@/lib/nav/new-actions";
 import { effectiveCapabilities } from "@/server/policy/capabilities";
 import type { CurrentUser } from "@/server/auth";
 import { PALETTE_COLOUR, PHYSICAL_UTILITY, classTokens, textOf } from "./ui-render";
@@ -87,6 +88,8 @@ function shell(role: NavRole, pathname: string): string {
       rank: role,
       audience: audienceOf({ isExternal: role === "GUEST", caps: subject.caps }),
       isGuest: role === "GUEST",
+      newActions: newActionsFor(subject),
+      orgName: "شركة زكي",
       children: createElement("p", null, "محتوى الصفحة"),
     }),
     role !== "GUEST",
@@ -156,17 +159,43 @@ describe("the frame for the owner, on a project page", () => {
     expect(count(html, 'data-tour="tabs"')).toBe(1);
     expect(count(html, 'data-tour="search"')).toBe(1);
     expect(count(html, 'data-tour="inbox"')).toBe(1);
+    expect(count(html, 'data-tour="new"')).toBe(1); // «جديد», the shell tour's stop since «نجمة وطريق»
     expect(count(html, 'data-tour="avatar"')).toBe(2);
     // the search hook is around the palette's button
     expect(outerOf(html, /<div[^>]*data-tour="search"[^>]*>/, "div")).toContain(`aria-label="${AR["pal.open"]}"`);
   });
 
-  it("the side menu's 72px header carries the theme's ornament (the sidebar place), never the list of places", () => {
+  it("the side menu's 88px header carries the theme's ornament (the sidebar place), never the list of places", () => {
     const aside = sidebar(html);
     expect(aside).toContain("zk-decor zk-decor-sidebar");
-    expect(aside).toMatch(/class="relative isolate flex h-\[72px\][^"]*overflow-hidden/);
+    expect(aside).toMatch(/class="relative isolate flex h-\[88px\][^"]*overflow-hidden/);
     expect(sidebarPlaces(html)).not.toContain("zk-decor");
-    expect(aside).toContain("Zaki Workspace");
+  });
+
+  it("«نجمة وطريق»: the wordmark «زاكي» in Lalezar, the company's name under it, a link home named in Arabic", () => {
+    const aside = sidebar(html);
+    expect(aside).toMatch(/<span aria-hidden="true" class="zk-wordmark[^"]*">زاكي<\/span>/);
+    expect(aside).toContain("<bdi>شركة زكي</bdi>");
+    expect(linkTo(aside, "/")).toContain(`aria-label="${AR["app.brand"]}"`);
+    expect(aside.split(">")[0]).toContain("zk-side-rule");
+  });
+
+  it("the current place is washed in gold and marked with a star; the others are not", () => {
+    const current = outerOf(sidebarPlaces(html), /<a\b[^>]*href="\/my-work"[^>]*>/, "a");
+    expect(current).toMatch(/class="[^"]*\bbg-accent-2\/10\b/);
+    expect(current).toMatch(/<span aria-hidden="true" class="zk-star[^"]*text-accent-2/);
+    expect(count(sidebarPlaces(html), "zk-star")).toBe(1);
+  });
+
+  it("«دليل زاكي» waits at the bottom of the side menu", () => {
+    expect(linkTo(sidebar(html), "/guide")).toMatch(/border-dashed border-accent-2/);
+    expect(sidebar(html)).toContain(AR["shell.guide"]);
+  });
+
+  it("the top bar names the place but never as a heading: the page's own h1 is the only one", () => {
+    const header = outerOf(html, /<header\b[^>]*>/, "header");
+    expect(header).toMatch(/<p class="hidden[^"]*md:block[^"]*">الشغل<\/p>/);
+    expect(html).not.toMatch(/<h1\b/);
   });
 
   it("offers the spaces and «+» in the side menu, and the spaces at the end of «الشغل»'s strip for the phone", () => {
@@ -176,13 +205,27 @@ describe("the frame for the owner, on a project page", () => {
     expect(tabStrip(html)).toContain(`aria-label="${AR["shell.spaces.open"]}"`);
   });
 
-  it("has the «؟» help, the search, the bell and the avatar in the top bar, and no theme toggle any more", () => {
+  it("has the «؟» help, the search «وين بدك تروح؟», the bell, «ليل / نهار», «جديد» and the avatar in the top bar (not the old light/dark toggle)", () => {
     const header = outerOf(html, /<header\b[^>]*>/, "header");
     expect(header).toContain(`aria-label="${AR["guide.help.open"]}"`);
+    expect(AR["pal.open"]).toBe("وين بدك تروح؟");
     expect(header).toContain(`aria-label="${AR["pal.open"]}"`);
     expect(header).toContain(`aria-label="${AR["notif.title"]}"`);
     expect(header).toContain(`aria-label="${AR["shell.avatar.open"]?.replace("{name}", USER.name)}"`);
+    expect(header).toContain(`role="group" aria-label="${AR["shell.theme.aria"]}"`);
+    expect(header).toContain(`aria-label="${AR["shell.new.open"]}"`);
     expect(html).not.toContain(`aria-label="${AR["top.theme"]}"`);
+  });
+
+  it("«ليل / نهار» is on a phone too (no hidden wrapper), and «جديد» is gold with the scrim's text", () => {
+    const header = outerOf(html, /<header\b[^>]*>/, "header");
+    const group = /<div[^>]*role="group" aria-label="[^"]*"[^>]*>/.exec(header)?.[0] ?? "";
+    expect(group).not.toMatch(/\bhidden\b/);
+    expect(header).not.toMatch(/<div class="hidden sm:block"><div[^>]*role="group"/);
+    const opener = /<button[^>]*aria-label="جديد"[^>]*>/.exec(header)?.[0] ?? "";
+    expect(opener).toMatch(/\bbg-accent-2\b/);
+    expect(opener).toMatch(/\btext-scrim\b/);
+    expect(opener).toContain('aria-haspopup="dialog"');
   });
 
   it("respects the notch and the home indicator: the top bar, the bottom bar, and the room left for the bar", () => {
@@ -197,9 +240,9 @@ describe("the frame for the owner, on a project page", () => {
     expect(html).toMatch(/<main id="zk-main"[^>]*>.*محتوى الصفحة/s);
   });
 
-  it("gives every dolphin mark its own gradient id (the phone bar and the side menu both draw one)", () => {
+  it("gives every dolphin mark its own gradient id (the phone bar draws one; the side menu wears the wordmark now)", () => {
     const ids = [...html.matchAll(/<linearGradient id="([^"]+)"/g)].map((m) => m[1]!);
-    expect(ids.length).toBeGreaterThanOrEqual(2);
+    expect(ids.length).toBeGreaterThanOrEqual(1);
     expect(new Set(ids).size).toBe(ids.length);
     for (const [, ref] of html.matchAll(/url\(#([^)]+)\)/g)) expect(ids, ref).toContain(ref);
   });
@@ -261,6 +304,10 @@ describe("the frame for an external partner (guest)", () => {
     expect(linkTo(strip, "/my-work")).toContain('aria-current="page"');
   });
 
+  it("is offered no «جديد» at all (an external partner starts nothing company-wide)", () => {
+    expect(html).not.toContain(`aria-label="${AR["shell.new.open"]}"`);
+  });
+
   it("is never offered to open a space", () => {
     expect(html).not.toContain(`aria-label="${AR["ws.new"]}"`);
     const menu = render(createElement(SpaceSwitcher, { variant: "sidebar", isGuest: true, defaultOpen: true, portal: false }), false);
@@ -300,7 +347,7 @@ describe("the side menu folded to an icon rail", () => {
   });
 
   it("the mark is still a named link home, the toggle says it unfolds, the spaces are one icon button", () => {
-    expect(linkTo(html, "/")).toContain('aria-label="Zaki Workspace"');
+    expect(linkTo(html, "/")).toContain(`aria-label="${AR["app.brand"]}"`);
     expect(html).toContain(`aria-label="${AR["shell.sidebar.expand"]}"`);
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain(`aria-label="${AR["shell.spaces.open"]}"`);

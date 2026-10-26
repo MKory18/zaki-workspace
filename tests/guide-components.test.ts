@@ -2,6 +2,8 @@ import * as React from "react";
 import { createElement, type FunctionComponent, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 // The components are TSX; under vitest their JSX compiles to React.createElement, which needs a global React.
 (globalThis as { React?: typeof React }).React = React;
@@ -21,6 +23,7 @@ import { GuideSearch } from "@/components/guide/guide-search";
 import { HelpPanel, PageHelpButton } from "@/components/guide/page-help-button";
 import { FirstStepsView } from "@/components/guide/first-steps-client";
 import { HintView } from "@/components/guide/hint";
+import { GuideCardView } from "@/components/guide/guide-card";
 import { searchEntries } from "@/lib/guide/articles";
 import { FIRST_STEPS, stepsFor, toViews } from "@/lib/guide/first-steps";
 import { matchHelp } from "@/lib/guide/page-help";
@@ -334,5 +337,50 @@ describe("HintView: a tip, once", () => {
     expect(html).toContain(t("guide.hint.dismiss"));
     expect(html).toMatch(/\bmin-h-11\b/);
     expectThemeSafe(html);
+  });
+});
+
+describe("«أول خطواتك» as a road of stars («نجمة وطريق»)", () => {
+  const fresh: FirstStepsLocal = { dismissed: false, collapsed: false, done: [] };
+  const steps = toViews(stepsFor("managers"), {});
+
+  it("the list is the dashed road, and each step has its mark on it: a star once done, a breathing gold ring now, a plain ring later", () => {
+    // the first step done (by real data), the second is the one to do now, the rest later
+    const html = render(createElement(FirstStepsView, { steps: steps.map((s, i) => (i === 0 ? { ...s, done: true } : s)), local: fresh, onMark: noop, onCollapse: noop, onDismiss: noop }));
+    expect(html).toMatch(/<ol id="first-steps-list" class="zk-route\b/);
+    expect([...html.matchAll(/class="zk-star size-6 text-accent-2"/g)].length).toBeGreaterThanOrEqual(1);
+    expect([...html.matchAll(/\bzk-ping\b/g)]).toHaveLength(1);
+    expect(html).toMatch(/class="relative grid size-8 shrink-0 place-items-center rounded-full border-2 bg-surface-1 border-muted"/);
+    expect(t("guide.first.title")).toBe("أول خطواتك");
+  });
+
+  it("the progress bar stays, in the star's gold", () => {
+    const html = render(createElement(FirstStepsView, { steps, local: fresh, onMark: noop, onCollapse: noop, onDismiss: noop }));
+    expect(html).toMatch(/role="progressbar"/);
+    expect(html).toMatch(/class="h-full rounded-full bg-accent-2"/);
+  });
+
+  it("the road lines up with the marks: through their centre, 4px in from the start of every row", () => {
+    const css = readFileSync(path.resolve(__dirname, "..", "src/app/globals.css"), "utf8");
+    expect(css).toMatch(/\.zk-route > li::before \{[^}]*inset-inline-start: 19px;[^}]*border-inline-start: 2px dashed/);
+  });
+});
+
+describe("the guide's welcome on «اليوم»: «يلا» / «بعدين»", () => {
+  it("says hello in the guide's voice and offers the two answers, each a 44px button", () => {
+    const html = render(createElement(GuideCardView, { onStart: noop, onLater: noop }));
+    expect(html).toContain(t("guide.card.title"));
+    expect(html).toContain(t("guide.card.body"));
+    for (const word of [t("guide.card.start"), t("guide.card.later")]) {
+      const button = [...html.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].find((m) => m[1] === word)?.[0] ?? "";
+      expect(button, word).toMatch(/\bmin-h-11\b/);
+    }
+  });
+
+  it("«يلا» takes the real tour of the frame, «بعدين» is remembered on this device", () => {
+    const source = readFileSync(path.resolve(__dirname, "..", "src/components/guide/guide-card.tsx"), "utf8");
+    expect(source).toContain('startTour("shell", t)');
+    expect(source).toContain("dismissHint(browserStore(), GUIDE_CARD_HINT)");
+    expect(source).toMatch(/!isTourSeen\(store, "shell"\) && !isHintDismissed\(store, GUIDE_CARD_HINT\)/);
   });
 });

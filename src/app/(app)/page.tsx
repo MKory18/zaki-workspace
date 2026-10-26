@@ -1,13 +1,14 @@
 import { pageActor } from "@/app/(app)/_access";
 import { FirstStepsCard } from "@/components/guide/first-steps-card";
+import { GuideCard } from "@/components/guide/guide-card";
 import { InstallHint } from "@/components/pwa/install-hint";
 import { ActiveProjects } from "@/components/today/active-projects";
-import { TodayQuickAdd } from "@/components/today/quick-add";
 import { TeamPulse } from "@/components/today/team-pulse";
 import { TodayHero } from "@/components/today/today-hero";
 import { TodayTasksCard } from "@/components/today/today-tasks";
 import { getServerT } from "@/lib/i18n/server";
 import { getToday } from "@/server/services/today";
+import { missionOf } from "@/lib/today";
 
 /** The browser tab says «اليوم» (the root layout adds the app name). */
 export const metadata = { title: getServerT().t("today.title") };
@@ -22,7 +23,11 @@ export const metadata = { title: getServerT().t("today.title") };
  * work. The parts are in src/components/today; the first-steps card and the install hint are the guide's and
  * the app shell's and draw nothing when they have nothing to say.
  *
- * Mobile first: one column with 16px gutters; from `lg` the pulse and the projects sit beside the tasks.
+ * «نجمة وطريق»: the mission card first («المهمّة الجاية», the page's one heading), the first steps as a road,
+ * then the day's tasks with the inline quick add at their foot; beside them the guide's welcome («يلا»), the
+ * pulse and the projects.
+ *
+ * Mobile first: one column with 16px gutters; from `lg` the side column sits beside the tasks.
  */
 export default async function TodayPage() {
   const { t } = getServerT();
@@ -36,13 +41,13 @@ export default async function TodayPage() {
     <div className="mx-auto w-full max-w-5xl px-4 py-4 md:px-6 md:py-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <TodayHero greeting={greeting} date={data.dateLabel} />
-          {data.quickAdd ? <TodayQuickAdd quickAdd={data.quickAdd} timeZone={data.timeZone} /> : null}
+          <TodayHero greeting={greeting} date={data.dateLabel} mission={missionOf(data.tasks)} />
           <FirstStepsCard actor={actor} />
-          <TodayTasksCard tasks={data.tasks} hasSpaces={data.hasSpaces} canCreateSpaces={data.canCreateSpaces} />
+          <TodayTasksCard tasks={data.tasks} hasSpaces={data.hasSpaces} canCreateSpaces={data.canCreateSpaces} quickAdd={data.quickAdd} timeZone={data.timeZone} />
           <InstallHint />
         </div>
         <div className="flex min-w-0 flex-col gap-4 lg:w-80 lg:shrink-0">
+          <GuideCard />
           {data.pulse ? <TeamPulse pulse={data.pulse} /> : null}
           <ActiveProjects projects={data.projects} isExternal={data.isExternal} />
         </div>

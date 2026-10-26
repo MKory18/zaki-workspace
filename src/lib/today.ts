@@ -76,6 +76,24 @@ export interface TodayCounts {
   overdue: number;
   today: number;
   later: number;
+  /** The person's own tasks finished today (in the company's zone), whatever their due day. */
+  doneToday: number;
+}
+
+/**
+ * «المهمّة الجاية» — the one task the Today page puts first: the most overdue one, else the first one due
+ * today. Nothing due (only later work, or none): no mission, and the card greets instead.
+ */
+export function missionOf(tasks: Pick<TodayTasks, "overdue" | "today">): TodayTask | null {
+  return tasks.overdue[0] ?? tasks.today[0] ?? null;
+}
+
+/**
+ * «x من y خلصت»: of the day's work — what was finished today plus what is still due (late or today) — how
+ * much is done. Later work is not the day's; a day with nothing in it is 0 of 0.
+ */
+export function dayProgress(counts: TodayCounts): { done: number; total: number } {
+  return { done: counts.doneToday, total: counts.doneToday + counts.overdue + counts.today };
 }
 
 export interface TodayTasks {

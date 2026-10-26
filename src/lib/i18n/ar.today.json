@@ -3,7 +3,8 @@
   "today.greeting.morning": "صباح الخير يا {name}",
   "today.greeting.evening": "مساء الخير يا {name}",
 
-  "today.tasks.title": "مهامي اليوم",
+  "today.tasks.title": "مهمّاتي اليوم",
+  "today.tasks.progress": "{done} من {total} خلصت",
   "today.tasks.later": "لاحقًا",
   "today.tasks.nothing_today": "ما في شي مستحق اليوم.",
   "today.tasks.see_all": "عرض كل مهامي",
@@ -41,5 +42,18 @@
   "today.projects.open": "المهام المفتوحة: {n}",
   "today.projects.open_mine": "مهامك المفتوحة: {n}",
   "today.projects.empty": "ما في مشاريع نشطة حاليًا.",
-  "today.projects.all": "كل المشاريع"
+  "today.projects.all": "كل المشاريع",
+
+  "today.mission.ribbon": "المهمّة الجاية",
+  "today.mission.start": "ابدأ المهمّة",
+  "today.mission.done": "خلّصتها",
+  "today.mission.done_aria": "خلّصتها: {title}",
+  "today.mission.empty_body": "ما في مهمّة مستحقّة اليوم. اكتب أول مهمّة تحت، وبتصير هي مهمّتك الجاية.",
+  "today.mission.passed_title": "تمّت المهمّة!",
+  "today.mission.passed_sub": "كمّل عالجاية",
+
+  "today.quick.inline_placeholder": "أضف مهمّة… اكتب العنوان واضغط إدخال",
+  "today.quick.inline_aria": "مهمّة جديدة لليوم",
+  "today.quick.more": "المشروع والموعد",
+  "today.quick.inline_added": "انضافت المهمّة"
 }

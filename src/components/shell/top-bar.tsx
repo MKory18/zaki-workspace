@@ -4,20 +4,27 @@ import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
 import type { Audience } from "@/lib/guide/audience";
 import type { NavModel, NavRole } from "@/lib/nav/places";
+import type { NewActionKey } from "@/lib/nav/new-actions";
 import { DolphinMark } from "@/components/logo";
 import { CommandPalette } from "@/components/command-palette";
 import { NotificationBell } from "@/components/notification-bell";
 import { PageHelpButton } from "@/components/guide/page-help-button";
+import { NightDaySwitch } from "@/components/theme/night-day-switch";
 import { AvatarMenu, type AvatarUser } from "./avatar-menu";
+import { NewWheel } from "./new-wheel";
 
 /**
- * The bar over every page, 56px under the notch (`env(safe-area-inset-top)`):
+ * The bar over every page («نجمة وطريق»), under the notch (`env(safe-area-inset-top)`):
  *
- *   phone      the dolphin mark (to Today) · search · «؟» · the bell · the avatar
- *   computer   search · «؟» · the bell (the mark and the avatar live in the side menu)
+ *   phone      the dolphin mark (to Today) · «ليل / نهار» · «؟» · the bell · «جديد» · the avatar, and
+ *              the search «وين بدك تروح؟» on a line of its own under them
+ *   computer   the place's name · the search · «ليل / نهار» · «؟» · the bell · the gold «جديد»
+ *              (the mark and the avatar live in the side menu)
  *
- * Every control is a 44px target. `data-tour`: "search" around the palette's button, "inbox" on the
- * bell (notification-bell.tsx), "avatar" on the avatar (avatar-menu.tsx).
+ * The place's name is NOT a heading: the one `h1` of a page is the page's own (a screen reader's list of
+ * headings starts with what the page is about, not with the frame — GLM's #3 drew two). Every control is
+ * a 44px target. `data-tour`: "search" around the palette's button, "inbox" on the bell
+ * (notification-bell.tsx), "new" on «جديد» (new-wheel.tsx), "avatar" on the avatar (avatar-menu.tsx).
  */
 export function TopBar({
   nav,
@@ -25,28 +32,37 @@ export function TopBar({
   audience,
   user,
   rank,
+  title,
+  newActions = [],
 }: {
   nav: NavModel;
   pathname: string;
   audience: Audience;
   user: AvatarUser;
   rank: NavRole;
+  /** The name of the current place, shown on a computer. */
+  title?: string;
+  /** What «جديد» offers this person (computed on the server); none, no button. */
+  newActions?: readonly NewActionKey[];
 }) {
   const { t } = useI18n();
   return (
     <header className="zk-safe-x shrink-0 border-b border-border bg-surface pt-[env(safe-area-inset-top)]">
-      <div className="flex h-14 items-center gap-1 px-2 md:gap-2 md:px-4">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2 py-1.5 md:h-16 md:flex-nowrap md:gap-x-2.5 md:px-5 md:py-0">
         <Link href="/" aria-label={t("nav.place.today")} className="grid size-11 shrink-0 place-items-center rounded-xl md:hidden">
           <span aria-hidden="true">
             <DolphinMark className="size-8" />
           </span>
         </Link>
-        <div data-tour="search" className="min-w-0 flex-1 md:max-w-md">
+        {title ? <p className="hidden shrink-0 font-display text-2xl leading-tight text-fg md:block">{title}</p> : null}
+        <div data-tour="search" className="order-last min-w-0 basis-full md:order-none md:max-w-[440px] md:flex-1 md:basis-auto">
           <CommandPalette nav={nav} />
         </div>
-        <div className="flex shrink-0 items-center gap-0.5 md:ms-auto">
+        <div className="ms-auto flex shrink-0 items-center gap-1 md:gap-2">
+          <NightDaySwitch />
           <PageHelpButton pathname={pathname} audience={audience} />
           <NotificationBell />
+          <NewWheel actions={newActions} />
           <div className="md:hidden">
             <AvatarMenu user={user} rank={rank} variant="bar" />
           </div>
