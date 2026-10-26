@@ -61,5 +61,10 @@
   "calls.quality.excellent": "الاتصال ممتاز",
   "calls.quality.good": "الاتصال منيح",
   "calls.quality.poor": "الاتصال ضعيف",
-  "calls.quality.lost": "الاتصال مقطوع"
+  "calls.quality.lost": "الاتصال مقطوع",
+  "calls.mini": "المكالمة شغّالة",
+  "calls.back_to_call": "ارجع للمكالمة",
+  "calls.reconnecting_short": "عم نرجّعك…",
+  "calls.pip": "صورة فوق كل شي",
+  "calls.minimize": "صغّر المكالمة وكمّل بالموقع"
 }

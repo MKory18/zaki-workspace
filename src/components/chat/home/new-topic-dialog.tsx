@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ct } from "@/lib/chat/text";
 
@@ -30,6 +31,7 @@ export function NewTopicDialog({
   onOpenChange: (open: boolean) => void;
   space: { id: string; name: string; sections: { id: string; name: string }[] };
 }) {
+  const router = useRouter();
   const [title, setTitle] = useState("");
   const [type, setType] = useState<TopicType>("DISCUSSION");
   const [audience, setAudience] = useState<Audience>("space");
@@ -82,7 +84,7 @@ export function NewTopicDialog({
       });
       if (!r.ok) throw new Error("topic");
       const { id } = (await r.json()) as { id: string };
-      window.location.assign(`/chat/${encodeURIComponent(id)}`);
+      router.push(`/chat/${encodeURIComponent(id)}`);
     } catch {
       setError(ct("chath.topic.failed"));
       setBusy(false);

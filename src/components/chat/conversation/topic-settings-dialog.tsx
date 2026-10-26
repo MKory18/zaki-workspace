@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { ConversationDto } from "@/server/chat/dto";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ct } from "@/lib/chat/text";
@@ -37,6 +38,7 @@ export function TopicSettingsDialog({
   topic: ConversationDto;
   onSaved: () => void;
 }) {
+  const router = useRouter();
   const spaceId = topic.space?.id ?? "";
   const [title, setTitle] = useState(topic.title);
   const [type, setType] = useState<TopicType>(topic.topicType ?? "DISCUSSION");
@@ -138,7 +140,7 @@ export function TopicSettingsDialog({
       }
       if (change === "delete") {
         // the topic is gone: back to the chat
-        window.location.assign("/chat");
+        router.push("/chat");
         return;
       }
       onSaved();
