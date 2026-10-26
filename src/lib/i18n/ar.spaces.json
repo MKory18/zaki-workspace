@@ -75,5 +75,22 @@
   "spaces.delete_owner_only": "حذف المساحة مع شغلها للمالك بس.",
   "spaces.delete_hq": "«الشركة» ما بتنحذف.",
   "spaces.delete_department": "مساحة القسم بتنحذف مع القسم نفسه من «الأقسام».",
-  "spaces.delete_name_mismatch": "الاسم اللي كتبته مش اسم المساحة."
+  "spaces.delete_name_mismatch": "الاسم اللي كتبته مش اسم المساحة.",
+  "spaces.manage_denied": "ترتيب المساحات وأرشفتها للمالك والمديرين بس.",
+  "spaces.archive_hq": "«الشركة» ما بتتأرشف.",
+  "spaces.card.actions": "خيارات المساحة",
+  "spaces.card.rename": "عدّل الاسم",
+  "spaces.card.archive": "أرشف المساحة",
+  "spaces.card.drag": "اسحب لترتّب",
+  "spaces.order.saved": "انحفظ الترتيب.",
+  "spaces.order.failed": "ما انحفظ الترتيب. جرّب مرة ثانية.",
+  "spaces.archive.done": "انأرشفت المساحة. بتلاقيها تحت «المساحات المؤرشفة».",
+  "spaces.archive.failed": "ما زبطت. جرّب مرة ثانية.",
+  "spaces.archived.title": "المساحات المؤرشفة",
+  "spaces.archived.hint": "ما بتطلع بأي قائمة، وكل شي فيها محفوظ متل ما هو.",
+  "spaces.archived.restore": "رجّعها",
+  "spaces.archived.restored": "رجعت المساحة.",
+  "spaces.dept.title": "مساحة قسم",
+  "spaces.dept.body": "هاي مساحة قسم «{name}»، وهي مربوطة فيه. بتنحذف أو بتتغيّر من صفحة «الأقسام» مع القسم نفسه.",
+  "spaces.dept.go": "روح على الأقسام"
 }

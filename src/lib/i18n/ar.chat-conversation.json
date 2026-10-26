@@ -147,5 +147,6 @@
   "chatc.pinbar.label": "الرسائل المثبّتة",
   "chatc.pinbar.count": "{i} من {n}",
   "chatc.pinbar.empty_preview": "رسالة",
-  "chat.work.from": "من رسالة {name} بالدردشة"
+  "chat.work.from": "من رسالة {name} بالدردشة",
+  "chatc.more": "المزيد"
 }

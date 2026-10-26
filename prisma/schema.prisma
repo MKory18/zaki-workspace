@@ -703,6 +703,9 @@ model OrganizationMember {
   // Capabilities on top of / taken away from what the rank grants (src/server/policy/capabilities.ts).
   capabilities        String[] @default([])
   revokedCapabilities String[] @default([])
+  // The company's first OWNER: the only one who makes or unmakes another OWNER (a partner, «شريك») and takes a
+  // permission away from one. Nobody administers him. Other OWNERs are partners with everything he leaves them.
+  primaryOwner        Boolean  @default(false)
   // Who escalations go to (the person's manager); null = the owner.
   managerId      String?
   // The same person's reference in the OMS (staff, penalties, cash custody), for later integration.
@@ -752,6 +755,10 @@ model Workspace {
   systemKey      String?
   // DEPARTMENT spaces: the department they belong to (at most one space per department).
   departmentId   String?       @unique
+  // The order on the space lists (the switcher, «كل المساحات»), set by dragging; «الشركة» is always first.
+  position       Int           @default(0)
+  // Archived: off every list, its things kept as they are; the owner and the admins bring it back from «كل المساحات».
+  archivedAt     DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

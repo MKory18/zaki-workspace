@@ -13,6 +13,8 @@ export interface Actor {
   role: OrgRole;
   caps: ReadonlySet<Capability>;
   isOwner: boolean;
+  /** The company's primary owner: the only one who makes or unmakes another OWNER (absent: not him). */
+  isPrimaryOwner?: boolean;
   /** An external partner: sees only what is shared with them, no prices, no staff directory. */
   isExternal: boolean;
 }
@@ -22,7 +24,7 @@ export async function requireActor(opts: { allowPending?: boolean } = {}): Promi
   const member = await db.organizationMember.findFirst({
     where: { userId: user.id, status: "ACTIVE" },
     orderBy: { createdAt: "asc" },
-    select: { organizationId: true, role: true, capabilities: true, revokedCapabilities: true },
+    select: { organizationId: true, role: true, capabilities: true, revokedCapabilities: true, primaryOwner: true },
   });
   if (!member) throw new ForbiddenError("not_org_member");
   return {
@@ -31,6 +33,7 @@ export async function requireActor(opts: { allowPending?: boolean } = {}): Promi
     role: member.role,
     caps: effectiveCapabilities(member),
     isOwner: member.role === "OWNER",
+    isPrimaryOwner: member.role === "OWNER" && member.primaryOwner,
     isExternal: member.role === "GUEST",
   };
 }
