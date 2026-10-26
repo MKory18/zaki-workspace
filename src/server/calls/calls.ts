@@ -1,4 +1,5 @@
 import type { OrgAccessContext } from "@/server/auth";
+import { assertMemberCan, memberCan } from "@/server/policy/actor";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
 import { db } from "@/server/db";
 import { isOfSpace } from "@/server/chat/space-people";
@@ -139,6 +140,8 @@ export async function settleCall(callId: string, now: Date = new Date()): Promis
 
 /** The call going on in this conversation (settled first), or null. Its readers only. */
 export async function activeCallOf(ctx: OrgAccessContext, conversationId: string): Promise<{ id: string; video: boolean; startedAt: string } | null> {
+  // the calls row of the person's grid (an external partner by the space's rules)
+  await assertMemberCan(ctx, "calls.view", "section.view_denied", { spaceGuestsPass: true });
   const facts = await loadConversationFacts(ctx.userId, conversationId);
   if (!facts || facts.orgId !== ctx.orgId) throw new NotFoundError("chat.e.not_found");
   const org = await loadOrgFacts(ctx.userId, ctx.orgId);
@@ -167,7 +170,7 @@ export async function ringAudience(conversationId: string, callerId: string): Pr
       orderBy: { userId: "asc" },
       take: RING_CAP,
     });
-    return rows.map((r) => r.userId);
+    return keepCallable(conv.orgId, rows.map((r) => r.userId));
   }
   let candidates: string[];
   if (conv.kind === "TOPIC" && !conv.restricted && conv.spaceId) {
@@ -182,7 +185,14 @@ export async function ringAudience(conversationId: string, callerId: string): Pr
     const facts = await loadConversationFacts(userId, conversationId);
     if (facts && canRead(facts, await loadOrgFacts(userId, facts.orgId))) out.push(userId);
   }
-  return out;
+  return keepCallable(conv.orgId, out);
+}
+
+/** Only who may join a call is rung: the calls «يشوف» box of the section grid (an external partner by the space's rules). */
+async function keepCallable(orgId: string, userIds: string[]): Promise<string[]> {
+  const kept: string[] = [];
+  for (const userId of userIds) if ((await memberCan({ orgId, userId }, "calls.view", { spaceGuestsPass: true })) === true) kept.push(userId);
+  return kept;
 }
 
 /**
@@ -194,6 +204,7 @@ export async function startConversationCall(
   conversationId: string,
   opts: { video: boolean; ring: boolean },
 ): Promise<{ id: string; created: boolean }> {
+  await assertMemberCan(ctx, "calls.edit", "section.edit_denied", { spaceGuestsPass: true });
   const facts = await loadConversationFacts(ctx.userId, conversationId);
   if (!facts || facts.orgId !== ctx.orgId) throw new NotFoundError("chat.e.not_found");
   const org = await loadOrgFacts(ctx.userId, ctx.orgId);
@@ -223,6 +234,7 @@ export async function startConversationCall(
 
 /** Opens a meeting of the space the person is in: a call with a link, for the space's people. */
 export async function startMeeting(ctx: OrgAccessContext, spaceId: string, opts: { title: string | null; video: boolean }): Promise<{ id: string }> {
+  await assertMemberCan(ctx, "calls.edit", "section.edit_denied", { spaceGuestsPass: true });
   const org = await loadOrgFacts(ctx.userId, ctx.orgId);
   const space = await db.workspace.findFirst({ where: { id: spaceId, organizationId: ctx.orgId }, select: { id: true } });
   if (!space) throw new NotFoundError("calls.e.not_found");
@@ -236,6 +248,7 @@ export async function startMeeting(ctx: OrgAccessContext, spaceId: string, opts:
 
 /** One call as its page shows it. Whoever may join it. */
 export async function callDetail(ctx: OrgAccessContext, callId: string): Promise<CallDto> {
+  await assertMemberCan(ctx, "calls.view", "section.view_denied", { spaceGuestsPass: true });
   await settleCall(callId);
   const { facts, org } = await ownCall(ctx, callId);
   // an ended call still answers the people who could have been in it (its page says «خلصت»), nobody else:
@@ -284,6 +297,7 @@ export async function callDetail(ctx: OrgAccessContext, callId: string): Promise
 
 /** The short pass into a call's room, for somebody who may join it. */
 export async function callPass(ctx: OrgAccessContext, callId: string): Promise<{ url: string; token: string; room: string }> {
+  await assertMemberCan(ctx, "calls.view", "section.view_denied", { spaceGuestsPass: true });
   const { facts, org } = await ownCall(ctx, callId);
   if (facts.endedAt) throw new ForbiddenError("calls.e.ended");
   if (!canJoinCall(facts, org)) throw new NotFoundError("calls.e.not_found");
@@ -300,6 +314,7 @@ export async function callPass(ctx: OrgAccessContext, callId: string): Promise<{
 
 /** «ضيف حدا»: rings one of the space's people into the call (they get a seat: the call, not the conversation). */
 export async function inviteToCall(ctx: OrgAccessContext, callId: string, userId: string): Promise<void> {
+  await assertMemberCan(ctx, "calls.edit", "section.edit_denied", { spaceGuestsPass: true });
   const { facts, org } = await ownCall(ctx, callId);
   if (!canInviteToCall(facts, org)) throw new ForbiddenError("calls.e.cannot_invite");
   const ofSpace = facts.spaceId ? await isOfSpace(ctx.orgId, facts.spaceId, userId) : await isCompanyStaff(ctx.orgId, userId);
@@ -320,6 +335,7 @@ export async function inviteToCall(ctx: OrgAccessContext, callId: string, userId
 
 /** Takes somebody out of the call: out of the room now, and no new pass for this call. */
 export async function removeFromCall(ctx: OrgAccessContext, callId: string, userId: string): Promise<void> {
+  await assertMemberCan(ctx, "calls.edit", "section.edit_denied", { spaceGuestsPass: true });
   const { facts, org } = await ownCall(ctx, callId);
   const target = await db.organizationMember.findUnique({ // all-statuses: a suspended person still in the room is taken out all the same; the rank only guards the owner
     where: { organizationId_userId: { organizationId: ctx.orgId, userId } },
@@ -347,6 +363,7 @@ export async function leaveCall(ctx: OrgAccessContext, callId: string): Promise<
  * server; the others can only leave, and the call goes on without them.
  */
 export async function endCall(ctx: OrgAccessContext, callId: string): Promise<void> {
+  await assertMemberCan(ctx, "calls.edit", "section.edit_denied", { spaceGuestsPass: true });
   const { facts, org } = await ownCall(ctx, callId);
   if (facts.endedAt) return;
   if (!canEndCall(facts, org, ctx.userId)) throw new ForbiddenError("calls.e.cannot_end");
@@ -364,6 +381,7 @@ export async function endCall(ctx: OrgAccessContext, callId: string): Promise<vo
 
 /** «اكتم»: a host mutes one person's microphone (they unmute themselves when they want to speak). */
 export async function muteInCall(ctx: OrgAccessContext, callId: string, userId: string): Promise<void> {
+  await assertMemberCan(ctx, "calls.edit", "section.edit_denied", { spaceGuestsPass: true });
   const { facts, org } = await ownCall(ctx, callId);
   const target = await db.organizationMember.findUnique({ // all-statuses: the rank only guards the owner, like taking out
     where: { organizationId_userId: { organizationId: ctx.orgId, userId } },

@@ -12,7 +12,7 @@ import { MeetingButton } from "@/components/calls/meeting-button";
  * (every new message anywhere) keeps the list in place instead of pushing it down, and the empty
  * «لسا ما عندك مساحات» is never shown for a list that has not arrived yet (review D9).
  */
-export function ChatHomeClient({ guest }: { guest: boolean }) {
+export function ChatHomeClient({ guest, canMeet = !guest }: { guest: boolean; canMeet?: boolean }) {
   const [home, setHome] = useState<HomeDto>({ spaces: [], dms: [], canOversee: false });
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
@@ -27,5 +27,5 @@ export function ChatHomeClient({ guest }: { guest: boolean }) {
     }).then((data) => { if (alive) { setHome(data); setError(false); setLoaded(true); } }).catch(() => { if (alive) setError(true); });
     return () => { alive = false; };
   }, [reload]);
-  return <div className="min-h-full">{!guest && <div className="mx-4 mt-4 flex justify-end"><MeetingButton /></div>}{!loaded && !error && <div role="status" aria-label={ct("chath.loading")} className="mx-4 mt-4 space-y-3"><div className="h-16 animate-pulse rounded-xl bg-surface-2"/><div className="h-28 animate-pulse rounded-xl bg-surface-2"/></div>}{error && <div role="alert" className="mx-4 mt-4 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm">{ct("chath.load_failed")} <button type="button" onClick={refresh} className="min-h-11 underline">{ct("chath.retry")}</button></div>}{loaded && <ChatHome home={home} guest={guest}/>}</div>;
+  return <div className="min-h-full">{canMeet && <div className="mx-4 mt-4 flex justify-end"><MeetingButton /></div>}{!loaded && !error && <div role="status" aria-label={ct("chath.loading")} className="mx-4 mt-4 space-y-3"><div className="h-16 animate-pulse rounded-xl bg-surface-2"/><div className="h-28 animate-pulse rounded-xl bg-surface-2"/></div>}{error && <div role="alert" className="mx-4 mt-4 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm">{ct("chath.load_failed")} <button type="button" onClick={refresh} className="min-h-11 underline">{ct("chath.retry")}</button></div>}{loaded && <ChatHome home={home} guest={guest}/>}</div>;
 }

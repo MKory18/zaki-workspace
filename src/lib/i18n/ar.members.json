@@ -256,5 +256,15 @@
   "members.cap.tasks.edit.title": "يضيف ويعدّل بالمهام",
   "members.cap.tasks.edit.hint": "بيضيف مهمة، بيعدّلها، بينقلها، بيخلّصها، وبيعلّق عليها.",
   "members.cap.tasks.delete.title": "يحذف مهام",
-  "members.cap.tasks.delete.hint": "بيحذف مهمة (وبيضل بدها مدير المساحة)."
+  "members.cap.tasks.delete.hint": "بيحذف مهمة (وبيضل بدها مدير المساحة).",
+  "members.section.calls": "المكالمات",
+  "members.section.watch": "نتفرّج سوا",
+  "members.cap.calls.view.title": "يفوت على المكالمات",
+  "members.cap.calls.view.hint": "بيفوت على مكالمة أو اجتماع، وبيرنّ تلفونه لما حدا يتّصل.",
+  "members.cap.calls.edit.title": "يبدأ ويدير المكالمات",
+  "members.cap.calls.edit.hint": "بيبدأ مكالمة أو اجتماع، وبيضيف ناس، وبيكتم، وبينهي للكل.",
+  "members.cap.watch.view.title": "يشوف «نتفرّج سوا»",
+  "members.cap.watch.view.hint": "بيفوت على جلسات المشاهدة وبيمسك الريموت لما ينعطى.",
+  "members.cap.watch.edit.title": "يبدأ «نتفرّج سوا»",
+  "members.cap.watch.edit.hint": "بيبدأ جلسة مشاهدة وبينهيها."
 }

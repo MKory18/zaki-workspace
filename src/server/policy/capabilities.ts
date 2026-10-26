@@ -25,6 +25,10 @@ export const CAPABILITIES = [
   "tasks.view",
   "tasks.edit",
   "tasks.delete",
+  "calls.view",
+  "calls.edit",
+  "watch.view",
+  "watch.edit",
   "ideas.view",
   "ideas.edit",
   "ideas.delete",
@@ -69,6 +73,8 @@ export const SECTIONS = [
   { id: "tickets", actions: ["view", "edit", "delete"] },
   { id: "campaigns", actions: ["view", "edit", "delete"] },
   { id: "crm", actions: ["view", "edit", "delete"] },
+  { id: "calls", actions: ["view", "edit"] },
+  { id: "watch", actions: ["view", "edit"] },
   { id: "reports", actions: ["view"] },
 ] as const satisfies readonly { id: string; actions: readonly SectionAction[] }[];
 
@@ -125,7 +131,8 @@ export const WIRED_CAPABILITIES: readonly Capability[] = [
  * flips a box: ideas are everyone's; goals and production routines are seen by all staff and managed by the
  * admins; the reports are a lead's and up; the library, the tickets, the campaigns and the customers are all staff's;
  * the projects and the tasks too (an external partner works in their shared spaces by the space's own rules, not the
- * grid; deleting a task still takes the space's admin).
+ * grid; deleting a task still takes the space's admin); the calls (join; start and run one) and «نتفرّج سوا» (watch; start
+ * and end one) too.
  */
 export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
   OWNER: CAPABILITIES,
@@ -164,6 +171,10 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "tasks.view",
     "tasks.edit",
     "tasks.delete",
+    "calls.view",
+    "calls.edit",
+    "watch.view",
+    "watch.edit",
   ],
   LEAD: [
     "directory.view",
@@ -191,6 +202,10 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "tasks.view",
     "tasks.edit",
     "tasks.delete",
+    "calls.view",
+    "calls.edit",
+    "watch.view",
+    "watch.edit",
   ],
   MEMBER: [
     "directory.view",
@@ -216,6 +231,10 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "tasks.view",
     "tasks.edit",
     "tasks.delete",
+    "calls.view",
+    "calls.edit",
+    "watch.view",
+    "watch.edit",
   ],
   GUEST: [],
 };

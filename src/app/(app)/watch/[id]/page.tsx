@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { pageActor } from "@/app/(app)/_access";
+import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
+import { actorCan } from "@/server/policy/actor";
 import { actorFeatureOn } from "@/server/services/features";
 import { getServerT } from "@/lib/i18n/server";
 import { GuestNotice, placeRefusedToGuest } from "@/app/(app)/_guest";
@@ -15,6 +16,8 @@ export default async function WatchSessionPage({ params }: { params: { id: strin
   if (placeRefusedToGuest(actor, "watch")) return <GuestNotice />;
   // switched off in «الميزات»: the feature is not there at all
   if (!(await actorFeatureOn(actor, "watch"))) notFound();
+  // the «نتفرّج سوا» row of the person's grid
+  if (!actorCan(actor, "watch.view")) return <SectionOffNotice />;
   // a session of another space of theirs: enter that space first, so the name at the top says where it is
   const where = await db.watchSession.findFirst({ where: { id: params.id, orgId: actor.orgId }, select: { spaceId: true } });
   if (!where) notFound();
