@@ -122,7 +122,8 @@ describe("Google Drive: finishing the OAuth flow", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const row = await driveRow(t.org.id);
     expect(row?.connected).toBe(true);
-    expect(row?.config).toEqual({ connectedBy: t.admin.id });
+    // the granted scopes are kept too (this stub's answer names none): they decide whether the library goes to Drive
+    expect(row?.config).toEqual({ connectedBy: t.admin.id, scope: "" });
   });
 
   it("refuses a state that was signed for somebody else, or for another organization", async () => {
