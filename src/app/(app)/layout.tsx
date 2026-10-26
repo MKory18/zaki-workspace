@@ -8,6 +8,7 @@ import { cookies } from "next/headers";
 import { parseSidebarCookie, SIDEBAR_COOKIE } from "@/components/shell/sidebar-cookie";
 import { currentSpace } from "@/server/services/current-space";
 import { CallRing } from "@/components/calls/call-ring";
+import { CallProvider } from "@/components/calls/call-provider";
 
 /**
  * The frame of every signed-in page, decided on the server from the DATABASE (behind the middleware,
@@ -47,9 +48,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       audience={audienceOf(actor)}
       defaultCollapsed={sidebarCollapsed}
     >
-      {children}
-      {/* an incoming call rings on every page */}
-      <CallRing />
+      {/* a call goes on while the person moves between pages; an incoming call rings on every page */}
+      <CallProvider>
+        {children}
+        <CallRing />
+      </CallProvider>
     </AppShell>
   );
 }

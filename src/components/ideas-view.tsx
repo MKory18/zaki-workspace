@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/toast";
 import { enumLabel } from "@/lib/i18n/enums";
 import { cn } from "@/lib/utils";
 
+import Link from "next/link";
 export interface IdeaItem {
   id: string;
   title: string;
@@ -272,10 +273,10 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
                       <span className="ms-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-accent">{t("ideas.shared")}</span>
                     ) : null}
                     {idea.taskId ? (
-                      <a href={`/tasks/${idea.taskId}`} className="ms-1 inline-flex items-center gap-0.5 text-accent hover:underline">
+                      <Link href={`/tasks/${idea.taskId}`} className="ms-1 inline-flex items-center gap-0.5 text-accent hover:underline">
                         <ExternalLink className="h-2.5 w-2.5" />
                         {t("ideas.converted")}
-                      </a>
+                      </Link>
                     ) : null}
                   </p>
                 </div>
