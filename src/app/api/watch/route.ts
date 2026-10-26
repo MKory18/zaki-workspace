@@ -4,6 +4,7 @@ import { parseJson } from "@/server/validation";
 import { NotFoundError } from "@/server/auth";
 import { activeOrgCtx } from "@/server/services/integrations";
 import { assertNotGuest } from "@/server/services/guest-guard";
+import { assertFeatureOn } from "@/server/services/features";
 import { currentSpace } from "@/server/services/current-space";
 import { listWatch, startWatch, startWatchSchema } from "@/server/services/watch";
 
@@ -11,6 +12,7 @@ import { listWatch, startWatch, startWatchSchema } from "@/server/services/watch
 async function here() {
   const ctx = await activeOrgCtx();
   assertNotGuest(ctx);
+  await assertFeatureOn(ctx.orgId, "watch");
   const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
   if (!space) throw new NotFoundError("watch.e.not_found");
   return { ctx, space };

@@ -28,6 +28,8 @@
  *    tests/db/guest-internal-pages.test.ts renders every tab's page as every rank to prove it.
  */
 
+import type { FeatureKey } from "../features";
+
 /** The ranks, as the policy names them (src/server/policy/rank.ts keeps the order; a test compares). */
 export const NAV_ROLES = ["OWNER", "ADMIN", "LEAD", "MEMBER", "GUEST"] as const;
 export type NavRole = (typeof NAV_ROLES)[number];
@@ -40,6 +42,8 @@ export type NavRole = (typeof NAV_ROLES)[number];
 export interface NavSubject {
   role: NavRole;
   caps: readonly string[];
+  /** The company's switched-off features (src/lib/features.ts): their places are not drawn. */
+  off?: readonly FeatureKey[];
 }
 
 export type PlaceKey = "today" | "chat" | "work" | "library" | "admin" | "watch";
@@ -106,6 +110,8 @@ export interface PlaceDef {
   readonly owns?: readonly string[];
   /** With exactly one tab left, the place is called by that tab (a plain member sees «الفريق», not «الإدارة»). */
   readonly singleTabTakesLabel?: boolean;
+  /** The owner's switch this place is behind («الميزات»): off, the place is gone for everybody. */
+  readonly feature?: FeatureKey;
 }
 
 export const PLACES: readonly PlaceDef[] = [
@@ -180,7 +186,7 @@ export const PLACES: readonly PlaceDef[] = [
   // «نتفرّج سوا» (the owner's ask, 2026-10-26: «الشغل، تحتها المكتبة، الإدارة، ثم نتفرّج سوا»): a place of its own,
   // one page, after «الإدارة». People of a space watch one link together; the sessions are the team's own talk,
   // so not an external partner's (the page and /api/watch refuse a guest too: `placeOfferedToGuests`).
-  { key: "watch", href: "/watch", labelKey: "nav.place.watch", icon: "watch", requires: "staff", tabs: [] },
+  { key: "watch", href: "/watch", labelKey: "nav.place.watch", icon: "watch", requires: "staff", tabs: [], feature: "watch" },
 ];
 
 /**
@@ -304,6 +310,7 @@ export function buildNav(subject: NavSubject): NavModel {
   const places: NavPlace[] = [];
   for (const def of PLACES) {
     if (!meets(def.requires, subject)) continue;
+    if (def.feature && subject.off?.includes(def.feature)) continue;
     const allowed = def.tabs.filter((tab) => meets(tab.requires, subject));
     if (def.tabs.length > 0 && allowed.length === 0) continue;
 

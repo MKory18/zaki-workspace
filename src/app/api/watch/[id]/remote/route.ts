@@ -3,6 +3,7 @@ import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { activeOrgCtx } from "@/server/services/integrations";
 import { assertNotGuest } from "@/server/services/guest-guard";
+import { assertFeatureOn } from "@/server/services/features";
 import { handOverRemote, handOverSchema, pressRemote, pressSchema, watchRemote } from "@/server/services/watch";
 
 /** The remote of a «نتفرّج سوا» session. Its people only (and the owner); anybody else: 404. */
@@ -12,6 +13,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return withApi(async () => {
     const ctx = await activeOrgCtx();
     assertNotGuest(ctx);
+    await assertFeatureOn(ctx.orgId, "watch");
     return NextResponse.json({ remote: await watchRemote(ctx, params.id) });
   });
 }
@@ -21,6 +23,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   return withApi(async () => {
     const ctx = await activeOrgCtx();
     assertNotGuest(ctx);
+    await assertFeatureOn(ctx.orgId, "watch");
     const body = await parseJson(pressSchema, req);
     return NextResponse.json({ remote: await pressRemote(ctx, params.id, body) });
   });
@@ -31,6 +34,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return withApi(async () => {
     const ctx = await activeOrgCtx();
     assertNotGuest(ctx);
+    await assertFeatureOn(ctx.orgId, "watch");
     const body = await parseJson(handOverSchema, req);
     return NextResponse.json({ remote: await handOverRemote(ctx, params.id, body) });
   });
