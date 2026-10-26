@@ -9,7 +9,8 @@ import { writeSystemMessage } from "@/server/chat/system";
 import { emitRealtime } from "@/server/realtime/emit";
 import { pushNotificationToMany } from "@/server/notify";
 import { loadConversationFacts, loadOrgFacts } from "@/server/policy/conversation";
-import { canEndWatch, canSeeWatch, canStartWatch } from "@/server/policy/watch";
+import { canEndWatch, canHandOverWatch, canSeeWatch, canStartWatch } from "@/server/policy/watch";
+import { canPress, type RemoteState } from "@/lib/watch/sync";
 import { videoTitle } from "@/server/watch/title";
 
 /**
@@ -49,9 +50,23 @@ export interface WatchSessionDto {
   conversationId: string;
 }
 
+/** The remote of a session as a screen needs it: the state, the server's clock, who holds it, what this person may do. */
+export interface WatchRemoteDto {
+  state: RemoteState;
+  /** the server's clock when it answered (a screen works out its own offset from it) */
+  serverNow: number;
+  hostId: string;
+  everyoneControls: boolean;
+  live: boolean;
+  can: { press: boolean; handOver: boolean };
+}
+
 export interface WatchDetailDto extends WatchSessionDto {
   embedUrl: string;
+  /** the video's start (`?t=` of the link) */
+  startSec: number;
   people: { id: string; name: string }[];
+  remote: WatchRemoteDto;
   can: { end: boolean };
 }
 
@@ -61,11 +76,17 @@ const sessionSelect = {
   sourceKind: true,
   sourceRef: true,
   positionSec: true,
+  playing: true,
+  stateAt: true,
+  version: true,
+  everyoneControls: true,
   hostId: true,
+  startedById: true,
   createdAt: true,
   endedAt: true,
   conversationId: true,
   host: { select: { id: true, name: true } },
+  startedBy: { select: { id: true, name: true } },
 } as const;
 
 type SessionRow = {
@@ -74,11 +95,17 @@ type SessionRow = {
   sourceKind: string;
   sourceRef: string;
   positionSec: number;
+  playing: boolean;
+  stateAt: Date;
+  version: number;
+  everyoneControls: boolean;
   hostId: string;
+  startedById: string | null;
   createdAt: Date;
   endedAt: Date | null;
   conversationId: string;
   host: { id: string; name: string };
+  startedBy: { id: string; name: string } | null;
 };
 
 function present(row: SessionRow, peopleCount: number): WatchSessionDto {
@@ -90,7 +117,8 @@ function present(row: SessionRow, peopleCount: number): WatchSessionDto {
     ref: source.ref,
     pageUrl: watchPageUrl(source),
     thumbUrl: watchThumbUrl(source),
-    host: row.host,
+    // who started it: the remote may be in somebody else's hands since
+    host: row.startedBy ?? row.host,
     peopleCount,
     live: !row.endedAt,
     createdAt: row.createdAt.toISOString(),
@@ -156,6 +184,7 @@ export async function startWatch(ctx: OrgAccessContext, spaceId: string, input: 
         spaceId,
         conversationId: conv.id,
         hostId: ctx.userId,
+        startedById: ctx.userId,
         title,
         sourceKind: source.kind,
         sourceRef: source.ref,
@@ -220,10 +249,105 @@ export async function watchDetail(ctx: OrgAccessContext, id: string): Promise<Wa
   return {
     ...present(row, members.length),
     embedUrl: watchEmbedUrl({ kind: row.sourceKind as WatchKind, ref: row.sourceRef }, row.positionSec),
+    startSec: row.positionSec,
     people: members.map((m) => m.user),
+    remote: remoteOf(row, ctx.userId, conv, org),
     can: { end: !row.endedAt && canEndWatch(row, ctx.userId, conv, org) },
     spaceId: row.spaceId,
   };
+}
+
+type Guarded = Awaited<ReturnType<typeof guardSession>>;
+
+function remoteOf(row: SessionRow, viewerId: string, conv: Guarded["conv"], org: Guarded["org"]): WatchRemoteDto {
+  const ended = !!row.endedAt;
+  return {
+    state: { playing: row.playing && !ended, positionSec: row.positionSec, stateAt: row.stateAt.getTime(), version: row.version },
+    serverNow: Date.now(),
+    hostId: row.hostId,
+    everyoneControls: row.everyoneControls,
+    live: !ended,
+    can: {
+      press: canPress({ hostId: row.hostId, everyoneControls: row.everyoneControls, ended }, viewerId),
+      handOver: !ended && canHandOverWatch(row, viewerId, conv, org),
+    },
+  };
+}
+
+/** The remote of one session, for its people (the page asks again after every `watch.changed`). */
+export async function watchRemote(ctx: OrgAccessContext, id: string): Promise<WatchRemoteDto> {
+  const { row, conv, org } = await guardSession(ctx, id);
+  return remoteOf(row, ctx.userId, conv, org);
+}
+
+/** The longest a video may be said to be at (a day): a wrong number never reaches the other screens. */
+export const MAX_POSITION_SEC = 86_400;
+
+export const pressSchema = z.object({
+  playing: z.boolean(),
+  positionSec: z.number().finite().min(0).max(MAX_POSITION_SEC),
+});
+
+/**
+ * A press of the remote (play, pause, a jump): only whoever holds it. The state is written with the server's own
+ * clock and a version one higher, and the session's people are told (`watch.changed`, ids only) to fetch it.
+ */
+export async function pressRemote(ctx: OrgAccessContext, id: string, input: z.infer<typeof pressSchema>): Promise<WatchRemoteDto> {
+  const { row, conv, org } = await guardSession(ctx, id);
+  if (!canPress({ hostId: row.hostId, everyoneControls: row.everyoneControls, ended: !!row.endedAt }, ctx.userId)) {
+    throw new ForbiddenError(row.endedAt ? "watch.e.ended" : "watch.e.not_remote");
+  }
+  const updated = await db.$transaction(async (tx) => {
+    const next = await tx.watchSession.update({
+      where: { id },
+      data: { playing: input.playing, positionSec: input.positionSec, stateAt: new Date(), version: { increment: 1 } },
+      select: sessionSelect,
+    });
+    await emitRealtime(tx, ctx.orgId, "watch.changed", { conversationId: row.conversationId, spaceId: conv?.spaceId ?? undefined });
+    return next;
+  });
+  return remoteOf(updated, ctx.userId, conv, org);
+}
+
+export const handOverSchema = z
+  .object({
+    /** give the remote to this person of the session */
+    hostId: z.string().min(1).optional(),
+    /** «الكل بيتحكّم» on or off */
+    everyoneControls: z.boolean().optional(),
+  })
+  .refine((v) => v.hostId !== undefined || v.everyoneControls !== undefined, { message: "watch.e.nothing" });
+
+/** Hands the remote to one of the session's people, or opens it to all of them: the host, the space's admin, the owner. */
+export async function handOverRemote(ctx: OrgAccessContext, id: string, input: z.infer<typeof handOverSchema>): Promise<WatchRemoteDto> {
+  const { row, conv, org } = await guardSession(ctx, id);
+  if (row.endedAt) throw new ForbiddenError("watch.e.ended");
+  if (!canHandOverWatch(row, ctx.userId, conv, org)) throw new ForbiddenError("watch.e.not_remote");
+  if (input.hostId && input.hostId !== row.hostId) {
+    // only one of the session's own people (an active one, never an external partner) takes the remote
+    const member = await db.conversationMember.count({
+      where: {
+        conversationId: row.conversationId,
+        userId: input.hostId,
+        user: { memberships: { some: { organizationId: ctx.orgId, status: "ACTIVE", role: { not: "GUEST" } } } },
+      },
+    });
+    if (member === 0) throw new ForbiddenError("watch.e.not_member");
+  }
+  const updated = await db.$transaction(async (tx) => {
+    const next = await tx.watchSession.update({
+      where: { id },
+      data: {
+        ...(input.hostId ? { hostId: input.hostId } : {}),
+        ...(input.everyoneControls !== undefined ? { everyoneControls: input.everyoneControls } : {}),
+        version: { increment: 1 },
+      },
+      select: sessionSelect,
+    });
+    await emitRealtime(tx, ctx.orgId, "watch.changed", { conversationId: row.conversationId, spaceId: conv?.spaceId ?? undefined });
+    return next;
+  });
+  return remoteOf(updated, ctx.userId, conv, org);
 }
 
 /** Ends a session (its talk stays, like any topic). Ending an ended one changes nothing. */

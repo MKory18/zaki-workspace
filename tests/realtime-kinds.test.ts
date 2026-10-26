@@ -14,6 +14,11 @@ describe("the realtime kinds are one list", () => {
     expect(isRealtimeKind("whiteboard.changed")).toBe(true);
   });
 
+  it("a press of a «نتفرّج سوا» remote reaches the browsers as itself, not as conversation.changed", () => {
+    // as a plain `conversation.changed` the other screens would refetch the chat and never move their player
+    expect(isRealtimeKind("watch.changed")).toBe(true);
+  });
+
   it("every kind of the list is known, and nothing else is", () => {
     for (const kind of REALTIME_KINDS) expect(isRealtimeKind(kind)).toBe(true);
     expect(isRealtimeKind("something.else")).toBe(false);
