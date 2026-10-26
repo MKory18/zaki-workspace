@@ -19,6 +19,7 @@ import chatHome from "./ar.chat-home.json";
 import archive from "./ar.archive.json";
 import whiteboard from "./ar.whiteboard.json";
 import calls from "./ar.calls.json";
+import libraryDrive from "./ar.library-drive.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
@@ -49,4 +50,5 @@ export const AR: Record<string, string> = {
   ...archive,
   ...whiteboard,
   ...calls,
+  ...libraryDrive,
 };
