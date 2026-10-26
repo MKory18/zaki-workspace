@@ -50,6 +50,24 @@ export function messageClientId(): string {
   return globalThis.crypto.randomUUID();
 }
 
+/** How close to the bottom (px) still counts as «at the newest message». */
+export const STICK_PX = 80;
+
+export function isAtBottom(el: { scrollTop: number; scrollHeight: number; clientHeight: number }): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_PX;
+}
+
+/**
+ * Where a new newest message leaves the view, like a messaging app (the owner, 2026-10-26: «بس ابعت رسالة ما بمول
+ * المحادثة»): «bottom» on opening, on one's own message, or when already at the bottom; «badge» when the person is up
+ * reading older messages (they stay there, and «↓ رسائل جديدة» counts what came); «stay» around a search hit.
+ */
+export function onNewest(state: { opening: boolean; mine: boolean; atBottom: boolean; aroundHit: boolean }): "bottom" | "badge" | "stay" {
+  if (state.aroundHit) return "stay";
+  if (state.opening || state.mine || state.atBottom) return "bottom";
+  return "badge";
+}
+
 /** The composer's Enter: it sends (the owner, 2026-10-26), Shift+Enter is a new line, and never while an input method composes. */
 export function enterSends(event: { key: string; shiftKey: boolean; isComposing?: boolean }): boolean {
   return event.key === "Enter" && !event.shiftKey && !event.isComposing;
