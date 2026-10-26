@@ -11,6 +11,7 @@ import { createTask } from "@/server/services/tasks";
 import type { DbClient } from "@/server/db";
 import { isSpaceManager } from "@/server/workspace-role";
 import { assertMemberCan, can } from "@/server/policy/actor";
+import { sectionGridOf } from "@/server/policy/section-grid";
 
 /**
  * Membership context resolved from the idea's own org (shared by API routes). Only an ACTIVE member
@@ -28,12 +29,21 @@ export async function ideaAccessCtx(ideaId: string): Promise<OrgAccessContext> {
   if (!idea) throw new ForbiddenError("idea.not_found");
   const membership = await db.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId: idea.orgId, userId: user.id } },
-    select: { role: true, status: true, capabilities: true, revokedCapabilities: true, primaryOwner: true },
+    select: {
+      role: true,
+      status: true,
+      capabilities: true,
+      revokedCapabilities: true,
+      primaryOwner: true,
+      organization: { select: { settings: true } },
+    },
   });
   if (!membership || membership.status !== "ACTIVE") throw new ForbiddenError("not_org_member");
   assertNotGuest({ orgRole: membership.role });
   // the ideas row of the person's grid: a section switched off for them is closed at every door
-  if (!can(membership, "ideas.view")) throw new ForbiddenError("section.view_denied");
+  if (!can(membership, "ideas.view", { sectionGrid: sectionGridOf(membership.organization.settings) })) {
+    throw new ForbiddenError("section.view_denied");
+  }
   return { orgId: idea.orgId, orgRole: membership.role, userId: user.id };
 }
 

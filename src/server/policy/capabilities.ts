@@ -223,7 +223,8 @@ export function isPartner(member: Pick<CapabilitySource, "role" | "primaryOwner"
  * in a section one can not see). The primary owner holds everything; a partner everything but what the primary owner
  * took away from him.
  */
-export function effectiveCapabilities(member: CapabilitySource): Set<Capability> {
+export function effectiveCapabilities(member: CapabilitySource, opts: CapabilityOptions = {}): Set<Capability> {
+  if (opts.sectionGrid === false) return withoutGrid(member);
   if (isPartner(member)) {
     const caps = new Set<Capability>(CAPABILITIES);
     for (const c of member.revokedCapabilities ?? []) if (isCapability(c)) caps.delete(c);
@@ -238,8 +239,47 @@ export function effectiveCapabilities(member: CapabilitySource): Set<Capability>
   return dropWithoutView(caps);
 }
 
-export function can(source: CapabilitySource, capability: Capability): boolean {
-  return effectiveCapabilities(source).has(capability);
+export interface CapabilityOptions {
+  /**
+   * «الميزات» → «صلاحيات الأقسام» (src/lib/features.ts, `sectionPermissions`). Off (`false`), the site is as it was
+   * before the grid: every section box is the rank's template, whatever was stored for the person (kept for when it
+   * is switched on again), except the customers' `crm.view` / `crm.edit`, which were switches of their own before
+   * and stay so, with deleting following `crm.edit` as it did. Absent or `true`: the grid decides.
+   */
+  sectionGrid?: boolean;
+}
+
+/** BEFORE THE GRID: the person's switches as stored, the section boxes from the rank's template. */
+const PRE_GRID_SWITCHES: readonly Capability[] = ["crm.view", "crm.edit"];
+function withoutGrid(member: CapabilitySource): Set<Capability> {
+  const gridOnly = (c: string) => isCapability(c) && SECTION_CAPABILITIES.includes(c) && !PRE_GRID_SWITCHES.includes(c);
+  const stored = {
+    ...member,
+    capabilities: (member.capabilities ?? []).filter((c) => !gridOnly(c)),
+    revokedCapabilities: (member.revokedCapabilities ?? []).filter((c) => !gridOnly(c)),
+  };
+  // the rules without the grid's own: no «without view, no edit»; deleting customers went with editing them
+  let caps: Set<Capability>;
+  if (isPartner(stored)) {
+    caps = new Set<Capability>(CAPABILITIES);
+    for (const c of stored.revokedCapabilities) if (isCapability(c)) caps.delete(c);
+  } else if (stored.role === "OWNER") {
+    return new Set(CAPABILITIES);
+  } else if (stored.role === "GUEST") {
+    return new Set();
+  } else {
+    caps = new Set<Capability>(RANK_DEFAULTS[stored.role]);
+    for (const c of stored.capabilities) if (isCapability(c)) caps.add(c);
+    for (const c of stored.revokedCapabilities) if (isCapability(c)) caps.delete(c);
+    for (const c of OWNER_ONLY) caps.delete(c);
+  }
+  if (caps.has("crm.edit")) caps.add("crm.delete");
+  else caps.delete("crm.delete");
+  return caps;
+}
+
+export function can(source: CapabilitySource, capability: Capability, opts: CapabilityOptions = {}): boolean {
+  return effectiveCapabilities(source, opts).has(capability);
 }
 
 export type GrantProblem = "unknown_capability" | "owner_only" | "not_for_guests" | "owner_has_all";

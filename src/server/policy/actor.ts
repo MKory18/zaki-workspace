@@ -2,6 +2,7 @@ import type { OrgRole } from "@prisma/client";
 import { db } from "@/server/db";
 import { ForbiddenError, requireUser } from "@/server/auth";
 import { can, effectiveCapabilities, type Capability } from "./capabilities";
+import { sectionGridOf } from "./section-grid";
 
 /**
  * Who is making this request, as far as the rules are concerned: the person, the organization
@@ -24,14 +25,22 @@ export async function requireActor(opts: { allowPending?: boolean } = {}): Promi
   const member = await db.organizationMember.findFirst({
     where: { userId: user.id, status: "ACTIVE" },
     orderBy: { createdAt: "asc" },
-    select: { organizationId: true, role: true, capabilities: true, revokedCapabilities: true, primaryOwner: true },
+    select: {
+      organizationId: true,
+      role: true,
+      capabilities: true,
+      revokedCapabilities: true,
+      primaryOwner: true,
+      organization: { select: { settings: true } },
+    },
   });
   if (!member) throw new ForbiddenError("not_org_member");
   return {
     userId: user.id,
     orgId: member.organizationId,
     role: member.role,
-    caps: effectiveCapabilities(member),
+    // the section grid counts while its switch in «الميزات» is on
+    caps: effectiveCapabilities(member, { sectionGrid: sectionGridOf(member.organization.settings) }),
     isOwner: member.role === "OWNER",
     isPrimaryOwner: member.role === "OWNER" && member.primaryOwner,
     isExternal: member.role === "GUEST",
@@ -61,8 +70,15 @@ export async function assertMemberCan(
 ): Promise<void> {
   const member = await db.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } },
-    select: { status: true, role: true, capabilities: true, revokedCapabilities: true, primaryOwner: true },
+    select: {
+      status: true,
+      role: true,
+      capabilities: true,
+      revokedCapabilities: true,
+      primaryOwner: true,
+      organization: { select: { settings: true } },
+    },
   });
   if (!member || member.status !== "ACTIVE") throw new ForbiddenError("not_org_member");
-  if (!can(member, capability)) throw new ForbiddenError(code);
+  if (!can(member, capability, { sectionGrid: sectionGridOf(member.organization.settings) })) throw new ForbiddenError(code);
 }
