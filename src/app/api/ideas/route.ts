@@ -3,7 +3,7 @@ import { z } from "zod";
 import { withApi } from "@/server/api";
 import { parseJson, ideaStatuses } from "@/server/validation";
 import type { OrgAccessContext } from "@/server/auth";
-import { requireActor } from "@/server/policy/actor";
+import { assertCan, requireActor } from "@/server/policy/actor";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { createIdea, listIdeas } from "@/server/services/ideas";
 import { currentSpace } from "@/server/services/current-space";
@@ -29,6 +29,8 @@ const querySchema = z.object({
 async function ideasCtx(): Promise<OrgAccessContext> {
   const actor = await requireActor();
   assertNotGuest({ orgRole: actor.role });
+  // the ideas row of the person's grid («يشوف»); adding is checked again by the service («يضيف ويعدّل»)
+  assertCan(actor, "ideas.view", "section.view_denied");
   return { orgId: actor.orgId, orgRole: actor.role, userId: actor.userId };
 }
 

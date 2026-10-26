@@ -42,10 +42,27 @@ export function actorCan(actor: Pick<Actor, "caps">, capability: Capability): bo
   return actor.caps.has(capability);
 }
 
-/** 403 `insufficient_role` unless the actor holds the capability (a guest holds none). */
-export function assertCan(actor: Pick<Actor, "caps">, capability: Capability): void {
-  if (!actorCan(actor, capability)) throw new ForbiddenError("insufficient_role");
+/** 403 `code` (`insufficient_role` unless told otherwise) unless the actor holds the capability (a guest holds none). */
+export function assertCan(actor: Pick<Actor, "caps">, capability: Capability, code = "insufficient_role"): void {
+  if (!actorCan(actor, capability)) throw new ForbiddenError(code);
 }
 
 /** The capability check for a member row read from the database (not the signed-in actor). */
 export { can };
+
+/**
+ * The same check inside a service that is handed only `{ orgId, userId }`: reads the person's ACTIVE membership and
+ * throws 403 `code` unless it holds the capability. The routes check too; this is the door a new caller can not forget.
+ */
+export async function assertMemberCan(
+  ctx: { orgId: string; userId: string },
+  capability: Capability,
+  code = "insufficient_role",
+): Promise<void> {
+  const member = await db.organizationMember.findUnique({
+    where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } },
+    select: { status: true, role: true, capabilities: true, revokedCapabilities: true, primaryOwner: true },
+  });
+  if (!member || member.status !== "ACTIVE") throw new ForbiddenError("not_org_member");
+  if (!can(member, capability)) throw new ForbiddenError(code);
+}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireActor } from "@/server/policy/actor";
+import { assertCan, requireActor } from "@/server/policy/actor";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { createRoutine, listRoutines, routineSchema } from "@/server/services/production";
@@ -11,6 +11,7 @@ export async function GET() {
 	return withApi(async () => {
 		const actor = await requireActor();
 		assertNotGuest({ orgRole: actor.role });
+		assertCan(actor, "production.view", "section.view_denied");
 		const routines = await listRoutines(actor.orgId, await placeOf(actor));
 		return NextResponse.json({ routines });
 	});

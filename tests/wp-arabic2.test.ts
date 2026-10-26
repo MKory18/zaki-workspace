@@ -129,9 +129,9 @@ describe("(f) a role refusal says why, in its own words", () => {
   it("goals and the daily routines have their own key, not the membership one", () => {
     const goals = read("src/server/services/goals.ts");
     const production = read("src/server/services/production.ts");
-    expect(goals).toContain('ForbiddenError("goals.role_denied")');
+    expect(goals).toContain('"goals.role_denied")');
     expect(goals).not.toContain('ForbiddenError("orgm.role_denied")');
-    expect(production).toContain('ForbiddenError("production.routines_role_denied")');
+    expect(production).toContain('"production.routines_role_denied")');
     expect(production).not.toContain('ForbiddenError("orgm.role_denied")');
     for (const k of ["goals.role_denied", "production.routines_role_denied"]) {
       expect(ar).toHaveProperty(k);

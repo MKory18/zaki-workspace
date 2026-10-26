@@ -75,7 +75,20 @@ function dayLabel(day: string): string {
 
 /** الروتين اليومي — recurring daily checklist with per-day completion. */
 /** `readOnly`: an external partner (guest) sees the checklist but cannot tick anything (the server refuses too). */
-export function ProductionView({ canManage, readOnly = false, timeZone }: { canManage: boolean; readOnly?: boolean; /** The company's zone: the default day is its today, not the browser's. */ timeZone?: string }) {
+export function ProductionView({
+	canManage,
+	canDelete = canManage,
+	readOnly = false,
+	timeZone,
+}: {
+	/** The production box «يضيف ويعدّل»: opens the routine manager. */
+	canManage: boolean;
+	/** «يحذف»: the delete button in the manager (absent: as `canManage`). */
+	canDelete?: boolean;
+	readOnly?: boolean;
+	/** The company's zone: the default day is its today, not the browser's. */
+	timeZone?: string;
+}) {
 	const { t } = useI18n();
 	const { toast } = useToast();
 	const qc = useQueryClient();
@@ -204,6 +217,7 @@ export function ProductionView({ canManage, readOnly = false, timeZone }: { canM
 					routines={routines.data?.routines ?? []}
 					loading={routines.isLoading}
 					people={(directory.data?.people ?? []).map((p) => ({ id: p.userId, name: p.user.name }))}
+					canDelete={canDelete}
 				/>
 			) : null}
 		</div>
@@ -216,12 +230,14 @@ function ManageRoutinesModal({
 	routines,
 	loading,
 	people,
+	canDelete,
 }: {
 	open: boolean;
 	onClose: () => void;
 	routines: RoutineRow[];
 	loading: boolean;
 	people: { id: string; name: string }[];
+	canDelete: boolean;
 }) {
 	const { t } = useI18n();
 	const { toast } = useToast();
@@ -267,15 +283,17 @@ function ManageRoutinesModal({
 							<Button size="sm" variant="ghost" aria-label={t("prod.editRoutine")} onClick={() => setEditing(r)}>
 								<Pencil className="size-3.5" />
 							</Button>
-							<Button
-								size="sm"
-								variant="ghost"
-								aria-label={t("prod.deleteRoutine")}
-								className="text-danger"
-								onClick={() => remove.mutate(r.id)}
-							>
-								<Trash2 className="size-3.5" />
-							</Button>
+							{canDelete ? (
+								<Button
+									size="sm"
+									variant="ghost"
+									aria-label={t("prod.deleteRoutine")}
+									className="text-danger"
+									onClick={() => remove.mutate(r.id)}
+								>
+									<Trash2 className="size-3.5" />
+								</Button>
+							) : null}
 						</li>
 					))}
 					{loading ? <li className="px-3 py-3 text-xs text-muted">…</li> : null}

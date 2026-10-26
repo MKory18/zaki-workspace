@@ -66,7 +66,8 @@ function periodLabel(period: "WEEKLY" | "MONTHLY", iso: string): string {
 }
 
 /** الأهداف الأسبوعية والشهرية — period goals with live progress. */
-export function GoalsView({ canManage }: { canManage: boolean }) {
+/** `canManage`: the goals box «يضيف ويعدّل»; `canDelete`: «يحذف» (absent: as `canManage`). */
+export function GoalsView({ canManage, canDelete = canManage }: { canManage: boolean; canDelete?: boolean }) {
 	const { t } = useI18n();
 	const { toast } = useToast();
 	const qc = useQueryClient();
@@ -184,17 +185,19 @@ export function GoalsView({ canManage }: { canManage: boolean }) {
 												<Button size="sm" variant="ghost" aria-label={t("goal.edit")} onClick={() => setEditing(g)}>
 													<Pencil className="size-3.5" />
 												</Button>
-												<Button
-													size="sm"
-													variant="ghost"
-													aria-label={t("goal.remove")}
-													className="text-danger"
-													onClick={() => {
-														if (confirm(t("goal.removeConfirm", { title: g.title }))) remove.mutate(g.id);
-													}}
-												>
-													<Trash2 className="size-3.5" />
-												</Button>
+												{canDelete ? (
+													<Button
+														size="sm"
+														variant="ghost"
+														aria-label={t("goal.remove")}
+														className="text-danger"
+														onClick={() => {
+															if (confirm(t("goal.removeConfirm", { title: g.title }))) remove.mutate(g.id);
+														}}
+													>
+														<Trash2 className="size-3.5" />
+													</Button>
+												) : null}
 											</>
 										) : null}
 									</div>

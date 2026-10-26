@@ -11,10 +11,14 @@ import type { OrgRole } from "@prisma/client";
 import {
   CAPABILITIES,
   RANK_DEFAULTS,
+  SECTIONS,
   WIRED_CAPABILITIES,
   effectiveCapabilities,
   isCapability,
+  sectionCapability,
   type Capability,
+  type SectionAction,
+  type SectionId,
 } from "@/server/policy/capabilities";
 // The server's own rank rules: pure functions with no database (member-rules.ts says so), imported
 // so that the screen offers exactly what the server will accept, not a copy of it.
@@ -287,34 +291,79 @@ export interface CapabilityGroupRows {
  * capabilities are rows, and a group left without any is dropped.
  */
 export function capabilityGroups(member: CapabilityTarget, actor: ActorInfo, editable: boolean): CapabilityGroupRows[] {
+  const rowOf = rowBuilder(member, actor, editable);
+  const groups = CAPABILITY_GROUPS.map((group) => ({
+    id: group.id,
+    rows: group.capabilities.filter(isOffered).map(rowOf),
+  }));
+  return groups.filter((group) => group.rows.length > 0);
+}
+
+/** One switch's state and lock for this person, as the server would judge it (shared by the switches and the grid). */
+function rowBuilder(member: CapabilityTarget, actor: ActorInfo, editable: boolean): (capability: Capability) => CapabilityRow {
   const effective = effectiveCapabilities(member);
   const defaults = new Set<Capability>(RANK_DEFAULTS[member.role]);
   const holder = holderOf(actor);
-  const groups = CAPABILITY_GROUPS.map((group) => ({
-    id: group.id,
-    rows: group.capabilities.filter(isOffered).map((capability) => {
-      const on = effective.has(capability);
-      const rankDefault = defaults.has(capability);
-      let locked: CapabilityLock | null = null;
-      if (!editable) {
-        locked = "readonly";
-      } else {
-        // the server's own question: may this actor switch this capability for a person of this rank?
-        const problem = capabilityChangeProblem(holder, member.role, capability, partnerOf(member));
-        if (problem === "accounts.cap_not_held") locked = "actor_lacks";
-        else if (problem) locked = "not_grantable";
+  return (capability) => {
+    const on = effective.has(capability);
+    const rankDefault = defaults.has(capability);
+    let locked: CapabilityLock | null = null;
+    if (!editable) {
+      locked = "readonly";
+    } else {
+      // the server's own question: may this actor switch this capability for a person of this rank?
+      const problem = capabilityChangeProblem(holder, member.role, capability, partnerOf(member));
+      if (problem === "accounts.cap_not_held") locked = "actor_lacks";
+      else if (problem) locked = "not_grantable";
+    }
+    return {
+      capability,
+      on,
+      rankDefault,
+      customized: on !== rankDefault,
+      locked,
+      sensitive: SENSITIVE_CAPABILITIES.includes(capability),
+    };
+  };
+}
+
+export interface SectionCell extends CapabilityRow {
+  action: SectionAction;
+  /** «يضيف ويعدّل» or «يحذف» while «يشوف» is off: shown off and not clickable (the server drops it too). */
+  needsView: boolean;
+}
+
+export interface SectionGridRow {
+  section: SectionId;
+  /** One cell per action of the grid (view, edit, delete); null where the section has no such action. */
+  cells: Record<SectionAction, SectionCell | null>;
+}
+
+export const SECTION_ACTIONS: readonly SectionAction[] = ["view", "edit", "delete"];
+
+/**
+ * The per-person grid (the owner's decision, 2026-10-26): a row per section, «يشوف / يضيف ويعدّل / يحذف» across. Each
+ * cell is the same switch as on the list, with the same locks; a section the person can not see shows its other boxes
+ * off and locked, since the server ignores them until «يشوف» is back.
+ */
+export function sectionGrid(member: CapabilityTarget, actor: ActorInfo, editable: boolean): SectionGridRow[] {
+  const rowOf = rowBuilder(member, actor, editable);
+  return SECTIONS.map((section) => {
+    const viewCap = sectionCapability(section.id, "view");
+    const sees = viewCap !== null && rowOf(viewCap).on;
+    const cells = {} as Record<SectionAction, SectionCell | null>;
+    for (const action of SECTION_ACTIONS) {
+      const capability = (section.actions as readonly SectionAction[]).includes(action) ? sectionCapability(section.id, action) : null;
+      if (!capability) {
+        cells[action] = null;
+        continue;
       }
-      return {
-        capability,
-        on,
-        rankDefault,
-        customized: on !== rankDefault,
-        locked,
-        sensitive: SENSITIVE_CAPABILITIES.includes(capability),
-      };
-    }),
-  }));
-  return groups.filter((group) => group.rows.length > 0);
+      const row = rowOf(capability);
+      const needsView = action !== "view" && !sees;
+      cells[action] = { ...row, action, needsView, locked: needsView && row.locked === null ? "not_grantable" : row.locked };
+    }
+    return { section: section.id, cells };
+  });
 }
 
 export interface CapabilityLists {

@@ -126,10 +126,10 @@ export const PLACES: readonly PlaceDef[] = [
       { key: "calendar", href: "/calendar", labelKey: "nav.calendar", requires: "everyone" },
       // The company's own goals and ideas (titles, descriptions, who wrote them): not shared with an external
       // partner. The pages and /api/goals, /api/ideas refuse a guest too (docs/PHASE0-AUDIT.md R10).
-      { key: "goals", href: "/goals", labelKey: "nav.goals", requires: "staff" },
+      { key: "goals", href: "/goals", labelKey: "nav.goals", requires: { capability: "goals.view" } },
       // temporary: becomes a chat topic in Phase 3
-      { key: "ideas", href: "/ideas", labelKey: "nav.ideas", requires: "staff" },
-      { key: "production", href: "/production", labelKey: "nav.production", requires: "staff" },
+      { key: "ideas", href: "/ideas", labelKey: "nav.ideas", requires: { capability: "ideas.view" } },
+      { key: "production", href: "/production", labelKey: "nav.production", requires: { capability: "production.view" } },
       { key: "departments", href: "/departments", labelKey: "nav.departments", requires: "staff" },
       // a department's tickets and campaigns, each a page of its own (the owner's ask, 2026-10-25)
       { key: "tickets", href: "/tickets", labelKey: "nav.tickets", requires: "staff" },
@@ -164,7 +164,7 @@ export const PLACES: readonly PlaceDef[] = [
         requires: { anyOf: [{ capability: "directory.view" }, { capability: "users.manage" }] },
         also: ["/teams", "/u"],
       },
-      { key: "reports", href: "/analytics", labelKey: "nav.analytics", icon: "reports", requires: { rankAtLeast: "LEAD" } },
+      { key: "reports", href: "/analytics", labelKey: "nav.analytics", icon: "reports", requires: { capability: "reports.view" } },
       { key: "automation", href: "/automation", labelKey: "nav.tab.automation", icon: "automation", requires: { capability: "integrations.manage" } },
       { key: "telegram", href: "/telegram", labelKey: "nav.telegram", icon: "telegram", requires: { capability: "integrations.manage" } },
       {
