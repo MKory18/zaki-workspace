@@ -39,6 +39,8 @@ interface N8nStatus {
 interface GoogleStatus {
   connected: boolean;
   configured: boolean;
+  library?: boolean;
+  libraryOff?: boolean;
   files?: DriveFile[];
   filesError?: string | null;
 }
@@ -320,6 +322,24 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
           <p className="text-xs leading-6 text-muted">{t("google.envHelp")}</p>
         ) : google.data.connected ? (
           <div className="space-y-3">
+            {google.data.libraryOff ? (
+              <p className="text-xs leading-6 text-muted">{t("google.libraryFeatureOff")}</p>
+            ) : google.data.library ? (
+              <p className="text-xs leading-6 text-ok">{t("google.libraryOn")}</p>
+            ) : (
+              <div className="space-y-1 rounded-lg border border-warn/40 bg-warn/10 p-3 text-xs leading-6">
+                <p className="text-warn">{t("google.libraryNeedsReconnect")}</p>
+                <p>{t("google.libraryReconnectFix")}</p>
+                {canManage && (
+                  <Link href="/api/integrations/google/start">
+                    <Button size="sm" className="mt-1">
+                      <Plug className="size-4" />
+                      {t("google.reconnect")}
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               {canManage && (
                 <Button variant="secondary" size="sm" onClick={() => setShowFiles((s) => !s)}>
@@ -333,6 +353,12 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
                 </Button>
               )}
             </div>
+            {google.data.library && canManage && (
+              <div className="space-y-1 text-xs leading-6">
+                <p className="text-warn">{t("google.disconnectWarn")}</p>
+                <p className="text-muted">{t("google.disconnectFix")}</p>
+              </div>
+            )}
             {google.data.filesError && <p className="text-xs text-danger">{t(google.data.filesError)}</p>}
             {showFiles && canManage && (
               <ul className="divide-y divide-border rounded-lg border border-border">

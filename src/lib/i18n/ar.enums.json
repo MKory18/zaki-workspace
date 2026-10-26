@@ -69,6 +69,7 @@
   "event.chat.message_pinned": "تثبيت رسالة",
   "event.file.uploaded": "رفع ملف",
   "event.file.deleted": "حذف ملف",
+  "event.file.drive_failed": "تعذّر الحفظ على Google Drive فحُفظ الملف على الخادم",
 
   "detail.missing_task_fields": "حقول المهمة ناقصة",
   "detail.invalid": "بيانات غير صالحة",

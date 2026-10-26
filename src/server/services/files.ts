@@ -9,6 +9,19 @@ import { logEvent } from "@/server/services/integrations";
 import { canReadConversation } from "@/server/policy/conversation";
 import { MAX_FILE_BYTES, canManageFile, checksumHex, safeStoredName, sniffMimeType } from "@/server/files/sniff";
 import { accessibleWorkspaceIds } from "@/server/services/access";
+import { libraryOnDrive } from "@/server/services/google";
+import {
+  DriveStoreError,
+  type DriveSpace,
+  driveIdOf,
+  driveNameFor,
+  isDrivePath,
+  moveToOldVersions,
+  readAllFromDrive,
+  readFromDrive,
+  trashOnDrive,
+  uploadToDrive,
+} from "@/server/files/drive-store";
 
 export const fileLibrary = process.env.UPLOAD_DIR || join(process.cwd(), ".data", "uploads");
 
@@ -192,11 +205,81 @@ export async function readStored(orgId: string, id: string): Promise<{ buffer: B
   if (!f) throw new NotFoundError("files.not_found");
   let buffer: Buffer;
   try {
-    buffer = await fs.readFile(join(fileLibrary, f.path));
-  } catch {
-    throw new NotFoundError("files.missing_storage");
+    buffer = isDrivePath(f.path) ? await readAllFromDrive(orgId, driveIdOf(f.path)) : await fs.readFile(join(fileLibrary, f.path));
+  } catch (err) {
+    throw driveReadError(err);
   }
   return { buffer, mimeType: f.mimeType, name: f.name };
+}
+
+/** Drive gone for a moment is not «the file is gone». */
+function driveReadError(err: unknown): NotFoundError {
+  if (err instanceof DriveStoreError && err.status !== 404) return new NotFoundError("files.drive_unavailable");
+  return new NotFoundError("files.missing_storage");
+}
+
+/**
+ * A stored file opened for streaming (the download route): its size, and its bytes - all of them or
+ * one inclusive range - read on demand from the server's disk or from Drive. Nothing is held in memory.
+ * Permission gate is in the caller, as for `readStored`.
+ */
+export async function openStored(
+  orgId: string,
+  id: string,
+): Promise<{ mimeType: string; name: string; size: number; stream: (range: { start: number; end: number } | null) => Promise<ReadableStream<Uint8Array>> }> {
+  const f = await db.storedFile.findFirst({ where: { id, orgId, deletedAt: null, ...STORED }, select: { path: true, mimeType: true, name: true, size: true } });
+  if (!f) throw new NotFoundError("files.not_found");
+  if (isDrivePath(f.path)) {
+    const driveId = driveIdOf(f.path);
+    return {
+      mimeType: f.mimeType,
+      name: f.name,
+      // the upload checked that Drive holds exactly `size` bytes
+      size: f.size,
+      stream: (range) => readFromDrive(orgId, driveId, range).catch((err: unknown) => Promise.reject(driveReadError(err))),
+    };
+  }
+  const full = join(fileLibrary, f.path);
+  const stat = await fs.stat(full).catch(() => null);
+  if (!stat?.isFile()) throw new NotFoundError("files.missing_storage");
+  return {
+    mimeType: f.mimeType,
+    name: f.name,
+    size: stat.size,
+    stream: (range) => fileStream(full, range ?? { start: 0, end: stat.size - 1 }),
+  };
+}
+
+/**
+ * The bytes start..end (inclusive) of a file on the server's disk, read 64 KB at a time as the response is
+ * consumed. (A web stream by hand: `node:stream` is not resolvable in every bundle that imports this file.)
+ */
+async function fileStream(full: string, range: { start: number; end: number }): Promise<ReadableStream<Uint8Array>> {
+  const handle = await fs.open(full, "r");
+  let at = range.start;
+  const done = async (controller: ReadableStreamDefaultController<Uint8Array>) => {
+    await handle.close().catch(() => undefined);
+    controller.close();
+  };
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const want = Math.min(64 * 1024, range.end - at + 1);
+        if (want <= 0) return done(controller);
+        const chunk = new Uint8Array(want);
+        const { bytesRead } = await handle.read(chunk, 0, want, at);
+        if (bytesRead === 0) return done(controller);
+        at += bytesRead;
+        controller.enqueue(chunk.subarray(0, bytesRead));
+      } catch (err) {
+        await handle.close().catch(() => undefined);
+        controller.error(err);
+      }
+    },
+    async cancel() {
+      await handle.close().catch(() => undefined);
+    },
+  });
 }
 
 /* ---------------- writes ---------------- */
@@ -264,12 +347,28 @@ export async function ingest(
   }
 
   const finalFamilyId = familyId || created.id;
-  const path = join(ctx.orgId, `${created.id}_v${version}_${display}`);
-  const target = join(fileLibrary, path);
+  // A library file goes to the owner's Drive when it is connected for it; on any Drive failure it is
+  // kept on the server exactly as before, so an upload never fails because of Drive.
+  const space = purpose === "LIBRARY" && (await libraryOnDrive(ctx.orgId)) ? { of: await driveSpaceOf(workspaceId) } : null;
+  const steppingDown = space && familyOf ? await previousHeadPath(ctx.orgId, finalFamilyId) : null;
+  let path = "";
+  let target: string | null = null;
   let updated: { id: string; version: number; mimeType: string };
   try {
-    await fs.mkdir(join(fileLibrary, ctx.orgId), { recursive: true });
-    await fs.writeFile(target, input.bytes);
+    if (space) {
+      path = await uploadToDrive(ctx.orgId, { name: driveNameFor(display, version), mimeType: mime, bytes: input.bytes, space: space.of, fileId: created.id }).catch(
+        async (err: unknown) => {
+          await logEvent(ctx.orgId, { direction: "OUT", type: "file.drive_failed", status: "FAILED", detail: err instanceof DriveStoreError ? err.message : "drive.error" });
+          return "";
+        },
+      );
+    }
+    if (!path) {
+      path = join(ctx.orgId, `${created.id}_v${version}_${display}`);
+      target = join(fileLibrary, path);
+      await fs.mkdir(join(fileLibrary, ctx.orgId), { recursive: true });
+      await fs.writeFile(target, input.bytes);
+    }
     // The row becomes a file, and the previous head steps down, in ONE transaction.
     updated = await db.$transaction(async (tx) => {
       const row = await tx.storedFile.update({
@@ -288,9 +387,14 @@ export async function ingest(
   } catch (err) {
     // Leave nothing behind. A row without its bytes is listed, then answers 404 on download
     // (a root-owned volume makes EVERY upload end up here).
-    await fs.rm(target, { force: true }).catch(() => undefined);
+    if (target) await fs.rm(target, { force: true }).catch(() => undefined);
+    if (isDrivePath(path)) await trashOnDrive(ctx.orgId, driveIdOf(path)).catch(() => undefined);
     await db.storedFile.deleteMany({ where: { id: created.id } }).catch(() => undefined);
     throw err;
+  }
+  // the version that stepped down leaves the space folder for «نسخ قديمة» (tidiness only: never fails the upload)
+  if (space && steppingDown && isDrivePath(steppingDown)) {
+    await moveToOldVersions(ctx.orgId, driveIdOf(steppingDown), space.of).catch(() => undefined);
   }
 
   await logFile(ctx.orgId, "file.uploaded", {
@@ -302,6 +406,17 @@ export async function ingest(
     checksum: checksumHex(input.bytes),
   });
   return { id: updated.id, version: updated.version, mimeType: updated.mimeType };
+}
+
+/** The Drive folder of a library file's space (none: a file from before spaces had libraries). */
+async function driveSpaceOf(workspaceId: string | null): Promise<DriveSpace | null> {
+  if (!workspaceId) return null;
+  return db.workspace.findUnique({ where: { id: workspaceId }, select: { id: true, name: true } });
+}
+
+async function previousHeadPath(orgId: string, familyId: string): Promise<string | null> {
+  const head = await db.storedFile.findFirst({ where: { orgId, familyId, isLatest: true, deletedAt: null, ...STORED }, select: { path: true } });
+  return head?.path ?? null;
 }
 
 /** Library files only: a chat file goes with its message, never through the library. */
