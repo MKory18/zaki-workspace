@@ -50,7 +50,8 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
     where: { workspaceId_userId: { workspaceId: task.workspaceId, userId: user.id } },
     select: { role: true },
   });
-  const canEdit = membership ? canWriteInWorkspace(membership.role, spaceRow?.role) : false;
+  // the space's rule, and the tasks row's «يضيف ويعدّل» box of the section grid
+  const canEdit = membership ? canWriteInWorkspace(membership.role, spaceRow?.role) && actorCanWork(actor, "tasks.edit") : false;
 
   const [members, labels] = await Promise.all([
     // the people who can be assigned: the space's members who are still ACTIVE in the company (a

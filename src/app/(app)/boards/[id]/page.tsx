@@ -91,7 +91,8 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
       }}
       columns={columns}
       tasks={taskData}
-      canEdit={canWriteInWorkspace(member.role, wsRow?.role)}
+      // the space's rule, and the tasks row's «يضيف ويعدّل» box of the section grid (add, drag, edit)
+      canEdit={canWriteInWorkspace(member.role, wsRow?.role) && actorCanWork(actor, "tasks.edit")}
     />
   );
 }
