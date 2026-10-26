@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, audit } from "@/server/auth";
-import { canManageOrg } from "@/server/services/orgs";
+import { assertMemberCan } from "@/server/policy/actor";
 import { assertCanWrite } from "@/server/services/guest-guard";
 import { assertActiveAssignee } from "@/server/services/active-people";
 import { resolveTimeZone, zonedParts, zonedWallTime } from "@/lib/zoned-time";
@@ -212,20 +212,20 @@ export async function updateRoutine(ctx: { orgId: string; userId: string }, id: 
 }
 
 export async function deleteRoutine(ctx: { orgId: string; userId: string }, id: string) {
-	await assertCanManageRoutines(ctx);
+	await assertCanManageRoutines(ctx, "delete");
 	await assertRoutineOrg(ctx.orgId, id, ctx.userId);
 	await db.routine.delete({ where: { id } });
 	await audit("routine.deleted", { actorId: ctx.userId, orgId: ctx.orgId, target: id });
 }
 
 /**
- * Managing routines (create, edit, delete) is OWNER/ADMIN only. A guest is told it is
- * read-only (`guest.readonly`), a plain member that their role is not enough.
+ * Managing routines takes the production boxes of the person's grid: «يضيف ويعدّل» to create or edit one, «يحذف» to
+ * delete one (by default the admins', as before the grid). A guest is told it is read-only (`guest.readonly`), anyone
+ * else without the box that their permission does not allow it.
  */
-async function assertCanManageRoutines(ctx: { orgId: string; userId: string }): Promise<void> {
-	const role = await orgRoleOf(ctx.orgId, ctx.userId);
-	assertCanWrite({ orgRole: role });
-	if (!canManageOrg(role)) throw new ForbiddenError("production.routines_role_denied");
+async function assertCanManageRoutines(ctx: { orgId: string; userId: string }, action: "edit" | "delete" = "edit"): Promise<void> {
+	assertCanWrite({ orgRole: await orgRoleOf(ctx.orgId, ctx.userId) });
+	await assertMemberCan(ctx, action === "edit" ? "production.edit" : "production.delete", "production.routines_role_denied");
 }
 
 /** Toggle (or force) one routine's completion for one day. Any org member except a guest may check off. */
@@ -236,6 +236,7 @@ export async function setRoutineDone(
 	done: boolean,
 ): Promise<void> {
 	assertCanWrite({ orgRole: await orgRoleOf(ctx.orgId, ctx.userId) });
+	await assertMemberCan(ctx, "production.view", "section.view_denied");
 	const routine = await db.routine.findFirst({ where: { id: routineId, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] }, select: { id: true } });
 	if (!routine) throw new NotFoundError("routine.not_found");
 	if (done) {

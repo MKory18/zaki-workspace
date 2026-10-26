@@ -1,4 +1,5 @@
-import { pageActor } from "@/app/(app)/_access";
+import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
+import { actorCan } from "@/server/policy/actor";
 import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { listIdeas } from "@/server/services/ideas";
 import { currentSpace } from "@/server/services/current-space";
@@ -10,6 +11,8 @@ export default async function IdeasPage() {
   // The ideas are the team's own (every idea carries its author's name): the tab is for staff and
   // /api/ideas refuses an external partner, so the list is never read for them.
   if (refusedToGuest(actor, "ideas")) return <GuestNotice />;
+  // the ideas row of the person's grid
+  if (!actorCan(actor, "ideas.view")) return <SectionOffNotice />;
 
   // the ideas of the space the person is in; «الشركة» also reads the ones shared with the company
   const space = await currentSpace(actor);
@@ -39,6 +42,8 @@ export default async function IdeasPage() {
         orgRole: actor.role,
         // the managers of this space move its ideas along; in «الشركة» the owner and the admins
         canManage: isHq ? actor.role === "OWNER" || actor.role === "ADMIN" : Boolean(space?.manager),
+        mayEdit: actorCan(actor, "ideas.edit"),
+        mayDelete: actorCan(actor, "ideas.delete"),
         spaceId: space?.id ?? null,
         isHq,
       }}

@@ -13,7 +13,7 @@ describe("one name for the company", () => {
   });
 
   it("the goals refusal names the goals, not «الأهداف والفكرة»", () => {
-    expect(AR["goals.role_denied"]).toBe("إدارة الأهداف متاحة لصاحب القرار في الشركة فقط");
+    expect(AR["goals.role_denied"]).toBe("صلاحيتك ما بتسمح تضيف أو تعدّل أو تحذف بالأهداف");
   });
 });
 

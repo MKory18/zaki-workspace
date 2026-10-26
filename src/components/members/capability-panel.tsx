@@ -15,6 +15,7 @@ import {
   type TFn,
 } from "@/lib/members-ui";
 import type { Capability } from "@/server/policy/capabilities";
+import { SectionGrid } from "./section-grid";
 import { SwitchRow } from "./switch-row";
 
 /**
@@ -55,6 +56,15 @@ export function CapabilityPanel({
   return (
     <div className="space-y-4">
       <p className="text-xs leading-5 text-fg-muted">{editable ? t("members.caps_intro") : t("members.caps_readonly")}</p>
+
+      <SectionGrid
+        member={member}
+        actor={actor}
+        editable={editable}
+        busy={busy}
+        pendingCapability={pendingCapability}
+        onToggle={onToggle}
+      />
 
       {groups.map((group) => {
         const headingId = `${uid}-${group.id}`;

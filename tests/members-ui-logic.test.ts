@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { CAPABILITIES, OWNER_ONLY, RANK_DEFAULTS, WIRED_CAPABILITIES, can, effectiveCapabilities } from "@/server/policy/capabilities";
+import { CAPABILITIES, OWNER_ONLY, RANK_DEFAULTS, SECTION_CAPABILITIES, WIRED_CAPABILITIES, can, effectiveCapabilities } from "@/server/policy/capabilities";
+
+/** The wired capabilities shown as switches: the section boxes are the grid's (tests/section-grid.test.ts). */
+const SWITCHES = WIRED_CAPABILITIES.filter((c) => !SECTION_CAPABILITIES.includes(c));
 import { CREATABLE_ROLES } from "@/server/policy/rank";
 import { getServerT } from "@/lib/i18n/server";
 import { ApiError } from "@/lib/api-client";
@@ -219,10 +222,10 @@ describe("capability switches: rank defaults + extras - revoked", () => {
     capabilityGroups(member, actor, true).flatMap((g) => g.rows.map((r) => r.capability));
   const hidden = CAPABILITIES.filter((c) => !WIRED_CAPABILITIES.includes(c));
 
-  it("the groups cover every capability exactly once, except the owner-only archive that is never switchable", () => {
+  it("the groups cover every capability exactly once, except the owner-only archive and the section grid's boxes", () => {
     const grouped = CAPABILITY_GROUPS.flatMap((g) => [...g.capabilities]);
     expect(new Set(grouped).size).toBe(grouped.length);
-    expect([...grouped, ...OWNER_ONLY].sort()).toEqual([...CAPABILITIES].sort());
+    expect([...grouped, ...SECTION_CAPABILITIES, ...OWNER_ONLY].sort()).toEqual([...CAPABILITIES].sort());
     expect(grouped).not.toContain("archive.view");
   });
 
@@ -241,7 +244,7 @@ describe("capability switches: rank defaults + extras - revoked", () => {
   it("only the WIRED capabilities are offered: a switch that does nothing is a lie on the screen", () => {
     for (const role of ["ADMIN", "LEAD", "MEMBER"] as const) {
       const shown = offered(person({ role }));
-      expect([...shown].sort(), role).toEqual([...WIRED_CAPABILITIES].sort());
+      expect([...shown].sort(), role).toEqual([...SWITCHES].sort());
       for (const cap of hidden) expect(shown, `${role} ${cap}`).not.toContain(cap);
     }
     expect(hidden.length).toBeGreaterThan(0); // the catalogue is larger than what is wired today
@@ -251,7 +254,7 @@ describe("capability switches: rank defaults + extras - revoked", () => {
     for (const actor of [actorOf("OWNER"), actorOf("ADMIN")]) {
       const shown = offered(person({ role: "ADMIN" }), actor);
       expect(shown).not.toContain("archive.view");
-      expect(shown.length).toBe(WIRED_CAPABILITIES.length);
+      expect(shown.length).toBe(SWITCHES.length);
     }
   });
 

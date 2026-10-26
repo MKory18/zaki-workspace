@@ -10,6 +10,7 @@ import type { ActorContext } from "@/server/services/tasks";
 import { createTask } from "@/server/services/tasks";
 import type { DbClient } from "@/server/db";
 import { isSpaceManager } from "@/server/workspace-role";
+import { assertMemberCan, can } from "@/server/policy/actor";
 
 /**
  * Membership context resolved from the idea's own org (shared by API routes). Only an ACTIVE member
@@ -27,10 +28,12 @@ export async function ideaAccessCtx(ideaId: string): Promise<OrgAccessContext> {
   if (!idea) throw new ForbiddenError("idea.not_found");
   const membership = await db.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId: idea.orgId, userId: user.id } },
-    select: { role: true, status: true },
+    select: { role: true, status: true, capabilities: true, revokedCapabilities: true, primaryOwner: true },
   });
   if (!membership || membership.status !== "ACTIVE") throw new ForbiddenError("not_org_member");
   assertNotGuest({ orgRole: membership.role });
+  // the ideas row of the person's grid: a section switched off for them is closed at every door
+  if (!can(membership, "ideas.view")) throw new ForbiddenError("section.view_denied");
   return { orgId: idea.orgId, orgRole: membership.role, userId: user.id };
 }
 
@@ -190,6 +193,7 @@ export interface CreateIdeaInput {
 
 /** An idea is born in the space the person is in. */
 export async function createIdea(orgId: string, actor: ActorContext, input: CreateIdeaInput, spaceId: string | null = null): Promise<IdeaDTO> {
+  await assertMemberCan({ orgId, userId: actor.userId }, "ideas.edit", "section.edit_denied");
   const row = await db.idea.create({
     data: {
       orgId,
@@ -230,6 +234,7 @@ export async function updateIdea(
 ): Promise<IdeaDTO> {
   // an external partner never writes, not even on an idea they wrote before they were made a guest
   assertCanWrite({ orgRole });
+  await assertMemberCan({ orgId, userId: actor.userId }, "ideas.edit", "section.edit_denied");
   return db.$transaction(async (tx) => {
     const idea = await assertIdeaScope(ideaId, orgId, tx, actor.userId);
     const manager = await managesIdea(orgRole, actor.userId, idea.workspaceId, tx);
@@ -272,6 +277,7 @@ export async function deleteIdea(
   ideaId: string,
 ): Promise<void> {
   assertCanWrite({ orgRole });
+  await assertMemberCan({ orgId, userId: actor.userId }, "ideas.delete", "section.delete_denied");
   const idea = await assertIdeaScope(ideaId, orgId, db, actor.userId);
   if (idea.creatorId !== actor.userId && !(await managesIdea(orgRole, actor.userId, idea.workspaceId))) {
     throw new ForbiddenError("idea.not_owner");
@@ -291,6 +297,7 @@ export async function shareIdea(
   shared: boolean,
 ): Promise<IdeaDTO> {
   assertCanWrite({ orgRole });
+  await assertMemberCan({ orgId, userId: actor.userId }, "ideas.edit", "section.edit_denied");
   const idea = await assertIdeaScope(ideaId, orgId, db, actor.userId);
   if (idea.creatorId !== actor.userId && !(await managesIdea(orgRole, actor.userId, idea.workspaceId))) {
     throw new ForbiddenError("idea.not_owner");
@@ -309,6 +316,7 @@ export async function toggleIdeaVote(
   actor: ActorContext,
   ideaId: string,
 ): Promise<{ voted: boolean }> {
+  await assertMemberCan({ orgId, userId: actor.userId }, "ideas.edit", "section.edit_denied");
   const idea = await assertIdeaScope(ideaId, orgId, db, actor.userId);
   const existing = await db.ideaVote.findUnique({
     where: { ideaId_userId: { ideaId: idea.id, userId: actor.userId } },
@@ -343,6 +351,7 @@ export async function convertIdeaToTask(
   target: { workspaceId: string; projectId: string; boardId: string },
 ): Promise<{ idea: IdeaDTO; taskId: string }> {
   assertCanWrite({ orgRole });
+  await assertMemberCan({ orgId, userId: actor.userId }, "ideas.edit", "section.edit_denied");
   const idea = await assertIdeaScope(ideaId, orgId, db, actor.userId);
   if (idea.taskId) throw new ForbiddenError("idea.already_converted");
   if (idea.creatorId !== actor.userId && !(await managesIdea(orgRole, actor.userId, idea.workspaceId))) {

@@ -1,4 +1,5 @@
-import { pageActor } from "@/app/(app)/_access";
+import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
+import { actorCan } from "@/server/policy/actor";
 import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { getServerT } from "@/lib/i18n/server";
 import { loadWorkScope, narrowScope, scopeSpaceIds } from "@/server/services/team-scope";
@@ -13,9 +14,9 @@ export default async function AnalyticsPage() {
   const { t } = getServerT();
   const { user, actor } = await pageActor();
   // Company numbers: the idea funnel, the staff names with their workload. Not for an external partner,
-  // whatever their tab shows (the reports tab is offered from LEAD up; the page itself serves every
-  // member of the team over the spaces they can open).
+  // whatever their tab shows; for the team, the reports box of the person's grid (a lead's and up by default).
   if (refusedToGuest(actor, "reports")) return <GuestNotice />;
+  if (!actorCan(actor, "reports.view")) return <SectionOffNotice />;
   // numbers for the active org (oldest ACTIVE membership), over the workspaces the user can open
   // …inside the space they are in (src/server/services/current-space.ts)
   const teams = narrowScope(await loadWorkScope(user.id), (await currentSpace(actor))?.id);
