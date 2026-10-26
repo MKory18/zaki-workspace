@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "pushEverything"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -21,6 +21,9 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   watch: true,
   // the per-person section grid «الأقسام» (src/server/policy/capabilities.ts): off, everyone has their rank's template
   sectionPermissions: true,
+  // every notification of the bell also reaches the person's phone and laptop while the site is closed (Web Push);
+  // off: only a ringing call does, as before
+  pushEverything: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

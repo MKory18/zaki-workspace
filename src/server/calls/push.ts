@@ -40,8 +40,8 @@ export function vapidKeys(source: NodeJS.ProcessEnv = process.env): PushKeys {
 }
 
 export interface PushMessage {
-  /** «ring»: somebody is ringing; «missed»: nobody answered */
-  kind: "ring" | "missed";
+  /** «ring»: somebody is ringing; «missed»: nobody answered; «note»: one of the bell's notifications */
+  kind: "ring" | "missed" | "note";
   title: string;
   body: string;
   /** the page a tap opens */
@@ -76,8 +76,8 @@ export async function pushTo(userIds: string[], message: PushMessage): Promise<v
   }
   const options: webpush.RequestOptions = {
     vapidDetails: { subject: appUrl().startsWith("https://") ? appUrl() : "mailto:calls@zakiai.io", publicKey: keys.publicKey, privateKey: keys.privateKey },
-    // a ring is worth nothing a minute later
-    TTL: message.kind === "ring" ? 45 : 3600,
+    // a ring is worth nothing a minute later; a note still matters the next day
+    TTL: message.kind === "ring" ? 45 : message.kind === "note" ? 86400 : 3600,
     urgency: message.kind === "ring" ? "high" : "normal",
   };
   const payload = JSON.stringify(message);
