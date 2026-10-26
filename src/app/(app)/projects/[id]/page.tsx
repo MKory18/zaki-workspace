@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/server/db";
 import { pageUser } from "@/server/auth";
-import { requireActor } from "@/server/policy/actor";
+import { actorCanWork, requireActor } from "@/server/policy/actor";
+import { SectionOffNotice } from "@/app/(app)/_access";
 import { keepInSpace } from "@/server/services/current-space";
 import { loadWorkScope, projectVisibleWhere } from "@/server/services/team-scope";
 import { Card, CardBody, CardHeader, Badge } from "@/components/ui/card";
@@ -30,7 +31,10 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   });
   if (!project) notFound();
   // a thing of another space of theirs: enter that space first, so the name at the top says where it is
-  await keepInSpace(await requireActor(), project.workspace.id, `/projects/${project.id}`);
+  const actor = await requireActor();
+  // the projects row of the person's grid
+  if (!actorCanWork(actor, "projects.view")) return <SectionOffNotice />;
+  await keepInSpace(actor, project.workspace.id, `/projects/${project.id}`);
   const doneColumnIds = await db.boardColumn.findMany({
     where: { board: { projectId: project.id }, done: true },
     select: { id: true },

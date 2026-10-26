@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireActor } from "@/server/policy/actor";
+import { assertCan, requireActor } from "@/server/policy/actor";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import { assertNotGuest } from "@/server/services/guest-guard";
@@ -17,6 +17,7 @@ export async function GET() {
 	return withApi(async () => {
 		const actor = await requireActor();
 		assertNotGuest({ orgRole: actor.role });
+		assertCan(actor, "goals.view", "section.view_denied");
 		const goals = await listGoals({ orgId: actor.orgId, orgRole: actor.role }, await placeOf(actor));
 		return NextResponse.json({ goals });
 	});

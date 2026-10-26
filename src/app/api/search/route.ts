@@ -4,7 +4,7 @@ import { requireUser } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { ForbiddenError } from "@/server/auth";
 import { currentSpace } from "@/server/services/current-space";
-import { requireActor } from "@/server/policy/actor";
+import { actorCan, actorCanWork, requireActor } from "@/server/policy/actor";
 import { loadWorkScope, narrowScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 import { searchChat } from "@/server/chat/search";
 import { searchLibrary } from "@/server/services/files";
@@ -56,7 +56,8 @@ export async function GET(req: Request) {
       db.task.findMany({
         where: {
           orgId: { in: orgIds },
-          workspaceId: { in: workspaceIds },
+          // the tasks «يشوف» box of the section grid
+          workspaceId: { in: actorCanWork(actor, "tasks.view") ? workspaceIds : [] },
           AND: [taskVisibleWhere(scope)],
           archived: false,
           title: contains,
@@ -74,7 +75,7 @@ export async function GET(req: Request) {
       }),
       db.project.findMany({
         where: {
-          workspaceId: { in: workspaceIds },
+          workspaceId: { in: actorCanWork(actor, "projects.view") ? workspaceIds : [] },
           AND: [projectVisibleWhere(scope)],
           name: contains,
         },
@@ -99,7 +100,8 @@ export async function GET(req: Request) {
             take: 6,
             select: { user: { select: { id: true, name: true } } },
           }),
-      actor.isExternal || !place ? [] : searchLibrary(actor.orgId, place, q),
+      // the library's files only for whoever holds its «يشوف» box
+      actor.isExternal || !place || !actorCan(actor, "files.view") ? [] : searchLibrary(actor.orgId, place, q),
     ]);
 
     return NextResponse.json({

@@ -38,7 +38,8 @@ interface FileMeta {
   uploaderId: string;
 }
 
-export function FilesView({ me }: { me: { id: string; role: string } }) {
+/** `may`: the library boxes of the person's grid, «يضيف ويعدّل» and «يحذف» (absent: allowed; the server decides again). */
+export function FilesView({ me, may = { edit: true, delete: true } }: { me: { id: string; role: string }; may?: { edit: boolean; delete: boolean } }) {
   const { t } = useI18n();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -115,7 +116,8 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
     onError: fileErr,
   });
 
-  const canManage = (f: FileRow) => f.uploaderId === me.id || me.role === "OWNER" || me.role === "ADMIN";
+  const canManage = (f: FileRow) => may.delete && (f.uploaderId === me.id || me.role === "OWNER" || me.role === "ADMIN");
+  const canUpload = me.role !== "GUEST" && may.edit;
   const files = list.data?.files ?? [];
 
   return (
@@ -131,7 +133,7 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
             </p>
           )}
         </div>
-        {me.role !== "GUEST" && (
+        {canUpload && (
           <Button ref={uploadRef} size="sm" onClick={() => fileInputRef.current?.click()}>
             <FolderUp className="size-4" />
             {t("files.upload")}
@@ -145,7 +147,7 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
         />
       </header>
 
-      {me.role !== "GUEST" && (
+      {canUpload && (
         <div
           role="button"
           tabIndex={0}
@@ -226,7 +228,7 @@ export function FilesView({ me }: { me: { id: string; role: string } }) {
       {versioning && (
         <VersionModal
           row={versioning}
-          canUpload={me.role !== "GUEST"}
+          canUpload={canUpload}
           onUpload={(file) => addVersion.mutate({ file, targetId: versioning.id })}
           uploading={addVersion.isPending}
           onClose={() => setVersioning(null)}

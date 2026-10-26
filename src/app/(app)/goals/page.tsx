@@ -1,4 +1,5 @@
-import { pageActor } from "@/app/(app)/_access";
+import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
+import { actorCan } from "@/server/policy/actor";
 import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { GoalsView } from "@/components/goals-view";
 
@@ -10,8 +11,9 @@ import { GoalsView } from "@/components/goals-view";
 export default async function GoalsPage() {
 	const { actor } = await pageActor();
 	if (refusedToGuest(actor, "goals")) return <GuestNotice />;
-	const canManage = actor.role === "OWNER" || actor.role === "ADMIN";
-	return <GoalsView canManage={canManage} />;
+	// the goals row of the person's grid: «يشوف», «يضيف ويعدّل» (by default the admins'), «يحذف»
+	if (!actorCan(actor, "goals.view")) return <SectionOffNotice />;
+	return <GoalsView canManage={actorCan(actor, "goals.edit")} canDelete={actorCan(actor, "goals.delete")} />;
 }
 
 export const dynamic = "force-dynamic";

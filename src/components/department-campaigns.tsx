@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Megaphone, Plus, Trash2 } from "lucide-react";
+import { MAY_ALL, type SectionMay } from "@/lib/section-may";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,12 +55,15 @@ export function DepartmentCampaigns({
   emoji,
   canManage,
   currentUserId,
+  may = MAY_ALL,
 }: {
   deptId: string;
   deptName: string;
   emoji: string | null;
   canManage: boolean;
   currentUserId: string;
+  /** The campaigns row of the person's grid: no «يضيف ويعدّل», no new campaign or changes; no «يحذف», no delete. */
+  may?: SectionMay;
 }) {
   const { t } = useI18n();
   const { toast } = useToast();
@@ -122,10 +126,12 @@ export function DepartmentCampaigns({
 
   return (
     <>
-      <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
-        <Megaphone className="size-4 text-cat-1" />
-        {t("camp.new")}
-      </Button>
+      {may.edit ? (
+        <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
+          <Megaphone className="size-4 text-cat-1" />
+          {t("camp.new")}
+        </Button>
+      ) : null}
 
       {creating ? (
         <Modal open onClose={() => setCreating(false)} title={`${emoji ?? "📣"} ${deptName} — ${t("camp.newTitle")}`}>
@@ -196,7 +202,7 @@ export function DepartmentCampaigns({
                   <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold", STATUS_CHIP[r.status])}>
                     {enumLabel("CampaignStatus", r.status)}
                   </span>
-                  {canManage ? (
+                  {canManage && may.edit ? (
                     <Select
                       value={r.status}
                       onChange={(e) => update.mutate({ id: r.id, payload: { status: e.target.value } })}
@@ -210,7 +216,7 @@ export function DepartmentCampaigns({
                       ))}
                     </Select>
                   ) : null}
-                  {canManage ? (
+                  {canManage && may.delete ? (
                     <Button
                       size="sm"
                       variant="ghost"

@@ -40,6 +40,7 @@ interface GoogleStatus {
   connected: boolean;
   configured: boolean;
   library?: boolean;
+  libraryOff?: boolean;
   files?: DriveFile[];
   filesError?: string | null;
 }
@@ -321,7 +322,9 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
           <p className="text-xs leading-6 text-muted">{t("google.envHelp")}</p>
         ) : google.data.connected ? (
           <div className="space-y-3">
-            {google.data.library ? (
+            {google.data.libraryOff ? (
+              <p className="text-xs leading-6 text-muted">{t("google.libraryFeatureOff")}</p>
+            ) : google.data.library ? (
               <p className="text-xs leading-6 text-ok">{t("google.libraryOn")}</p>
             ) : (
               <div className="space-y-1 rounded-lg border border-warn/40 bg-warn/10 p-3 text-xs leading-6">

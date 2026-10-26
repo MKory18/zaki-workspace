@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Globe, KeyRound, Lock, Users } from "lucide-react";
+import { Globe, KeyRound, Lock, ToggleRight, Users } from "lucide-react";
 import { pageActor } from "@/app/(app)/_access";
 import { GuestNotice, refusedToGuest } from "@/app/(app)/_guest";
 import { fmtDMY } from "@/lib/format";
@@ -12,6 +12,8 @@ import { getGoogleStatus } from "@/server/services/google";
 import { getIntegration } from "@/server/services/integrations";
 import { OrgNameForm } from "@/components/org-name-form";
 import { IntegrationBadge } from "@/components/integration-badge";
+import { FeatureSwitches } from "@/components/feature-switches";
+import { listFeatures } from "@/server/services/features";
 
 export default async function SettingsPage() {
   const { t } = getServerT();
@@ -25,12 +27,13 @@ export default async function SettingsPage() {
   });
   if (!org) redirect("/login");
 
-  const [telegram, n8n, google, membersCount] = await Promise.all([
+  const [telegram, n8n, google, membersCount, features] = await Promise.all([
     getIntegration(org.id, "TELEGRAM"),
     getIntegration(org.id, "N8N"),
     getGoogleStatus(org.id),
     // only people who can still use the app: a suspended or offboarded person is not "a member" here
     db.organizationMember.count({ where: { organizationId: org.id, status: "ACTIVE" } }),
+    listFeatures(org.id),
   ]);
 
   // Renaming the organization is the OWNER's alone (the API refuses everybody else, so it is not offered).
@@ -70,6 +73,24 @@ export default async function SettingsPage() {
           </Link>
         </div>
       </section>
+
+      {/* «الميزات»: the owner's on/off switch for each feature (src/lib/features.ts) */}
+      {actor.isOwner ? (
+        <section className="space-y-2 rounded-xl border border-border bg-surface-1 p-5" aria-labelledby="features-title">
+          <div className="flex items-center gap-2">
+            <span className="grid size-9 place-items-center rounded-lg bg-accent/10 text-accent">
+              <ToggleRight className="size-5" />
+            </span>
+            <div>
+              <h2 id="features-title" className="text-sm font-semibold">
+                {t("features.title")}
+              </h2>
+              <p className="text-xs text-muted">{t("features.subtitle")}</p>
+            </div>
+          </div>
+          <FeatureSwitches initial={features} />
+        </section>
+      ) : null}
 
       {/* integrations */}
       <section className="space-y-3 rounded-xl border border-border bg-surface-1 p-5">

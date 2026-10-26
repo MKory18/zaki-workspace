@@ -1,7 +1,8 @@
 /**
  * THE FIVE PLACES — the one map of the navigation.
  *
- * The owner's plan for Phase 2: five places and no more — اليوم · الدردشة · الشغل · المكتبة · الإدارة.
+ * The owner's plan for Phase 2: five places and no more — اليوم · الدردشة · الشغل · المكتبة · الإدارة; and a sixth
+ * by his own ask (2026-10-26), after them: نتفرّج سوا.
  * A place has tabs, and every tab is a page that already existed: nothing was removed and no old
  * address broke, the pages were only grouped (LEGACY_ROUTES lists them, and a test proves each one
  * is still a page and still has a home here).
@@ -27,6 +28,8 @@
  *    tests/db/guest-internal-pages.test.ts renders every tab's page as every rank to prove it.
  */
 
+import type { FeatureKey } from "../features";
+
 /** The ranks, as the policy names them (src/server/policy/rank.ts keeps the order; a test compares). */
 export const NAV_ROLES = ["OWNER", "ADMIN", "LEAD", "MEMBER", "GUEST"] as const;
 export type NavRole = (typeof NAV_ROLES)[number];
@@ -39,9 +42,11 @@ export type NavRole = (typeof NAV_ROLES)[number];
 export interface NavSubject {
   role: NavRole;
   caps: readonly string[];
+  /** The company's switched-off features (src/lib/features.ts): their places are not drawn. */
+  off?: readonly FeatureKey[];
 }
 
-export type PlaceKey = "today" | "chat" | "work" | "library" | "admin";
+export type PlaceKey = "today" | "chat" | "work" | "library" | "admin" | "watch";
 
 export type TabKey =
   | "my-work"
@@ -64,7 +69,7 @@ export type TabKey =
   | "archive";
 
 /** An icon by NAME: the shell maps it to a drawing (src/components/shell/nav-icons.tsx). Data only, so it crosses from server to browser. */
-export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings";
+export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings" | "watch";
 
 /**
  * Who may see a place or a tab:
@@ -73,13 +78,15 @@ export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team
  *   { capability }        holds that switch (a guest never does, whatever was stored)
  *   { rankAtLeast }       that rank or above
  *   { anyOf }             one of these
+ *   { workCapability }    an external partner (the space's own rules decide for them), or staff holding that box
  */
 export type Requirement =
   | "everyone"
   | "staff"
   | { readonly capability: string }
   | { readonly rankAtLeast: NavRole }
-  | { readonly anyOf: readonly Requirement[] };
+  | { readonly anyOf: readonly Requirement[] }
+  | { readonly workCapability: string };
 
 export interface TabDef {
   readonly key: TabKey;
@@ -105,6 +112,8 @@ export interface PlaceDef {
   readonly owns?: readonly string[];
   /** With exactly one tab left, the place is called by that tab (a plain member sees «الفريق», not «الإدارة»). */
   readonly singleTabTakesLabel?: boolean;
+  /** The owner's switch this place is behind («الميزات»): off, the place is gone for everybody. */
+  readonly feature?: FeatureKey;
 }
 
 export const PLACES: readonly PlaceDef[] = [
@@ -119,20 +128,20 @@ export const PLACES: readonly PlaceDef[] = [
     requires: "everyone",
     owns: ["/tasks"],
     tabs: [
-      { key: "my-work", href: "/my-work", labelKey: "nav.tab.myWork", requires: "everyone" },
-      { key: "projects", href: "/projects", labelKey: "nav.projects", requires: "everyone", also: ["/boards"] },
-      { key: "list", href: "/list", labelKey: "nav.listView", requires: "everyone" },
-      { key: "calendar", href: "/calendar", labelKey: "nav.calendar", requires: "everyone" },
+      { key: "my-work", href: "/my-work", labelKey: "nav.tab.myWork", requires: { workCapability: "tasks.view" } },
+      { key: "projects", href: "/projects", labelKey: "nav.projects", requires: { workCapability: "projects.view" }, also: ["/boards"] },
+      { key: "list", href: "/list", labelKey: "nav.listView", requires: { workCapability: "tasks.view" } },
+      { key: "calendar", href: "/calendar", labelKey: "nav.calendar", requires: { workCapability: "tasks.view" } },
       // The company's own goals and ideas (titles, descriptions, who wrote them): not shared with an external
       // partner. The pages and /api/goals, /api/ideas refuse a guest too (docs/PHASE0-AUDIT.md R10).
-      { key: "goals", href: "/goals", labelKey: "nav.goals", requires: "staff" },
+      { key: "goals", href: "/goals", labelKey: "nav.goals", requires: { capability: "goals.view" } },
       // temporary: becomes a chat topic in Phase 3
-      { key: "ideas", href: "/ideas", labelKey: "nav.ideas", requires: "staff" },
-      { key: "production", href: "/production", labelKey: "nav.production", requires: "staff" },
+      { key: "ideas", href: "/ideas", labelKey: "nav.ideas", requires: { capability: "ideas.view" } },
+      { key: "production", href: "/production", labelKey: "nav.production", requires: { capability: "production.view" } },
       { key: "departments", href: "/departments", labelKey: "nav.departments", requires: "staff" },
       // a department's tickets and campaigns, each a page of its own (the owner's ask, 2026-10-25)
-      { key: "tickets", href: "/tickets", labelKey: "nav.tickets", requires: "staff" },
-      { key: "campaigns", href: "/campaigns", labelKey: "nav.campaigns", requires: "staff" },
+      { key: "tickets", href: "/tickets", labelKey: "nav.tickets", requires: { capability: "tickets.view" } },
+      { key: "campaigns", href: "/campaigns", labelKey: "nav.campaigns", requires: { capability: "campaigns.view" } },
       { key: "crm", href: "/crm", labelKey: "nav.crm", requires: { capability: "crm.view" } },
     ],
   },
@@ -141,9 +150,9 @@ export const PLACES: readonly PlaceDef[] = [
     href: "/files",
     labelKey: "nav.place.library",
     icon: "library",
-    requires: "staff",
+    requires: { capability: "files.view" },
     // /documents was an empty "coming soon" page: it is a redirect to /files now
-    tabs: [{ key: "files", href: "/files", labelKey: "nav.files", requires: "staff", also: ["/documents"] }],
+    tabs: [{ key: "files", href: "/files", labelKey: "nav.files", requires: { capability: "files.view" }, also: ["/documents"] }],
   },
   {
     key: "admin",
@@ -163,7 +172,7 @@ export const PLACES: readonly PlaceDef[] = [
         requires: { anyOf: [{ capability: "directory.view" }, { capability: "users.manage" }] },
         also: ["/teams", "/u"],
       },
-      { key: "reports", href: "/analytics", labelKey: "nav.analytics", icon: "reports", requires: { rankAtLeast: "LEAD" } },
+      { key: "reports", href: "/analytics", labelKey: "nav.analytics", icon: "reports", requires: { capability: "reports.view" } },
       { key: "automation", href: "/automation", labelKey: "nav.tab.automation", icon: "automation", requires: { capability: "integrations.manage" } },
       { key: "telegram", href: "/telegram", labelKey: "nav.telegram", icon: "telegram", requires: { capability: "integrations.manage" } },
       {
@@ -176,6 +185,10 @@ export const PLACES: readonly PlaceDef[] = [
       { key: "archive", href: "/archive", labelKey: "nav.archive", requires: { capability: "archive.view" } },
     ],
   },
+  // «نتفرّج سوا» (the owner's ask, 2026-10-26: «الشغل، تحتها المكتبة، الإدارة، ثم نتفرّج سوا»): a place of its own,
+  // one page, after «الإدارة». People of a space watch one link together; the sessions are the team's own talk,
+  // so not an external partner's (the page and /api/watch refuse a guest too: `placeOfferedToGuests`).
+  { key: "watch", href: "/watch", labelKey: "nav.place.watch", icon: "watch", requires: { capability: "watch.view" }, tabs: [], feature: "watch" },
 ];
 
 /**
@@ -227,6 +240,8 @@ function meets(req: Requirement, subject: NavSubject): boolean {
   if (req === "everyone") return true;
   if (req === "staff") return !outsider;
   if ("anyOf" in req) return req.anyOf.some((r) => meets(r, subject));
+  // an outsider works in what is shared with them by the space's rules; staff need the box
+  if ("workCapability" in req) return outsider || subject.caps.includes(req.workCapability);
   if ("capability" in req) return !outsider && subject.caps.includes(req.capability);
   return rankAtLeast(subject.role, req.rankAtLeast);
 }
@@ -260,6 +275,16 @@ export function offeredToGuests(tabKey: TabKey): boolean {
   return canOpenTab({ role: "GUEST", caps: [] }, tabKey);
 }
 
+/** Is this place (of any kind: one page, or tabs) on this person's map? Exactly when `buildNav` draws it. */
+export function canOpenPlace(subject: NavSubject, placeKey: PlaceKey): boolean {
+  return buildNav(subject).places.some((drawn) => drawn.key === placeKey);
+}
+
+/** `offeredToGuests` for a place that is one page (Today, the chat, «نتفرّج سوا»). */
+export function placeOfferedToGuests(placeKey: PlaceKey): boolean {
+  return canOpenPlace({ role: "GUEST", caps: [] }, placeKey);
+}
+
 // ───────────────────────────────────────── the person's map ─────────────────────────────────────────
 
 export interface NavTab {
@@ -289,6 +314,7 @@ export function buildNav(subject: NavSubject): NavModel {
   const places: NavPlace[] = [];
   for (const def of PLACES) {
     if (!meets(def.requires, subject)) continue;
+    if (def.feature && subject.off?.includes(def.feature)) continue;
     const allowed = def.tabs.filter((tab) => meets(tab.requires, subject));
     if (def.tabs.length > 0 && allowed.length === 0) continue;
 

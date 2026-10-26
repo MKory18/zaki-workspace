@@ -6,5 +6,6 @@
   "google.libraryReconnectFix": "🔧 أعد الربط مرة واحدة لتُحفظ الملفات الجديدة على Google Drive.",
   "google.reconnect": "إعادة الربط",
   "google.disconnectWarn": "⚠️ إزالة الربط توقف فتح ملفات المكتبة المحفوظة على Google Drive، والملفات الجديدة تعود إلى الخادم.",
-  "google.disconnectFix": "🔧 أعد الربط بنفس حساب Google لتعود الملفات كما كانت."
+  "google.disconnectFix": "🔧 أعد الربط بنفس حساب Google لتعود الملفات كما كانت.",
+  "google.libraryFeatureOff": "ميزة «المكتبة على Google Drive» مطفأة من «الميزات»، فالملفات الجديدة تُحفظ على الخادم. الملفات المحفوظة على Google Drive تبقى تُفتح."
 }

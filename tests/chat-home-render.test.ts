@@ -1,8 +1,11 @@
 import { createElement } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatHome } from "@/components/chat/home/chat-home";
 import { filterTopics } from "@/components/chat/home/space-topics";
+
+// the dialogs open the new chat inside the app (router.push): rendered on its own, the page has no app router
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => undefined, refresh: () => undefined }), usePathname: () => "/chat" }));
 
 describe("chat home audience sections", () => {
   const topic = (id: string, title: string, teamId: string | null = null) => ({ id, title, emoji: "💬", topicType: "DISCUSSION" as const, unread: 0, mentions: 0, closed: false, restricted: false, teamId, pinned: false, archived: false, canPost: true, lastMessage: null });

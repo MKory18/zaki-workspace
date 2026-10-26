@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { actorCanWork } from "@/server/policy/actor";
 import {
   queryTasksForView,
   resolveWorkspaceView,
@@ -8,9 +9,10 @@ import { pageUser } from "@/server/auth";
 import { monthName } from "@/lib/format";
 import { CalendarGrid, type CalTask } from "@/components/calendar-grid";
 import { getServerT } from "@/lib/i18n/server";
-import { pageActor } from "@/app/(app)/_access";
+import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
 import { currentSpace } from "@/server/services/current-space";
 
+import Link from "next/link";
 export default async function CalendarPage({
   searchParams,
 }: {
@@ -19,6 +21,8 @@ export default async function CalendarPage({
   const { t } = getServerT();
   // the space the person is in, never one named in the address (that is entered through the switcher)
   const { actor } = await pageActor();
+  // the tasks row of the person's grid (a guest works in their shared spaces by the space's rules)
+  if (!actorCanWork(actor, "tasks.view")) return <SectionOffNotice />;
   const space = await currentSpace(actor);
   const view = await resolveWorkspaceView(space?.id ?? "");
   if ("pageRedirect" in view) redirect("/login");
@@ -79,21 +83,21 @@ export default async function CalendarPage({
           <h1 className="text-base font-semibold text-fg">{t("cal.title")}</h1>
           <p className="text-xs text-fg-muted">{ctx.denied ? t("forbidden") : ctx.workspaceName}</p>
         </div>
-        <a
+        <Link
           href={mineUrl}
           aria-current={mine ? "true" : undefined}
           className="rounded-lg border border-border px-2.5 py-1 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg"
         >
           {t("cal.mineOnly")}
-        </a>
+        </Link>
         <nav className="flex items-center gap-1" aria-label={t("cal.title")}>
-          <a href={`/calendar?workspace=${ctx.workspaceId}&month=${shift(-1)}${mine ? "&mine=1" : ""}`} className="rounded-lg border border-border px-2 py-1 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg" aria-label={t("cal.prev")}>
+          <Link href={`/calendar?workspace=${ctx.workspaceId}&month=${shift(-1)}${mine ? "&mine=1" : ""}`} className="rounded-lg border border-border px-2 py-1 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg" aria-label={t("cal.prev")}>
             ›
-          </a>
+          </Link>
           <span className="min-w-32 px-2 text-center text-sm text-fg">{monthTitle}</span>
-          <a href={`/calendar?workspace=${ctx.workspaceId}&month=${shift(1)}${mine ? "&mine=1" : ""}`} className="rounded-lg border border-border px-2 py-1 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg" aria-label={t("cal.next")}>
+          <Link href={`/calendar?workspace=${ctx.workspaceId}&month=${shift(1)}${mine ? "&mine=1" : ""}`} className="rounded-lg border border-border px-2 py-1 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg" aria-label={t("cal.next")}>
             ‹
-          </a>
+          </Link>
         </nav>
       </header>
 

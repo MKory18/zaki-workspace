@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertMemberCan } from "@/server/policy/actor";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { NotFoundError, requireTeamWork } from "@/server/auth";
@@ -32,6 +33,7 @@ export async function POST(
     if (!task) throw new NotFoundError("task.not_found");
     // writing needs a member of the space: an external partner (GUEST) only reads
     const ctx = await requireTeamWork(task.workspaceId, task.project.teamId, ["ADMIN", "MEMBER"], "task.not_found");
+    await assertMemberCan(ctx, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
     const comment = await db.taskComment.create({
       data: { taskId: task.id, authorId: ctx.userId, body: input.body },
       include: { author: { select: { id: true, name: true } } },
@@ -61,7 +63,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       select: { workspaceId: true, project: { select: { teamId: true } } },
     });
     if (!task) throw new NotFoundError("task.not_found");
-    await requireTeamWork(task.workspaceId, task.project.teamId, undefined, "task.not_found");
+    const access = await requireTeamWork(task.workspaceId, task.project.teamId, undefined, "task.not_found");
+    await assertMemberCan(access, "tasks.view", "section.view_denied", { spaceGuestsPass: true });
     const comments = await db.taskComment.findMany({
       where: { taskId: params.id },
       orderBy: { createdAt: "desc" },

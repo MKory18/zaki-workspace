@@ -59,11 +59,11 @@ const STAGE_STYLES: Record<string, string> = {
 };
 
 /**
- * `canEdit` is the `crm.edit` switch (the page reads it from the person's capabilities): without it
- * the screen only reads - no create, edit, delete or stage change is offered. The server refuses
- * those requests too; this keeps the screen honest.
+ * `canEdit` is the customers box «يضيف ويعدّل» (`crm.edit`, the page reads it from the person's capabilities):
+ * without it the screen only reads - no create, edit or stage change is offered. `canDelete` is «يحذف» (`crm.delete`;
+ * absent: as `canEdit`). The server refuses those requests too; this keeps the screen honest.
  */
-export function CrmView({ canEdit }: { canEdit: boolean }) {
+export function CrmView({ canEdit, canDelete = canEdit }: { canEdit: boolean; canDelete?: boolean }) {
 	const { t } = useI18n();
 	const qc = useQueryClient();
 	const { toast } = useToast();
@@ -183,7 +183,7 @@ export function CrmView({ canEdit }: { canEdit: boolean }) {
 					loading={customersQuery.isLoading}
 					canEdit={canEdit}
 					onEdit={setCustomerModal}
-					onDelete={(id) => delCustomer.mutate(id)}
+					onDelete={canDelete ? (id) => delCustomer.mutate(id) : undefined}
 				/>
 			) : (
 				<OpportunitiesTab
@@ -191,7 +191,7 @@ export function CrmView({ canEdit }: { canEdit: boolean }) {
 					loading={oppsQuery.isLoading}
 					canEdit={canEdit}
 					onEdit={setOppModal}
-					onDelete={(id) => delOpp.mutate(id)}
+					onDelete={canDelete ? (id) => delOpp.mutate(id) : undefined}
 					onStageChange={(id, stage) =>
 						saveOpp.mutate({ id, body: { stage } })
 					}
@@ -237,7 +237,8 @@ export function CustomersTab({
 	loading: boolean;
 	canEdit: boolean;
 	onEdit: (row: CustomerRow) => void;
-	onDelete: (id: string) => void;
+	/** Absent: the person may not delete (the customers box «يحذف»). */
+	onDelete?: (id: string) => void;
 }) {
 	const { t } = useI18n();
 	if (loading) return <div className="py-10 text-center text-sm text-muted">{t("common.loading")}</div>;
@@ -275,13 +276,15 @@ export function CustomersTab({
 								>
 									<Pencil className="size-3.5" />
 								</button>
-								<button
-									aria-label={t("common.delete")}
-									onClick={() => onDelete(c.id)}
-									className="rounded-md p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
-								>
-									<Trash2 className="size-3.5" />
-								</button>
+								{onDelete ? (
+									<button
+										aria-label={t("common.delete")}
+										onClick={() => onDelete(c.id)}
+										className="rounded-md p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
+									>
+										<Trash2 className="size-3.5" />
+									</button>
+								) : null}
 							</div>
 						) : null}
 					</div>
@@ -317,7 +320,8 @@ export function OpportunitiesTab({
 	loading: boolean;
 	canEdit: boolean;
 	onEdit: (row: OpportunityRow) => void;
-	onDelete: (id: string) => void;
+	/** Absent: the person may not delete (the customers box «يحذف»). */
+	onDelete?: (id: string) => void;
 	onStageChange: (id: string, stage: string) => void;
 }) {
 	const { t } = useI18n();
@@ -368,13 +372,15 @@ export function OpportunitiesTab({
 									>
 										<Pencil className="size-3.5" />
 									</button>
-									<button
-										aria-label={t("common.delete")}
-										onClick={() => onDelete(o.id)}
-										className="rounded-md p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
-									>
-										<Trash2 className="size-3.5" />
-									</button>
+									{onDelete ? (
+										<button
+											aria-label={t("common.delete")}
+											onClick={() => onDelete(o.id)}
+											className="rounded-md p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
+										>
+											<Trash2 className="size-3.5" />
+										</button>
+									) : null}
 								</>
 							) : null}
 						</div>

@@ -1,4 +1,5 @@
 import { createReadStream, promises as fs } from "node:fs";
+import { assertMemberCan } from "@/server/policy/actor";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { z } from "zod";
@@ -143,8 +144,12 @@ export async function assertMayReadFile(ctx: OrgAccessContext, id: string): Prom
     },
   });
   if (!f) throw new NotFoundError("files.not_found");
-  // a library file: of one of the person's spaces (or from before spaces had libraries)
-  if (f.purpose === "LIBRARY") return assertOfMySpaces(ctx.userId, f.workspaceId);
+  // a library file: the library row of the person's grid, and of one of their spaces (or from before spaces had
+  // libraries). A chat attachment is its conversation's, whatever the library box says.
+  if (f.purpose === "LIBRARY") {
+    await assertMemberCan(ctx, "files.view", "section.view_denied");
+    return assertOfMySpaces(ctx.userId, f.workspaceId);
+  }
   const messages = f.chatLinks.flatMap((l) => (l.message ? [l.message] : []));
   if (messages.length === 0 && f.uploaderId === ctx.userId) return;
   for (const m of messages) {
@@ -270,6 +275,8 @@ export async function ingest(
 ): Promise<{ id: string; version: number; mimeType: string }> {
   // a guest posts in the topics of their spaces (files and voice notes included), never in the library
   if (ctx.orgRole === "GUEST" && purpose === "LIBRARY") throw new ForbiddenError("chat.guest_forbidden");
+  // adding to the library (a file or a new version) is its «يضيف ويعدّل» box; chat files are the topic's
+  if (purpose === "LIBRARY") await assertMemberCan(ctx, "files.edit", "section.edit_denied");
   if (input.bytes.length === 0) throw new ForbiddenError("files.empty");
   if (input.bytes.length > MAX_FILE_BYTES) throw new ForbiddenError("files.too_large");
 
@@ -389,6 +396,7 @@ export async function softDelete(ctx: OrgAccessContext, id: string): Promise<voi
     select: { id: true, uploaderId: true, isLatest: true, familyId: true, workspaceId: true },
   });
   if (!f) throw new NotFoundError("files.not_found");
+  await assertMemberCan(ctx, "files.delete", "section.delete_denied");
   await assertOfMySpaces(ctx.userId, f.workspaceId);
   if (!canManageFile({ uploaderId: f.uploaderId, viewerId: ctx.userId, orgRole: ctx.orgRole })) {
     throw new ForbiddenError("files.no_perm");

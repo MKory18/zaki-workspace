@@ -21,6 +21,8 @@ import ChatPage from "@/app/(app)/chat/page";
 import ChatConversationPage from "@/app/(app)/chat/[id]/page";
 import WhiteboardPage from "@/app/(app)/chat/[id]/whiteboard/page";
 import CallPage from "@/app/(app)/calls/[id]/page";
+import WatchPage from "@/app/(app)/watch/page";
+import WatchSessionPage from "@/app/(app)/watch/[id]/page";
 import ArchivePage from "@/app/(app)/archive/page";
 import MyWorkPage from "@/app/(app)/my-work/page";
 import ProjectsPage from "@/app/(app)/projects/page";
@@ -91,9 +93,10 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * button, from Phase 3 one conversation (`/chat/[id]`) and the owner's archive (`/archive`), and the owner's
  * and admins' look over every space (`/spaces`, «كل المساحات»), «التذاكر» and «الحملات» as pages of their own
  * under «الشغل» (`/tickets`, `/campaigns`), one call (`/calls/[id]`: a conversation's call or a meeting's link) and a
- * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25.
+ * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25, and «نتفرّج سوا» (`/watch`, `/watch/[id]`, the owner's
+ * sixth place, 2026-10-26).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -143,6 +146,8 @@ const PAGES: Record<string, PageCall> = {
   "/chat/[id]": (args) => ChatConversationPage({ params: idOf(args) }),
   "/chat/[id]/whiteboard": (args) => WhiteboardPage({ params: idOf(args) }),
   "/calls/[id]": (args) => CallPage({ params: idOf(args) }),
+  "/watch": () => WatchPage(),
+  "/watch/[id]": (args) => WatchSessionPage({ params: idOf(args) }),
   "/archive": () => ArchivePage(),
   "/my-work": ({ searchParams }) => MyWorkPage({ searchParams }),
   "/projects": ({ searchParams }) => ProjectsPage({ searchParams }),
@@ -312,7 +317,14 @@ async function linkWorld() {
   // a call of a topic, and a meeting of the space nobody is in
   const topicCall = await db.call.create({ data: { orgId, spaceId: teamSpace.space.id, conversationId: teamTopic.id, startedById: team.member.id } });
   const closedMeeting = await db.call.create({ data: { orgId, spaceId: closed.space.id, startedById: team.owner.id } });
-  return { ...team, lead, teamSpace, shared, closed, teamTopic, closedTopic, topicCall, closedMeeting };
+  // a «نتفرّج سوا» session of the team's space (its private topic: the member and the lead)
+  const watchTopic = await db.conversation.create({
+    data: { orgId, kind: "TOPIC", spaceId: teamSpace.space.id, title: "Watch", restricted: true, members: { create: [{ userId: team.member.id }, { userId: lead.id }] } },
+  });
+  const watch = await db.watchSession.create({
+    data: { orgId, spaceId: teamSpace.space.id, conversationId: watchTopic.id, hostId: team.member.id, title: "Watch", sourceKind: "YOUTUBE", sourceRef: "dQw4w9WgXcQ", sourceUrl: "https://youtu.be/dQw4w9WgXcQ" },
+  });
+  return { ...team, lead, teamSpace, shared, closed, teamTopic, closedTopic, topicCall, closedMeeting, watch };
 }
 
 type World = Awaited<ReturnType<typeof linkWorld>>;
@@ -336,6 +348,8 @@ function addressesOf(route: string, w: World): string[] {
       return [w.teamTopic.id, w.closedTopic.id, GONE].map((id) => `/chat/${id}/whiteboard`);
     case "/calls/[id]":
       return [w.topicCall.id, w.closedMeeting.id, GONE].map((id) => `/calls/${id}`);
+    case "/watch/[id]":
+      return [w.watch.id, GONE].map((id) => `/watch/${id}`);
     case "/u/[id]":
       return [w.owner.id, w.admin.id, w.lead.id, w.member.id, w.guest.id, GONE].map((id) => `/u/${id}`);
     case "/guide/[slug]":

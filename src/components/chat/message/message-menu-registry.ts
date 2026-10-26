@@ -30,6 +30,9 @@ export interface MessageMenuContext {
   oversight: boolean;
   /** may turn a message into a task or a ticket (`me.canMakeWork`) */
   canMakeWork?: boolean;
+  /** …and holds the tasks / tickets «يضيف ويعدّل» box of the section grid (absent: yes) */
+  canMakeTask?: boolean;
+  canMakeTicket?: boolean;
 }
 
 /** `labelKey`: a key of ar.chat-conversation.json (the strings live there, not here). */
@@ -42,8 +45,8 @@ export const messageMenuItems: MessageMenuAction[] = [
   { id: "edit", labelKey: () => "chatc.menu.edit", available: (c) => c.mine && c.kind === "TEXT" && c.hasText },
   { id: "note", labelKey: () => "chatc.menu.note", available: (c) => c.canModerate },
   { id: "copy", labelKey: () => "chatc.menu.copy", available: (c) => c.hasText },
-  { id: "task", labelKey: () => "chatc.menu.task", available: (c) => c.hasText && !!c.canMakeWork },
-  { id: "ticket", labelKey: () => "chatc.menu.ticket", available: (c) => c.hasText && !!c.canMakeWork },
+  { id: "task", labelKey: () => "chatc.menu.task", available: (c) => c.hasText && !!c.canMakeWork && c.canMakeTask !== false },
+  { id: "ticket", labelKey: () => "chatc.menu.ticket", available: (c) => c.hasText && !!c.canMakeWork && c.canMakeTicket !== false },
   { id: "delete", labelKey: () => "chatc.menu.delete", danger: true, available: (c) => c.mine || c.canModerate },
 ];
 

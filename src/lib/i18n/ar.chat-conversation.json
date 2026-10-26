@@ -26,6 +26,7 @@
   "chatc.sys.forwarded": "تحويل رسالة بواسطة {name}",
   "chatc.sys.call_started": "بلّش {name} مكالمة",
   "chatc.sys.call_ended": "خلصت المكالمة",
+  "chatc.sys.call_missed": "مكالمة فايتة من {name}",
   "chatc.sys.other": "تحديث في المحادثة",
   "chatc.tick.sent": "أُرسلت",
   "chatc.tick.delivered": "وصلت",
@@ -146,5 +147,6 @@
   "chatc.pinbar.label": "الرسائل المثبّتة",
   "chatc.pinbar.count": "{i} من {n}",
   "chatc.pinbar.empty_preview": "رسالة",
-  "chat.work.from": "من رسالة {name} بالدردشة"
+  "chat.work.from": "من رسالة {name} بالدردشة",
+  "chatc.more": "المزيد"
 }

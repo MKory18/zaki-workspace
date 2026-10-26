@@ -156,6 +156,11 @@ export interface ConversationDto {
     canJoin: boolean;
     /** may turn a message into a task or a ticket (not a guest, not in silent oversight) */
     canMakeWork?: boolean;
+    /** may start a call here: the calls row's «يضيف ويعدّل» box of the section grid (absent: yes; the server decides again) */
+    canCall?: boolean;
+    /** with `canMakeWork`: the tasks / tickets row's «يضيف ويعدّل» box (absent: yes) */
+    canMakeTask?: boolean;
+    canMakeTicket?: boolean;
     id?: string;
   };
   /** the pinned messages, newest first (the bar on top of the conversation) */

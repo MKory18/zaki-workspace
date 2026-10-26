@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertMemberCan } from "@/server/policy/actor";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { requireTeamWork, audit, ForbiddenError, NotFoundError } from "@/server/auth";
@@ -21,7 +22,8 @@ export async function POST(req: Request) {
       select: { id: true, workspaceId: true, teamId: true, workspace: { select: { organizationId: true } } },
     });
     if (!project) throw new NotFoundError("project.not_found");
-    await requireTeamWork(project.workspaceId, project.teamId, ["ADMIN", "MEMBER"], "project.not_found");
+    const access = await requireTeamWork(project.workspaceId, project.teamId, ["ADMIN", "MEMBER"], "project.not_found");
+    await assertMemberCan(access, "projects.edit", "section.edit_denied", { spaceGuestsPass: true });
 
     const board = await db.board.create({
       data: {

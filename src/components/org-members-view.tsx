@@ -61,7 +61,13 @@ export function OrgMembersView({
 
   const members = query.data?.members ?? [];
   const spaces = query.data?.spaces ?? [];
-  const actor: ActorInfo = { id: actorId, role: actorRole, caps: actorCaps };
+  const actor: ActorInfo = {
+    id: actorId,
+    role: actorRole,
+    caps: actorCaps,
+    primaryOwner: query.data?.actorPrimaryOwner === true,
+    sectionGrid: query.data?.sectionGrid !== false,
+  };
   const opened = openId ? (members.find((m) => m.id === openId) ?? null) : null;
   // «جديد» → «عضو» lands here with ?new=person; like the button, the form waits for the list
   useNewIntent("person", () => setAdding(true), query.isSuccess && creatableRoles(actorRole).length > 0);

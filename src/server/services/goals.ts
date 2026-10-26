@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { db } from "@/server/db";
-import { ForbiddenError, NotFoundError, audit } from "@/server/auth";
+import { NotFoundError, audit } from "@/server/auth";
+import { assertMemberCan } from "@/server/policy/actor";
 import { assertNotGuest } from "@/server/services/guest-guard";
-import { canManageOrg } from "@/server/services/orgs";
-import { assertDepartmentInOrg, orgRoleOf } from "@/server/services/production";
+import { assertDepartmentInOrg } from "@/server/services/production";
 import { resolveTimeZone, zonedParts, zonedWallTime } from "@/lib/zoned-time";
 import { mySpacesWhere, placeWhere, type SpacePlace } from "@/server/services/space-place";
 
@@ -100,7 +100,7 @@ async function orgZone(orgId: string): Promise<string> {
 }
 
 export async function createGoal(ctx: { orgId: string; userId: string }, input: z.infer<typeof goalSchema>, spaceId: string | null = null) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
+	await assertMemberCan(ctx, "goals.edit", "goals.role_denied");
 	await assertDepartmentInOrg(ctx.orgId, input.departmentId);
 	const anchor = parseAnchor(input.anchorDate);
 	// the period is the company's week / month, cut in its zone
@@ -129,7 +129,7 @@ export const goalPatchSchema = goalSchema.partial().refine((v) => Object.keys(v)
 export type GoalPatch = z.infer<typeof goalPatchSchema>;
 
 export async function updateGoal(ctx: { orgId: string; userId: string }, id: string, input: GoalPatch) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
+	await assertMemberCan(ctx, "goals.edit", "goals.role_denied");
 	const existing = await db.goal.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] }, select: { id: true, periodStart: true, periodEnd: true, period: true } });
 	if (!existing) throw new NotFoundError("goal.not_found");
 	await assertDepartmentInOrg(ctx.orgId, input.departmentId);
@@ -154,7 +154,7 @@ export async function updateGoal(ctx: { orgId: string; userId: string }, id: str
 }
 
 export async function deleteGoal(ctx: { orgId: string; userId: string }, id: string) {
-	if (!canManageOrg(await orgRoleOf(ctx.orgId, ctx.userId))) throw new ForbiddenError("goals.role_denied");
+	await assertMemberCan(ctx, "goals.delete", "goals.role_denied");
 	const existing = await db.goal.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] }, select: { id: true } });
 	if (!existing) throw new NotFoundError("goal.not_found");
 	await db.goal.delete({ where: { id } });

@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { actorCanWork } from "@/server/policy/actor";
 import { redirect } from "next/navigation";
 import { db } from "@/server/db";
-import { pageActor } from "@/app/(app)/_access";
+import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
 import { loadWorkScope, narrowScope, projectVisibleWhere, scopeSpaceIds } from "@/server/services/team-scope";
 import { currentSpace } from "@/server/services/current-space";
 import { goHref } from "@/lib/space-link";
@@ -21,6 +22,8 @@ export default async function ProjectsPage({
 }) {
   const { t } = getServerT();
   const { user, actor } = await pageActor();
+  // the projects row of the person's grid (a guest works in their shared spaces by the space's rules)
+  if (!actorCanWork(actor, "projects.view")) return <SectionOffNotice />;
   const space = await currentSpace(actor);
   const everything = await loadWorkScope(user.id);
   // an old link naming another space of theirs (`?workspace=`) enters that space first, then comes back here;

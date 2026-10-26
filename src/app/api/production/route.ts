@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireActor } from "@/server/policy/actor";
+import { assertCan, requireActor } from "@/server/policy/actor";
 import { withApi } from "@/server/api";
 import { dayChecklist, dayIso } from "@/server/services/production";
 import { db } from "@/server/db";
@@ -17,6 +17,7 @@ export async function GET(req: Request) {
 		const actor = await requireActor();
 		// the checklist names who did what: staff only, never an external partner (review C6)
 		assertNotGuest({ orgRole: actor.role });
+		assertCan(actor, "production.view", "section.view_denied");
 		const url = new URL(req.url);
 		const raw = url.searchParams.get("day");
 		if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {

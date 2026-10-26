@@ -1,0 +1,154 @@
+import { describe, expect, it } from "vitest";
+import { RANK_DEFAULTS, SECTIONS, SECTION_CAPABILITIES, WIRED_CAPABILITIES, can, effectiveCapabilities } from "@/server/policy/capabilities";
+import { sectionGrid, type ActorInfo } from "@/lib/members-ui";
+import { ADMIN_ACTOR, MEMBER, OWNER_ACTOR, contractMember } from "./members-ui-fixtures";
+import { buildNav } from "@/lib/nav/places";
+import { newActionsFor } from "@/lib/nav/new-actions";
+import { menuFor } from "@/components/chat/message/message-menu-registry";
+
+/**
+ * The per-person section grid (the owner's decision, 2026-10-26): «يشوف / يضيف ويعدّل / يحذف» for every section. The
+ * rank templates give exactly what each rank could do before the grid, and a section one can not see can not be changed.
+ */
+describe("section grid: the policy", () => {
+  it("every section box is a wired capability, and the grid lists each section's actions", () => {
+    for (const cap of SECTION_CAPABILITIES) expect(WIRED_CAPABILITIES, cap).toContain(cap);
+    expect(SECTIONS.map((s) => s.id)).toEqual(["projects", "tasks", "ideas", "goals", "production", "files", "tickets", "campaigns", "crm", "calls", "watch", "reports"]);
+    expect(SECTION_CAPABILITIES).toContain("reports.view");
+    expect(SECTION_CAPABILITIES).not.toContain("reports.edit" as never);
+  });
+
+  it("the templates are today's rules: ideas for all staff, goals and routines managed by admins, reports from lead up", () => {
+    for (const role of ["ADMIN", "LEAD", "MEMBER"] as const) {
+      for (const cap of ["ideas.view", "ideas.edit", "ideas.delete", "goals.view", "production.view"] as const) {
+        expect(can({ role }, cap), `${role} ${cap}`).toBe(true);
+      }
+    }
+    for (const cap of ["goals.edit", "goals.delete", "production.edit", "production.delete"] as const) {
+      expect(can({ role: "ADMIN" }, cap), cap).toBe(true);
+      expect(can({ role: "LEAD" }, cap), cap).toBe(false);
+      expect(can({ role: "MEMBER" }, cap), cap).toBe(false);
+    }
+    // batches 2 and 3: the library, the tickets, the campaigns, the customers and the tasks are all staff's, delete
+    // included; the projects have «يشوف» and «يضيف ويعدّل» only (a project is archived, not deleted)
+    for (const role of ["ADMIN", "LEAD", "MEMBER"] as const) {
+      for (const section of ["projects", "calls", "watch"]) {
+        expect(can({ role }, `${section}.view` as never), `${role} ${section}`).toBe(true);
+        expect(can({ role }, `${section}.edit` as never), `${role} ${section}`).toBe(true);
+      }
+      for (const section of ["files", "tickets", "campaigns", "crm", "tasks"]) {
+        for (const action of ["view", "edit", "delete"]) expect(can({ role }, `${section}.${action}` as never), `${role} ${section}.${action}`).toBe(true);
+      }
+    }
+    expect(can({ role: "LEAD" }, "reports.view")).toBe(true);
+    expect(can({ role: "MEMBER" }, "reports.view")).toBe(false);
+    expect(RANK_DEFAULTS.GUEST).toEqual([]);
+    for (const cap of SECTION_CAPABILITIES) expect(can({ role: "GUEST", capabilities: [cap] }, cap), cap).toBe(false);
+  });
+
+  it("without «يشوف» a section's add/edit and delete are gone, for anyone below the primary owner", () => {
+    const blind = effectiveCapabilities({ role: "ADMIN", revokedCapabilities: ["goals.view"] });
+    expect(blind.has("goals.edit")).toBe(false);
+    expect(blind.has("goals.delete")).toBe(false);
+    expect(blind.has("ideas.edit")).toBe(true);
+    // an extra «يضيف ويعدّل» given to someone who can not see the section does nothing
+    expect(can({ role: "MEMBER", capabilities: ["production.edit"], revokedCapabilities: ["production.view"] }, "production.edit")).toBe(false);
+    // a partner too
+    const partner = effectiveCapabilities({ role: "OWNER", primaryOwner: false, revokedCapabilities: ["ideas.view"] });
+    expect(partner.has("ideas.delete")).toBe(false);
+    expect(partner.has("goals.delete")).toBe(true);
+    expect(effectiveCapabilities({ role: "OWNER", primaryOwner: true }).has("ideas.delete")).toBe(true);
+    // the customers joined the grid: without «يشوف» their add/edit and delete fall too
+    const noCrm = effectiveCapabilities({ role: "MEMBER", revokedCapabilities: ["crm.view"] });
+    expect(noCrm.has("crm.edit")).toBe(false);
+    expect(noCrm.has("crm.delete")).toBe(false);
+  });
+});
+
+describe("section grid: the screen's model", () => {
+  const cellsOf = (member = MEMBER, actor: ActorInfo = OWNER_ACTOR, editable = true) =>
+    new Map(sectionGrid(member, actor, editable).map((row) => [row.section, row.cells]));
+
+  it("a row per section with «يشوف / يضيف ويعدّل / يحذف», the reports only «يشوف»", () => {
+    const grid = cellsOf();
+    expect([...grid.keys()]).toEqual(["projects", "tasks", "ideas", "goals", "production", "files", "tickets", "campaigns", "crm", "calls", "watch", "reports"]);
+    expect(grid.get("reports")?.edit).toBeNull();
+    expect(grid.get("projects")?.delete).toBeNull();
+    expect(grid.get("tasks")?.delete?.on).toBe(true);
+    expect(grid.get("reports")?.delete).toBeNull();
+    const goals = grid.get("goals")!;
+    expect(goals.view?.on).toBe(true);
+    expect(goals.edit?.on).toBe(false);
+    expect(goals.edit?.customized).toBe(false);
+    expect(goals.edit?.locked).toBeNull();
+  });
+
+  it("a box changed from the template is marked; a section switched off locks its other boxes", () => {
+    const changed = contractMember({ ...MEMBER, capabilities: ["goals.edit"], revokedCapabilities: ["ideas.view"] });
+    const grid = cellsOf(changed);
+    expect(grid.get("goals")?.edit?.on).toBe(true);
+    expect(grid.get("goals")?.edit?.customized).toBe(true);
+    const ideas = grid.get("ideas")!;
+    expect(ideas.view?.on).toBe(false);
+    expect(ideas.view?.customized).toBe(true);
+    expect(ideas.edit?.on).toBe(false);
+    expect(ideas.edit?.needsView).toBe(true);
+    expect(ideas.edit?.locked).not.toBeNull();
+    expect(ideas.view?.locked).toBeNull();
+  });
+
+  it("read-only for whoever may not edit the person, and nobody hands out a box they lack", () => {
+    for (const row of sectionGrid(MEMBER, OWNER_ACTOR, false)) {
+      for (const cell of Object.values(row.cells)) if (cell) expect(cell.locked).toBe("readonly");
+    }
+    const lead: ActorInfo = { id: "u-lead", role: "LEAD", caps: [...RANK_DEFAULTS.LEAD, "users.manage"] };
+    const grid = cellsOf(MEMBER, lead);
+    expect(grid.get("goals")?.edit?.locked).toBe("actor_lacks");
+    expect(grid.get("ideas")?.delete?.locked).toBeNull();
+    expect(cellsOf(MEMBER, ADMIN_ACTOR).get("goals")?.edit?.locked).toBeNull();
+  });
+});
+
+describe("batch 3: the projects and the tasks on the map and the «جديد» wheel", () => {
+  const tabsOf = (role: "MEMBER" | "GUEST", caps: readonly string[]) =>
+    buildNav({ role, caps }).places.flatMap((p) => p.tabs.map((t) => t.key));
+  const memberCaps = [...RANK_DEFAULTS.MEMBER];
+
+  it("a member without the tasks «يشوف» loses «مهامي», the list and the calendar; without the projects one, the projects", () => {
+    expect(tabsOf("MEMBER", memberCaps)).toEqual(expect.arrayContaining(["my-work", "projects", "list", "calendar"]));
+    const noTasks = tabsOf("MEMBER", memberCaps.filter((c) => c !== "tasks.view"));
+    for (const tab of ["my-work", "list", "calendar"]) expect(noTasks, tab).not.toContain(tab);
+    expect(noTasks).toContain("projects");
+    expect(tabsOf("MEMBER", memberCaps.filter((c) => c !== "projects.view"))).not.toContain("projects");
+  });
+
+  it("an external partner keeps the work of the spaces shared with them: the space's rules decide, not the grid", () => {
+    expect(tabsOf("GUEST", [])).toEqual(expect.arrayContaining(["my-work", "projects", "list", "calendar"]));
+  });
+
+  it("the wheel offers a task, a project or a document only with that row's «يضيف ويعدّل»", () => {
+    expect(newActionsFor({ role: "MEMBER", caps: memberCaps })).toEqual(expect.arrayContaining(["task", "project", "doc"]));
+    const without = newActionsFor({ role: "MEMBER", caps: memberCaps.filter((c) => !["tasks.edit", "projects.edit", "files.edit"].includes(c)) });
+    for (const key of ["task", "project", "doc"]) expect(without, key).not.toContain(key);
+    expect(newActionsFor({ role: "MEMBER", caps: memberCaps })).toContain("watch");
+    expect(newActionsFor({ role: "MEMBER", caps: memberCaps.filter((c) => c !== "watch.edit") })).not.toContain("watch");
+  });
+
+  it("«نتفرّج سوا» is drawn only with its «يشوف» box", () => {
+    const places = (caps: readonly string[]) => buildNav({ role: "MEMBER", caps }).places.map((p) => p.key);
+    expect(places(memberCaps)).toContain("watch");
+    expect(places(memberCaps.filter((c) => c !== "watch.view"))).not.toContain("watch");
+  });
+});
+
+describe("polish: a message's «حوّلها لمهمة / لتذكرة» follow the tasks / tickets boxes", () => {
+  const base = { mine: false, deleted: false, kind: "TEXT", hasText: true, pinned: false, conversationKind: "TOPIC", canPost: true, canModerate: false, oversight: false, canMakeWork: true } as const;
+  const ids = (extra: Record<string, unknown>) => menuFor({ ...base, ...extra } as Parameters<typeof menuFor>[0]).map((a) => a.id);
+
+  it("both by the template; each gone without its box", () => {
+    expect(ids({})).toEqual(expect.arrayContaining(["task", "ticket"]));
+    expect(ids({ canMakeTask: false })).not.toContain("task");
+    expect(ids({ canMakeTask: false })).toContain("ticket");
+    expect(ids({ canMakeTicket: false })).not.toContain("ticket");
+  });
+});

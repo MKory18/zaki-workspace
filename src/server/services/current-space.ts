@@ -53,10 +53,11 @@ export async function spacesOf(who: SpaceSubject): Promise<SpaceEntry[]> {
     db.workspace.findMany({
       where:
         who.role === "OWNER"
-          ? { organizationId: who.orgId }
-          : { organizationId: who.orgId, members: { some: { userId: who.userId } } },
+          ? { organizationId: who.orgId, archivedAt: null }
+          : { organizationId: who.orgId, archivedAt: null, members: { some: { userId: who.userId } } },
       select: { id: true, name: true, emoji: true, kind: true, systemKey: true },
-      orderBy: [{ name: "asc" }, { id: "asc" }],
+      // the order the owner put them in by dragging, then by name
+      orderBy: [{ position: "asc" }, { name: "asc" }, { id: "asc" }],
     }),
     db.workspaceMember.findMany({
       where: { userId: who.userId, workspace: { organizationId: who.orgId } },

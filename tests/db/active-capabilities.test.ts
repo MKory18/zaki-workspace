@@ -62,9 +62,10 @@ async function expectCrmUntouched(w: Awaited<ReturnType<typeof crmWorld>>) {
 }
 
 describe("CRM: crm.edit switches writing, crm.view switches reading", () => {
-  it("a MEMBER whose crm.edit was taken away can still read everything but change nothing (403 insufficient_role)", async () => {
+  // since the section grid (2026-10-26) deleting is its own box, `crm.delete`: changing nothing takes both away
+  it("a MEMBER whose crm.edit and crm.delete were taken away can still read everything but change nothing (403 insufficient_role)", async () => {
     const w = await crmWorld();
-    await setCapabilities(w.org.id, w.member.id, { revokedCapabilities: ["crm.edit"] });
+    await setCapabilities(w.org.id, w.member.id, { revokedCapabilities: ["crm.edit", "crm.delete"] });
     await loginAs(w.member.id);
 
     for (const res of await everyCrmRead(w)) expect(res.status).toBe(200);
@@ -75,9 +76,9 @@ describe("CRM: crm.edit switches writing, crm.view switches reading", () => {
     await expectCrmUntouched(w);
   });
 
-  it("an ADMIN whose crm.edit was taken away is held to the same", async () => {
+  it("an ADMIN whose crm.edit and crm.delete were taken away is held to the same", async () => {
     const w = await crmWorld();
-    await setCapabilities(w.org.id, w.admin.id, { revokedCapabilities: ["crm.edit"] });
+    await setCapabilities(w.org.id, w.admin.id, { revokedCapabilities: ["crm.edit", "crm.delete"] });
     await loginAs(w.admin.id);
     for (const res of await everyCrmWrite(w)) expect(res.status).toBe(403);
     expect((await call(opportunitiesRoute.GET)).status).toBe(200);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
 import { activeOrgCtx } from "@/server/services/integrations";
+import { assertMemberCan } from "@/server/policy/actor";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { ingest, listFiles } from "@/server/services/files";
 import { currentSpace } from "@/server/services/current-space";
@@ -35,6 +36,8 @@ export async function GET() {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
     assertNotGuest(ctx);
+    // the library row of the person's grid («يشوف»); uploading is checked by `ingest` («يضيف ويعدّل»)
+    await assertMemberCan(ctx, "files.view", "section.view_denied");
     const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
     const [files, onDrive] = await Promise.all([listFiles(ctx.orgId, { spaceId: space?.id ?? null, isHq: space?.kind === "HQ" }), libraryOnDrive(ctx.orgId)]);
     return NextResponse.json({ files, onDrive });

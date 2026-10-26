@@ -205,7 +205,8 @@ describe("pages serve the ACTIVE company, with the role held there", () => {
     }
     await loginAs(w.person.id);
     const element = (await ChatPage()) as PageElement;
-    expect(element.props).toEqual({ guest: false });
+    // who is looking, and whether they may start a meeting (the calls row of the section grid, 2026-10-26)
+    expect(element.props).toEqual({ guest: false, canMeet: true });
     const home = await call(chatHomeRoute.GET, { url: "http://localhost/api/chat/home" });
     expect(home.status).toBe(200);
     expect(home.text).toContain("NEW COMPANY TOPIC");
@@ -228,6 +229,11 @@ describe("pages serve the ACTIVE company, with the role held there", () => {
     await withHq(w.newOrg.id, [w.person.id]);
     for (let i = 0; i < 5; i += 1) await makeIdea(w.oldOrg.id, w.oldOwner.id, `old idea ${i}`);
     for (let i = 0; i < 2; i += 1) await makeIdea(w.newOrg.id, w.newOwner.id, `new idea ${i}`);
+    // a member reads the reports once the owner ticks the box (the template gives them to a lead and up)
+    await db.organizationMember.update({
+      where: { organizationId_userId: { organizationId: w.newOrg.id, userId: w.person.id } },
+      data: { capabilities: ["reports.view"] },
+    });
     await loginAs(w.person.id);
     const page = await html(AnalyticsPage());
     expect(page).toContain(t("analytics.ideasTotal", { total: 2 }));

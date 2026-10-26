@@ -3,11 +3,13 @@ import { AppShell } from "@/components/app-shell";
 import { audienceOf } from "@/lib/guide/audience";
 import { buildNav } from "@/lib/nav/places";
 import { newActionsFor } from "@/lib/nav/new-actions";
+import { featuresOff } from "@/lib/features";
 import { db } from "@/server/db";
 import { cookies } from "next/headers";
 import { parseSidebarCookie, SIDEBAR_COOKIE } from "@/components/shell/sidebar-cookie";
 import { currentSpace } from "@/server/services/current-space";
 import { CallRing } from "@/components/calls/call-ring";
+import { CallProvider } from "@/components/calls/call-provider";
 
 /**
  * The frame of every signed-in page, decided on the server from the DATABASE (behind the middleware,
@@ -27,9 +29,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // The side menu's folded state is a cookie (`zk-sidebar`), read on the server: the first frame is
   // already the right width, instead of 256px that shrink after the effect runs.
   const sidebarCollapsed = parseSidebarCookie(cookies().get(SIDEBAR_COOKIE)?.value);
-  const subject = { role: actor.role, caps: [...actor.caps] };
-  // the company's name under the wordmark: the active organization, nothing else about it
-  const org = await db.organization.findUnique({ where: { id: actor.orgId }, select: { name: true } });
+  // the company's name under the wordmark, and its switched-off features («الميزات»: their places are not drawn)
+  const org = await db.organization.findUnique({ where: { id: actor.orgId }, select: { name: true, settings: true } });
+  const subject = { role: actor.role, caps: [...actor.caps], off: featuresOff(org?.settings) };
   // the space the person is in, named at the top of every page (a space is like a separate site)
   const space = await currentSpace(actor);
   return (
@@ -47,9 +49,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       audience={audienceOf(actor)}
       defaultCollapsed={sidebarCollapsed}
     >
-      {children}
-      {/* an incoming call rings on every page */}
-      <CallRing />
+      {/* a call goes on while the person moves between pages; an incoming call rings on every page */}
+      <CallProvider>
+        {children}
+        <CallRing />
+      </CallProvider>
     </AppShell>
   );
 }

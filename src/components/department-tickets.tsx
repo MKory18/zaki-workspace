@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LifeBuoy, Pencil, Plus, Ticket as TicketIcon, Trash2 } from "lucide-react";
+import { MAY_ALL, type SectionMay } from "@/lib/section-may";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,12 +50,15 @@ export function DepartmentTickets({
   emoji,
   currentUserId,
   canAssign,
+  may = MAY_ALL,
 }: {
   deptId: string;
   deptName: string;
   emoji: string | null;
   currentUserId: string;
   canAssign: boolean; // dept member or org admin
+  /** The tickets row of the person's grid: no «يضيف ويعدّل», no new ticket or edit; no «يحذف», no delete. */
+  may?: SectionMay;
 }) {
   const { t } = useI18n();
   const { toast } = useToast();
@@ -133,10 +137,12 @@ export function DepartmentTickets({
 
   return (
     <>
-      <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
-        <LifeBuoy className="size-4 text-cat-3" />
-        {t("ticket.new")}
-      </Button>
+      {may.edit ? (
+        <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
+          <LifeBuoy className="size-4 text-cat-3" />
+          {t("ticket.new")}
+        </Button>
+      ) : null}
 
       {detailId ? <TicketDetailModal ticketId={detailId} currentUserId={currentUserId} onClose={() => setDetailId(null)} /> : null}
 
@@ -258,7 +264,7 @@ export function DepartmentTickets({
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CHIP[r.status]}`}>
                   {enumLabel("TicketStatus", r.status)}
                 </span>
-                {canAssign ? (
+                {canAssign && may.edit ? (
                   <>
                     <Select
                       value={r.status}
@@ -288,7 +294,7 @@ export function DepartmentTickets({
                     </Button>
                   </>
                 ) : null}
-                {canAssign ? (
+                {canAssign && may.delete ? (
                   <Button
                     size="sm"
                     variant="ghost"

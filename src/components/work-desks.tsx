@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { DepartmentTickets } from "@/components/department-tickets";
 import { DepartmentCampaigns } from "@/components/department-campaigns";
 import { TicketDetailModal } from "@/components/ticket-detail-modal";
+import type { SectionMay } from "@/lib/section-may";
 
 /**
  * «التذاكر» and «الحملات», each a page of its own under «الشغل» (the owner's ask, 2026-10-25), not only a tab inside
@@ -21,7 +22,8 @@ import { TicketDetailModal } from "@/components/ticket-detail-modal";
  */
 
 type Department = { id: string; name: string; emoji: string | null; members: { id: string }[] };
-type Me = { id: string; role: string };
+/** `may`: this desk's row of the person's grid (tickets on «التذاكر», campaigns on «الحملات»). */
+type Me = { id: string; role: string; may?: SectionMay };
 
 const STATUS_CHIP: Record<string, string> = {
   OPEN: "bg-info/10 text-info",
@@ -113,6 +115,7 @@ export function TicketsDesk({ me, defaultDepartmentId }: { me: Me; defaultDepart
             emoji={depts.picked.emoji}
             currentUserId={me.id}
             canAssign={manage || depts.picked.members.some((m) => m.id === me.id)}
+            may={me.may}
           />
         </section>
       )}
@@ -166,6 +169,7 @@ export function CampaignsDesk({ me, defaultDepartmentId }: { me: Me; defaultDepa
             emoji={depts.picked.emoji}
             currentUserId={me.id}
             canManage={manage || depts.picked.members.some((m) => m.id === me.id)}
+            may={me.may}
           />
         </section>
       )}

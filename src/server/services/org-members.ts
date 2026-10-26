@@ -1,6 +1,7 @@
 import type { MemberStatus, OrgRole, Prisma, TicketStatus, WorkspaceRole } from "@prisma/client";
 import { db } from "@/server/db";
 import { effectiveCapabilities } from "@/server/policy/capabilities";
+import { sectionGridOn } from "@/server/policy/section-grid";
 import { RANK } from "@/server/policy/rank";
 import type { Actor } from "@/server/policy/actor";
 import { accessibleWorkspaceIds } from "@/server/services/access";
@@ -16,17 +17,22 @@ import { inCatalogueOrder } from "@/server/services/member-rules";
 export {
   ASSIGNABLE_ROLES,
   STATUS_TRANSITIONS,
+  canAdministratePerson,
   canAdministrateTarget,
   canChangeRole,
+  canChangeRoleOf,
   canRemoveMember,
   canTransitionStatus,
   capabilityChangeProblem,
   grantableRoles,
+  grantableRolesFor,
   inCatalogueOrder,
+  isPartner,
   replaceCapabilityList,
   unheldRankDefaults,
   wouldCreateManagerCycle,
   type CapabilityHolder,
+  type RankedPerson,
   type StatusAction,
 } from "@/server/services/member-rules";
 
@@ -66,6 +72,8 @@ export interface RosterMember {
   managerName: string | null;
   capabilities: string[];
   revokedCapabilities: string[];
+  /** An OWNER who is the company's primary owner (false for a partner and for everybody else). */
+  primaryOwner: boolean;
   effectiveCapabilities: string[];
   lastLoginAt: Date | null;
   mustChangePassword: boolean;
@@ -78,6 +86,10 @@ export interface RosterMember {
 export interface Roster {
   members: RosterMember[];
   actorRole: OrgRole;
+  /** The caller is the company's primary owner (he alone makes or unmakes a partner). */
+  actorPrimaryOwner: boolean;
+  /** «صلاحيات الأقسام» is on in «الميزات»: the sheet shows the section grid (off: the customers' two switches instead). */
+  sectionGrid: boolean;
   /** The spaces the caller may put people into: every space for the OWNER, otherwise their own. */
   spaces: { id: string; name: string }[];
 }
@@ -89,8 +101,9 @@ const STATUS_ORDER: Record<MemberStatus, number> = { ACTIVE: 0, SUSPENDED: 1, OF
  * OFFBOARDED; inside each, the highest rank first, then by name. Never a password hash or a
  * session version (fields are selected one by one).
  */
-export async function listOrgMembers(actor: Pick<Actor, "userId" | "orgId" | "role" | "isOwner">): Promise<Roster> {
+export async function listOrgMembers(actor: Pick<Actor, "userId" | "orgId" | "role" | "isOwner" | "isPrimaryOwner">): Promise<Roster> {
   const orgId = actor.orgId;
+  const sectionGrid = await sectionGridOn(orgId);
   const rows = await db.organizationMember.findMany({
     where: { organizationId: orgId },
     select: {
@@ -98,6 +111,7 @@ export async function listOrgMembers(actor: Pick<Actor, "userId" | "orgId" | "ro
       status: true,
       capabilities: true,
       revokedCapabilities: true,
+      primaryOwner: true,
       managerId: true,
       manager: { select: { name: true } },
       user: {
@@ -155,7 +169,8 @@ export async function listOrgMembers(actor: Pick<Actor, "userId" | "orgId" | "ro
     managerName: r.manager?.name ?? null,
     capabilities: r.capabilities,
     revokedCapabilities: r.revokedCapabilities,
-    effectiveCapabilities: inCatalogueOrder(effectiveCapabilities(r)),
+    primaryOwner: r.role === "OWNER" && r.primaryOwner,
+    effectiveCapabilities: inCatalogueOrder(effectiveCapabilities(r, { sectionGrid })),
     lastLoginAt: r.user.lastLoginAt,
     mustChangePassword: r.user.mustChangePassword,
     openWork: openWork.get(r.user.id) ?? 0,
@@ -169,6 +184,8 @@ export async function listOrgMembers(actor: Pick<Actor, "userId" | "orgId" | "ro
   return {
     members,
     actorRole: actor.role,
+    actorPrimaryOwner: actor.isPrimaryOwner === true,
+    sectionGrid,
     spaces: visible ? orgSpaces.filter((s) => visible.has(s.id)) : orgSpaces,
   };
 }

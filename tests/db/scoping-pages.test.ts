@@ -193,6 +193,11 @@ describe("Analytics page: this organization and the workspaces the user can open
     for (let i = 0; i < 2; i += 1) await idea(f.org.id, f.owner.id, f.wsIn.id);
     await idea(f.org.id, f.owner.id, f.wsOut.id);
     for (let i = 0; i < 5; i += 1) await idea(other.org.id, other.owner.id, other.wsIn.id);
+    // the reports box of the grid is a lead's and up by the template: the owner ticks it for this member
+    await db.organizationMember.update({
+      where: { organizationId_userId: { organizationId: f.org.id, userId: f.member.id } },
+      data: { capabilities: ["reports.view"] },
+    });
     await loginAs(f.member.id);
     const page = await html(AnalyticsPage());
     expect(page).toContain(t("analytics.statWorkspaces", { n: 1 }));

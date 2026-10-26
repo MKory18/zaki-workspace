@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { decryptSecrets, encryptSecrets, hmacHex, safeEqual } from "@/server/crypto";
 import { appUrl } from "@/server/env";
 import { getIntegration, logEvent, upsertIntegration } from "@/server/services/integrations";
+import { isFeatureOn } from "@/server/services/features";
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -160,14 +161,23 @@ function grantsLibrary(row: { connected: boolean; config: unknown } | null): boo
   return typeof scope === "string" && scope.split(" ").includes(DRIVE_FILE_SCOPE);
 }
 
+/** New library files go to Drive: the grant allows it and «الميزات» → «المكتبة على Google Drive» is on. */
 export async function libraryOnDrive(orgId: string): Promise<boolean> {
-  return grantsLibrary(await getIntegration(orgId, "GOOGLE_DRIVE"));
+  return grantsLibrary(await getIntegration(orgId, "GOOGLE_DRIVE")) && (await isFeatureOn(orgId, "libraryDrive"));
 }
 
-/** `library`: new library files go to Drive; connected without it means «connect again». */
-export async function getGoogleStatus(orgId: string): Promise<{ connected: boolean; configured: boolean; library: boolean }> {
+/**
+ * `library`: the grant lets the library store on Drive (connected without it means «connect again»);
+ * `libraryOff`: the owner switched the feature off, so new files stay on the server whatever the grant.
+ */
+export async function getGoogleStatus(orgId: string): Promise<{ connected: boolean; configured: boolean; library: boolean; libraryOff: boolean }> {
   const row = await getIntegration(orgId, "GOOGLE_DRIVE");
-  return { connected: Boolean(row?.connected), configured: Boolean(googleEnv()), library: grantsLibrary(row) };
+  return {
+    connected: Boolean(row?.connected),
+    configured: Boolean(googleEnv()),
+    library: grantsLibrary(row),
+    libraryOff: !(await isFeatureOn(orgId, "libraryDrive")),
+  };
 }
 
 async function accessToken(orgId: string, opts?: { forceRefresh?: boolean }): Promise<string | null> {

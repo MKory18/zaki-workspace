@@ -13,7 +13,7 @@ import type { MessageMenuContext, MessageMenuId } from "@/components/chat/messag
  * «⋯» beside it with a mouse or the keyboard, a long press on a phone. What the menu offers comes from
  * message-menu-registry.ts, which mirrors the server's rules.
  */
-export interface MessageItemProps { message: MessageDto; canModerate: boolean; oversight?: boolean; readers?: ReaderDto[]; conversationKind?: "DM" | "GROUP" | "TOPIC"; canPost?: boolean; canMakeWork?: boolean; onReact: (message: MessageDto, emoji: string) => void; onAction: (message: MessageDto, id: MessageMenuId) => void;
+export interface MessageItemProps { message: MessageDto; canModerate: boolean; oversight?: boolean; readers?: ReaderDto[]; conversationKind?: "DM" | "GROUP" | "TOPIC"; canPost?: boolean; canMakeWork?: boolean; canMakeTask?: boolean; canMakeTicket?: boolean; onReact: (message: MessageDto, emoji: string) => void; onAction: (message: MessageDto, id: MessageMenuId) => void;
   /** a «صارت مهمة/تذكرة» chip was tapped */
   onOpenWork?: (kind: "task" | "ticket", id: string) => void }
 const safeMediaUrl = (url: string) => url.startsWith("/api/chat/attachments/") ? url : undefined;
@@ -22,13 +22,13 @@ const MAX_READER_AVATARS = 5;
 export function MessageTicks({status}:{status:NonNullable<MessageDto["status"]>}){const label=AR[`chatc.tick.${status}`]??"";return <span data-ticks={status} className={`ms-2 text-xs ${status==="read"?"text-info":"text-fg-muted"}`}><span aria-hidden="true">{status==="sent"?"✓":"✓✓"}</span><span className="sr-only">{label}</span></span>;}
 /** The small row of people whose newest read message is this one (topics and groups), five at most and «+n». */
 export function ReaderRow({readers}:{readers:ReaderDto[]}){if(!readers.length)return null;const shown=readers.slice(0,MAX_READER_AVATARS);const more=readers.length-shown.length;const names=shown.map(r=>r.name).join(ct("chatc.list_sep"))+(more>0?` ${interpolate(AR["chatc.readers_more"]??"",{count:more})}`:"");return <div data-readers className="mt-1 flex justify-end gap-0.5" role="img" aria-label={interpolate(AR["chatc.readers"]??"",{names})}>{shown.map(r=><Avatar key={r.userId} name={r.name} className="h-6 w-6"/>)}{more>0&&<span aria-hidden="true" className="self-center text-xs text-fg-muted">+{more}</span>}</div>;}
-export function MessageItem({message,canModerate,oversight=false,readers=[],conversationKind="TOPIC",canPost=true,canMakeWork=false,onReact,onAction,onOpenWork}: MessageItemProps) {
+export function MessageItem({message,canModerate,oversight=false,readers=[],conversationKind="TOPIC",canPost=true,canMakeWork=false,canMakeTask,canMakeTicket,onReact,onAction,onOpenWork}: MessageItemProps) {
  const [sheetOpen,setSheetOpen]=React.useState(false);
  const press=React.useRef<{timer:ReturnType<typeof setTimeout>;x:number;y:number}|null>(null);
  const canAct=!oversight&&!message.deleted&&message.kind!=="SYSTEM";
  // a system line is a quiet sentence in the middle, never a bubble with an empty body
  if(message.kind==="SYSTEM")return <p dir="rtl" role="note" className="my-2 text-center text-xs text-fg-muted">{systemSentence(message.system,message.authorName)}</p>;
- const context:MessageMenuContext={mine:message.mine,deleted:message.deleted,kind:message.kind,hasText:Boolean(message.body&&message.body.trim()),pinned:message.pinned,conversationKind,canPost,canModerate,oversight,canMakeWork};
+ const context:MessageMenuContext={mine:message.mine,deleted:message.deleted,kind:message.kind,hasText:Boolean(message.body&&message.body.trim()),pinned:message.pinned,conversationKind,canPost,canModerate,oversight,canMakeWork,canMakeTask,canMakeTicket};
  // a phone's long press opens the menu sheet; moving the finger (a scroll) or lifting early is no press
  const endPress=()=>{if(press.current){clearTimeout(press.current.timer);press.current=null;}};
  const onPointerDown=(e:React.PointerEvent)=>{if(e.pointerType==="mouse"||!canAct)return;const {clientX:x,clientY:y}=e;press.current={x,y,timer:setTimeout(()=>{press.current=null;setSheetOpen(true);},LONG_PRESS_MS)};};

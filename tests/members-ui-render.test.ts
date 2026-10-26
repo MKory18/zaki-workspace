@@ -23,7 +23,7 @@ import { StaffDirectory } from "@/components/members/staff-directory";
 import { CapabilityPanel } from "@/components/members/capability-panel";
 import { SwitchRow } from "@/components/members/switch-row";
 import { CAPABILITY_GROUPS, type ActorInfo, type ContractMember, type MembersResponse } from "@/lib/members-ui";
-import { CAPABILITIES, RANK_DEFAULTS, WIRED_CAPABILITIES } from "@/server/policy/capabilities";
+import { CAPABILITIES, RANK_DEFAULTS, SECTION_CAPABILITIES, WIRED_CAPABILITIES } from "@/server/policy/capabilities";
 import { ADMIN, GUEST, LEAD, MEMBER, NOW, OFFBOARDED, OWNER, SAMPLE, SPACES, SUSPENDED, contractMember } from "./members-ui-fixtures";
 
 // The components are TSX; under vitest their JSX compiles to React.createElement, which needs a global React.
@@ -44,12 +44,14 @@ function render(element: ReactElement, client = new QueryClient()): string {
 }
 
 const ownerActor: ActorInfo = { id: "u-owner", role: "OWNER", caps: ["spaces.create", "users.manage", "directory.view", "crm.view", "crm.edit", "prices.view", "integrations.manage", "announce.send", "escalation.configure", "cash.view", "penalties.view", "archive.view"] };
-const adminActor: ActorInfo = { id: "u-admin", role: "ADMIN", caps: ["spaces.create", "users.manage", "directory.view", "crm.view", "crm.edit", "prices.view", "integrations.manage", "announce.send", "escalation.configure"] };
+const adminActor: ActorInfo = { id: "u-admin", role: "ADMIN", caps: [...RANK_DEFAULTS.ADMIN] };
 
 const noop = () => {};
 
 /** What the panel offers today: the wired switches only. */
-const WIRED = WIRED_CAPABILITIES.length;
+/** The wired capabilities shown as switches (the section boxes are the grid's checkboxes). */
+const SWITCHES = WIRED_CAPABILITIES.filter((c) => !SECTION_CAPABILITIES.includes(c));
+const WIRED = SWITCHES.length;
 const HIDDEN = CAPABILITIES.filter((c) => !WIRED_CAPABILITIES.includes(c));
 /** A team lead who was given users.manage: holds the lead defaults and that one, not integrations.manage. */
 const leadManagerActor: ActorInfo = { id: "u-lead", role: "LEAD", caps: [...RANK_DEFAULTS.LEAD, "users.manage"] };
@@ -332,7 +334,7 @@ describe("the panel of one person: only what the actor may do is offered", () =>
       expect(markup, cap).not.toContain(t(`members.cap.${cap}.title`));
       expect(markup, cap).not.toContain(t(`members.cap.${cap}.hint`));
     }
-    for (const cap of WIRED_CAPABILITIES) expect(markup, cap).toContain(t(`members.cap.${cap}.title`));
+    for (const cap of SWITCHES) expect(markup, cap).toContain(t(`members.cap.${cap}.title`));
   });
 
   it("shows each switch with its rank default, a one-line explanation and the group it belongs to; a group with nothing wired is gone", () => {
@@ -344,9 +346,9 @@ describe("the panel of one person: only what the actor may do is offered", () =>
       if (wired) expect(markup, group.id).toContain(`>${title}</h4>`);
       else expect(markup, group.id).not.toContain(`>${title}</h4>`);
     }
-    expect(markup).toContain(t("members.cap.crm.view.hint"));
+    expect(markup).toContain(t("members.cap.directory.view.hint"));
     // a team lead's rank gives these of the wired switches
-    const onByRank = WIRED_CAPABILITIES.filter((c) => RANK_DEFAULTS.LEAD.includes(c)).length;
+    const onByRank = SWITCHES.filter((c) => RANK_DEFAULTS.LEAD.includes(c)).length;
     expect(count(markup, /role="switch" aria-checked="true"/g)).toBe(onByRank);
     expect(count(markup, /حسب الرتبة/g)).toBe(WIRED);
   });
@@ -357,7 +359,7 @@ describe("the panel of one person: only what the actor may do is offered", () =>
       name: "نادين",
       role: "MEMBER",
       capabilities: ["integrations.manage"],
-      revokedCapabilities: ["crm.edit"],
+      revokedCapabilities: ["directory.view"],
     });
     const markup = render(sheet(changed));
     expect(markup).toContain("أُضيف فوق الرتبة");
@@ -590,5 +592,22 @@ describe("the source files follow the colour rule", () => {
         });
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("the section grid on a person's sheet («الأقسام»)", () => {
+  it("the owner sees a box per section and action, ticked as the rank's template gives", () => {
+    const markup = render(sheet(MEMBER));
+    expect(markup).toContain(t("members.sections_title"));
+    for (const section of ["ideas", "goals", "production", "reports"]) expect(markup, section).toContain(t(`members.section.${section}`));
+    for (const action of ["view", "edit", "delete"]) expect(markup, action).toContain(t(`members.action.${action}`));
+    expect(count(markup, /role="checkbox"/g)).toBe(SECTION_CAPABILITIES.length);
+    const onByRank = SECTION_CAPABILITIES.filter((c) => RANK_DEFAULTS.MEMBER.includes(c)).length;
+    expect(count(markup, /role="checkbox" aria-checked="true"/g)).toBe(onByRank);
+  });
+
+  it("an offboarded person's boxes are all locked", () => {
+    const markup = render(sheet(OFFBOARDED));
+    expect(count(markup, /role="checkbox"[^>]*disabled=""/g)).toBe(SECTION_CAPABILITIES.length);
   });
 });

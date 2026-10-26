@@ -69,7 +69,10 @@ model User {
   goals           Goal[]               @relation("GoalCreator")
   campaigns       Campaign[]           @relation("CampaignOwner")
   startedCalls    Call[]               @relation("CallStarter")
+  hostedWatches   WatchSession[]       @relation("WatchHost")
+  startedWatches  WatchSession[]       @relation("WatchStarter")
   callSeats       CallPerson[]
+  pushDevices     PushSubscription[]
 }
 
 // ---------- departments (the company's pools: design / dev / IT / sales) ----------
@@ -379,6 +382,7 @@ model Conversation {
   messages     ChatMessage[]
   whiteboard   Whiteboard?
   calls        Call[]
+  watch        WatchSession?
 
   @@unique([orgId, dmKey])
   @@unique([spaceId, systemKey])
@@ -584,6 +588,8 @@ model CallPerson {
   invitedById String?
   removedAt   DateTime?
   removedById String?
+  // the first time this person got a pass into the call (they answered / joined): a DM call nobody answered is missed
+  joinedAt    DateTime?
   createdAt   DateTime  @default(now())
 
   call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
@@ -591,6 +597,61 @@ model CallPerson {
 
   @@unique([callId, userId])
   @@index([userId])
+}
+
+// One browser of one person that agreed to be rung when the site is closed (Web Push; the browser's own push
+// service carries «فلان عم يرنّ» and nothing else). Removed when the push service says the browser is gone.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  // the push service's address for this browser: unique, a browser subscribes once
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// «نتفرّج سوا» (the owner's ask, 2026-10-26): people of a space watch ONE link together. Its talk is a restricted
+// topic (🎬) of that space, so who may see it, the chat, the call and the whiteboard are the topic's own rules.
+// Links only: nothing is uploaded or stored but the link. The playback fields are the host's remote: what plays,
+// from where, as of when (a late joiner computes where the others are from them).
+model WatchSession {
+  id             String    @id @default(cuid())
+  orgId          String
+  spaceId        String
+  conversationId String    @unique
+  hostId         String
+  // who started it (the host may hand the remote to somebody else; null: from before the remote could move)
+  startedById    String?
+  title          String
+  sourceKind     String // YOUTUBE
+  sourceRef      String // the video's own id at its site
+  sourceUrl      String // the link as it was pasted
+  playing        Boolean   @default(false)
+  positionSec    Float     @default(0)
+  stateAt        DateTime  @default(now())
+  // goes up by one on every change of the remote: a screen drops an answer older than the one it has
+  version        Int       @default(0)
+  // «الكل بيتحكّم»: everybody of the session holds the remote, not only the host
+  everyoneControls Boolean @default(false)
+  endedAt        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  space        Workspace    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  host         User         @relation("WatchHost", fields: [hostId], references: [id], onDelete: Cascade)
+  startedBy    User?        @relation("WatchStarter", fields: [startedById], references: [id], onDelete: SetNull)
+
+  @@index([spaceId, createdAt])
+  @@index([orgId])
+  @@index([hostId])
 }
 
 model Organization {
@@ -626,6 +687,7 @@ model Organization {
   campaigns        Campaign[]
   whiteboards      Whiteboard[]
   calls            Call[]
+  watchSessions    WatchSession[]
 
   @@index([slug])
 }
@@ -641,6 +703,9 @@ model OrganizationMember {
   // Capabilities on top of / taken away from what the rank grants (src/server/policy/capabilities.ts).
   capabilities        String[] @default([])
   revokedCapabilities String[] @default([])
+  // The company's first OWNER: the only one who makes or unmakes another OWNER (a partner, «شريك») and takes a
+  // permission away from one. Nobody administers him. Other OWNERs are partners with everything he leaves them.
+  primaryOwner        Boolean  @default(false)
   // Who escalations go to (the person's manager); null = the owner.
   managerId      String?
   // The same person's reference in the OMS (staff, penalties, cash custody), for later integration.
@@ -690,6 +755,10 @@ model Workspace {
   systemKey      String?
   // DEPARTMENT spaces: the department they belong to (at most one space per department).
   departmentId   String?       @unique
+  // The order on the space lists (the switcher, «كل المساحات»), set by dragging; «الشركة» is always first.
+  position       Int           @default(0)
+  // Archived: off every list, its things kept as they are; the owner and the admins bring it back from «كل المساحات».
+  archivedAt     DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -707,6 +776,7 @@ model Workspace {
   customers     Customer[]
   opportunities Opportunity[]
   calls         Call[]
+  watchSessions WatchSession[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, systemKey])

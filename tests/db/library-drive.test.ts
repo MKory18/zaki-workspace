@@ -15,6 +15,7 @@ import { decryptSecrets } from "@/server/crypto";
 import { forgetDriveFolders } from "@/server/files/drive-store";
 import { fileLibrary, ingest } from "@/server/services/files";
 import { connectGoogle, DRIVE_FILE_SCOPE, getGoogleStatus, type GoogleSecrets } from "@/server/services/google";
+import { setFeature } from "@/server/services/features";
 import { upsertIntegration } from "@/server/services/integrations";
 import { SPACE_COOKIE } from "@/server/services/current-space";
 import { call, db, loginAs, makeTeam, makeUser, makeWorkspace, uid } from "./helpers";
@@ -254,7 +255,7 @@ describe("a library file is stored on the owner's Drive", () => {
 
   it("the library and the connection say the files go to Drive", async () => {
     const w = await world();
-    expect(await getGoogleStatus(w.org.id)).toEqual({ connected: true, configured: true, library: true });
+    expect(await getGoogleStatus(w.org.id)).toEqual({ connected: true, configured: true, library: true, libraryOff: false });
     await loginAs(w.alice.id);
     (globalThis as { __zkCookieJar?: Map<string, string> }).__zkCookieJar?.set(SPACE_COOKIE, w.space.id);
     expect((await call(filesRoute.GET)).json?.["onDrive"]).toBe(true);
@@ -280,6 +281,23 @@ describe("nothing breaks because of Drive: the file stays on the server", () => 
     expect(await pathOf(made.id)).not.toMatch(/^gdrive:/);
     expect(drive.calls).toEqual([]);
     expect((await getGoogleStatus(w.org.id)).library).toBe(false);
+  });
+
+  it("«الميزات» → «المكتبة على Google Drive» off: new files on the server, Drive never asked, Drive files still open", async () => {
+    const w = await world();
+    const before = await ingest(w.ctx, { name: "old.png", bytes: PNG }, undefined, "LIBRARY", undefined, { workspaceId: w.space.id });
+    expect(await pathOf(before.id)).toMatch(/^gdrive:/);
+    await setFeature({ orgId: w.org.id, orgRole: "OWNER", userId: w.alice.id }, "libraryDrive", false);
+    const callsBefore = drive.calls.length;
+
+    const after = await ingest(w.ctx, { name: "new.png", bytes: PNG }, undefined, "LIBRARY", undefined, { workspaceId: w.space.id });
+    expect(await pathOf(after.id)).not.toMatch(/^gdrive:/);
+    expect(drive.calls.length).toBe(callsBefore);
+    expect((await getGoogleStatus(w.org.id)).libraryOff).toBe(true);
+
+    await loginAs(w.alice.id);
+    expect(Buffer.from((await raw(before.id)).bytes)).toEqual(Buffer.from(PNG));
+    expect(Buffer.from((await raw(after.id)).bytes)).toEqual(Buffer.from(PNG));
   });
 
   it("chat attachments and voice notes stay on the server", async () => {

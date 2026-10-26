@@ -36,6 +36,7 @@ import AutomationPage from "@/app/(app)/automation/page";
 import TelegramPage from "@/app/(app)/telegram/page";
 import SettingsPage from "@/app/(app)/settings/page";
 import ArchivePage from "@/app/(app)/archive/page";
+import WatchPage from "@/app/(app)/watch/page";
 import * as goalsRoute from "@/app/api/goals/route";
 import * as goalRoute from "@/app/api/goals/[id]/route";
 import * as ideasRoute from "@/app/api/ideas/route";
@@ -224,9 +225,11 @@ describe("everybody else keeps the four pages exactly as before", () => {
       await loginAs(person.id);
       const who = person.name;
 
+      // the reports box of the grid: a lead's and up by the template (the tab always was); a member gets the notice
       const reports = await html(AnalyticsPage());
-      expect(reports, who).toContain(t("analytics.title"));
       expect(reports, who).not.toContain(NOTICE);
+      if (person === w.member) expect(reports, who).toContain(t("access.section_off"));
+      else expect(reports, who).toContain(t("analytics.title"));
 
       const settings = await html(SettingsPage());
       expect(settings, who).toContain(t("settings.title"));
@@ -245,7 +248,11 @@ describe("everybody else keeps the four pages exactly as before", () => {
     }
 
     // somebody who opens the team's space (inside it: the reports are the current space's) still reads the
-    // workload with the colleague's name in it
+    // workload with the colleague's name in it: a member the owner gave the reports box
+    await db.organizationMember.update({
+      where: { organizationId_userId: { organizationId: w.org.id, userId: w.member.id } },
+      data: { capabilities: ["reports.view"] },
+    });
     await loginAs(w.member.id);
     (globalThis as { __zkCookieJar?: Map<string, string> }).__zkCookieJar?.set(SPACE_COOKIE, w.space.id);
     expect(await html(AnalyticsPage())).toContain(`Staffer ${w.secret}`);
@@ -390,6 +397,7 @@ const TAB_PAGES: Record<TabKey, PageCall> = {
 const PLACE_PAGES: Partial<Record<PlaceKey, PageCall>> = {
   today: () => TodayPage(),
   chat: () => ChatPage(),
+  watch: () => WatchPage(),
 };
 
 interface Entry {

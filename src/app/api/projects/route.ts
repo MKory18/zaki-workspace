@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertMemberCan } from "@/server/policy/actor";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { requireWorkspace, audit, ForbiddenError } from "@/server/auth";
@@ -26,6 +27,7 @@ export async function GET(req: Request) {
       Object.fromEntries(url.searchParams),
     );
     const ctx = await requireWorkspace(workspaceId);
+    await assertMemberCan(ctx, "projects.view", "section.view_denied", { spaceGuestsPass: true });
     // inside a space with teams: the space's own projects and the caller's teams' (a manager sees all)
     const team = await teamFilterInSpace(ctx.userId, workspaceId, ctx.spaceManager === true);
     const projects = await db.project.findMany({
@@ -52,6 +54,7 @@ export async function POST(req: Request) {
   return withApi(async () => {
     const input = await parseJson(createSchema, req);
     const ctx = await requireWorkspace(input.workspaceId, ["ADMIN", "MEMBER"]);
+    await assertMemberCan(ctx, "projects.edit", "section.edit_denied", { spaceGuestsPass: true });
     // «الشركة» (HQ) is the whole company's announcements and talk, not a place for work: a project there
     // would be seen by everybody (the owner's decision, 2026-10-25). The projects already there stay.
     const space = await db.workspace.findUnique({ where: { id: input.workspaceId }, select: { kind: true } });

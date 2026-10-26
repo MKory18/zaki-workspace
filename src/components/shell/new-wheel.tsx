@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as 
 import { useRouter } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, FolderKanban, Layers, MessageCircle, Plus, SquareCheck, UserPlus, X, type LucideIcon } from "lucide-react";
+import { Clapperboard, FileText, FolderKanban, Layers, MessageCircle, Plus, SquareCheck, UserPlus, X, type LucideIcon } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { apiGet } from "@/lib/api-client";
 import { browserStore } from "@/lib/guide/storage";
@@ -19,6 +19,7 @@ const ICONS: Record<NewActionKey, LucideIcon> = {
   project: FolderKanban,
   doc: FileText,
   message: MessageCircle,
+  watch: Clapperboard,
   space: Layers,
   person: UserPlus,
 };

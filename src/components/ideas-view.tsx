@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/toast";
 import { enumLabel } from "@/lib/i18n/enums";
 import { cn } from "@/lib/utils";
 
+import Link from "next/link";
 export interface IdeaItem {
   id: string;
   title: string;
@@ -38,6 +39,9 @@ export interface IdeasCtx {
   orgRole: string;
   /** Moves the ideas of this space along (its managers; in «الشركة» the owner and the admins). */
   canManage: boolean;
+  /** The ideas boxes of the person's grid: «يضيف ويعدّل» and «يحذف» (absent: allowed, the server decides again). */
+  mayEdit?: boolean;
+  mayDelete?: boolean;
   /** The space the person is in, and whether it is «الشركة». */
   spaceId?: string | null;
   isHq?: boolean;
@@ -97,7 +101,7 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
   const [desc, setDesc] = useState("");
   const [converting, setConverting] = useState<IdeaItem | null>(null);
 
-  const canWrite = ctx.orgRole !== "GUEST";
+  const canWrite = ctx.orgRole !== "GUEST" && ctx.mayEdit !== false;
 
   const shown = useMemo(
     () =>
@@ -234,7 +238,7 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
             !idea.taskId &&
             idea.status !== "REJECTED" &&
             (idea.creatorId === ctx.userId || ctx.canManage);
-          const nexts = ctx.canManage ? NEXT_STATUS[idea.status] : [];
+          const nexts = ctx.canManage && canWrite ? NEXT_STATUS[idea.status] : [];
           return (
             <li key={idea.id} className="rounded-xl border border-border bg-surface p-4">
               <div className="flex items-start gap-3">
@@ -272,10 +276,10 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
                       <span className="ms-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-accent">{t("ideas.shared")}</span>
                     ) : null}
                     {idea.taskId ? (
-                      <a href={`/tasks/${idea.taskId}`} className="ms-1 inline-flex items-center gap-0.5 text-accent hover:underline">
+                      <Link href={`/tasks/${idea.taskId}`} className="ms-1 inline-flex items-center gap-0.5 text-accent hover:underline">
                         <ExternalLink className="h-2.5 w-2.5" />
                         {t("ideas.converted")}
-                      </a>
+                      </Link>
                     ) : null}
                   </p>
                 </div>
@@ -310,15 +314,17 @@ export function IdeasView({ initial, ctx }: { initial: IdeaItem[]; ctx: IdeasCtx
                           <Rocket className="h-3.5 w-3.5" />
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={() => removeIdea(idea)}
-                        aria-label={t("common.delete")}
-                        title={t("common.delete")}
-                        className="rounded p-1 text-muted hover:bg-surface-2 hover:text-danger"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {ctx.mayDelete !== false ? (
+                        <button
+                          type="button"
+                          onClick={() => removeIdea(idea)}
+                          aria-label={t("common.delete")}
+                          title={t("common.delete")}
+                          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-danger"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                   {nexts.length > 0 ? (

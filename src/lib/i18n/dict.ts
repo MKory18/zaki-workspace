@@ -19,6 +19,8 @@ import chatHome from "./ar.chat-home.json";
 import archive from "./ar.archive.json";
 import whiteboard from "./ar.whiteboard.json";
 import calls from "./ar.calls.json";
+import watch from "./ar.watch.json";
+import features from "./ar.features.json";
 import libraryDrive from "./ar.library-drive.json";
 
 /**
@@ -50,5 +52,7 @@ export const AR: Record<string, string> = {
   ...archive,
   ...whiteboard,
   ...calls,
+  ...watch,
+  ...features,
   ...libraryDrive,
 };

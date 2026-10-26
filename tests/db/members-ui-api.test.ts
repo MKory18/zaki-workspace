@@ -15,6 +15,7 @@ import {
   capabilityGroups,
   creatableRoles,
   offeredActions,
+  sectionGrid,
   transferCandidates,
   type ActorInfo,
   type AddFormValues,
@@ -550,8 +551,13 @@ describe.each(ACTORS)("the screen and the server agree for: $label", ({ role, ex
     const row = await rowOf(org.id, actor.id, target.id);
     const acts = offeredActions(info, row);
     if (!acts.manageable) return;
-    const rows = capabilityGroups(row, info, acts.capabilities === "editable").flatMap((g) => g.rows);
-    expect(rows.length).toBe(WIRED_CAPABILITIES.length); // only the wired switches are offered
+    const editable = acts.capabilities === "editable";
+    // the switches and the section grid's boxes: together, exactly the wired capabilities
+    const rows = [
+      ...capabilityGroups(row, info, editable).flatMap((g) => g.rows),
+      ...sectionGrid(row, info, editable).flatMap((r) => Object.values(r.cells).filter((c) => c !== null)),
+    ];
+    expect(rows.length).toBe(WIRED_CAPABILITIES.length); // only the wired capabilities are offered
     for (const r of rows) {
       const res = await setCapability(org.id, await rowOf(org.id, actor.id, target.id), r.capability, !r.on, t);
       expect(res.ok, `${role}: ${r.capability} locked=${r.locked}`).toBe(r.locked === null);
