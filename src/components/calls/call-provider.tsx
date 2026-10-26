@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AudioPresets, Room, RoomEvent, ScreenSharePresets, Track, VideoPresets, type DisconnectReason, type LocalTrack, type Participant, type Track as LkTrack } from "livekit-client";
+import { AudioPresets, Room, RoomEvent, ScreenSharePresets, Track, VideoPresets, type DisconnectReason, type LocalAudioTrack, type LocalTrack, type Participant, type Track as LkTrack } from "livekit-client";
 import { ct } from "@/lib/chat/text";
 import { AWAY_TOPIC, decodeAway, encodeAway, micHeld, type MicFacts } from "@/lib/calls/mic";
 import { isDrop, isFresh, MAX_REJOINS, miniVisible, rejoinDelayMs } from "@/lib/calls/session";
@@ -122,13 +122,28 @@ function newRoom(): Room {
 interface Pass {
   url: string;
   token: string;
+  /** the owner's switch «تنقية صوت المكالمات» (src/components/calls/noise-filter.ts) */
+  noiseFilter?: boolean;
+}
+
+/**
+ * The microphone cleaned of noise, when the owner's switch is on: the filter is loaded only then (its model stays off
+ * the page otherwise), and anything that fails leaves the voice as the browser captured it.
+ */
+async function cleanMic(track: LocalTrack | undefined): Promise<void> {
+  if (!track || track.kind !== Track.Kind.Audio) return;
+  const { canFilterNoise, noiseFilter, NOISE_FILTER_NAME } = await import("./noise-filter");
+  if (!canFilterNoise() || track.getProcessor()?.name === NOISE_FILTER_NAME) return;
+  await (track as LocalAudioTrack).setProcessor(noiseFilter()).catch(() => undefined);
 }
 
 /** What the phone did to this call's microphone, read for the rules in src/lib/calls/mic.ts. */
 function micFactsOf(room: Room): MicFacts {
   const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
   const track = pub?.track as LocalTrack | undefined;
-  const capture = track?.mediaStreamTrack;
+  // the microphone itself, not the noise filter's output (which stays «live» when the phone takes the microphone)
+  const filtered = track?.getProcessor() as { sourceTrack?: MediaStreamTrack } | undefined;
+  const capture = filtered?.sourceTrack ?? track?.mediaStreamTrack;
   return {
     published: !!track,
     chosenMute: !!pub?.isMuted,
@@ -258,6 +273,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         const ended = e instanceof Error && e.message === callErrorText("calls.e.ended");
         patch({ phase: ended ? "ended" : "denied", error: e instanceof Error ? e.message : ct("calls.failed") });
         return;
+      }
+      // every microphone this call publishes (the first, or a new one after a change) is cleaned of noise
+      if (pass.noiseFilter) {
+        room.on(RoomEvent.LocalTrackPublished, (pub) => {
+          if (pub.source === Track.Source.Microphone) void cleanMic(pub.track);
+        });
       }
       try {
         await room.connect(pass.url, pass.token);
