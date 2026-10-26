@@ -7,7 +7,14 @@ import { getIntegration, logEvent, upsertIntegration } from "@/server/services/i
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
-const SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+/**
+ * Only the files the app itself creates (the library's): a non-sensitive scope, so Google asks for no
+ * review and the owner's published app keeps its connection. The old drive.readonly grant cannot write
+ * and is "restricted" (a paid security review to publish); a connection made with it keeps working
+ * for the browse list, and the library stays on the server until the owner connects again.
+ */
+export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const SCOPE = DRIVE_FILE_SCOPE;
 
 export interface GoogleSecrets {
   refreshToken: string;
@@ -79,7 +86,6 @@ export function buildAuthUrl(orgId: string, userId: string): string {
     response_type: "code",
     scope: SCOPE,
     access_type: "offline",
-    include_granted_scopes: "true",
     prompt: "consent",
     state: signState(orgId, userId),
   });
@@ -89,12 +95,15 @@ export function buildAuthUrl(orgId: string, userId: string): string {
 interface TokenResponse {
   access_token?: string;
   refresh_token?: string;
+  scope?: string;
   error?: string;
   error_description?: string;
 }
 
 /** Exchanges the consent code for tokens; store result via connectGoogle. */
-export async function exchangeCode(code: string): Promise<{ ok: true; access: string; refresh: string | null } | { ok: false; error: string }> {
+export async function exchangeCode(
+  code: string,
+): Promise<{ ok: true; access: string; refresh: string | null; scope: string | null } | { ok: false; error: string }> {
   const cfg = googleEnv();
   if (!cfg) return { ok: false, error: "google.not_configured" };
   const body = new URLSearchParams({
@@ -112,7 +121,7 @@ export async function exchangeCode(code: string): Promise<{ ok: true; access: st
     });
     const json = (await res.json().catch(() => null)) as TokenResponse | null;
     if (!json?.access_token) return { ok: false, error: json?.error_description ?? json?.error ?? "google.token_failed" };
-    return { ok: true, access: json.access_token, refresh: json.refresh_token ?? null };
+    return { ok: true, access: json.access_token, refresh: json.refresh_token ?? null, scope: json.scope ?? null };
   } catch {
     return { ok: false, error: "google.unreachable" };
   }
@@ -121,7 +130,7 @@ export async function exchangeCode(code: string): Promise<{ ok: true; access: st
 export async function connectGoogle(
   orgId: string,
   userId: string,
-  tokens: { access: string; refresh: string | null },
+  tokens: { access: string; refresh: string | null; scope?: string | null },
 ): Promise<void> {
   // First connection supplies the refresh token; later consents only refresh access.
   const previous = await getIntegration(orgId, "GOOGLE_DRIVE");
@@ -133,7 +142,8 @@ export async function connectGoogle(
   await upsertIntegration(orgId, "GOOGLE_DRIVE", {
     connected: Boolean(secrets.refreshToken || secrets.accessToken),
     secrets,
-    config: { connectedBy: userId },
+    // the granted scopes decide whether the library may store on Drive (`libraryOnDrive`)
+    config: { connectedBy: userId, scope: tokens.scope ?? "" },
   });
   await logEvent(orgId, { direction: "IN", type: "google.connected" });
 }
@@ -143,9 +153,21 @@ export async function disconnectGoogle(orgId: string): Promise<void> {
   await logEvent(orgId, { direction: "OUT", type: "google.disconnected" });
 }
 
-export async function getGoogleStatus(orgId: string): Promise<{ connected: boolean; configured: boolean }> {
+/** Drive can hold the library: connected, configured, and the grant includes `drive.file`. */
+function grantsLibrary(row: { connected: boolean; config: unknown } | null): boolean {
+  if (!row?.connected || !googleEnv()) return false;
+  const scope = (row.config as { scope?: unknown } | null)?.scope;
+  return typeof scope === "string" && scope.split(" ").includes(DRIVE_FILE_SCOPE);
+}
+
+export async function libraryOnDrive(orgId: string): Promise<boolean> {
+  return grantsLibrary(await getIntegration(orgId, "GOOGLE_DRIVE"));
+}
+
+/** `library`: new library files go to Drive; connected without it means «connect again». */
+export async function getGoogleStatus(orgId: string): Promise<{ connected: boolean; configured: boolean; library: boolean }> {
   const row = await getIntegration(orgId, "GOOGLE_DRIVE");
-  return { connected: Boolean(row?.connected), configured: Boolean(googleEnv()) };
+  return { connected: Boolean(row?.connected), configured: Boolean(googleEnv()), library: grantsLibrary(row) };
 }
 
 async function accessToken(orgId: string, opts?: { forceRefresh?: boolean }): Promise<string | null> {
@@ -195,22 +217,26 @@ interface DriveListResponse {
   files?: Array<{ id: string; name: string; mimeType: string; modifiedTime?: string; webViewLink?: string }>;
 }
 
-async function driveFetch(token: string, params: URLSearchParams): Promise<Response> {
-  return fetch(`${DRIVE_FILES_URL}?${params.toString()}`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-}
-
-async function listJson(orgId: string, params: URLSearchParams): Promise<DriveListResponse | null> {
+/**
+ * A Drive request as the org's connected account: the stored access token, refreshed once when Google
+ * answers 401. Null when there is no usable connection. `init` must be repeatable (no stream body).
+ */
+export async function driveRequest(orgId: string, url: string, init: RequestInit = {}): Promise<Response | null> {
+  const send = (token: string) => fetch(url, { ...init, headers: { ...(init.headers as Record<string, string>), authorization: `Bearer ${token}` } });
   let token = await accessToken(orgId);
   if (!token) return null;
-  let res = await driveFetch(token, params);
+  let res = await send(token);
   if (res.status === 401) {
     token = await accessToken(orgId, { forceRefresh: true });
     if (!token) return null;
-    res = await driveFetch(token, params);
+    res = await send(token);
   }
-  if (!res.ok) return null;
+  return res;
+}
+
+async function listJson(orgId: string, params: URLSearchParams): Promise<DriveListResponse | null> {
+  const res = await driveRequest(orgId, `${DRIVE_FILES_URL}?${params.toString()}`);
+  if (!res?.ok) return null;
   return (await res.json().catch(() => null)) as DriveListResponse | null;
 }
 
