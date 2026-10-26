@@ -74,5 +74,8 @@
   "calls.pin": "كبّر الصورة",
   "calls.unpin": "رجّع الصور كلها",
   "calls.e.cannot_end": "بس اللي بلّش المكالمة أو مدير المساحة بيقدر ينهيها للكل.",
-  "calls.e.cannot_mute": "ما بتقدر تكتم هالشخص."
+  "calls.e.cannot_mute": "ما بتقدر تكتم هالشخص.",
+  "calls.push.ring_title": "{name} عم يرنّ عليك",
+  "calls.push.missed_title": "مكالمة فايتة من {name}",
+  "calls.push.missed_body": "اضغط لتفتح المحادثة وترنّ عليه."
 }

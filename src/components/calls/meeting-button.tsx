@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { ct } from "@/lib/chat/text";
 import { callApi } from "./call-api";
+import { ensurePush } from "./push-client";
 
 /**
  * «اجتماع جديد»: a call with a link, in the space the person is in. The link opens it for the space's people only,
@@ -18,6 +19,7 @@ export function MeetingButton() {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
+    void ensurePush(true);
     setBusy(true);
     setError("");
     try {

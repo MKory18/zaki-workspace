@@ -7,6 +7,7 @@ import { ct } from "@/lib/chat/text";
 import { Avatar } from "@/components/ui/avatar";
 import { callApi, type CallView } from "./call-api";
 import { useOptionalCall } from "./call-provider";
+import { ensurePush } from "./push-client";
 
 /** A ring stops by itself after this long (an unanswered call). */
 export const RING_FOR_MS = 30_000;
@@ -66,6 +67,7 @@ export function CallRing() {
         type="button"
         onClick={() => {
           const id = ringing.id;
+          void ensurePush(true);
           setRinging(null);
           router.push(`/calls/${encodeURIComponent(id)}`);
         }}
