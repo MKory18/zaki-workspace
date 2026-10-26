@@ -7,6 +7,8 @@ import * as tokenRoute from "@/app/api/calls/[id]/token/route";
 import * as inviteRoute from "@/app/api/calls/[id]/invite/route";
 import * as removeRoute from "@/app/api/calls/[id]/remove/route";
 import * as leaveRoute from "@/app/api/calls/[id]/leave/route";
+import * as endRoute from "@/app/api/calls/[id]/end/route";
+import * as muteRoute from "@/app/api/calls/[id]/mute/route";
 import * as dmRoute from "@/app/api/chat/dm/route";
 import { setCallsFetchForTests, roomOf } from "@/server/calls/livekit";
 import { EMPTY_GRACE_MS } from "@/server/calls/calls";
@@ -19,6 +21,8 @@ const saved: Record<string, string | undefined> = {};
 /** The calls server, faked: who is in which room, and who was taken out. */
 const rooms = new Map<string, string[]>();
 const removed: { room: string; identity: string }[] = [];
+const closed: string[] = [];
+const muted: { room: string; identity: string; track: string }[] = [];
 
 beforeAll(() => {
   for (const k of ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"]) saved[k] = process.env[k];
@@ -36,12 +40,26 @@ beforeEach(() => {
   process.env["LIVEKIT_API_SECRET"] = SECRET;
   rooms.clear();
   removed.length = 0;
+  closed.length = 0;
+  muted.length = 0;
   setCallsFetchForTests(async (input, init) => {
     const url = String(input);
     const body = JSON.parse(String(init?.body ?? "{}")) as { room: string; identity?: string };
     if (url.endsWith("/ListParticipants")) {
       if (!rooms.has(body.room)) return new Response(JSON.stringify({ code: "not_found" }), { status: 404 });
-      return Response.json({ participants: (rooms.get(body.room) ?? []).map((identity) => ({ identity, name: identity })) });
+      return Response.json({
+        participants: (rooms.get(body.room) ?? []).map((identity) => ({ identity, name: identity, tracks: [{ sid: `TR_mic_${identity}`, type: "AUDIO", source: "MICROPHONE" }, { sid: `TR_cam_${identity}`, type: "VIDEO", source: "CAMERA" }] })),
+      });
+    }
+    if (url.endsWith("/DeleteRoom")) {
+      closed.push(body.room);
+      rooms.delete(body.room);
+      return Response.json({});
+    }
+    if (url.endsWith("/MutePublishedTrack")) {
+      const b = body as unknown as { room: string; identity: string; track_sid: string };
+      muted.push({ room: b.room, identity: b.identity, track: b.track_sid });
+      return Response.json({});
     }
     if (url.endsWith("/RemoveParticipant")) {
       removed.push({ room: body.room, identity: body.identity ?? "" });
@@ -353,5 +371,72 @@ describe("calls: meetings by link, and the end", () => {
     expect(res.status).toBe(200);
     const people = res.json?.["people"] as { userId: string; canRemove: boolean }[];
     expect(Object.fromEntries(people.map((p) => [p.userId, p.canRemove]))).toEqual({ [t.member.id]: false, [t.admin.id]: true, [t.owner.id]: false });
+  });
+});
+
+describe("calls: the host ends the call for everybody, and mutes", () => {
+  it("whoever started the call ends it for everybody: its end, its line, the room closed on the calls server", async () => {
+    const t = await space();
+    const topic = await topicOf(t.org.id, t.ws.id);
+    await loginAs(t.member.id);
+    const id = (await start(topic.id)).json?.["id"] as string;
+    rooms.set(roomOf(id), [t.member.id, t.guest.id]);
+    expect((await call(callRoute.GET, { params: { id } })).json).toMatchObject({ can: { end: true } });
+
+    expect((await call(endRoute.POST, { method: "POST", params: { id } })).status).toBe(200);
+    expect((await db.call.findUniqueOrThrow({ where: { id } })).endedAt).not.toBeNull();
+    expect(closed).toEqual([roomOf(id)]);
+    const lines = await db.chatMessage.findMany({ where: { conversationId: topic.id, kind: "SYSTEM" }, orderBy: { createdAt: "asc" } });
+    expect(lines.map((l) => (JSON.parse(l.body) as { k: string }).k)).toEqual(["call_started", "call_ended"]);
+    expect(await db.realtimeEvent.count({ where: { kind: "call.changed", ids: { path: ["callId"], equals: id } } })).toBe(2);
+    await loginAs(t.guest.id);
+    expect((await pass(id)).status).toBe(403); // ended: no way back in
+  });
+
+  it("somebody who did not start it gets 403 on ending: they only leave, and the call goes on", async () => {
+    const t = await space();
+    const topic = await topicOf(t.org.id, t.ws.id);
+    await loginAs(t.member.id);
+    const id = (await start(topic.id)).json?.["id"] as string;
+    const extra = await makeUser({ orgId: t.org.id, role: "MEMBER" });
+    await db.workspaceMember.create({ data: { workspaceId: t.ws.id, userId: extra.id } });
+    await loginAs(extra.id);
+    expect((await call(callRoute.GET, { params: { id } })).json).toMatchObject({ can: { end: false } });
+    const refused = await call(endRoute.POST, { method: "POST", params: { id } });
+    expect(refused.status).toBe(403);
+    expect(refused.text).toContain("calls.e.cannot_end");
+    expect((await db.call.findUniqueOrThrow({ where: { id } })).endedAt).toBeNull();
+    expect(closed).toEqual([]);
+  });
+
+  it("the space's admin and the owner end a call they did not start", async () => {
+    const t = await space();
+    const topic = await topicOf(t.org.id, t.ws.id);
+    await loginAs(t.member.id);
+    const a = (await start(topic.id)).json?.["id"] as string;
+    await loginAs(t.admin.id);
+    expect((await call(endRoute.POST, { method: "POST", params: { id: a } })).status).toBe(200);
+
+    await loginAs(t.member.id);
+    const b = (await start(topic.id)).json?.["id"] as string;
+    await loginAs(t.owner.id);
+    expect((await call(endRoute.POST, { method: "POST", params: { id: b } })).status).toBe(200);
+  });
+
+  it("a host mutes somebody's microphone on the calls server; nobody else does, and nobody mutes the owner", async () => {
+    const t = await space();
+    const topic = await topicOf(t.org.id, t.ws.id);
+    await loginAs(t.member.id);
+    const id = (await start(topic.id)).json?.["id"] as string;
+    rooms.set(roomOf(id), [t.member.id, t.guest.id, t.owner.id]);
+    expect((await call(muteRoute.POST, { params: { id }, body: { userId: t.guest.id } })).status).toBe(200);
+    expect(muted).toEqual([{ room: roomOf(id), identity: t.guest.id, track: `TR_mic_${t.guest.id}` }]);
+    expect((await call(muteRoute.POST, { params: { id }, body: { userId: t.owner.id } })).status).toBe(403);
+
+    await loginAs(t.guest.id);
+    const refused = await call(muteRoute.POST, { params: { id }, body: { userId: t.member.id } });
+    expect(refused.status).toBe(403);
+    expect(refused.text).toContain("calls.e.cannot_mute");
+    expect(muted).toHaveLength(1);
   });
 });

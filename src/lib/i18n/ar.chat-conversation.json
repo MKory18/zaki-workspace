@@ -26,6 +26,7 @@
   "chatc.sys.forwarded": "تحويل رسالة بواسطة {name}",
   "chatc.sys.call_started": "بلّش {name} مكالمة",
   "chatc.sys.call_ended": "خلصت المكالمة",
+  "chatc.sys.call_missed": "مكالمة فايتة من {name}",
   "chatc.sys.other": "تحديث في المحادثة",
   "chatc.tick.sent": "أُرسلت",
   "chatc.tick.delivered": "وصلت",

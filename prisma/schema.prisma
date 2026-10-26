@@ -71,6 +71,7 @@ model User {
   startedCalls    Call[]               @relation("CallStarter")
   hostedWatches   WatchSession[]       @relation("WatchHost")
   callSeats       CallPerson[]
+  pushDevices     PushSubscription[]
 }
 
 // ---------- departments (the company's pools: design / dev / IT / sales) ----------
@@ -586,12 +587,31 @@ model CallPerson {
   invitedById String?
   removedAt   DateTime?
   removedById String?
+  // the first time this person got a pass into the call (they answered / joined): a DM call nobody answered is missed
+  joinedAt    DateTime?
   createdAt   DateTime  @default(now())
 
   call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([callId, userId])
+  @@index([userId])
+}
+
+// One browser of one person that agreed to be rung when the site is closed (Web Push; the browser's own push
+// service carries «فلان عم يرنّ» and nothing else). Removed when the push service says the browser is gone.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  // the push service's address for this browser: unique, a browser subscribes once
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 
