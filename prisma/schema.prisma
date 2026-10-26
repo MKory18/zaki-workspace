@@ -690,6 +690,10 @@ model Workspace {
   systemKey      String?
   // DEPARTMENT spaces: the department they belong to (at most one space per department).
   departmentId   String?       @unique
+  // The order on the space lists (the switcher, «كل المساحات»), set by dragging; «الشركة» is always first.
+  position       Int           @default(0)
+  // Archived: off every list, its things kept as they are; the owner and the admins bring it back from «كل المساحات».
+  archivedAt     DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
