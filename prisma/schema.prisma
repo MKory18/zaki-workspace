@@ -70,6 +70,7 @@ model User {
   campaigns       Campaign[]           @relation("CampaignOwner")
   startedCalls    Call[]               @relation("CallStarter")
   hostedWatches   WatchSession[]       @relation("WatchHost")
+  startedWatches  WatchSession[]       @relation("WatchStarter")
   callSeats       CallPerson[]
   pushDevices     PushSubscription[]
 }
@@ -625,6 +626,8 @@ model WatchSession {
   spaceId        String
   conversationId String    @unique
   hostId         String
+  // who started it (the host may hand the remote to somebody else; null: from before the remote could move)
+  startedById    String?
   title          String
   sourceKind     String // YOUTUBE
   sourceRef      String // the video's own id at its site
@@ -632,6 +635,10 @@ model WatchSession {
   playing        Boolean   @default(false)
   positionSec    Float     @default(0)
   stateAt        DateTime  @default(now())
+  // goes up by one on every change of the remote: a screen drops an answer older than the one it has
+  version        Int       @default(0)
+  // «الكل بيتحكّم»: everybody of the session holds the remote, not only the host
+  everyoneControls Boolean @default(false)
   endedAt        DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -640,6 +647,7 @@ model WatchSession {
   space        Workspace    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   host         User         @relation("WatchHost", fields: [hostId], references: [id], onDelete: Cascade)
+  startedBy    User?        @relation("WatchStarter", fields: [startedById], references: [id], onDelete: SetNull)
 
   @@index([spaceId, createdAt])
   @@index([orgId])
