@@ -45,7 +45,7 @@ const holds = (s: NavSubject, cap: string) => staff(s) && s.caps.includes(cap);
  *                   belong to: the form lists those)
  *   doc             whoever has the library and its «يضيف ويعدّل» box
  *   message         any staff member (the chat is everybody's place)
- *   watch           any staff member (the «نتفرّج سوا» place is the staff's)
+ *   watch           staff with the «نتفرّج سوا» row's «يضيف ويعدّل» box (the place is the staff's)
  *   space           `spaces.create`
  *   person          `users.manage`
  */
@@ -54,7 +54,7 @@ const REQUIRES: Record<NewActionKey, (s: NavSubject) => boolean> = {
   project: (s) => holds(s, "projects.edit"),
   doc: (s) => holds(s, "files.edit") && canOpenTab(s, "files"),
   message: staff,
-  watch: (s) => staff(s) && canOpenPlace(s, "watch"),
+  watch: (s) => holds(s, "watch.edit") && canOpenPlace(s, "watch"),
   space: (s) => holds(s, "spaces.create"),
   person: (s) => holds(s, "users.manage"),
 };

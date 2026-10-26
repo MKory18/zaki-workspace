@@ -12,7 +12,7 @@ import { newActionsFor } from "@/lib/nav/new-actions";
 describe("section grid: the policy", () => {
   it("every section box is a wired capability, and the grid lists each section's actions", () => {
     for (const cap of SECTION_CAPABILITIES) expect(WIRED_CAPABILITIES, cap).toContain(cap);
-    expect(SECTIONS.map((s) => s.id)).toEqual(["projects", "tasks", "ideas", "goals", "production", "files", "tickets", "campaigns", "crm", "reports"]);
+    expect(SECTIONS.map((s) => s.id)).toEqual(["projects", "tasks", "ideas", "goals", "production", "files", "tickets", "campaigns", "crm", "calls", "watch", "reports"]);
     expect(SECTION_CAPABILITIES).toContain("reports.view");
     expect(SECTION_CAPABILITIES).not.toContain("reports.edit" as never);
   });
@@ -31,8 +31,10 @@ describe("section grid: the policy", () => {
     // batches 2 and 3: the library, the tickets, the campaigns, the customers and the tasks are all staff's, delete
     // included; the projects have «يشوف» and «يضيف ويعدّل» only (a project is archived, not deleted)
     for (const role of ["ADMIN", "LEAD", "MEMBER"] as const) {
-      expect(can({ role }, "projects.view")).toBe(true);
-      expect(can({ role }, "projects.edit")).toBe(true);
+      for (const section of ["projects", "calls", "watch"]) {
+        expect(can({ role }, `${section}.view` as never), `${role} ${section}`).toBe(true);
+        expect(can({ role }, `${section}.edit` as never), `${role} ${section}`).toBe(true);
+      }
       for (const section of ["files", "tickets", "campaigns", "crm", "tasks"]) {
         for (const action of ["view", "edit", "delete"]) expect(can({ role }, `${section}.${action}` as never), `${role} ${section}.${action}`).toBe(true);
       }
@@ -68,7 +70,7 @@ describe("section grid: the screen's model", () => {
 
   it("a row per section with «يشوف / يضيف ويعدّل / يحذف», the reports only «يشوف»", () => {
     const grid = cellsOf();
-    expect([...grid.keys()]).toEqual(["projects", "tasks", "ideas", "goals", "production", "files", "tickets", "campaigns", "crm", "reports"]);
+    expect([...grid.keys()]).toEqual(["projects", "tasks", "ideas", "goals", "production", "files", "tickets", "campaigns", "crm", "calls", "watch", "reports"]);
     expect(grid.get("reports")?.edit).toBeNull();
     expect(grid.get("projects")?.delete).toBeNull();
     expect(grid.get("tasks")?.delete?.on).toBe(true);
@@ -127,5 +129,13 @@ describe("batch 3: the projects and the tasks on the map and the «جديد» wh
     expect(newActionsFor({ role: "MEMBER", caps: memberCaps })).toEqual(expect.arrayContaining(["task", "project", "doc"]));
     const without = newActionsFor({ role: "MEMBER", caps: memberCaps.filter((c) => !["tasks.edit", "projects.edit", "files.edit"].includes(c)) });
     for (const key of ["task", "project", "doc"]) expect(without, key).not.toContain(key);
+    expect(newActionsFor({ role: "MEMBER", caps: memberCaps })).toContain("watch");
+    expect(newActionsFor({ role: "MEMBER", caps: memberCaps.filter((c) => c !== "watch.edit") })).not.toContain("watch");
+  });
+
+  it("«نتفرّج سوا» is drawn only with its «يشوف» box", () => {
+    const places = (caps: readonly string[]) => buildNav({ role: "MEMBER", caps }).places.map((p) => p.key);
+    expect(places(memberCaps)).toContain("watch");
+    expect(places(memberCaps.filter((c) => c !== "watch.view"))).not.toContain("watch");
   });
 });

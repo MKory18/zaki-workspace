@@ -188,7 +188,7 @@ export const PLACES: readonly PlaceDef[] = [
   // «نتفرّج سوا» (the owner's ask, 2026-10-26: «الشغل، تحتها المكتبة، الإدارة، ثم نتفرّج سوا»): a place of its own,
   // one page, after «الإدارة». People of a space watch one link together; the sessions are the team's own talk,
   // so not an external partner's (the page and /api/watch refuse a guest too: `placeOfferedToGuests`).
-  { key: "watch", href: "/watch", labelKey: "nav.place.watch", icon: "watch", requires: "staff", tabs: [], feature: "watch" },
+  { key: "watch", href: "/watch", labelKey: "nav.place.watch", icon: "watch", requires: { capability: "watch.view" }, tabs: [], feature: "watch" },
 ];
 
 /**

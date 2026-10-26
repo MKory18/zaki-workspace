@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { memberCan } from "@/server/policy/actor";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, ValidationError, type OrgAccessContext } from "@/server/auth";
 import { canModerate, canPost, canRead, loadConversationFacts, loadOrgFacts } from "@/server/policy/conversation";
@@ -381,6 +382,7 @@ export async function conversationDetail(
       // a topic only (a DM is never his to enter), and not a closed one (it takes no messages)
       canJoin: org!.role === "OWNER" && !facts.viewerIsMember && facts.kind === "TOPIC" && !conv.closedAt,
       canMakeWork: org!.role !== "GUEST" && !(org!.role === "OWNER" && !facts.viewerIsMember),
+      canCall: (await memberCan(ctx, "calls.edit", { spaceGuestsPass: true })) === true,
       id: ctx.userId,
     },
     pinnedMessages: (

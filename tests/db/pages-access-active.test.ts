@@ -205,7 +205,8 @@ describe("pages serve the ACTIVE company, with the role held there", () => {
     }
     await loginAs(w.person.id);
     const element = (await ChatPage()) as PageElement;
-    expect(element.props).toEqual({ guest: false });
+    // who is looking, and whether they may start a meeting (the calls row of the section grid, 2026-10-26)
+    expect(element.props).toEqual({ guest: false, canMeet: true });
     const home = await call(chatHomeRoute.GET, { url: "http://localhost/api/chat/home" });
     expect(home.status).toBe(200);
     expect(home.text).toContain("NEW COMPANY TOPIC");

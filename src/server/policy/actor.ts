@@ -68,19 +68,15 @@ export function assertCan(actor: Pick<Actor, "caps">, capability: Capability, co
 export { can };
 
 /**
- * The same check inside a service that is handed only `{ orgId, userId }`: reads the person's ACTIVE membership and
- * throws 403 `code` unless it holds the capability. The routes check too; this is the door a new caller can not forget.
+ * The person's box, from their ACTIVE membership, for a service that is handed only `{ orgId, userId }` (false for
+ * anyone who is not an ACTIVE member). `spaceGuestsPass`: an external partner (GUEST) holds no capability, yet works
+ * in the spaces shared with them under the space's own rules (projects, tasks, calls): for them those rules decide.
  */
-export async function assertMemberCan(
+export async function memberCan(
   ctx: { orgId: string; userId: string },
   capability: Capability,
-  code = "insufficient_role",
-  /**
-   * `spaceGuestsPass`: an external partner (GUEST) holds no capability, yet works in the spaces shared with them under
-   * the space's own rules (projects and tasks): for them those rules decide, not the grid.
-   */
   opts: { spaceGuestsPass?: boolean } = {},
-): Promise<void> {
+): Promise<boolean | "not_member"> {
   const member = await db.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } },
     select: {
@@ -92,7 +88,22 @@ export async function assertMemberCan(
       organization: { select: { settings: true } },
     },
   });
-  if (!member || member.status !== "ACTIVE") throw new ForbiddenError("not_org_member");
-  if (opts.spaceGuestsPass && member.role === "GUEST") return;
-  if (!can(member, capability, { sectionGrid: sectionGridOf(member.organization.settings) })) throw new ForbiddenError(code);
+  if (!member || member.status !== "ACTIVE") return "not_member";
+  if (opts.spaceGuestsPass && member.role === "GUEST") return true;
+  return can(member, capability, { sectionGrid: sectionGridOf(member.organization.settings) });
+}
+
+/**
+ * The same as a door: throws 403 `code` unless the person holds the capability (`not_org_member` for anyone not an
+ * ACTIVE member). The routes check too; this is the door a new caller can not forget.
+ */
+export async function assertMemberCan(
+  ctx: { orgId: string; userId: string },
+  capability: Capability,
+  code = "insufficient_role",
+  opts: { spaceGuestsPass?: boolean } = {},
+): Promise<void> {
+  const ok = await memberCan(ctx, capability, opts);
+  if (ok === "not_member") throw new ForbiddenError("not_org_member");
+  if (!ok) throw new ForbiddenError(code);
 }

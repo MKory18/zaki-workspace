@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertMemberCan } from "@/server/policy/actor";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, ValidationError, type OrgAccessContext } from "@/server/auth";
 import { AR } from "@/lib/i18n/dict";
@@ -144,6 +145,7 @@ export async function watchCandidates(orgId: string, spaceId: string, exceptUser
 
 /** Starts a session in a space: its topic, its row, a line in the talk and a word to everybody it is for. */
 export async function startWatch(ctx: OrgAccessContext, spaceId: string, input: z.infer<typeof startWatchSchema>): Promise<{ id: string; conversationId: string }> {
+  await assertMemberCan(ctx, "watch.edit", "section.edit_denied");
   const org = await loadOrgFacts(ctx.userId, ctx.orgId);
   const space = await db.workspace.findFirst({ where: { id: spaceId, organizationId: ctx.orgId }, select: { id: true } });
   if (!space) throw new NotFoundError("watch.e.not_found");
@@ -211,6 +213,7 @@ export async function startWatch(ctx: OrgAccessContext, spaceId: string, input: 
 
 /** The sessions of a space this person may see: the ones they were started for (the OWNER: all), live ones first. */
 export async function listWatch(ctx: OrgAccessContext, spaceId: string): Promise<WatchSessionDto[]> {
+  await assertMemberCan(ctx, "watch.view", "section.view_denied");
   const org = await loadOrgFacts(ctx.userId, ctx.orgId);
   if (!org || org.status !== "ACTIVE" || org.role === "GUEST") return [];
   const rows = await db.watchSession.findMany({
@@ -240,6 +243,7 @@ async function guardSession(ctx: OrgAccessContext, id: string) {
 
 /** One session as its page shows it. */
 export async function watchDetail(ctx: OrgAccessContext, id: string): Promise<WatchDetailDto & { spaceId: string }> {
+  await assertMemberCan(ctx, "watch.view", "section.view_denied");
   const { row, conv, org } = await guardSession(ctx, id);
   const members = await db.conversationMember.findMany({
     where: { conversationId: row.conversationId, user: { memberships: { some: { organizationId: ctx.orgId, status: "ACTIVE" } } } },
@@ -276,6 +280,7 @@ function remoteOf(row: SessionRow, viewerId: string, conv: Guarded["conv"], org:
 
 /** The remote of one session, for its people (the page asks again after every `watch.changed`). */
 export async function watchRemote(ctx: OrgAccessContext, id: string): Promise<WatchRemoteDto> {
+  await assertMemberCan(ctx, "watch.view", "section.view_denied");
   const { row, conv, org } = await guardSession(ctx, id);
   return remoteOf(row, ctx.userId, conv, org);
 }
@@ -293,6 +298,7 @@ export const pressSchema = z.object({
  * clock and a version one higher, and the session's people are told (`watch.changed`, ids only) to fetch it.
  */
 export async function pressRemote(ctx: OrgAccessContext, id: string, input: z.infer<typeof pressSchema>): Promise<WatchRemoteDto> {
+  await assertMemberCan(ctx, "watch.view", "section.view_denied");
   const { row, conv, org } = await guardSession(ctx, id);
   if (!canPress({ hostId: row.hostId, everyoneControls: row.everyoneControls, ended: !!row.endedAt }, ctx.userId)) {
     throw new ForbiddenError(row.endedAt ? "watch.e.ended" : "watch.e.not_remote");
@@ -320,6 +326,7 @@ export const handOverSchema = z
 
 /** Hands the remote to one of the session's people, or opens it to all of them: the host, the space's admin, the owner. */
 export async function handOverRemote(ctx: OrgAccessContext, id: string, input: z.infer<typeof handOverSchema>): Promise<WatchRemoteDto> {
+  await assertMemberCan(ctx, "watch.view", "section.view_denied");
   const { row, conv, org } = await guardSession(ctx, id);
   if (row.endedAt) throw new ForbiddenError("watch.e.ended");
   if (!canHandOverWatch(row, ctx.userId, conv, org)) throw new ForbiddenError("watch.e.not_remote");
@@ -352,6 +359,7 @@ export async function handOverRemote(ctx: OrgAccessContext, id: string, input: z
 
 /** Ends a session (its talk stays, like any topic). Ending an ended one changes nothing. */
 export async function endWatch(ctx: OrgAccessContext, id: string): Promise<void> {
+  await assertMemberCan(ctx, "watch.edit", "section.edit_denied");
   const { row, conv, org } = await guardSession(ctx, id);
   if (!canEndWatch(row, ctx.userId, conv, org)) throw new ForbiddenError("watch.e.cannot_end");
   await db.$transaction(async (tx) => {
