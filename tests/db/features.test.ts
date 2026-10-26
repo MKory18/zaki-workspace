@@ -50,6 +50,7 @@ describe("«الميزات»: who switches", () => {
       { key: "sectionPermissions", on: true },
       { key: "libraryDrive", on: true },
       { key: "pushEverything", on: true },
+      { key: "callNoiseFilter", on: true },
     ]);
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
   });

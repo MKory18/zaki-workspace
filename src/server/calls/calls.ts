@@ -5,6 +5,7 @@ import { db } from "@/server/db";
 import { isOfSpace } from "@/server/chat/space-people";
 import { writeSystemMessage } from "@/server/chat/system";
 import { emitRealtime } from "@/server/realtime/emit";
+import { isFeatureOn } from "@/server/services/features";
 import { canRead, loadConversationFacts, loadOrgFacts } from "@/server/policy/conversation";
 import {
   canEndCall,
@@ -296,7 +297,7 @@ export async function callDetail(ctx: OrgAccessContext, callId: string): Promise
 }
 
 /** The short pass into a call's room, for somebody who may join it. */
-export async function callPass(ctx: OrgAccessContext, callId: string): Promise<{ url: string; token: string; room: string }> {
+export async function callPass(ctx: OrgAccessContext, callId: string): Promise<{ url: string; token: string; room: string; noiseFilter: boolean }> {
   await assertMemberCan(ctx, "calls.view", "section.view_denied", { spaceGuestsPass: true });
   const { facts, org } = await ownCall(ctx, callId);
   if (facts.endedAt) throw new ForbiddenError("calls.e.ended");
@@ -309,7 +310,13 @@ export async function callPass(ctx: OrgAccessContext, callId: string): Promise<{
     update: {},
   });
   await db.callPerson.updateMany({ where: { callId, userId: ctx.userId, joinedAt: null }, data: { joinedAt: new Date() } });
-  return { url: server.url, room: roomOf(callId), token: await passFor(server, { callId, userId: ctx.userId, name: me.name }) };
+  return {
+    url: server.url,
+    room: roomOf(callId),
+    token: await passFor(server, { callId, userId: ctx.userId, name: me.name }),
+    // the owner's switch «تنقية صوت المكالمات»: the browser cleans the microphone of noise before sending it
+    noiseFilter: await isFeatureOn(ctx.orgId, "callNoiseFilter"),
+  };
 }
 
 /** «ضيف حدا»: rings one of the space's people into the call (they get a seat: the call, not the conversation). */

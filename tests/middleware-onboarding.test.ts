@@ -188,6 +188,10 @@ describe("middleware: the files a browser fetches by itself pass without a sessi
     ...served("icons", /\.png$/),
     ...served("brand/decor", /\.webp$/),
     ...served("fonts", /\.woff2$/),
+    // the call noise filter (copied into public/noise/ by the build: scripts/copy-noise-assets.mjs)
+    "/noise/rnnoise.wasm",
+    "/noise/rnnoise_simd.wasm",
+    "/noise/rnnoise-worklet.js",
   ];
 
   it("the list is real: Next's own files exist in src/app, the others are the files in public/", () => {
@@ -213,7 +217,7 @@ describe("middleware: the files a browser fetches by itself pass without a sessi
   });
 
   it("the file extension must end the path: a folder of files, or a name that only contains one, is a page and needs a session", async () => {
-    for (const p of ["/icons", "/brand/decor", "/fonts", "/manifest.json", "/icon.svg.html", "/fonts/reem-kufi-var.woff2x"]) {
+    for (const p of ["/icons", "/brand/decor", "/fonts", "/noise", "/manifest.json", "/icon.svg.html", "/fonts/reem-kufi-var.woff2x", "/noise/rnnoise.wasmx"]) {
       const res = await middleware(req(p));
       expect(res.status, p).toBe(307);
       expect(location(res), p).toBe(`/login?next=${encodeURIComponent(p)}`);

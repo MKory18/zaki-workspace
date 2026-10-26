@@ -20,3 +20,4 @@ data/files/
 
 # Excalidraw's fonts, copied by scripts/copy-whiteboard-assets.mjs at build
 /public/excalidraw/
+/public/noise/

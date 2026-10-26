@@ -10,7 +10,9 @@ import * as leaveRoute from "@/app/api/calls/[id]/leave/route";
 import * as endRoute from "@/app/api/calls/[id]/end/route";
 import * as muteRoute from "@/app/api/calls/[id]/mute/route";
 import * as dmRoute from "@/app/api/chat/dm/route";
+import type { Prisma } from "@prisma/client";
 import { setCallsFetchForTests, roomOf } from "@/server/calls/livekit";
+import { withFeature } from "@/lib/features";
 import { EMPTY_GRACE_MS } from "@/server/calls/calls";
 import { SPACE_COOKIE } from "@/server/services/current-space";
 import { call, db, loginAs, makeTeam, makeUser, makeWorkspace } from "./helpers";
@@ -113,6 +115,20 @@ describe("calls: who gets a pass", () => {
     expect(payload.iss).toBe("test-key");
     expect(payload["video"]).toMatchObject({ room: roomOf(id), roomJoin: true });
     expect((payload.exp as number) - Math.floor(Date.now() / 1000)).toBeLessThanOrEqual(120);
+  });
+
+  it("the pass says whether the microphone is cleaned of noise: on unless the owner switched «تنقية صوت المكالمات» off", async () => {
+    const t = await space();
+    const topic = await topicOf(t.org.id, t.ws.id);
+    await loginAs(t.member.id);
+    const id = (await start(topic.id)).json?.["id"] as string;
+    expect((await pass(id)).json?.["noiseFilter"]).toBe(true);
+
+    const org = await db.organization.findUniqueOrThrow({ where: { id: t.org.id }, select: { settings: true } });
+    await db.organization.update({ where: { id: t.org.id }, data: { settings: withFeature(org.settings, "callNoiseFilter", false) as Prisma.InputJsonValue } });
+    const off = await pass(id);
+    expect(off.status).toBe(200); // the call itself is untouched: only the filter is off
+    expect(off.json?.["noiseFilter"]).toBe(false);
   });
 
   it("somebody who may not read the conversation gets no pass, and no word that the call exists", async () => {
