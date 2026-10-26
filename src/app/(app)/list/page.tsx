@@ -13,6 +13,7 @@ import { pageActor } from "@/app/(app)/_access";
 import { currentSpace } from "@/server/services/current-space";
 import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 
+import Link from "next/link";
 const GROUPS = ["status", "priority", "project", "assignee"] as const;
 type Group = (typeof GROUPS)[number];
 const PRIORITY_ORDER = ["URGENT", "HIGH", "NORMAL", "LOW", "NONE"] as const;
@@ -35,9 +36,9 @@ export default async function ListPage({
         <div>
           <h1 className="text-base font-semibold text-fg">{t("list.title")}</h1>
           <p className="mt-1 text-sm text-muted">{t("list.noWorkspace")}</p>
-          <a href="/projects" className="mt-3 inline-block rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-fg">
+          <Link href="/projects" className="mt-3 inline-block rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-fg">
             {t("nav.projects")}
-          </a>
+          </Link>
         </div>
       </div>
     );

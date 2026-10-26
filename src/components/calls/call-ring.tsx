@@ -6,6 +6,7 @@ import { useRealtime } from "@/lib/realtime/use-realtime";
 import { ct } from "@/lib/chat/text";
 import { Avatar } from "@/components/ui/avatar";
 import { callApi, type CallView } from "./call-api";
+import { useOptionalCall } from "./call-provider";
 
 /** A ring stops by itself after this long (an unanswered call). */
 export const RING_FOR_MS = 30_000;
@@ -19,13 +20,18 @@ export function CallRing() {
   const router = useRouter();
   const pathname = usePathname();
   const [ringing, setRinging] = React.useState<CallView | null>(null);
+  const call = useOptionalCall();
 
   useRealtime((event) => {
     if (event.kind !== "call.ring" || !event.callId) return;
     if (pathname === `/calls/${event.callId}`) return; // already in it
     void callApi<CallView>(`/api/calls/${encodeURIComponent(event.callId)}`).then(
-      (call) => {
-        if (!call.endedAt) setRinging(call);
+      (view) => {
+        if (!view.endedAt) {
+          setRinging(view);
+          // warm the connection while it rings, so «ردّ» is instant
+          call?.prefetch(view.id);
+        }
       },
       () => undefined,
     );
