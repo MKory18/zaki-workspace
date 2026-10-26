@@ -9,6 +9,7 @@ import { isDrop, isFresh, MAX_REJOINS, miniVisible, rejoinDelayMs } from "@/lib/
 import { useOptionalToast } from "@/components/ui/toast";
 import { callApi, callErrorText, type CallView } from "./call-api";
 import { AudioOut, mainPicture, PersonPicture } from "./call-media";
+import { ensurePush } from "./push-client";
 
 /**
  * THE CALL KEEPER — one live call per tab, kept above every page of the app (mounted in the (app) layout), so the call
@@ -269,6 +270,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("online", again);
     };
   }, [state.phase, state.callId, join]);
+
+  // once allowed, this browser stays subscribed to rings (refreshed quietly on every visit; never asks here)
+  React.useEffect(() => {
+    void ensurePush(false);
+  }, []);
 
   // after a reload (switching space reloads the page) the call is not lost: it is joined again by itself
   const joinRef = React.useRef(join);
