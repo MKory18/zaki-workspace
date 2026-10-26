@@ -31,7 +31,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 /** DELETE: remove opportunity (`crm.edit`). */
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
-    const ctx = await crmContext("edit");
+    const ctx = await crmContext("delete");
     await deleteOpportunity(ctx, params.id);
     return NextResponse.json({ ok: true });
   });

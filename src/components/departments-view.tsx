@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { DepartmentTickets } from "@/components/department-tickets";
 import { DepartmentCampaigns } from "@/components/department-campaigns";
+import type { SectionMay } from "@/lib/section-may";
 
 interface DeptRow {
   id: string;
@@ -47,7 +48,8 @@ const CHIP: Record<string, string> = {
 };
 const EMOJIS = ["🎨", "💻", "🖥️", "💼", "📣", "⚙️", "👔", "🚀"];
 
-export function DepartmentsView({ me }: { me: { role: string; id: string } }) {
+/** `me.tickets` / `me.campaigns`: those rows of the person's grid (absent: allowed); a row without «يشوف» hides its panel. */
+export function DepartmentsView({ me }: { me: { role: string; id: string; tickets?: SectionMay; campaigns?: SectionMay } }) {
   const { t } = useI18n();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -131,20 +133,26 @@ export function DepartmentsView({ me }: { me: { role: string; id: string } }) {
                       {d.members.length > 6 && <span className="text-xs text-muted">+{d.members.length - 6}</span>}
                     </div>
                     <div className="mt-3">
-                      <DepartmentTickets
-                        deptId={d.id}
-                        deptName={d.name}
-                        emoji={d.emoji}
-                        currentUserId={me.id}
-                        canAssign={manage || d.members.some((m) => m.id === me.id)}
-                      />
-                      <DepartmentCampaigns
-                        deptId={d.id}
-                        deptName={d.name}
-                        emoji={d.emoji}
-                        currentUserId={me.id}
-                        canManage={manage || d.members.some((m) => m.id === me.id)}
-                      />
+                      {me.tickets?.view !== false ? (
+                        <DepartmentTickets
+                          deptId={d.id}
+                          deptName={d.name}
+                          emoji={d.emoji}
+                          currentUserId={me.id}
+                          canAssign={manage || d.members.some((m) => m.id === me.id)}
+                          may={me.tickets}
+                        />
+                      ) : null}
+                      {me.campaigns?.view !== false ? (
+                        <DepartmentCampaigns
+                          deptId={d.id}
+                          deptName={d.name}
+                          emoji={d.emoji}
+                          currentUserId={me.id}
+                          canManage={manage || d.members.some((m) => m.id === me.id)}
+                          may={me.campaigns}
+                        />
+                      ) : null}
                     </div>
                   </div>
                   {manage && (

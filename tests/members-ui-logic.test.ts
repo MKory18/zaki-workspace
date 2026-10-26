@@ -18,6 +18,7 @@ import {
   canAssignRole,
   canResetCapabilities,
   capabilityGroups,
+  sectionGrid,
   capabilityListsAfterRankChange,
   creatableRoles,
   filterMembers,
@@ -216,8 +217,14 @@ describe("which actions the sheet offers", () => {
 });
 
 describe("capability switches: rank defaults + extras - revoked", () => {
+  // the switches and the section grid's boxes: one row per wired capability, same state and locks
   const rows = (member: ContractMember, actor: ActorInfo = actorOf("OWNER"), editable = true) =>
-    new Map(capabilityGroups(member, actor, editable).flatMap((g) => g.rows).map((r) => [r.capability, r]));
+    new Map(
+      [
+        ...capabilityGroups(member, actor, editable).flatMap((g) => g.rows),
+        ...sectionGrid(member, actor, editable).flatMap((r) => Object.values(r.cells).filter((c) => c !== null)),
+      ].map((r) => [r.capability, r]),
+    );
   const offered = (member: ContractMember, actor: ActorInfo = actorOf("OWNER")) =>
     capabilityGroups(member, actor, true).flatMap((g) => g.rows.map((r) => r.capability));
   const hidden = CAPABILITIES.filter((c) => !WIRED_CAPABILITIES.includes(c));

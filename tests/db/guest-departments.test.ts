@@ -194,7 +194,9 @@ describe("the /departments page", () => {
       await loginAs(user.id);
       const element = (await DepartmentsPage()) as React.ReactElement<{ me: { role: string; id: string } }>;
       expect(element.type).toBe(DepartmentsView);
-      expect(element.props.me).toEqual({ role, id: user.id });
+      // who they are, and their tickets and campaigns rows of the grid (all on by the template)
+      const all = { view: true, edit: true, delete: true };
+      expect(element.props.me).toEqual({ role, id: user.id, tickets: all, campaigns: all });
     }
   });
 });

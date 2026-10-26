@@ -10,7 +10,8 @@ export const CAPABILITIES = [
   "users.manage", // create accounts, suspend, offboard, reset passwords
   "directory.view", // see the staff directory (names, titles, e-mail)
   "crm.view", // read customers and opportunities
-  "crm.edit", // create/edit/delete customers and opportunities
+  "crm.edit", // create and edit customers and opportunities
+  "crm.delete", // delete customers and opportunities
   "prices.view", // see price data
   "integrations.manage", // n8n, Telegram, Google Drive
   "announce.send", // company-wide announcements
@@ -29,6 +30,15 @@ export const CAPABILITIES = [
   "production.edit",
   "production.delete",
   "reports.view",
+  "files.view",
+  "files.edit",
+  "files.delete",
+  "tickets.view",
+  "tickets.edit",
+  "tickets.delete",
+  "campaigns.view",
+  "campaigns.edit",
+  "campaigns.delete",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -48,6 +58,10 @@ export const SECTIONS = [
   { id: "ideas", actions: ["view", "edit", "delete"] },
   { id: "goals", actions: ["view", "edit", "delete"] },
   { id: "production", actions: ["view", "edit", "delete"] },
+  { id: "files", actions: ["view", "edit", "delete"] },
+  { id: "tickets", actions: ["view", "edit", "delete"] },
+  { id: "campaigns", actions: ["view", "edit", "delete"] },
+  { id: "crm", actions: ["view", "edit", "delete"] },
   { id: "reports", actions: ["view"] },
 ] as const satisfies readonly { id: string; actions: readonly SectionAction[] }[];
 
@@ -89,8 +103,6 @@ export const WIRED_CAPABILITIES: readonly Capability[] = [
   "spaces.create",
   "users.manage",
   "directory.view",
-  "crm.view",
-  "crm.edit",
   "integrations.manage",
   ...SECTION_CAPABILITIES,
 ];
@@ -104,7 +116,7 @@ export const WIRED_CAPABILITIES: readonly Capability[] = [
  *
  * The sections give each rank exactly what it could do before the grid existed, so nothing changes until the owner
  * flips a box: ideas are everyone's; goals and production routines are seen by all staff and managed by the
- * admins; the reports are a lead's and up.
+ * admins; the reports are a lead's and up; the library, the tickets, the campaigns and the customers are all staff's.
  */
 export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
   OWNER: CAPABILITIES,
@@ -128,6 +140,16 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "production.edit",
     "production.delete",
     "reports.view",
+    "files.view",
+    "files.edit",
+    "files.delete",
+    "tickets.view",
+    "tickets.edit",
+    "tickets.delete",
+    "campaigns.view",
+    "campaigns.edit",
+    "campaigns.delete",
+    "crm.delete",
   ],
   LEAD: [
     "directory.view",
@@ -140,8 +162,37 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "goals.view",
     "production.view",
     "reports.view",
+    "files.view",
+    "files.edit",
+    "files.delete",
+    "tickets.view",
+    "tickets.edit",
+    "tickets.delete",
+    "campaigns.view",
+    "campaigns.edit",
+    "campaigns.delete",
+    "crm.delete",
   ],
-  MEMBER: ["directory.view", "crm.view", "crm.edit", "ideas.view", "ideas.edit", "ideas.delete", "goals.view", "production.view"],
+  MEMBER: [
+    "directory.view",
+    "crm.view",
+    "crm.edit",
+    "ideas.view",
+    "ideas.edit",
+    "ideas.delete",
+    "goals.view",
+    "production.view",
+    "files.view",
+    "files.edit",
+    "files.delete",
+    "tickets.view",
+    "tickets.edit",
+    "tickets.delete",
+    "campaigns.view",
+    "campaigns.edit",
+    "campaigns.delete",
+    "crm.delete",
+  ],
   GUEST: [],
 };
 

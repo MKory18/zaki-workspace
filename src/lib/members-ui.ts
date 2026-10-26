@@ -231,7 +231,8 @@ export type CapabilityGroupId = "people" | "customers" | "money" | "admin";
  */
 export const CAPABILITY_GROUPS: readonly { id: CapabilityGroupId; capabilities: readonly Capability[] }[] = [
   { id: "people", capabilities: ["spaces.create", "users.manage", "directory.view"] },
-  { id: "customers", capabilities: ["crm.view", "crm.edit", "prices.view"] },
+  // the customers' view / add-edit / delete are the section grid's row («العملاء»); prices stay a switch here
+  { id: "customers", capabilities: ["prices.view"] },
   { id: "money", capabilities: ["cash.view", "penalties.view"] },
   { id: "admin", capabilities: ["integrations.manage", "announce.send", "escalation.configure"] },
 ];

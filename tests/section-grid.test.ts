@@ -10,7 +10,7 @@ import { ADMIN_ACTOR, MEMBER, OWNER_ACTOR, contractMember } from "./members-ui-f
 describe("section grid: the policy", () => {
   it("every section box is a wired capability, and the grid lists each section's actions", () => {
     for (const cap of SECTION_CAPABILITIES) expect(WIRED_CAPABILITIES, cap).toContain(cap);
-    expect(SECTIONS.map((s) => s.id)).toEqual(["ideas", "goals", "production", "reports"]);
+    expect(SECTIONS.map((s) => s.id)).toEqual(["ideas", "goals", "production", "files", "tickets", "campaigns", "crm", "reports"]);
     expect(SECTION_CAPABILITIES).toContain("reports.view");
     expect(SECTION_CAPABILITIES).not.toContain("reports.edit" as never);
   });
@@ -25,6 +25,12 @@ describe("section grid: the policy", () => {
       expect(can({ role: "ADMIN" }, cap), cap).toBe(true);
       expect(can({ role: "LEAD" }, cap), cap).toBe(false);
       expect(can({ role: "MEMBER" }, cap), cap).toBe(false);
+    }
+    // batch 2: the library, the tickets, the campaigns and the customers are all staff's, delete included
+    for (const role of ["ADMIN", "LEAD", "MEMBER"] as const) {
+      for (const section of ["files", "tickets", "campaigns", "crm"]) {
+        for (const action of ["view", "edit", "delete"]) expect(can({ role }, `${section}.${action}` as never), `${role} ${section}.${action}`).toBe(true);
+      }
     }
     expect(can({ role: "LEAD" }, "reports.view")).toBe(true);
     expect(can({ role: "MEMBER" }, "reports.view")).toBe(false);
@@ -44,6 +50,10 @@ describe("section grid: the policy", () => {
     expect(partner.has("ideas.delete")).toBe(false);
     expect(partner.has("goals.delete")).toBe(true);
     expect(effectiveCapabilities({ role: "OWNER", primaryOwner: true }).has("ideas.delete")).toBe(true);
+    // the customers joined the grid: without «يشوف» their add/edit and delete fall too
+    const noCrm = effectiveCapabilities({ role: "MEMBER", revokedCapabilities: ["crm.view"] });
+    expect(noCrm.has("crm.edit")).toBe(false);
+    expect(noCrm.has("crm.delete")).toBe(false);
   });
 });
 
@@ -53,7 +63,7 @@ describe("section grid: the screen's model", () => {
 
   it("a row per section with «يشوف / يضيف ويعدّل / يحذف», the reports only «يشوف»", () => {
     const grid = cellsOf();
-    expect([...grid.keys()]).toEqual(["ideas", "goals", "production", "reports"]);
+    expect([...grid.keys()]).toEqual(["ideas", "goals", "production", "files", "tickets", "campaigns", "crm", "reports"]);
     expect(grid.get("reports")?.edit).toBeNull();
     expect(grid.get("reports")?.delete).toBeNull();
     const goals = grid.get("goals")!;

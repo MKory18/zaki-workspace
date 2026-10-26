@@ -1,5 +1,6 @@
 import { pageActor, SectionOffNotice } from "@/app/(app)/_access";
 import { actorCan } from "@/server/policy/actor";
+import { sectionMay } from "@/lib/section-may";
 import { getServerT } from "@/lib/i18n/server";
 import { db } from "@/server/db";
 import { currentSpace } from "@/server/services/current-space";
@@ -16,12 +17,12 @@ export default async function CampaignsPage() {
   if (actor.isExternal) {
     return <div className="mx-auto max-w-2xl p-10 text-center text-sm text-muted">{t("guest.no_access")}</div>;
   }
-  if (!actorCan(actor, "directory.view")) return <SectionOffNotice />;
+  if (!actorCan(actor, "directory.view") || !actorCan(actor, "campaigns.view")) return <SectionOffNotice />;
   const space = await currentSpace(actor);
   const here = space?.kind === "DEPARTMENT"
     ? await db.workspace.findUnique({ where: { id: space.id }, select: { departmentId: true } })
     : null;
-  return <CampaignsDesk me={{ id: user.id, role: actor.role }} defaultDepartmentId={here?.departmentId ?? null} />;
+  return <CampaignsDesk me={{ id: user.id, role: actor.role, may: sectionMay(actor.caps, "campaigns") }} defaultDepartmentId={here?.departmentId ?? null} />;
 }
 
 export const dynamic = "force-dynamic";

@@ -52,14 +52,14 @@ export type CustomerInput = z.infer<typeof createCustomerSchema>;
 export type OpportunityInput = z.infer<typeof createOpportunitySchema>;
 
 /**
- * CRM is staff-only and runs on two capabilities: `crm.view` for every read, `crm.edit` for every
- * create, update and delete. Members, team leads and admins hold both by default (the owner can
+ * CRM is staff-only and runs on the customers row of the person's grid: `crm.view` for every read, `crm.edit` for
+ * every create and update, `crm.delete` for every delete (without `crm.view` the other two fall too). Members, team leads and admins hold both by default (the owner can
  * switch either off for one person: 403 `insufficient_role`); org GUESTs hold neither and keep the
  * message they always got (`guest.no_access`). Opportunity `value` is price data, but hiding it
  * from staff is `prices.view`'s job, which is wired later - not here.
  * Every exported function below takes the caller's context for that.
  */
-async function assertCrm(ctx: OrgAccessContext, capability: "crm.view" | "crm.edit"): Promise<void> {
+async function assertCrm(ctx: OrgAccessContext, capability: "crm.view" | "crm.edit" | "crm.delete"): Promise<void> {
   assertNotGuest(ctx);
   await assertCapability(ctx, capability);
 }
@@ -116,7 +116,7 @@ export async function updateCustomer(ctx: OrgAccessContext, id: string, input: P
 }
 
 export async function deleteCustomer(ctx: OrgAccessContext, id: string) {
-  await assertCrm(ctx, "crm.edit");
+  await assertCrm(ctx, "crm.delete");
   const customer = await db.customer.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] } });
   if (!customer) throw new NotFoundError("crm.not_found");
   await db.customer.delete({ where: { id: customer.id } });
@@ -198,7 +198,7 @@ export async function updateOpportunity(
 }
 
 export async function deleteOpportunity(ctx: OrgAccessContext, id: string) {
-  await assertCrm(ctx, "crm.edit");
+  await assertCrm(ctx, "crm.delete");
   const opportunity = await db.opportunity.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] } });
   if (!opportunity) throw new NotFoundError("crm.not_found");
   await db.opportunity.delete({ where: { id: opportunity.id } });

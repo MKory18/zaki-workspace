@@ -346,7 +346,7 @@ describe("the panel of one person: only what the actor may do is offered", () =>
       if (wired) expect(markup, group.id).toContain(`>${title}</h4>`);
       else expect(markup, group.id).not.toContain(`>${title}</h4>`);
     }
-    expect(markup).toContain(t("members.cap.crm.view.hint"));
+    expect(markup).toContain(t("members.cap.directory.view.hint"));
     // a team lead's rank gives these of the wired switches
     const onByRank = SWITCHES.filter((c) => RANK_DEFAULTS.LEAD.includes(c)).length;
     expect(count(markup, /role="switch" aria-checked="true"/g)).toBe(onByRank);
@@ -359,7 +359,7 @@ describe("the panel of one person: only what the actor may do is offered", () =>
       name: "نادين",
       role: "MEMBER",
       capabilities: ["integrations.manage"],
-      revokedCapabilities: ["crm.edit"],
+      revokedCapabilities: ["directory.view"],
     });
     const markup = render(sheet(changed));
     expect(markup).toContain("أُضيف فوق الرتبة");
