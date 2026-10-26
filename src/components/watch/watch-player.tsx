@@ -56,8 +56,10 @@ export const WatchPlayer = forwardRef<
     people: { id: string; name: string }[];
     /** drawn over the video (the reactions that float up) */
     overlay?: ReactNode;
+    /** open at this second (a link back from what a comment became) */
+    jumpTo?: number | null;
   }
->(function WatchPlayer({ sessionId, conversationId, videoRef, startSec, title, initial, viewerId, people, overlay }, ref) {
+>(function WatchPlayer({ sessionId, conversationId, videoRef, startSec, title, initial, viewerId, people, overlay, jumpTo }, ref) {
   const { t } = useI18n();
   const toast = useOptionalToast();
   const box = useRef<HTMLDivElement>(null);
@@ -181,10 +183,22 @@ export const WatchPlayer = forwardRef<
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoRef]);
 
-  // once the player is there: where are the others?
+  // once the player is there: where are the others? (a link to a moment goes there instead, alone)
   useEffect(() => {
-    if (ready) void refresh();
-  }, [ready, refresh]);
+    if (!ready) return;
+    if (typeof jumpTo === "number") {
+      const p = player.current;
+      if (p && !(live.current.remote.can.press && live.current.remote.live)) {
+        live.current.detached = true;
+        setDetached(true);
+      }
+      p?.seekTo(jumpTo, true);
+      return;
+    }
+    void refresh();
+    // only when the player becomes ready
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   // a press anywhere, or the session ending: ask again
   useRealtime((e) => {
