@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pin, Send } from "lucide-react";
+import { Lightbulb, ListTodo, FolderPlus, Pin, Send, Wand2 } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { useRealtime } from "@/lib/realtime/use-realtime";
@@ -9,6 +9,9 @@ import { useOptionalToast } from "@/components/ui/toast";
 import { MOMENT_MARK, QUICK_REACTIONS, fmtVideoTime, isKeyMoment, isReaction, keyMoments, momentText } from "@/lib/watch/moments";
 import { watchErrorKey } from "./watch-home";
 import { cn } from "@/lib/utils";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MakeWorkDialog } from "@/components/chat/message/make-work-dialog";
+import { commentDraft, sessionDraft, type Draft } from "@/lib/watch/convert";
 
 /** The part of a chat message the comments need (the session's talk is an ordinary topic). */
 export interface WatchComment {
@@ -32,13 +35,25 @@ const PAGE = 50;
  * moments, in the video's order, are the session's summary. Everything is an ordinary message of the session's topic,
  * so the call, the read marks and the rest of the chat work as they do anywhere.
  */
+/** What «حوّل» may make here: the person's «الأقسام» boxes (every door checks again). */
+export interface ConvertRights {
+  idea: boolean;
+  task: boolean;
+  project: boolean;
+}
+
 export function WatchComments({
   conversationId,
+  session,
+  convert,
   timeSec,
   seekMine,
   onReaction,
 }: {
   conversationId: string;
+  /** the session, for «حوّل» (its name, its space, the link back) */
+  session: { id: string; title: string; spaceId: string };
+  convert: ConvertRights;
   /** the second this screen's player is at */
   timeSec: () => number;
   /** take this screen to a second */
@@ -54,6 +69,7 @@ export function WatchComments({
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [onlyKey, setOnlyKey] = useState(false);
+  const [taskFrom, setTaskFrom] = useState<{ id: string; body: string } | null>(null);
   const seen = useRef<Set<string>>(new Set());
   const listEnd = useRef<HTMLLIElement>(null);
 
@@ -112,12 +128,33 @@ export function WatchComments({
   }
 
   const moments = useMemo(() => keyMoments(items), [items]);
+  const words = { momentOf: t("watch.convert.moment_of"), summary: t("watch.convert.summary") };
+  const canConvert = convert.idea || convert.task || convert.project;
+
+  /** An idea or a project from a draft, through the doors that already make them (their rules, their boxes). */
+  async function make(kind: "idea" | "project", draft: Draft) {
+    try {
+      if (kind === "idea") {
+        await apiPost("/api/ideas", { title: draft.title, description: draft.description });
+      } else {
+        await apiPost("/api/projects", { workspaceId: session.spaceId, name: draft.title.slice(0, 120), description: draft.description });
+      }
+      toast?.toast(t(kind === "idea" ? "watch.convert.made_idea" : "watch.convert.made_project", { title: draft.title }), "success");
+    } catch (err) {
+      toast?.toast(t(watchErrorKey(err)), "error");
+    }
+  }
+
   const shown = onlyKey ? moments : items.filter((m) => !isReaction(m.body));
 
   return (
     <section className="flex min-h-0 flex-col rounded-xl border border-border bg-surface" aria-label={t("watch.comments.title")}>
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
         <h2 className="text-sm font-semibold text-fg">{t("watch.comments.title")}</h2>
+        <span className="flex items-center gap-1">
+        {convert.idea || convert.project ? (
+          <ConvertMenu rights={convert} onMake={make} onTask={setTaskFrom} label={t("watch.convert.session")} draft={() => sessionDraft(session, moments, words)} />
+        ) : null}
         <button
           type="button"
           aria-pressed={onlyKey}
@@ -130,6 +167,7 @@ export function WatchComments({
           <Pin className="h-3.5 w-3.5" aria-hidden="true" />
           {t("watch.comments.key_moments", { n: moments.length })}
         </button>
+        </span>
       </header>
 
       <ol className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 lg:max-h-[55vh]" aria-live="polite">
@@ -165,6 +203,16 @@ export function WatchComments({
                 <bdi className="text-fg">{m.body}</bdi>
               )}
             </p>
+            {canConvert && !m.deleted && m.body ? (
+              <ConvertMenu
+                rights={convert}
+                onMake={make}
+                onTask={setTaskFrom}
+                label={t("watch.convert.comment")}
+                draft={() => commentDraft({ body: m.body ?? "", authorName: m.authorName, videoAtSec: m.videoAtSec }, session, words)}
+                task={{ id: m.id, body: m.body }}
+              />
+            ) : null}
           </li>
         ))}
         <li ref={listEnd} aria-hidden="true" />
@@ -217,6 +265,69 @@ export function WatchComments({
       ) : loaded ? (
         <p className="border-t border-border p-3 text-xs text-muted">{t("watch.comments.read_only")}</p>
       ) : null}
+
+      <MakeWorkDialog
+        message={taskFrom}
+        kind="task"
+        onClose={() => setTaskFrom(null)}
+        onDone={() => {
+          setTaskFrom(null);
+          toast?.toast(t("watch.convert.made_task"), "success");
+        }}
+      />
     </section>
+  );
+}
+
+/**
+ * The «حوّل» menu of a comment or of the whole session. Its own component (not made inside the comments' render), so a
+ * comment arriving while it is open does not close it.
+ */
+function ConvertMenu({
+  rights,
+  onMake,
+  onTask,
+  label,
+  draft,
+  task,
+}: {
+  rights: ConvertRights;
+  onMake: (kind: "idea" | "project", draft: Draft) => void | Promise<void>;
+  onTask: (from: { id: string; body: string }) => void;
+  label: string;
+  draft: () => Draft;
+  task?: { id: string; body: string };
+}) {
+  const { t } = useI18n();
+  return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={label}
+            title={label}
+            className="grid size-9 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-accent md:size-7"
+          >
+            <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {rights.idea ? (
+            <DropdownMenuItem onSelect={() => void onMake("idea", draft())}>
+              <Lightbulb className="h-4 w-4" aria-hidden="true" /> {t("watch.convert.to_idea")}
+            </DropdownMenuItem>
+          ) : null}
+          {rights.task && task ? (
+            <DropdownMenuItem onSelect={() => onTask(task)}>
+              <ListTodo className="h-4 w-4" aria-hidden="true" /> {t("watch.convert.to_task")}
+            </DropdownMenuItem>
+          ) : null}
+          {rights.project ? (
+            <DropdownMenuItem onSelect={() => void onMake("project", draft())}>
+              <FolderPlus className="h-4 w-4" aria-hidden="true" /> {t("watch.convert.to_project")}
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
   );
 }

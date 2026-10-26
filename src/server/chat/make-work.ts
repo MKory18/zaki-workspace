@@ -6,6 +6,7 @@ import { createTicket } from "@/server/services/tickets";
 import type { TaskPriority } from "@prisma/client";
 import { AR } from "@/lib/i18n/dict";
 import { interpolate } from "@/lib/i18n/interpolate";
+import { momentLink } from "@/lib/watch/convert";
 
 /**
  * A CHAT MESSAGE BECOMES WORK (the owner's ask, 2026-10-25): «اعمل منها مهمة» / «اعمل منها تذكرة». The task or the
@@ -19,7 +20,7 @@ import { interpolate } from "@/lib/i18n/interpolate";
 async function sourceOf(ctx: OrgAccessContext, messageId: string) {
   const msg = await db.chatMessage.findFirst({
     where: { id: messageId, orgId: ctx.orgId },
-    select: { id: true, body: true, kind: true, deletedAt: true, conversationId: true, author: { select: { name: true } } },
+    select: { id: true, body: true, kind: true, deletedAt: true, conversationId: true, videoAtSec: true, author: { select: { name: true } } },
   });
   if (!msg) throw new NotFoundError("chat.e.not_found");
   const [facts, org] = await Promise.all([loadConversationFacts(ctx.userId, msg.conversationId), loadOrgFacts(ctx.userId, ctx.orgId)]);
@@ -29,10 +30,15 @@ async function sourceOf(ctx: OrgAccessContext, messageId: string) {
   return msg;
 }
 
-/** The message's text, then where it came from (a link that opens the conversation at it). */
-function describe(msg: { id: string; body: string; conversationId: string; author: { name: string } }): string {
+/**
+ * The message's text, then where it came from (a link that opens the conversation at it); a comment of a «نتفرّج سوا»
+ * session also links to the same moment of its video.
+ */
+async function describe(msg: { id: string; body: string; conversationId: string; videoAtSec: number | null; author: { name: string } }): Promise<string> {
   const from = interpolate(AR["chat.work.from"] ?? "{name}", { name: msg.author.name });
-  return `${msg.body.trim()}\n\n${from}: /chat/${msg.conversationId}?m=${msg.id}`.slice(0, 4000);
+  const watch = msg.videoAtSec !== null ? await db.watchSession.findUnique({ where: { conversationId: msg.conversationId }, select: { id: true } }) : null;
+  const moment = watch ? `\n🎬 ${momentLink(watch.id, msg.videoAtSec!)}` : "";
+  return `${msg.body.trim()}\n\n${from}: /chat/${msg.conversationId}?m=${msg.id}${moment}`.slice(0, 4000);
 }
 
 /** A short title from the message: its first line, cut at a word. */
@@ -56,7 +62,7 @@ export async function messageToTask(
     projectId: input.projectId,
     boardId: input.boardId,
     title: (input.title?.trim() || titleFrom(msg.body)).slice(0, 280),
-    description: describe(msg),
+    description: await describe(msg),
     priority: input.priority,
     assigneeId: input.assigneeId ?? null,
   });
@@ -73,7 +79,7 @@ export async function messageToTicket(
   const title = (input.title?.trim() || titleFrom(msg.body, 190)).slice(0, 200);
   const ticket = await createTicket(ctx, input.departmentId, {
     title: title.length >= 3 ? title : `${title}…`.padEnd(3, "…"),
-    description: describe(msg),
+    description: await describe(msg),
     priority: input.priority ?? "NORMAL",
   });
   await db.ticket.update({ where: { id: ticket.id }, data: { sourceMessageId: msg.id } });
