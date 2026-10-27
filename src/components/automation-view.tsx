@@ -39,6 +39,9 @@ interface N8nStatus {
 interface GoogleStatus {
   connected: boolean;
   configured: boolean;
+  /** Where the app's keys come from: the server's settings, typed on the site, or not yet. */
+  appSource?: "env" | "site" | null;
+  redirectUri?: string;
   library?: boolean;
   libraryOff?: boolean;
   files?: DriveFile[];
@@ -319,7 +322,11 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
         </div>
 
         {!google.data?.configured ? (
-          <p className="text-xs leading-6 text-muted">{t("google.envHelp")}</p>
+          canManage && google.data ? (
+            <GoogleAppForm redirectUri={google.data.redirectUri ?? ""} replacing={false} onSaved={() => qc.invalidateQueries({ queryKey: ["google"] })} t={t} />
+          ) : (
+            <p className="text-xs leading-6 text-muted">{t("google.envHelp")}</p>
+          )
         ) : google.data.connected ? (
           <div className="space-y-3">
             {google.data.libraryOff ? (
@@ -392,12 +399,80 @@ x-zaki-signature: sha256=HMAC_SHA256(secret, "{timestamp}.{raw body}")`}
             <p className="text-xs text-muted">{t("google.readonlyNote")}</p>
           </div>
         )}
+        {/* keys typed on the site can be replaced from here (the server's own settings, when set, win and are not shown) */}
+        {canManage && google.data?.appSource === "site" ? (
+          <details className="text-xs">
+            <summary className="min-h-11 cursor-pointer py-2 text-muted">{t("google.app.change")}</summary>
+            <GoogleAppForm redirectUri={google.data.redirectUri ?? ""} replacing onSaved={() => qc.invalidateQueries({ queryKey: ["google"] })} t={t} />
+          </details>
+        ) : null}
       </section>
     </div>
   );
 }
 
 type TFn = (key: string, vars?: Record<string, string | number>) => string;
+
+/**
+ * «مفاتيح جوجل» typed on the site (the owner's ask, 2026-10-27: «بدي ادخلها بالسايت»): the app's id and secret from
+ * Google's console, saved on the company (the secret encrypted, never shown again), with the return address ready to
+ * copy into Google. Whoever runs integrations sees it while Drive has no app yet, or to replace the keys typed here.
+ */
+function GoogleAppForm({ redirectUri, replacing, onSaved, t }: { redirectUri: string; replacing: boolean; onSaved: () => void; t: TFn }) {
+  const { toast } = useToast();
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const save = useMutation({
+    mutationFn: () => apiPost("/api/integrations/google/app", { clientId: clientId.trim(), clientSecret: clientSecret.trim() }),
+    onSuccess: () => {
+      setClientSecret("");
+      toast(t("google.app.saved"), "success");
+      onSaved();
+    },
+    onError: (err) => toast(errText(err, t), "error"),
+  });
+  return (
+    <form
+      className="space-y-3 rounded-lg border border-border bg-surface-2/40 p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!save.isPending) save.mutate();
+      }}
+    >
+      <p className="text-xs leading-6 text-muted">{replacing ? t("google.app.replaceIntro") : t("google.app.intro")}</p>
+      <label className="block space-y-1 text-xs">
+        <span className="font-medium text-fg">{t("google.app.redirect")}</span>
+        <span className="flex items-center gap-2">
+          <code dir="ltr" className="min-w-0 flex-1 truncate rounded bg-surface px-2 py-1.5 text-start">{redirectUri}</code>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              void navigator.clipboard?.writeText(redirectUri).then(
+                () => toast(t("google.app.copied"), "success"),
+                () => undefined,
+              )
+            }
+          >
+            {t("google.app.copy")}
+          </Button>
+        </span>
+      </label>
+      <label className="block space-y-1 text-xs">
+        <span className="font-medium text-fg">{t("google.app.clientId")}</span>
+        <Input dir="ltr" autoComplete="off" spellCheck={false} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="1234567890-abc….apps.googleusercontent.com" />
+      </label>
+      <label className="block space-y-1 text-xs">
+        <span className="font-medium text-fg">{t("google.app.clientSecret")}</span>
+        <Input dir="ltr" type="password" autoComplete="new-password" spellCheck={false} value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
+      </label>
+      <Button type="submit" size="sm" disabled={save.isPending || !clientId.trim() || !clientSecret.trim()}>
+        {t("google.app.save")}
+      </Button>
+    </form>
+  );
+}
 
 function errText(err: unknown, t: TFn): string {
   if (err instanceof ApiError) {

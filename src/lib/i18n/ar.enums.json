@@ -60,6 +60,8 @@
   "event.telegram.message_sent": "رسالة مرسلة إلى تيليجرام",
   "event.google.connected": "ربط Google Drive",
   "event.google.disconnected": "إزالة ربط Google Drive",
+  "event.google.app_saved": "حفظ مفاتيح تطبيق جوجل",
+  "event.google.app_cleared": "مسح مفاتيح تطبيق جوجل",
   "event.chat.dm_created": "محادثة فردية جديدة",
   "event.chat.group_created": "مجموعة جديدة",
   "event.chat.group_updated": "تحديث مجموعة",

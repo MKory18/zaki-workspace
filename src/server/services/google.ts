@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { ValidationError } from "@/server/auth";
 import { decryptSecrets, encryptSecrets, hmacHex, safeEqual } from "@/server/crypto";
 import { appUrl } from "@/server/env";
 import { getIntegration, logEvent, upsertIntegration } from "@/server/services/integrations";
@@ -24,12 +26,72 @@ export interface GoogleSecrets {
   [key: string]: unknown;
 }
 
-/** Google app credentials come from the deployment env — the app never invents them. */
+/** Google app credentials from the deployment env (they win when set) — the app never invents them. */
 export function googleEnv(): { clientId: string; clientSecret: string } | null {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
   return { clientId, clientSecret: clientSecret };
+}
+
+/**
+ * THE GOOGLE APP ENTERED FROM THE SITE (the owner's ask, 2026-10-27: «بدي ادخلها بالسايت»): the client's id and
+ * secret typed on «الأتمتة» instead of the server's settings. Kept on the company (`Organization.settings.googleApp`),
+ * the secret encrypted like every integration secret; it never goes back to a screen. The deployment env, when set,
+ * still wins.
+ */
+interface StoredGoogleApp {
+  clientId?: unknown;
+  secretEnc?: unknown;
+}
+
+async function storedApp(orgId: string): Promise<{ clientId: string; clientSecret: string } | null> {
+  const org = await db.organization.findUnique({ where: { id: orgId }, select: { settings: true } });
+  const app = (org?.settings as { googleApp?: StoredGoogleApp } | null)?.googleApp;
+  if (!app || typeof app.clientId !== "string" || typeof app.secretEnc !== "string") return null;
+  const secret = decryptSecrets<{ clientSecret?: string }>(app.secretEnc)?.clientSecret;
+  return secret ? { clientId: app.clientId, clientSecret: secret } : null;
+}
+
+/** The app this company connects with: the env's, else the one entered on the site. */
+export async function googleApp(orgId: string): Promise<{ clientId: string; clientSecret: string } | null> {
+  return googleEnv() ?? (await storedApp(orgId));
+}
+
+/** Where the keys come from, for the screen: the server's settings, the site, or nowhere yet. */
+export async function googleAppSource(orgId: string): Promise<"env" | "site" | null> {
+  if (googleEnv()) return "env";
+  return (await storedApp(orgId)) ? "site" : null;
+}
+
+const CLIENT_ID = /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/;
+
+/** Saves the app typed on «الأتمتة» (whoever runs integrations: `integrations.manage`, checked by the route). */
+export async function saveGoogleApp(orgId: string, userId: string, input: { clientId: string; clientSecret: string }): Promise<void> {
+  const clientId = input.clientId.trim();
+  const clientSecret = input.clientSecret.trim();
+  if (!CLIENT_ID.test(clientId)) throw new ValidationError([{ path: "clientId", message: "google.app.bad_id" }]);
+  if (clientSecret.length < 10 || /\s/.test(clientSecret)) throw new ValidationError([{ path: "clientSecret", message: "google.app.bad_secret" }]);
+  await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT 1 FROM "Organization" WHERE id = ${orgId} FOR UPDATE`;
+    const org = await tx.organization.findUnique({ where: { id: orgId }, select: { settings: true } });
+    const base = org?.settings && typeof org.settings === "object" ? (org.settings as Record<string, unknown>) : {};
+    const next = { ...base, googleApp: { clientId, secretEnc: encryptSecrets({ clientSecret }) } };
+    await tx.organization.update({ where: { id: orgId }, data: { settings: next as Prisma.InputJsonValue } });
+  });
+  await logEvent(orgId, { direction: "OUT", type: "google.app_saved", payload: { by: userId } });
+}
+
+/** Forgets the app typed on the site (a connection made with it stops refreshing). */
+export async function clearGoogleApp(orgId: string, userId: string): Promise<void> {
+  await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT 1 FROM "Organization" WHERE id = ${orgId} FOR UPDATE`;
+    const org = await tx.organization.findUnique({ where: { id: orgId }, select: { settings: true } });
+    const base = org?.settings && typeof org.settings === "object" ? { ...(org.settings as Record<string, unknown>) } : {};
+    delete base["googleApp"];
+    await tx.organization.update({ where: { id: orgId }, data: { settings: base as Prisma.InputJsonValue } });
+  });
+  await logEvent(orgId, { direction: "OUT", type: "google.app_cleared", payload: { by: userId } });
 }
 
 /**
@@ -78,8 +140,8 @@ export function verifyState(state: string, now: Date = new Date()): { orgId: str
   return { orgId, userId };
 }
 
-export function buildAuthUrl(orgId: string, userId: string): string {
-  const cfg = googleEnv();
+export async function buildAuthUrl(orgId: string, userId: string): Promise<string> {
+  const cfg = await googleApp(orgId);
   if (!cfg) throw new Error("google.not_configured");
   const params = new URLSearchParams({
     client_id: cfg.clientId,
@@ -103,9 +165,10 @@ interface TokenResponse {
 
 /** Exchanges the consent code for tokens; store result via connectGoogle. */
 export async function exchangeCode(
+  orgId: string,
   code: string,
 ): Promise<{ ok: true; access: string; refresh: string | null; scope: string | null } | { ok: false; error: string }> {
-  const cfg = googleEnv();
+  const cfg = await googleApp(orgId);
   if (!cfg) return { ok: false, error: "google.not_configured" };
   const body = new URLSearchParams({
     code,
@@ -155,28 +218,40 @@ export async function disconnectGoogle(orgId: string): Promise<void> {
 }
 
 /** Drive can hold the library: connected, configured, and the grant includes `drive.file`. */
-function grantsLibrary(row: { connected: boolean; config: unknown } | null): boolean {
-  if (!row?.connected || !googleEnv()) return false;
+function grantsLibrary(row: { connected: boolean; config: unknown } | null, configured: boolean): boolean {
+  if (!row?.connected || !configured) return false;
   const scope = (row.config as { scope?: unknown } | null)?.scope;
   return typeof scope === "string" && scope.split(" ").includes(DRIVE_FILE_SCOPE);
 }
 
 /** New library files go to Drive: the grant allows it and «الميزات» → «المكتبة على Google Drive» is on. */
 export async function libraryOnDrive(orgId: string): Promise<boolean> {
-  return grantsLibrary(await getIntegration(orgId, "GOOGLE_DRIVE")) && (await isFeatureOn(orgId, "libraryDrive"));
+  return grantsLibrary(await getIntegration(orgId, "GOOGLE_DRIVE"), Boolean(await googleApp(orgId))) && (await isFeatureOn(orgId, "libraryDrive"));
 }
 
 /**
  * `library`: the grant lets the library store on Drive (connected without it means «connect again»);
  * `libraryOff`: the owner switched the feature off, so new files stay on the server whatever the grant.
  */
-export async function getGoogleStatus(orgId: string): Promise<{ connected: boolean; configured: boolean; library: boolean; libraryOff: boolean }> {
+export async function getGoogleStatus(orgId: string): Promise<{
+  connected: boolean;
+  configured: boolean;
+  library: boolean;
+  libraryOff: boolean;
+  /** Where the app's keys come from: the server's settings («env»), typed on the site («site»), or not yet. */
+  appSource: "env" | "site" | null;
+  /** The address to give Google as the app's redirect URI (shown on «الأتمتة» to copy). */
+  redirectUri: string;
+}> {
   const row = await getIntegration(orgId, "GOOGLE_DRIVE");
+  const appSource = await googleAppSource(orgId);
   return {
     connected: Boolean(row?.connected),
-    configured: Boolean(googleEnv()),
-    library: grantsLibrary(row),
+    configured: appSource !== null,
+    library: grantsLibrary(row, appSource !== null),
     libraryOff: !(await isFeatureOn(orgId, "libraryDrive")),
+    appSource,
+    redirectUri: redirectUri(),
   };
 }
 
@@ -184,7 +259,7 @@ async function accessToken(orgId: string, opts?: { forceRefresh?: boolean }): Pr
   const row = await getIntegration(orgId, "GOOGLE_DRIVE");
   const secrets = decryptSecrets<GoogleSecrets>(row?.secretEnc);
   if (!row?.connected || !secrets) return null;
-  const cfg = googleEnv();
+  const cfg = await googleApp(orgId);
   if (!cfg) return null;
 
   if (secrets.accessToken && !opts?.forceRefresh) return secrets.accessToken;

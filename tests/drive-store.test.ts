@@ -34,10 +34,10 @@ describe("the Google consent asks for the app's own files only", () => {
     }
   });
 
-  it("drive.file (no review, the published app keeps its connection), not drive.readonly, and no older grants merged in", () => {
+  it("drive.file (no review, the published app keeps its connection), not drive.readonly, and no older grants merged in", async () => {
     process.env["GOOGLE_CLIENT_ID"] = "id";
     process.env["GOOGLE_CLIENT_SECRET"] = "secret";
-    const url = new URL(buildAuthUrl("org-1", "user-1"));
+    const url = new URL(await buildAuthUrl("org-1", "user-1"));
     expect(url.searchParams.get("scope")).toBe("https://www.googleapis.com/auth/drive.file");
     expect(url.searchParams.get("access_type")).toBe("offline");
     expect(url.searchParams.has("include_granted_scopes")).toBe(false);

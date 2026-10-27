@@ -3,7 +3,7 @@ import { withApi } from "@/server/api";
 import { UnauthorizedError } from "@/server/auth";
 import { appUrl } from "@/server/env";
 import { activeOrgCtx, assertOrgManager } from "@/server/services/integrations";
-import { buildAuthUrl, googleEnv } from "@/server/services/google";
+import { buildAuthUrl, googleApp } from "@/server/services/google";
 
 /**
  * GET: starts the Google consent screen. Drive is an org-level asset, so only whoever holds the
@@ -30,7 +30,7 @@ export async function GET() {
     }
     const { orgId, userId } = ctx;
     await assertOrgManager(orgId);
-    if (!googleEnv()) return back("/automation?google=not_configured");
-    return NextResponse.redirect(buildAuthUrl(orgId, userId));
+    if (!(await googleApp(ctx.orgId))) return back("/automation?google=not_configured");
+    return NextResponse.redirect(await buildAuthUrl(orgId, userId));
   });
 }
