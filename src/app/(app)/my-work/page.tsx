@@ -3,6 +3,7 @@ import { actorCanWork } from "@/server/policy/actor";
 import { currentSpace } from "@/server/services/current-space";
 import { MY_WORK_TABS, getMyWork, type MyWorkTab } from "@/server/services/my-work";
 import { TaskRow } from "@/components/task-row";
+import { InstantWorkButton } from "@/components/instant-work";
 import { getServerT } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
 
@@ -33,9 +34,13 @@ export default async function MyWorkPage({ searchParams }: { searchParams: { tab
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-y-auto">
-      <header className="border-b border-border bg-surface px-5 py-4">
-        <h1 className="text-base font-semibold text-fg">{t("mywork.title")}</h1>
-        <p className="text-xs text-fg-muted">{t("mywork.subtitle")}</p>
+      <header className="flex items-center gap-3 border-b border-border bg-surface px-5 py-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-base font-semibold text-fg">{t("mywork.title")}</h1>
+          <p className="text-xs text-fg-muted">{t("mywork.subtitle")}</p>
+        </div>
+        {/* «+ مهمة فورية» (draws nothing while its switch is off or the person may not add tasks) */}
+        <InstantWorkButton kind="task" />
       </header>
 
       <nav className="flex gap-1 overflow-x-auto border-b border-border bg-surface px-4" aria-label={t("mywork.title")}>

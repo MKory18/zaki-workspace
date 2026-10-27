@@ -52,6 +52,7 @@ describe("«الميزات»: who switches", () => {
       { key: "pushEverything", on: true },
       { key: "chatRowMenu", on: true },
       { key: "callNoiseFilter", on: true },
+      { key: "instantWork", on: true },
     ]);
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
   });

@@ -22,6 +22,7 @@ import calls from "./ar.calls.json";
 import watch from "./ar.watch.json";
 import features from "./ar.features.json";
 import libraryDrive from "./ar.library-drive.json";
+import instant from "./ar.instant.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
@@ -55,4 +56,5 @@ export const AR: Record<string, string> = {
   ...watch,
   ...features,
   ...libraryDrive,
+  ...instant,
 };
