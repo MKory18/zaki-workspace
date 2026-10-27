@@ -255,7 +255,7 @@ describe("a library file is stored on the owner's Drive", () => {
 
   it("the library and the connection say the files go to Drive", async () => {
     const w = await world();
-    expect(await getGoogleStatus(w.org.id)).toEqual({ connected: true, configured: true, library: true, libraryOff: false });
+    expect(await getGoogleStatus(w.org.id)).toMatchObject({ connected: true, configured: true, library: true, libraryOff: false, appSource: "env" });
     await loginAs(w.alice.id);
     (globalThis as { __zkCookieJar?: Map<string, string> }).__zkCookieJar?.set(SPACE_COOKIE, w.space.id);
     expect((await call(filesRoute.GET)).json?.["onDrive"]).toBe(true);

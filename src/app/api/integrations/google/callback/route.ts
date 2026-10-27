@@ -40,7 +40,7 @@ export async function GET(req: Request) {
     await assertOrgManager(parsed.orgId);
     if (parsed.userId !== sessionUserId) throw new ForbiddenError("forbidden");
 
-    const tokens = await exchangeCode(code);
+    const tokens = await exchangeCode(parsed.orgId, code);
     if (!tokens.ok) {
       const reason = encodeURIComponent(tokens.error.slice(0, 100));
       return back(`/automation?google=error&reason=${reason}`);
