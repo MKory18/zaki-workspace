@@ -26,6 +26,9 @@ import { assertActiveAssignee } from "@/server/services/active-people";
  * - a ticket is only ever handed to an ACTIVE member of the organization (not a suspended or an
  *   offboarded person, not a stranger), whoever hands it; a ticket somebody already holds stays
  *   readable and editable around them until it is moved.
+ * - «تذكرة فورية» (the owner's ask, 2026-10-27): a ticket with NO department, handed straight to a person with a
+ *   priority. Nobody is its department: whoever raised it, whoever holds it, the OWNER and the ADMINs read and work
+ *   it; it can be handed to any active member of the company. It shows in «تذاكري» like any other ticket.
  */
 
 export const TICKET_STATUSES: TicketStatus[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
@@ -85,7 +88,10 @@ export function canEditTicket(f: TicketEditFacts): boolean {
   return f.isCreator && f.status === "OPEN";
 }
 
-async function departmentContext(ctx: OrgAccessContext, departmentId: string) {
+async function departmentContext(ctx: OrgAccessContext, departmentId: string | null) {
+  const isAdmin = ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
+  // an instant ticket has no department: nobody is its member or its lead
+  if (departmentId === null) return { dept: null, isMember: false, isLead: false, isAdmin };
   const dept = await db.department.findFirst({
     where: { id: departmentId, orgId: ctx.orgId },
     select: { id: true, name: true, leadId: true, memberships: { select: { userId: true } } },
@@ -93,12 +99,11 @@ async function departmentContext(ctx: OrgAccessContext, departmentId: string) {
   if (!dept) throw new NotFoundError("dept.not_found");
   const isMember = dept.memberships.some((m) => m.userId === ctx.userId);
   const isLead = dept.leadId === ctx.userId;
-  const isAdmin = ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
   return { dept, isMember, isLead, isAdmin };
 }
 
 /** The department's people, the OWNER and the ADMINs read all of its tickets and campaigns. */
-async function seesDepartment(ctx: OrgAccessContext, departmentId: string): Promise<boolean> {
+async function seesDepartment(ctx: OrgAccessContext, departmentId: string | null): Promise<boolean> {
   const { isMember, isLead, isAdmin } = await departmentContext(ctx, departmentId);
   return isMember || isLead || isAdmin;
 }
@@ -153,6 +158,7 @@ export async function createTicket(
   assertCanWrite(ctx);
   await assertMemberCan(ctx, "tickets.edit", "section.edit_denied");
   const { dept } = await departmentContext(ctx, departmentId);
+  if (!dept) throw new NotFoundError("dept.not_found");
   if (input.assigneeId) {
     const ok = dept.memberships.some((m) => m.userId === input.assigneeId) || ctx.orgRole === "OWNER" || ctx.orgRole === "ADMIN";
     if (!ok) throw new ForbiddenError("ticket.assignee_not_member");
@@ -194,7 +200,7 @@ export async function createTicket(
       type: "ticket_assigned",
       title: AR["notif.type.ticket_assigned"] ?? "إشعار",
       body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title}`,  // the label is machine text; the title is what the bell prints
-      linkUrl: "/departments",
+      linkUrl: "/tickets",
     });
   }
   return ticket;
@@ -265,7 +271,7 @@ export async function addTicketComment(ctx: OrgAccessContext, ticketId: string, 
       type: "ticket_comment",
       title: AR["notif.type.ticket_comment"] ?? "إشعار",
       body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${body.slice(0, 120)}`,  // the label rides in the body
-      linkUrl: "/departments",
+      linkUrl: "/tickets",
     });
   }
   return comment;
@@ -312,7 +318,7 @@ export async function deleteTicketComment(ctx: OrgAccessContext, ticketId: strin
   await db.ticketComment.delete({ where: { id: comment.id } });
 }
 
-/** "تذاكري" — tickets assigned to the caller (or created by them) in their org. */
+/** "تذاكري" — tickets assigned to the caller (or created by them) in their org; an instant one has no department. */
 export async function myTickets(ctx: OrgAccessContext) {
   await assertMemberCan(ctx, "tickets.view", "section.view_denied");
   return db.ticket.findMany({
@@ -337,13 +343,14 @@ export async function updateTicket(
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   if (!canEditTicket(await ticketEditFacts(ctx, ticket))) throw new ForbiddenError("ticket.admin_only");
   if (input.assigneeId) {
-    const dept = await db.department.findFirst({
-      where: { id: ticket.departmentId },
-      select: { memberships: { select: { userId: true } } },
-    });
+    const dept = ticket.departmentId
+      ? await db.department.findFirst({ where: { id: ticket.departmentId }, select: { memberships: { select: { userId: true } } } })
+      : null;
     const ok =
       ctx.orgRole === "OWNER" ||
       ctx.orgRole === "ADMIN" ||
+      // an instant ticket goes to anybody active in the company (checked just below)
+      ticket.departmentId === null ||
       (dept?.memberships.some((m) => m.userId === input.assigneeId) ?? false);
     if (!ok) throw new ForbiddenError("ticket.assignee_not_member");
     // handing it to somebody NEW: they must be active (re-sending the current assignee, who may have
@@ -387,7 +394,7 @@ export async function updateTicket(
       type: "ticket_assigned",
       title: AR["notif.type.ticket_assigned"] ?? "إشعار",
       body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title}`,  // the label is machine text; the title is what the bell prints
-      linkUrl: "/departments",
+      linkUrl: "/tickets",
     });
   }
   if (statusChanged) {
@@ -402,7 +409,7 @@ export async function updateTicket(
         title: AR["notif.type.ticket_status"] ?? "إشعار",
         // the status is an English enum on the wire; the bell gets its Arabic name from the dictionary
         body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title} → ${enumLabel("TicketStatus", input.status)}`,
-        linkUrl: "/departments",
+        linkUrl: "/tickets",
       });
     }
   }
@@ -416,4 +423,68 @@ export async function deleteTicket(ctx: OrgAccessContext, ticketId: string): Pro
   const ticket = await loadTicketForOrg(ctx.orgId, ticketId);
   if (!canEditTicket(await ticketEditFacts(ctx, ticket))) throw new ForbiddenError("ticket.admin_only");
   await db.ticket.delete({ where: { id: ticket.id } });
+}
+
+export const instantTicketSchema = z.object({
+  title: z.string().trim().min(3, "title.too_short").max(200),
+  description: z.string().trim().max(4000).nullable().optional(),
+  priority: z.enum(["URGENT", "HIGH", "NORMAL", "LOW"]).default("NORMAL"),
+  assigneeId: z.string().min(1, "instant.pick_person"),
+});
+
+/**
+ * «تذكرة فورية»: a ticket with no department, straight to one active person of the company, with its priority. The
+ * same rules as any ticket (not a guest, the tickets row's «يضيف ويعدّل» box); the person is told at once.
+ */
+export async function createInstantTicket(ctx: OrgAccessContext, input: z.infer<typeof instantTicketSchema>) {
+  assertCanWrite(ctx);
+  await assertMemberCan(ctx, "tickets.edit", "section.edit_denied");
+  await assertActiveAssignee(ctx.orgId, input.assigneeId);
+  const ticket = await db.$transaction(async (tx) => {
+    const number = await nextTicketNumber(ctx.orgId, tx);
+    const created = await tx.ticket.create({
+      data: {
+        orgId: ctx.orgId,
+        departmentId: null,
+        number,
+        title: input.title,
+        description: input.description ?? null,
+        priority: input.priority,
+        creatorId: ctx.userId,
+        assigneeId: input.assigneeId,
+      },
+      select: { id: true, number: true, title: true },
+    });
+    await tx.ticketActivity.create({ data: { ticketId: created.id, actorId: ctx.userId, event: "created" } });
+    await tx.ticketActivity.create({
+      data: { ticketId: created.id, actorId: ctx.userId, event: "assigned", meta: { assigneeId: input.assigneeId } },
+    });
+    return created;
+  });
+  if (input.assigneeId !== ctx.userId) {
+    const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
+    await pushNotificationToMany([input.assigneeId], {
+      type: "ticket_assigned",
+      title: AR["notif.type.ticket_assigned"] ?? "إشعار",
+      body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title}`,
+      linkUrl: "/tickets",
+    });
+  }
+  return ticket;
+}
+
+/** Every instant ticket of the company, for the OWNER and the ADMINs (anybody else has theirs in «تذاكري»). */
+export async function listInstantTickets(ctx: OrgAccessContext) {
+  await assertMemberCan(ctx, "tickets.view", "section.view_denied");
+  if (ctx.orgRole !== "OWNER" && ctx.orgRole !== "ADMIN") return [];
+  return db.ticket.findMany({
+    where: { orgId: ctx.orgId, departmentId: null },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    take: 100,
+    select: {
+      id: true, number: true, title: true, status: true, priority: true, createdAt: true,
+      creator: { select: { id: true, name: true } },
+      assignee: { select: { id: true, name: true } },
+    },
+  });
 }

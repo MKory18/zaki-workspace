@@ -6,11 +6,12 @@ import { Activity, MessageSquare, Send, Ticket as TicketIcon } from "lucide-reac
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { fmtDateTime } from "@/lib/format";
-import { enumLabel } from "@/lib/i18n/enums";
+import { enumLabel, enumOptions } from "@/lib/i18n/enums";
 import { errText } from "@/components/department-tickets";
 
 interface CommentRow {
@@ -29,6 +30,8 @@ interface ActivityRow {
 }
 interface TicketDetail {
   id: string;
+  /** null: an «تذكرة فورية» (its status is changed here: there is no department desk for it) */
+  departmentId: string | null;
   number: number;
   title: string;
   description: string | null;
@@ -95,6 +98,12 @@ export function TicketDetailModal({
     onError: (err) => toast(errText(err, t), "error"),
   });
 
+  const setStatus = useMutation({
+    mutationFn: (status: string) => apiPatch(`/api/tickets/${ticketId}`, { status }),
+    onSuccess: () => invalidate(),
+    onError: (err) => toast(errText(err, t), "error"),
+  });
+
   const delComment = useMutation({
     mutationFn: (id: string) => apiDelete(`/api/tickets/${ticketId}/comments/${id}`),
     onSuccess: () => invalidate(),
@@ -109,6 +118,19 @@ export function TicketDetailModal({
     <Modal open onClose={onClose} title={`T${tk?.number ?? "…"} — ${tk?.title ?? ""}`}>
       <div className="space-y-4">
         {tk?.description ? <p className="whitespace-pre-wrap text-xs text-fg-muted">{tk.description}</p> : null}
+
+        {tk && tk.departmentId === null ? (
+          <label className="flex items-center gap-2 text-xs">
+            <span className="font-medium text-fg">{t("instant.status")}</span>
+            <Select value={tk.status} disabled={setStatus.isPending} onChange={(e) => setStatus.mutate(e.target.value)} className="w-auto min-w-36">
+              {enumOptions("TicketStatus").map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </label>
+        ) : null}
 
         {/* Comments */}
         <section className="space-y-2">

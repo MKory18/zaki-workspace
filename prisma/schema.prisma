@@ -110,7 +110,8 @@ enum TicketStatus {
 model Ticket {
   id           String       @id @default(cuid())
   orgId        String
-  departmentId String
+  // null: an «تذكرة فورية», handed straight to a person with no department (the owner's ask, 2026-10-27)
+  departmentId String?
   number       Int // per-org sequential → key `${prefix}-T${number}`
   title        String
   description  String?
@@ -123,7 +124,7 @@ model Ticket {
   updatedAt    DateTime     @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   creator      User         @relation("TicketCreator", fields: [creatorId], references: [id])
   assignee     User?        @relation("TicketAssignee", fields: [assigneeId], references: [id])
   comments     TicketComment[]
@@ -871,6 +872,8 @@ model Project {
   departmentId String?
   startDate    DateTime?
   targetDate   DateTime?
+  // The role of a project the app keeps for itself: "instant" holds the space's «مهام فورية» (one per space).
+  systemKey    String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -882,6 +885,7 @@ model Project {
   tasks      Task[]
   milestones Milestone[]
 
+  @@unique([workspaceId, systemKey])
   @@index([workspaceId])
   @@index([status])
   @@index([departmentId])

@@ -23,7 +23,7 @@ describe("(a) a notification stores its Arabic phrase as the title, the machine 
     const fromDict = [...notify.matchAll(/title:\s*AR\["notif\.type\.([a-z_]+)"\]/g)].map((m) => m[1]);
     const ticketDict = [...tickets.matchAll(/title:\s*AR\["notif\.type\.([a-z_]+)"\]/g)].map((m) => m[1]);
     expect(fromDict.sort()).toEqual(["comment", "task_assigned"]);
-    expect(ticketDict.sort()).toEqual(["ticket_assigned", "ticket_assigned", "ticket_comment", "ticket_status"]);
+    expect(ticketDict.sort()).toEqual(["ticket_assigned", "ticket_assigned", "ticket_assigned", "ticket_comment", "ticket_status"]);
   });
 
   it("the task/ticket key rides in the body as «ZK-12 · …»", () => {

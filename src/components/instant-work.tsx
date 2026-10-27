@@ -1,0 +1,163 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
+import { apiGet, apiPost } from "@/lib/api-client";
+import { useI18n } from "@/lib/i18n";
+import { enumOptions } from "@/lib/i18n/enums";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Modal } from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
+import { errText } from "@/components/department-tickets";
+
+/**
+ * «+ مهمة فورية» on «مهامي» and «+ تذكرة فورية» on «التذاكر» (the owner's ask, 2026-10-27): one small form — what is
+ * wanted, for whom (the people of the space one is in), the priority, and for a task its day (today unless changed).
+ * Nothing is drawn while the «instantWork» switch is off or the person may not add that kind of work: the server
+ * says so (`GET /api/instant`) and refuses on its own anyway. Plain requests, no query cache: «مهامي» is a server page
+ * and is simply refreshed; `onSent` lets a desk reload its own lists.
+ */
+
+interface InstantInfo {
+  task: boolean;
+  ticket: boolean;
+  space: { id: string; name: string } | null;
+  people: { id: string; name: string }[];
+}
+
+/** Today as `yyyy-mm-dd` in the person's own clock (what a date field holds). */
+function todayValue(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** The end of that day in the person's own clock, sent as an instant. */
+function dueOf(day: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const [y, m, d] = day.split("-").map(Number) as [number, number, number];
+  return new Date(y, m - 1, d, 23, 59, 0).toISOString();
+}
+
+export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; onSent?: () => void }) {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const router = useRouter();
+  const [info, setInfo] = useState<InstantInfo | null>(null);
+  useEffect(() => {
+    let live = true;
+    apiGet<InstantInfo>("/api/instant").then(
+      (data) => live && setInfo(data),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  const [pending, setPending] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [details, setDetails] = useState("");
+  const [person, setPerson] = useState("");
+  const [priority, setPriority] = useState("NORMAL");
+  const [day, setDay] = useState(todayValue);
+
+  async function send() {
+    setPending(true);
+    try {
+      if (kind === "task") {
+        await apiPost("/api/instant/task", { title: title.trim(), description: details.trim() || null, assigneeId: person, priority, dueDate: dueOf(day) });
+      } else {
+        await apiPost("/api/instant/ticket", { title: title.trim(), description: details.trim() || null, assigneeId: person, priority });
+      }
+      toast(t(kind === "task" ? "instant.task.sent" : "instant.ticket.sent"), "success");
+      setOpen(false);
+      setTitle("");
+      setDetails("");
+      setPerson("");
+      setPriority("NORMAL");
+      setDay(todayValue());
+      onSent?.();
+      router.refresh();
+    } catch (err) {
+      toast(errText(err, t), "error");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (!info?.[kind]) return null;
+  const label = t(kind === "task" ? "instant.task.button" : "instant.ticket.button");
+  const minTitle = kind === "ticket" ? 3 : 1;
+  const ready = title.trim().length >= minTitle && person !== "";
+
+  return (
+    <>
+      <Button type="button" size="sm" onClick={() => setOpen(true)} className="shrink-0">
+        <Plus className="size-4" aria-hidden="true" />
+        {label}
+      </Button>
+      {open ? (
+        <Modal open onClose={() => setOpen(false)} title={`⚡ ${label}`}>
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (ready && !pending) void send();
+            }}
+          >
+            <Input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t("instant.field.title")}
+              aria-label={t("instant.field.title")}
+              required
+              minLength={minTitle}
+              maxLength={kind === "ticket" ? 200 : 280}
+            />
+            <label className="block space-y-1 text-xs">
+              <span className="font-medium text-fg">{t("instant.field.person")}</span>
+              <Select value={person} onChange={(e) => setPerson(e.target.value)} required>
+                <option value="">{t("instant.field.pick")}</option>
+                {info.people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block space-y-1 text-xs">
+                <span className="font-medium text-fg">{t("instant.field.priority")}</span>
+                <Select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                  {/* «بلا أولوية» is not one to pick here: the server takes the four levels */}
+                  {enumOptions("TaskPriority").filter((o) => o.value !== "NONE").map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              {kind === "task" ? (
+                <label className="block space-y-1 text-xs">
+                  <span className="font-medium text-fg">{t("instant.field.due")}</span>
+                  <Input type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+                </label>
+              ) : null}
+            </div>
+            <Textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={2} placeholder={t("instant.field.details")} aria-label={t("instant.field.details")} />
+            <div className="flex justify-end">
+              <Button type="submit" disabled={!ready || pending}>
+                {t("instant.send")}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+    </>
+  );
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { enumLabel } from "@/lib/i18n/enums";
@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { DepartmentTickets } from "@/components/department-tickets";
 import { DepartmentCampaigns } from "@/components/department-campaigns";
 import { TicketDetailModal } from "@/components/ticket-detail-modal";
+import { InstantWorkButton } from "@/components/instant-work";
 import type { SectionMay } from "@/lib/section-may";
 
 /**
@@ -75,16 +76,27 @@ export function TicketsDesk({ me, defaultDepartmentId }: { me: Me; defaultDepart
   const { t } = useI18n();
   const manage = me.role === "OWNER" || me.role === "ADMIN";
   const [detailId, setDetailId] = useState<string | null>(null);
+  const qc = useQueryClient();
   const mine = useQuery({
     queryKey: ["tickets", "mine"],
     queryFn: () =>
-      apiGet<{ tickets: { id: string; number: number; title: string; status: string; department: { name: string; emoji: string | null } }[] }>("/api/tickets/mine"),
+      apiGet<{ tickets: { id: string; number: number; title: string; status: string; department: { name: string; emoji: string | null } | null }[] }>("/api/tickets/mine"),
+  });
+  // every «تذكرة فورية» of the company, for the OWNER and the ADMINs (anybody else has theirs in «تذاكري»)
+  const instant = useQuery({
+    queryKey: ["tickets", "instant"],
+    queryFn: () =>
+      apiGet<{ tickets: { id: string; title: string; status: string; assignee: { name: string } | null }[] }>("/api/tickets/instant"),
+    enabled: manage,
   });
   const depts = useDepartments(defaultDepartmentId);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-6">
-      <h1 className="text-xl font-semibold">{t("nav.tickets")}</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="min-w-0 flex-1 text-xl font-semibold">{t("nav.tickets")}</h1>
+        <InstantWorkButton kind="ticket" onSent={() => qc.invalidateQueries({ queryKey: ["tickets"] })} />
+      </div>
 
       <section aria-labelledby="my-tickets" className="rounded-xl border border-border bg-surface-1 p-4">
         <h2 id="my-tickets" className="mb-2 text-sm font-semibold">{t("desk.myTickets")}</h2>
@@ -94,7 +106,7 @@ export function TicketsDesk({ me, defaultDepartmentId }: { me: Me; defaultDepart
             <li key={r.id}>
               <button type="button" onClick={() => setDetailId(r.id)} className="flex min-h-11 w-full items-center gap-2 py-2 text-start hover:bg-surface-2">
                 <span className="shrink-0 text-xs text-muted">
-                  {r.department.emoji ?? "🏢"} {r.department.name}
+                  {r.department ? `${r.department.emoji ?? "🏢"} ${r.department.name}` : `⚡ ${t("instant.badge")}`}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm">{r.title}</span>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CHIP[r.status] ?? ""}`}>{enumLabel("TicketStatus", r.status)}</span>
@@ -103,6 +115,23 @@ export function TicketsDesk({ me, defaultDepartmentId }: { me: Me; defaultDepart
           ))}
         </ul>
       </section>
+
+      {manage && instant.data && instant.data.tickets.length > 0 ? (
+        <section aria-labelledby="instant-tickets" className="rounded-xl border border-border bg-surface-1 p-4">
+          <h2 id="instant-tickets" className="mb-2 text-sm font-semibold">⚡ {t("instant.section")}</h2>
+          <ul className="divide-y divide-border">
+            {instant.data.tickets.map((r) => (
+              <li key={r.id}>
+                <button type="button" onClick={() => setDetailId(r.id)} className="flex min-h-11 w-full items-center gap-2 py-2 text-start hover:bg-surface-2">
+                  <span className="min-w-0 flex-1 truncate text-sm">{r.title}</span>
+                  <span className="shrink-0 text-xs text-muted">{r.assignee?.name ?? "—"}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CHIP[r.status] ?? ""}`}>{enumLabel("TicketStatus", r.status)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {depts.rows && depts.rows.length === 0 && <p className="text-sm text-muted">{t("desk.noDepartments")}</p>}
       {depts.rows && depts.picked && (

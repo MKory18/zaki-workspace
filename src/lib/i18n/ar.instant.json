@@ -1,0 +1,21 @@
+{
+  "instant.project": "مهام فورية",
+  "instant.board": "فوري",
+  "instant.task.button": "مهمة فورية",
+  "instant.ticket.button": "تذكرة فورية",
+  "instant.field.title": "شو المطلوب؟",
+  "instant.field.person": "لمين",
+  "instant.field.pick": "اختر الشخص",
+  "instant.field.priority": "الأولوية",
+  "instant.field.due": "الموعد",
+  "instant.field.details": "تفاصيل (اختياري)",
+  "instant.send": "أرسل",
+  "instant.task.sent": "انبعتت المهمة",
+  "instant.ticket.sent": "انبعتت التذكرة",
+  "instant.pick_person": "اختر لمين",
+  "instant.not_in_space": "هذا الشخص ليس في هذه المساحة",
+  "instant.unavailable": "تعذّر تجهيز مكان المهام الفورية",
+  "instant.section": "تذاكر فورية",
+  "instant.badge": "فورية",
+  "instant.status": "الحالة"
+}
