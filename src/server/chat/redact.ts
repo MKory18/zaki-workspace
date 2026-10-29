@@ -36,7 +36,7 @@ type MessageRow = {
   deletedById?: string | null;
   deletedBy?: { name: string } | null;
   authorId: string;
-  author?: { id: string; name: string };
+  author?: { id: string; name: string; avatarUrl?: string | null };
   reactions?: { emoji: string; userId: string }[];
   attachments?: (Parameters<typeof attachmentView>[0] & { id: string })[];
   revisions?: { body: string; createdAt: Date }[];
@@ -107,6 +107,7 @@ export function presentMessage(
     mine: isMine,
     authorId: row.authorId,
     authorName: row.author?.name ?? "",
+    authorAvatar: row.author?.avatarUrl ?? null,
     createdAt: row.createdAt.toISOString(),
     clientId: row.clientId ?? null,
     mentions: (Array.isArray(row.mentions) ? (row.mentions as string[]) : []),

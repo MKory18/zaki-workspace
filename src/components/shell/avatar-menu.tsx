@@ -8,6 +8,7 @@ import { apiPost } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { enumLabel } from "@/lib/i18n/enums";
 import { initials } from "@/lib/format";
+import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { NavRole } from "@/lib/nav/places";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -20,6 +21,8 @@ export interface AvatarUser {
   name: string;
   username: string | null;
   email: string | null;
+  /** `/api/avatars/<id>` — the picture this person uploaded, or null for the initials. */
+  avatarUrl?: string | null;
 }
 
 /**
@@ -28,8 +31,9 @@ export interface AvatarUser {
  */
 export type AvatarVariant = "bar" | "sidebar" | "rail";
 
-/** The person's first letter in a circle of the theme's accent (decoration: the button carries the name). */
-function Initial({ name, large = false }: { name: string; large?: boolean }) {
+/** The person's picture in a circle, or their first letter (decoration: the button carries the name). */
+function Initial({ name, src, large = false }: { name: string; src?: string | null; large?: boolean }) {
+  if (src) return <Avatar name={name} src={src} className={large ? "size-11" : "size-8"} />;
   return (
     <span
       aria-hidden="true"
@@ -96,7 +100,7 @@ export function AvatarMenu({
               variant === "sidebar" ? "h-12 w-full px-2" : "size-11 justify-center",
             )}
           >
-            <Initial name={user.name} />
+            <Initial name={user.name} src={user.avatarUrl} />
             {variant === "sidebar" ? (
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-fg"><bdi>{user.name}</bdi></span>
@@ -122,7 +126,7 @@ export function AvatarMenu({
           }}
         >
           <div className="flex items-center gap-3 px-3 pb-3 pt-2">
-            <Initial name={user.name} large />
+            <Initial name={user.name} src={user.avatarUrl} large />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-fg"><bdi>{user.name}</bdi></p>
               {handle ? (

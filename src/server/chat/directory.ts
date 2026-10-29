@@ -18,7 +18,7 @@ export async function chatDirectory(orgId: string, spaceId?: string | null): Pro
       status: "ACTIVE",
       ...(spaceId !== undefined ? { AND: [spaceId ? spacePeopleWhere(orgId, spaceId) : { userId: { in: [] } }] } : {}),
     },
-    select: { userId: true, role: true, user: { select: { id: true, name: true, jobTitle: true } } },
+    select: { userId: true, role: true, user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } } },
     orderBy: { createdAt: "asc" },
   });
   return rows.map((r) => ({
@@ -26,5 +26,6 @@ export async function chatDirectory(orgId: string, spaceId?: string | null): Pro
     name: r.user.name,
     jobTitle: r.user.jobTitle,
     role: r.role,
+    avatarUrl: r.user.avatarUrl,
   }));
 }

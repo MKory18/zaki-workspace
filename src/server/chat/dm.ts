@@ -96,7 +96,7 @@ export async function listDms(ctx: OrgAccessContext, spaceId?: string | null) {
       ...(await dmPlaceWhere(spaceId)),
     },
     include: {
-      members: { include: { user: { select: { id: true, name: true } } } },
+      members: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } },
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1,
@@ -118,7 +118,7 @@ export async function listDms(ctx: OrgAccessContext, spaceId?: string | null) {
         : 0;
       return {
         id: c.id,
-        peer: { id: other?.userId ?? "", name: other?.user.name ?? "" },
+        peer: { id: other?.userId ?? "", name: other?.user.name ?? "", avatarUrl: other?.user.avatarUrl ?? null },
         unread,
         lastMessage: last
           ? {

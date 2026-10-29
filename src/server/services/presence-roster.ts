@@ -20,6 +20,8 @@ export interface PresencePerson {
   jobTitle: string | null;
   role: string;
   online: boolean;
+  /** `/api/avatars/<id>`, or null. */
+  avatarUrl?: string | null;
 }
 
 export interface PresenceRoster {
@@ -36,7 +38,7 @@ export async function presenceRoster(orgId: string, viewerId: string): Promise<P
       role: { not: "GUEST" },
       status: "ACTIVE",
     },
-    select: { userId: true, role: true, user: { select: { id: true, name: true, jobTitle: true } } },
+    select: { userId: true, role: true, user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } } },
     orderBy: { createdAt: "asc" },
   });
   const online = new Set(await onlineUserIds(orgId));
@@ -46,6 +48,7 @@ export async function presenceRoster(orgId: string, viewerId: string): Promise<P
       name: r.user.name,
       jobTitle: r.user.jobTitle,
       role: r.role,
+      avatarUrl: r.user.avatarUrl,
       // the viewer is looking at this very screen: they are at their screen, whatever the stream says
       online: r.userId === viewerId || online.has(r.userId),
     }))

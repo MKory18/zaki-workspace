@@ -31,6 +31,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const sidebarCollapsed = parseSidebarCookie(cookies().get(SIDEBAR_COOKIE)?.value);
   // the company's name under the wordmark, and its switched-off features («الميزات»: their places are not drawn)
   const org = await db.organization.findUnique({ where: { id: actor.orgId }, select: { name: true, settings: true } });
+  // the person's picture, for the avatar in the side menu and the phone's top bar
+  const avatarUrl = (await db.user.findUnique({ where: { id: actor.userId }, select: { avatarUrl: true } }))?.avatarUrl ?? null;
   const subject = { role: actor.role, caps: [...actor.caps], off: featuresOff(org?.settings) };
   // the space the person is in, named at the top of every page (a space is like a separate site)
   const space = await currentSpace(actor);
@@ -38,7 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppShell
       // the shell draws a name, a username and an e-mail; session facts (tv, locale, onboarding
       // flags) are the server's business and never cross to the browser
-      user={{ name: user.name, username: user.username, email: user.email }}
+      user={{ name: user.name, username: user.username, email: user.email, avatarUrl: avatarUrl }}
       rank={actor.role}
       isGuest={actor.isExternal}
       nav={buildNav(subject)}
