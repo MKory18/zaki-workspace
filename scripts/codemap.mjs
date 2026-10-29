@@ -20,12 +20,22 @@ const ROOT = ARGS[0] ?? fileURLToPath(new URL("..", import.meta.url));
 const OUT = ARGS[1] ?? path.join(ROOT, "docs", "CODEMAP.md");
 const APP = path.join(ROOT, "src", "app");
 
+/**
+ * Byte-wise comparison, never `localeCompare`: the output must be the same file on every machine.
+ * `localeCompare` asks the platform's collator (and `readdirSync` returns sorted names on NTFS but
+ * hash order on ext4), which put the same code in a different order and failed `--check` in CI.
+ */
+const byText = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 function walk(dir) {
-  return readdirSync(dir).flatMap((entry) => {
+  return readdirSync(dir).sort(byText).flatMap((entry) => {
     const full = path.join(dir, entry);
     return statSync(full).isDirectory() ? walk(full) : [full];
   });
 }
+
+/** Text as the file is written in git: LF, whatever the checkout's line endings are. */
+const read = (file) => readFileSync(file, "utf8").replace(/\r\n/g, "\n");
 
 /** Every name that decides *who* may run a route; the first one in the body is the door. */
 const GUARDS = [
@@ -92,7 +102,7 @@ const WRITE_RE = /\bdb\.(\w+)\.(create|createMany|update|updateMany|upsert|delet
 const routes = walk(APP)
   .filter((f) => /route\.tsx?$/.test(f))
   .map((file) => {
-    const src = readFileSync(file, "utf8");
+    const src = read(file);
     const rel = path.relative(APP, file).split(path.sep).join("/");
     const clean = rel
       .replace(/\/(route)\.tsx?$/, "")
@@ -133,17 +143,17 @@ const routes = walk(APP)
       lines: src.split("\n").length,
     };
   })
-  .sort((a, b) => a.url.localeCompare(b.url));
+  .sort((a, b) => byText(a.url, b.url));
 
 /* ---------------------------------------------------------------- sources */
 const ALL = walk(path.join(ROOT, "src")).filter((f) => /\.(ts|tsx)$/.test(f));
 const sources = ALL.map((f) => ({
   file: path.relative(ROOT, f).split(path.sep).join("/"),
-  src: readFileSync(f, "utf8"),
+  src: read(f),
 }));
 
 /* ---------------------------------------------------------------- models */
-const schema = readFileSync(path.join(ROOT, "prisma", "schema.prisma"), "utf8");
+const schema = read(path.join(ROOT, "prisma", "schema.prisma"));
 const models = [...schema.matchAll(/^model\s+(\w+)\s*\{/gm)].map((m) => m[1]);
 const writersOf = (model) => {
   const prop = model[0].toLowerCase() + model.slice(1);
@@ -153,7 +163,7 @@ const writersOf = (model) => {
     const n = [...s.src.matchAll(re)].length;
     if (n) hits.set(s.file, n);
   }
-  return [...hits.entries()].map(([file, n]) => ({ file, n })).sort((a, b) => b.n - a.n);
+  return [...hits.entries()].map(([file, n]) => ({ file, n })).sort((a, b) => b.n - a.n || byText(a.file, b.file));
 };
 const modelWriters = models.map((m) => ({ model: m, writers: writersOf(m) }));
 
@@ -228,7 +238,7 @@ const serviceCallers = serviceFiles
   .map((f) => {
     const name = path.basename(f, ".ts");
     const selfRel = path.relative(ROOT, f).split(path.sep).join("/");
-    const src = readFileSync(f, "utf8");
+    const src = read(f);
     const callers = sources
       .filter((s) => s.file !== selfRel)
       .filter((s) => new RegExp(`@/server/services/${name}["']`).test(s.src))
@@ -236,10 +246,10 @@ const serviceCallers = serviceFiles
     const exports = [...src.matchAll(/^export\s+(?:async\s+)?(?:function|const|class)\s+(\w+)/gm)].map((m) => m[1]);
     return { service: name, callers, exports, hint: firstSentence(src, exports), lines: src.split("\n").length };
   })
-  .sort((a, b) => a.service.localeCompare(b.service));
+  .sort((a, b) => byText(a.service, b.service));
 
 /* --------------------------------------------------------------- switches */
-const featuresSrc = readFileSync(path.join(ROOT, "src", "lib", "features.ts"), "utf8");
+const featuresSrc = read(path.join(ROOT, "src", "lib", "features.ts"));
 const switchKeys = [...featuresSrc.matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]);
 const switchUse = switchKeys.map((key) => ({
   key,
@@ -369,7 +379,7 @@ for (const r of routes) {
 p(
   "Doors in use: " +
     [...doorCount.entries()]
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => b[1] - a[1] || byText(a[0], b[0]))
       .map(([k, v]) => `\`${k}\` ${v}`)
       .join(" · ") +
     ".",
@@ -404,7 +414,7 @@ p("high count is a wide surface: changing its signature reaches all of them.");
 p();
 p("| Service | Lines | Imported by | What it owns |");
 p("|---|---|---|---|");
-for (const s of [...serviceCallers].sort((a, b) => b.callers.length - a.callers.length)) {
+for (const s of [...serviceCallers].sort((a, b) => b.callers.length - a.callers.length || byText(a.service, b.service))) {
   p(`| \`${s.service}\` | ${s.lines} | ${s.callers.length} | ${cell(s.hint)} |`);
 }
 p();
@@ -467,7 +477,7 @@ p();
 const directWriters = routes
   .filter((r) => r.writes.length)
   .map((r) => {
-    const src = readFileSync(path.join(ROOT, r.file), "utf8");
+    const src = read(path.join(ROOT, r.file));
     return {
       url: r.url,
       hits: r.writes,

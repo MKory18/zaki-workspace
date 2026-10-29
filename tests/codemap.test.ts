@@ -34,6 +34,16 @@ describe("the code map is the generator's output, not a hand-written file", () =
     expect(text).not.toMatch(/[A-Za-z]:\\\\/);
   });
 
+  it("sorts by code point, never by the platform's collator or its folder order", () => {
+    /* `--check` runs in CI on Linux, where `readdirSync` answers in hash order and the collator can
+       differ from Windows: the same code produced a different file there and the check failed.
+       `walk` sorts its listing and every other sort is byte-wise, so the output is the same file
+       on every machine. */
+    const script = readFileSync(resolve(ROOT, "scripts/codemap.mjs"), "utf8");
+    expect(script).not.toMatch(/localeCompare\(/);
+    expect(script).toMatch(/readdirSync\(dir\)\.sort\(byText\)/);
+  });
+
   it("names the door every guarded route opens with, and the six that have none", () => {
     const text = readFileSync(DOC, "utf8");
     /* The guard table and the public-doors table are the two halves a reviewer reads first. */

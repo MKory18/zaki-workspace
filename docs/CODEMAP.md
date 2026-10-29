@@ -342,16 +342,16 @@ to be added to, and the places a bug can leave the row half-written.
 | `WorkspaceMember` | 17 | `server/services/accounts.ts`: 6<br>`server/services/workspaces.ts`: 5<br>`server/services/department-space.ts`: 3<br>`server/chat/hq.ts`: 2<br>+1 more |
 | `Team` | 8 | `server/services/teams.ts`: 4<br>`server/services/accounts.ts`: 3<br>`server/services/workspaces.ts`: 1 |
 | `TeamMember` | 6 | `server/services/teams.ts`: 3<br>`server/services/accounts.ts`: 1<br>`server/services/department-space.ts`: 1<br>`server/services/workspaces.ts`: 1 |
-| `Project` | 7 | `server/services/accounts.ts`: 2<br>`app/api/projects/route.ts`: 1<br>`app/api/projects/[id]/route.ts`: 1<br>`server/services/instant-work.ts`: 1<br>+2 more |
+| `Project` | 7 | `server/services/accounts.ts`: 2<br>`app/api/projects/[id]/route.ts`: 1<br>`app/api/projects/route.ts`: 1<br>`server/services/instant-work.ts`: 1<br>+2 more |
 | `Milestone` | 2 | `server/services/accounts.ts`: 2 |
-| `Board` | 3 | `app/api/boards/route.ts`: 1<br>`app/api/boards/[id]/route.ts`: 1<br>`server/services/instant-work.ts`: 1 |
+| `Board` | 3 | `app/api/boards/[id]/route.ts`: 1<br>`app/api/boards/route.ts`: 1<br>`server/services/instant-work.ts`: 1 |
 | `BoardColumn` | 4 | `app/api/boards/[id]/columns/[columnId]/route.ts`: 2<br>`app/api/boards/[id]/columns/route.ts`: 1<br>`app/api/boards/[id]/route.ts`: 1 |
 | `TaskCounter` | 1 | `server/services/tasks.ts`: 1 |
 | `Task` | 9 | `server/services/tasks.ts`: 5<br>`server/chat/make-work.ts`: 1<br>`server/services/accounts.ts`: 1<br>`server/services/space-delete.ts`: 1<br>+1 more |
 | `Label` | 1 | `app/api/labels/route.ts`: 1 |
 | `TaskComment` | 3 | `app/api/tasks/[id]/comments/[commentId]/route.ts`: 2<br>`app/api/tasks/[id]/comments/route.ts`: 1 |
 | `TaskActivity` | 7 | `server/services/tasks.ts`: 4<br>`app/api/tasks/[id]/comments/route.ts`: 1<br>`server/activity.ts`: 1<br>`server/services/accounts.ts`: 1 |
-| `Notification` | 7 | `server/notify.ts`: 2<br>`app/api/notifications/read/route.ts`: 1<br>`app/api/notifications/[id]/route.ts`: 1<br>`server/chat/notify.ts`: 1<br>+2 more |
+| `Notification` | 7 | `server/notify.ts`: 2<br>`app/api/notifications/[id]/route.ts`: 1<br>`app/api/notifications/read/route.ts`: 1<br>`server/chat/notify.ts`: 1<br>+2 more |
 | `AuditLog` | 11 | `server/services/teams.ts`: 5<br>`server/chat/moderation.ts`: 2<br>`server/auth.ts`: 1<br>`server/chat/hq.ts`: 1<br>+2 more |
 | `Idea` | 7 | `server/services/ideas.ts`: 5<br>`server/services/move-to-space.ts`: 1<br>`server/services/space-delete.ts`: 1 |
 | `IdeaVote` | 2 | `server/services/ideas.ts`: 2 |
@@ -373,7 +373,7 @@ before it. A switch is only honest if something reads it, so this is the list of
 
 | Switch | Places that read it |
 |---|---|
-| `watch` | 27 — `app/(app)/watch/page.tsx`, `app/(app)/watch/[id]/page.tsx`, `app/api/watch/route.ts`, `app/api/watch/[id]/end/route.ts`, `app/api/watch/[id]/remote/route.ts`, `app/api/watch/[id]/route.ts`, `components/calls/call-room.tsx`, `components/shell/nav-icons.tsx`, `components/shell/new-wheel.tsx`, `components/watch/watch-comments.tsx`, `components/watch/watch-home.tsx`, `components/watch/watch-player.tsx`, `components/watch/watch-room.tsx`, `components/whiteboard/whiteboard-screen.tsx`, `lib/guide/page-help.ts`, `lib/i18n/dict.ts`, `lib/nav/new-actions.ts`, `lib/nav/places.ts`, `lib/watch/convert.ts`, `lib/watch/source.ts`, `server/chat/make-work.ts`, `server/chat/purge.ts`, `server/policy/capabilities.ts`, `server/policy/watch.ts`, `server/realtime/emit.ts`, `server/services/watch.ts`, `server/watch/title.ts` |
+| `watch` | 27 — `app/(app)/watch/[id]/page.tsx`, `app/(app)/watch/page.tsx`, `app/api/watch/[id]/end/route.ts`, `app/api/watch/[id]/remote/route.ts`, `app/api/watch/[id]/route.ts`, `app/api/watch/route.ts`, `components/calls/call-room.tsx`, `components/shell/nav-icons.tsx`, `components/shell/new-wheel.tsx`, `components/watch/watch-comments.tsx`, `components/watch/watch-home.tsx`, `components/watch/watch-player.tsx`, `components/watch/watch-room.tsx`, `components/whiteboard/whiteboard-screen.tsx`, `lib/guide/page-help.ts`, `lib/i18n/dict.ts`, `lib/nav/new-actions.ts`, `lib/nav/places.ts`, `lib/watch/convert.ts`, `lib/watch/source.ts`, `server/chat/make-work.ts`, `server/chat/purge.ts`, `server/policy/capabilities.ts`, `server/policy/watch.ts`, `server/realtime/emit.ts`, `server/services/watch.ts`, `server/watch/title.ts` |
 | `sectionPermissions` | 2 — `server/policy/capabilities.ts`, `server/policy/section-grid.ts` |
 | `libraryDrive` | 2 — `lib/i18n/dict.ts`, `server/services/google.ts` |
 | `pushEverything` | 1 — `server/notify.ts` |
