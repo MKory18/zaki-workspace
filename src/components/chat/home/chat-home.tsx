@@ -40,7 +40,7 @@ export function ChatHome({ home, guest, onChanged = () => undefined }: { home: H
     return () => { active = false; };
   }, [allCompany, home.canOversee]);
   return (
-    <div dir="rtl" className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 text-fg">
+    <div dir="rtl" className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-3 p-3 text-fg sm:gap-4 sm:p-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">{ct("chath.title")}</h1>
         {home.canOversee && <div className="inline-flex rounded-xl border border-border bg-surface-1 p-1" role="group" aria-label={ct("chath.scope")}>
