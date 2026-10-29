@@ -1,8 +1,8 @@
 import { db } from "@/server/db";
 import { ForbiddenError, type OrgAccessContext } from "@/server/auth";
-import { canArchive } from "@/server/policy/conversation";
 import type { ArchiveItemDto, ArchivePageDto, ArchiveType } from "@/server/chat/dto";
 import { logChat } from "@/server/chat/moderation";
+import { holdsArchiveView } from "./archive-access";
 
 /**
  * The archive: the OWNER's record of what happened — deleted messages (with the text that was
@@ -26,11 +26,7 @@ export interface ArchiveFilterOptions {
 }
 
 export async function readArchiveFilterOptions(ctx: OrgAccessContext): Promise<ArchiveFilterOptions> {
-  const role = await db.organizationMember.findUnique({
-    where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId }, status: "ACTIVE" },
-    select: { role: true },
-  });
-  if (!canArchive(role?.role)) throw new ForbiddenError("chat.e.archive_denied");
+  if (!(await holdsArchiveView(ctx))) throw new ForbiddenError("chat.e.archive_denied");
   const [members, spaces] = await Promise.all([
     db.organizationMember.findMany({
       where: { organizationId: ctx.orgId, status: "ACTIVE" },
@@ -47,14 +43,7 @@ export async function readArchive(
   ctx: OrgAccessContext,
   opts: { type?: ArchiveType; spaceId?: string; personId?: string; from?: string; to?: string; cursor?: string; limit?: number } = {},
 ): Promise<ArchivePageDto> {
-  const role = await db.organizationMember.findUnique({
-    where: {
-      organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId },
-      status: "ACTIVE",
-    },
-    select: { role: true },
-  });
-  if (!canArchive(role?.role)) throw new ForbiddenError("chat.e.archive_denied");
+  if (!(await holdsArchiveView(ctx))) throw new ForbiddenError("chat.e.archive_denied");
 
   const limit = Math.min(Math.max(opts.limit ?? PAGE, 1), 100);
   const cursor = parseCursor(opts.cursor);
