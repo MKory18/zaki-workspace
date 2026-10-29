@@ -377,7 +377,8 @@ describe("the panel of one person: only what the actor may do is offered", () =>
       role: "MEMBER",
       capabilities: ["cash.view", "penalties.view"],
     });
-    const lead = contractMember({ id: "u-z", name: "رنا", role: "LEAD", revokedCapabilities: ["prices.view"] });
+    // an ADMIN's announce.send (a rank default) switched off: still not a switch the screen offers
+    const lead = contractMember({ id: "u-z", name: "رنا", role: "ADMIN", revokedCapabilities: ["announce.send"] });
     for (const person of [hiddenOnly, lead]) {
       const markup = render(sheet(person));
       expect(markup).not.toContain("أُضيف فوق الرتبة");

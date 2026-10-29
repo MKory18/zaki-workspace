@@ -3,6 +3,7 @@ import * as customersRoute from "@/app/api/crm/customers/route";
 import * as customerRoute from "@/app/api/crm/customers/[id]/route";
 import * as opportunitiesRoute from "@/app/api/crm/opportunities/route";
 import * as opportunityRoute from "@/app/api/crm/opportunities/[id]/route";
+import * as memberRoute from "@/app/api/organizations/[id]/members/[userId]/route";
 import { withHq } from "./hq-helpers";
 import { call, db, loginAs, makeTeam, makeUser } from "./helpers";
 import { makeCustomer, makeOpportunity } from "./guest-helpers";
@@ -94,6 +95,23 @@ describe("CRM: an opportunity's amount is `prices.view`, not the screen", () => 
     const list = await call(opportunitiesRoute.GET);
     expect(firstOpportunityOf(list.json).value).toBe(PRICE);
     expect(opportunityOf((await call(opportunityRoute.GET, { params: { id: w.opportunity.id } })).json).value).toBe(PRICE);
+  });
+
+  it("the owner's switch on «الأشخاص» is what opens the amount", async () => {
+    const w = await crmWorld();
+    await loginAs(w.owner.id);
+    // exactly what the screen sends when the owner flips the switch
+    const patch = await call(memberRoute.PATCH, {
+      method: "PATCH",
+      params: { id: w.org.id, userId: w.member.id },
+      body: { capabilities: ["prices.view"], revokedCapabilities: [] },
+    });
+    expect(patch.status).toBe(200);
+
+    await loginAs(w.member.id);
+    const one = await call(opportunityRoute.GET, { params: { id: w.opportunity.id } });
+    expect(one.status).toBe(200);
+    expect(opportunityOf(one.json).value).toBe(PRICE);
   });
 
   it("an OWNER who is not the primary owner loses the number when the box is taken away", async () => {

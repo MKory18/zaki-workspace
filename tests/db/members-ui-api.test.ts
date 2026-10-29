@@ -319,7 +319,7 @@ describe("editing a person and the switches", () => {
   it("a rank change by somebody who lacks a default of the new rank: the cache shows what the server stored", async () => {
     const org = await makeOrg();
     const owner = await makeUser({ orgId: org.id, role: "OWNER" });
-    // the owner took crm.edit and prices.view (not on the screen) away from this admin
+    // the owner took crm.edit and prices.view away from this admin (prices.view is a switch on the screen now)
     const admin = await person(org.id, "ADMIN", "ACTIVE", { revokedCapabilities: ["crm.edit", "prices.view"] });
     const info = await actorInfo(org.id, admin);
     for (const [from, to] of [

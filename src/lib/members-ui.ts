@@ -246,11 +246,12 @@ export const CAPABILITY_GROUPS: readonly { id: CapabilityGroupId; capabilities: 
 ];
 
 /**
- * Switches whose power deserves a ⚠️ next to them when the owner grants them beyond the rank. Only
- * switches that are offered: each later phase adds its own when it wires the capability (prices, cash
- * and penalties come with the phases that use them).
+ * Switches whose power deserves a ⚠️ next to them when the owner grants them beyond the rank: they
+ * open accounts, reach another system, or show the company's money to somebody the rank does not
+ * give it to. Only switches that are offered: each later phase adds its own when it wires the
+ * capability (cash and penalties come with the phases that use them).
  */
-export const SENSITIVE_CAPABILITIES: readonly Capability[] = ["users.manage", "integrations.manage"];
+export const SENSITIVE_CAPABILITIES: readonly Capability[] = ["users.manage", "integrations.manage", "prices.view"];
 
 /** Is this capability a switch the screen offers today? */
 export function isOffered(capability: Capability): boolean {
