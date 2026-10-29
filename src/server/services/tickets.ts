@@ -201,6 +201,8 @@ export async function createTicket(
       title: AR["notif.type.ticket_assigned"] ?? "إشعار",
       body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title}`,  // the label is machine text; the title is what the bell prints
       linkUrl: "/tickets",
+      // a ticket notice belongs to the company that raised it: it rings in that bell only (review B7)
+      organizationId: ctx.orgId,
     });
   }
   return ticket;
@@ -272,6 +274,8 @@ export async function addTicketComment(ctx: OrgAccessContext, ticketId: string, 
       title: AR["notif.type.ticket_comment"] ?? "إشعار",
       body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${body.slice(0, 120)}`,  // the label rides in the body
       linkUrl: "/tickets",
+      // a ticket notice belongs to the company that raised it: it rings in that bell only (review B7)
+      organizationId: ctx.orgId,
     });
   }
   return comment;
@@ -395,6 +399,8 @@ export async function updateTicket(
       title: AR["notif.type.ticket_assigned"] ?? "إشعار",
       body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title}`,  // the label is machine text; the title is what the bell prints
       linkUrl: "/tickets",
+      // a ticket notice belongs to the company that raised it: it rings in that bell only (review B7)
+      organizationId: ctx.orgId,
     });
   }
   if (statusChanged) {
@@ -410,6 +416,8 @@ export async function updateTicket(
         // the status is an English enum on the wire; the bell gets its Arabic name from the dictionary
         body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title} → ${enumLabel("TicketStatus", input.status)}`,
         linkUrl: "/tickets",
+      // a ticket notice belongs to the company that raised it: it rings in that bell only (review B7)
+      organizationId: ctx.orgId,
       });
     }
   }
@@ -468,6 +476,8 @@ export async function createInstantTicket(ctx: OrgAccessContext, input: z.infer<
       title: AR["notif.type.ticket_assigned"] ?? "إشعار",
       body: `${org?.keyPrefix ?? "ZK"}-T${ticket.number} · ${ticket.title}`,
       linkUrl: "/tickets",
+      // a ticket notice belongs to the company that raised it: it rings in that bell only (review B7)
+      organizationId: ctx.orgId,
     });
   }
   return ticket;
