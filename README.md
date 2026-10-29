@@ -6,7 +6,9 @@ teams, ideas, documents, Telegram integration, automation and an AI assistant.
 Status: **Phase 1 (foundation) + first vertical slice implemented; Phase 0
 (security hardening and cleanup) in progress** — see `docs/PHASE0-AUDIT.md` for the
 verified state of every known gap. Rules for people and coding agents working in this
-repository are in `AGENTS.md`.
+repository are in `AGENTS.md`. A code map — every route and the guard that opens it, every
+service and who imports it, every table and what writes it — is generated into
+`docs/CODEMAP.md` by `node scripts/codemap.mjs` (never edited by hand).
 
 ## Stack
 
