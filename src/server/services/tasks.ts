@@ -202,6 +202,8 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
         startDate: input.startDate ?? null,
         creatorId: actor.userId,
         position: await positionAt(column.id, undefined, tx),
+        // born in a done column is finished: the same rule as `moveTask`, or no counter would see it
+        completedAt: column.done ? new Date() : null,
         labels: input.labelIds?.length
           ? { create: [...new Set(input.labelIds)].map((labelId) => ({ labelId })) }
           : undefined,
@@ -238,7 +240,11 @@ export async function moveTask(
       data: {
         columnId: column.id,
         position: await positionAt(column.id, input.index, tx),
-        completedAt: column.done ? new Date() : null,
+        /* `completedAt` is the day the work was FINISHED, and every counter reads it (Today's «أُنجز
+           اليوم», analytics, the open count). So it moves on the transition only: a task dragged
+           around inside the done column keeps the day it was finished, and one dragged out of it is
+           open again. (`setTaskCompletion` writes the same rule for the tick box.) */
+        completedAt: column.done ? (task.completedAt ?? new Date()) : null,
       },
       include: TASK_INCLUDE,
     });

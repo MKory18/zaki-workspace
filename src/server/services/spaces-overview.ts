@@ -42,7 +42,17 @@ export async function spacesOverview(actor: Actor, now: Date = new Date()): Prom
   const todayStart = zonedDayStart(now, resolveTimeZone(org?.timezone));
   const open = { orgId: actor.orgId, workspaceId: { in: ids }, archived: false, completedAt: null, AND: [taskVisibleWhere(scope)] };
   const [members, openBy, overdueBy] = await Promise.all([
-    db.workspaceMember.groupBy({ by: ["workspaceId"], where: { workspaceId: { in: ids } }, _count: { _all: true } }),
+    /* The people who are actually there: suspending somebody keeps their organization row and, for a
+       while, their space row too, so counting rows alone showed a space with people who had left. A
+       GUEST is a person of the space (an external partner) and still counts — the status decides. */
+    db.workspaceMember.groupBy({
+      by: ["workspaceId"],
+      where: {
+        workspaceId: { in: ids },
+        user: { memberships: { some: { organizationId: actor.orgId, status: "ACTIVE" } } },
+      },
+      _count: { _all: true },
+    }),
     db.task.groupBy({ by: ["workspaceId"], where: open, _count: { _all: true } }),
     db.task.groupBy({ by: ["workspaceId"], where: { ...open, dueDate: { lt: todayStart } }, _count: { _all: true } }),
   ]);
