@@ -101,6 +101,22 @@ describe("/go enters a space", () => {
     expect(safeNext("/\\evil")).toBe("/");
     expect(safeNext("/tasks/1?x=2")).toBe("/tasks/1?x=2");
   });
+
+  it("`next` never leaves the app, not even encoded: a dropped tab made «//host» of it", async () => {
+    const w = await world();
+    await loginAs(w.member.id);
+    // browsers delete tabs and newlines before they read a URL: "/<TAB>/evil.example" IS "//evil.example".
+    // Every one of these is what a link would carry after `URLSearchParams` decoded it.
+    for (const evil of ["/\t/evil.example", "/\n/evil.example", "/\u0000/evil.example", "/.//evil.example", "//evil.example"]) {
+      expect(safeNext(evil), JSON.stringify(evil)).toBe("/");
+    }
+    // …and the route answers a location on this site, whatever the link carried
+    for (const q of ["%2F%09%2Fevil.example", "%2F%0A%2Fevil.example", "%2F%5Cevil.example", "%2F%2Fevil.example"]) {
+      const res = await call(goRoute.GET, { url: `http://localhost/go?next=${q}` });
+      const location = res.headers.get("location") ?? "";
+      expect(new URL(location, "http://localhost").host, q).toBe("localhost");
+    }
+  });
 });
 
 describe("inside a space, only that space's work", () => {
