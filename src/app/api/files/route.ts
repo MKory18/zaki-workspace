@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
-import { ForbiddenError } from "@/server/auth";
 import { activeOrgCtx } from "@/server/services/integrations";
 import { assertMemberCan } from "@/server/policy/actor";
 import { assertNotGuest } from "@/server/services/guest-guard";
@@ -35,7 +34,8 @@ export async function POST(req: Request) {
       if (err instanceof UploadStreamError && (err.kind === "empty" || err.kind === "invalid")) {
         return NextResponse.json({ error: "bad_request", message: err.message }, { status: 400 });
       }
-      if (err instanceof UploadStreamError && err.kind === "too_large") throw new ForbiddenError("files.too_large");
+      // a body over the ceiling is answered 413 before its bytes are buffered (security review D2)
+      if (err instanceof UploadStreamError && err.kind === "too_large") return NextResponse.json({ error: "payload_too_large", message: "files.too_large" }, { status: 413 });
       throw err;
     } finally {
       await received?.cleanup();

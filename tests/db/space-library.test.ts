@@ -36,6 +36,19 @@ async function world() {
 }
 
 describe("a file lives in the space it was uploaded in", () => {
+  it("an upload over the file ceiling is refused before the bytes are buffered", async () => {
+    const w = await world();
+    await loginAs(w.alice.id);
+    enter(w.a.id);
+    const form = new FormData();
+    // 27 MB: over the 25 MB a library file may be (plus the multipart envelope), and nowhere near ingest
+    form.set("file", new File([new Uint8Array(27 * 1024 * 1024)], "huge.png", { type: "image/png" }));
+    const res = await filesRoute.POST(new Request("http://localhost/api/files", { method: "POST", body: form }));
+    expect(res.status).toBe(413);
+    expect((await res.json()) as { message: string }).toMatchObject({ message: "files.too_large" });
+    expect(await names()).toEqual([]);
+  });
+
   it("A's file is listed in A only; B neither lists nor opens it", async () => {
     const w = await world();
     await loginAs(w.alice.id);
