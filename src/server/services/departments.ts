@@ -5,6 +5,7 @@ import { assertNotGuest } from "@/server/services/guest-guard";
 import { loadWorkScope, projectVisibleWhere, scopeSpaceIds } from "@/server/services/team-scope";
 import { assertCapability } from "@/server/services/active-people";
 import { alignDepartmentSpace, syncDepartmentSpace } from "@/server/services/department-space";
+import { resolveTimeZone, zonedDayStart } from "@/lib/zoned-time";
 
 /**
  * The departments area is the company's staff directory (who works where, with
@@ -85,10 +86,20 @@ export async function createDepartment(ctx: OrgAccessContext, input: z.infer<typ
   return dept;
 }
 
-export async function listDepartments(ctx: OrgAccessContext) {
+/**
+ * «الأقسام» — each department, its people and how much work is open and late in it.
+ *
+ * "Late" is the COMPANY's day, the same line as My Work, analytics, the Today page and «كل المساحات»:
+ * a task due at 09:00 today is not late at noon. `now` is injected so a test can pin the day.
+ */
+export async function listDepartments(ctx: OrgAccessContext, now: Date = new Date()) {
   assertNotGuest(ctx);
   await assertCapability(ctx, "directory.view");
-  const scope = await loadWorkScope(ctx.userId);
+  const [scope, org] = await Promise.all([
+    loadWorkScope(ctx.userId),
+    db.organization.findUnique({ where: { id: ctx.orgId }, select: { timezone: true } }),
+  ]);
+  const todayStart = zonedDayStart(now, resolveTimeZone(org?.timezone));
   const wsIds = scopeSpaceIds(scope);
   const rows = await db.department.findMany({
     where: { orgId: ctx.orgId },
@@ -108,7 +119,7 @@ export async function listDepartments(ctx: OrgAccessContext) {
   return rows.map((d) => {
     const all = d.projects.flatMap((p) => p.tasks);
     const open = all.filter((t) => !t.completedAt).length;
-    const overdue = all.filter((t) => !t.completedAt && t.dueDate && t.dueDate < new Date()).length;
+    const overdue = all.filter((t) => !t.completedAt && t.dueDate && t.dueDate < todayStart).length;
     return {
       id: d.id,
       name: d.name,
