@@ -16,6 +16,7 @@ export interface PresencePersonDto {
   jobTitle: string | null;
   role: string;
   online: boolean;
+  avatarUrl?: string | null;
 }
 
 export interface PresenceRosterDto {
@@ -98,7 +99,7 @@ export function PeopleDock({ enabled = true, defaultOpen = false }: { enabled?: 
             {people.map((p) => (
               <li key={p.userId} className="flex items-center gap-3 border-b border-border px-3 py-2 last:border-0">
                 <span className="relative shrink-0">
-                  <Avatar name={p.name} className={cn("size-9", !p.online && "opacity-60")} />
+                  <Avatar name={p.name} src={p.avatarUrl} className={cn("size-9", !p.online && "opacity-60")} />
                   {p.online ? (
                     <span aria-hidden="true" className="absolute -bottom-0.5 -end-0.5 size-3 rounded-full border-2 border-surface-1 bg-ok" />
                   ) : null}
@@ -129,7 +130,7 @@ export function PeopleDock({ enabled = true, defaultOpen = false }: { enabled?: 
           <span aria-hidden="true" className="flex items-center">
             {faces.map((p, i) => (
               <span key={p.userId} className={cn("relative", i > 0 && "-ms-2")} style={{ zIndex: faces.length - i }}>
-                <Avatar name={p.name} className="size-6 ring-2 ring-surface-1" />
+                <Avatar name={p.name} src={p.avatarUrl} className="size-6 ring-2 ring-surface-1" />
                 <span className="absolute -bottom-0.5 -end-0.5 size-2 rounded-full border border-surface-1 bg-ok" />
               </span>
             ))}
