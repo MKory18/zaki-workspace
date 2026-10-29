@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { OrgRole, WorkspaceKind, WorkspaceRole } from "@prisma/client";
+import type { OrgRole, Prisma, WorkspaceKind, WorkspaceRole } from "@prisma/client";
 import { db } from "@/server/db";
 import { HQ_SYSTEM_KEY } from "@/server/chat/hq";
 import { isSpaceManager } from "@/server/workspace-role";
@@ -102,9 +102,21 @@ export async function keepInSpace(who: SpaceSubject, spaceId: string, path: stri
 }
 
 /**
- * The notifications the bell shows inside a space: that space's, and the personal ones (no space: a welcome, a
- * changed rank, everything from before spaces had them). With no space at all: everything.
+ * The notifications the bell shows inside a space: that space's, and the personal ones OF THE SAME COMPANY
+ * (no space: a welcome, a changed rank, a ticket with no space). A person may work in two companies, so a
+ * personal notice of one must never ring in the other's bell (review B7); a row from before notices carried a
+ * company (`organizationId: null`) is still shown, so nothing disappears. With no space at all: everything.
  */
-export function bellWhere(userId: string, spaceId: string | null | undefined) {
-  return spaceId ? { userId, OR: [{ workspaceId: spaceId }, { workspaceId: null }] } : { userId };
+export function bellWhere(userId: string, spaceId: string | null | undefined, organizationId?: string | null) {
+  // without a company (a caller that has none): what the bell always showed
+  if (!organizationId) return spaceId ? { userId, OR: [{ workspaceId: spaceId }, { workspaceId: null }] } : { userId };
+  const personal: Prisma.NotificationWhereInput = {
+    workspaceId: null,
+    // a notice from before the column existed belongs to no company: shown once, in the bell of the company
+    // open at the moment the switch happened. The backfill gives the rest of them their one company.
+    OR: [{ organizationId }, { organizationId: null }],
+  };
+  // inside a space: that space's, and the personal ones of this company; with no space open: the same, minus
+  // another company's spaces (a space row of another company is found by its id, never here)
+  return spaceId ? { userId, OR: [{ workspaceId: spaceId }, personal] } : { userId, AND: [personal] };
 }

@@ -1113,12 +1113,17 @@ model Notification {
   // the space the person is in. None: personal (a welcome, a changed rank), shown in every space — and the
   // notifications from before spaces had them.
   workspaceId String?
+  // The company the notification belongs to. A person may be in two companies: their personal notices (a welcome,
+  // a changed rank, a ticket with no space) must not appear in the other company's bell (review B7). No foreign
+  // key on purpose: a notice outlives the company row it mentions.
+  organizationId String?
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([userId, readAt, createdAt])
   @@index([userId, workspaceId, readAt])
+  @@index([userId, organizationId, readAt])
 }
 
 model AuditLog {

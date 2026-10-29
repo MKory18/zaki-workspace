@@ -5,12 +5,13 @@ import { db } from "@/server/db";
 import { requireActor } from "@/server/policy/actor";
 import { bellWhere, currentSpace } from "@/server/services/current-space";
 
-/** The caller's notifications (latest 30) + unread count — of the space they are in, and the personal ones. */
+/** The caller's notifications (latest 30) + unread count — of the space they are in, and the personal ones of their company. */
 export async function GET() {
   return withApi(async () => {
     const user = await requireUser();
-    const space = await currentSpace(await requireActor());
-    const mine = bellWhere(user.id, space?.id);
+    const actor = await requireActor();
+    const space = await currentSpace(actor);
+    const mine = bellWhere(user.id, space?.id, actor.orgId);
     const [items, unreadCount] = await Promise.all([
       db.notification.findMany({
         where: mine,
