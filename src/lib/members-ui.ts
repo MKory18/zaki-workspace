@@ -70,6 +70,8 @@ export interface ContractMember {
   effectiveCapabilities: string[];
   lastLoginAt: string | null;
   mustChangePassword: boolean;
+  /** `/api/avatars/<id>` — the picture the person uploaded, or null for the initials. */
+  avatarUrl?: string | null;
   /** Open tasks + open tickets + active routines assigned to the person: an offboarding needs a transfer target when > 0. */
   openWork: number;
   workspaces: MemberWorkspace[];
@@ -246,16 +248,28 @@ export const CAPABILITY_GROUPS: readonly { id: CapabilityGroupId; capabilities: 
 ];
 
 /**
- * Switches whose power deserves a ⚠️ next to them when the owner grants them beyond the rank. Only
- * switches that are offered: each later phase adds its own when it wires the capability (prices, cash
- * and penalties come with the phases that use them).
+ * Switches whose power deserves a ⚠️ next to them when the owner grants them beyond the rank: they
+ * open accounts, reach another system, or show the company's money to somebody the rank does not
+ * give it to. Only switches that are offered: each later phase adds its own when it wires the
+ * capability (cash and penalties come with the phases that use them).
  */
-export const SENSITIVE_CAPABILITIES: readonly Capability[] = ["users.manage", "integrations.manage"];
+export const SENSITIVE_CAPABILITIES: readonly Capability[] = ["users.manage", "integrations.manage", "prices.view"];
 
 /** Is this capability a switch the screen offers today? */
 export function isOffered(capability: Capability): boolean {
   return WIRED_CAPABILITIES.includes(capability);
 }
+
+/**
+ * The capabilities the catalogue has a group for, and nothing in this repository asks yet (the
+ * security review's C3: `cash.view`, `penalties.view`, `announce.send`, `escalation.configure`).
+ * They are not switches — a switch that does nothing is a lie — but hiding them completely let the
+ * owner believe he had closed a door that is not built yet, so the panel lists them as «قريبًا».
+ * The list empties by itself as each phase wires its capability.
+ */
+export const SOON_CAPABILITIES: readonly Capability[] = CAPABILITY_GROUPS.flatMap((group) => group.capabilities).filter(
+  (capability) => !WIRED_CAPABILITIES.includes(capability),
+);
 
 /** What a person holds as far as handing capabilities out goes (the OWNER holds everything, whatever list the page was given). */
 function holderOf(actor: ActorInfo): CapabilityHolder {

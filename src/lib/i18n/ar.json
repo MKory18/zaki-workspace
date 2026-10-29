@@ -600,6 +600,7 @@
   "crm.stage_won": "تمت الصفقة",
   "crm.title": "العنوان",
   "crm.value": "القيمة",
+  "crm.prices_denied": "لا تملك صلاحية الأسعار",
   "goal.achieved": "محقق",
   "goal.anchorLabel": "تاريخ ضمن الفترة",
   "goal.deleted": "حُذف الهدف",
@@ -705,5 +706,15 @@
   "ideas.unsharedToast": "رجعت الفكرة لمساحتها بس",
   "ideas.from_space": "من {space}",
   "ideas.subtitle_space": "أفكار هالمساحة. شارك أي وحدة مع الشركة لتطلع بـ«الشركة» كمان.",
-  "ideas.subtitle_hq": "أفكار «الشركة»، ومعها الأفكار اللي شاركتها المساحات مع الشركة."
+  "ideas.subtitle_hq": "أفكار «الشركة»، ومعها الأفكار اللي شاركتها المساحات مع الشركة.",
+  "profile.photo": "صورة البروفايل",
+  "profile.photo.hint": "صورة واضحة لوجهك، حتى يعرفوك بسرعة.",
+  "profile.photo.change": "تغيير الصورة",
+  "profile.photo.add": "أضف صورة",
+  "profile.photo.remove": "إزالة الصورة",
+  "profile.photo.saved": "تم تحديث الصورة",
+  "profile.photo.removed": "تمت إزالة الصورة",
+  "avatar.too_large": "الصورة أكبر من 2 ميغابايت.",
+  "avatar.unsupported": "صيغة الصورة غير مدعومة. اختر صورة عادية.",
+  "avatar.empty": "لم تختر صورة."
 }

@@ -109,14 +109,17 @@ function dropWithoutView(caps: Set<Capability>): Set<Capability> {
 /**
  * The switches that change something TODAY. The rest are in the catalogue so that stored values and
  * later phases stay valid, but a switch that does nothing is a lie on the people screen, so only
- * these are offered there (each later phase adds its own: announcements, escalation, cash,
- * penalties and prices come with the phases that use them).
+ * these are offered there (each later phase adds its own: announcements, escalation, cash and
+ * penalties come with the phases that use them). `prices.view` joined the list with the customers
+ * screen's own fix (security review C2): from then on the CRM service hides the amount from whoever
+ * lacks it, so the switch really closes a door.
  */
 export const WIRED_CAPABILITIES: readonly Capability[] = [
   "spaces.create",
   "users.manage",
   "directory.view",
   "integrations.manage",
+  "prices.view",
   ...SECTION_CAPABILITIES,
 ];
 

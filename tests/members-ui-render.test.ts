@@ -22,7 +22,7 @@ import { MemberSheet } from "@/components/members/member-sheet";
 import { StaffDirectory } from "@/components/members/staff-directory";
 import { CapabilityPanel } from "@/components/members/capability-panel";
 import { SwitchRow } from "@/components/members/switch-row";
-import { CAPABILITY_GROUPS, type ActorInfo, type ContractMember, type MembersResponse } from "@/lib/members-ui";
+import { CAPABILITY_GROUPS, SOON_CAPABILITIES, type ActorInfo, type ContractMember, type MembersResponse } from "@/lib/members-ui";
 import { CAPABILITIES, RANK_DEFAULTS, SECTION_CAPABILITIES, WIRED_CAPABILITIES } from "@/server/policy/capabilities";
 import { ADMIN, GUEST, LEAD, MEMBER, NOW, OFFBOARDED, OWNER, SAMPLE, SPACES, SUSPENDED, contractMember } from "./members-ui-fixtures";
 
@@ -52,7 +52,6 @@ const noop = () => {};
 /** The wired capabilities shown as switches (the section boxes are the grid's checkboxes). */
 const SWITCHES = WIRED_CAPABILITIES.filter((c) => !SECTION_CAPABILITIES.includes(c));
 const WIRED = SWITCHES.length;
-const HIDDEN = CAPABILITIES.filter((c) => !WIRED_CAPABILITIES.includes(c));
 /** A team lead who was given users.manage: holds the lead defaults and that one, not integrations.manage. */
 const leadManagerActor: ActorInfo = { id: "u-lead", role: "LEAD", caps: [...RANK_DEFAULTS.LEAD, "users.manage"] };
 
@@ -326,15 +325,30 @@ describe("the panel of one person: only what the actor may do is offered", () =>
     expect(markup).toContain("@qabas");
   });
 
-  it("only the wired switches are offered: the rest of the catalogue (and the owner-only archive) is not on the screen", () => {
+  it("only the wired switches are offered; the owner-only archive is not on the screen at all", () => {
     const markup = render(sheet(MEMBER));
     expect(markup).not.toContain("archive");
     expect(count(markup, /role="switch"/g)).toBe(WIRED);
-    for (const cap of HIDDEN) {
-      expect(markup, cap).not.toContain(t(`members.cap.${cap}.title`));
+    // the capabilities a later phase will wire are named as «قريبًا», never as a switch
+    expect(markup).toContain(t("members.caps_soon_title"));
+    for (const cap of SOON_CAPABILITIES) {
+      expect(markup, cap).toContain(t(`members.cap.${cap}.title`));
       expect(markup, cap).not.toContain(t(`members.cap.${cap}.hint`));
     }
     for (const cap of SWITCHES) expect(markup, cap).toContain(t(`members.cap.${cap}.title`));
+  });
+
+  it("«قريبًا» is the rest of the catalogue's groups and nothing else: derived, so a wired capability leaves it by itself", () => {
+    const grouped = CAPABILITY_GROUPS.flatMap((group) => [...group.capabilities]);
+    for (const cap of SOON_CAPABILITIES) {
+      expect(grouped, cap).toContain(cap);
+      expect(WIRED_CAPABILITIES, cap).not.toContain(cap);
+    }
+    // the four the security review counted as guarding nothing (C3), and the owner-only archive never appears
+    for (const cap of ["cash.view", "penalties.view", "announce.send", "escalation.configure"] as const) {
+      expect(SOON_CAPABILITIES, cap).toContain(cap);
+    }
+    expect(SOON_CAPABILITIES).not.toContain("archive.view");
   });
 
   it("shows each switch with its rank default, a one-line explanation and the group it belongs to; a group with nothing wired is gone", () => {
@@ -377,7 +391,8 @@ describe("the panel of one person: only what the actor may do is offered", () =>
       role: "MEMBER",
       capabilities: ["cash.view", "penalties.view"],
     });
-    const lead = contractMember({ id: "u-z", name: "رنا", role: "LEAD", revokedCapabilities: ["prices.view"] });
+    // an ADMIN's announce.send (a rank default) switched off: still not a switch the screen offers
+    const lead = contractMember({ id: "u-z", name: "رنا", role: "ADMIN", revokedCapabilities: ["announce.send"] });
     for (const person of [hiddenOnly, lead]) {
       const markup = render(sheet(person));
       expect(markup).not.toContain("أُضيف فوق الرتبة");

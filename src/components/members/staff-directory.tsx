@@ -16,6 +16,8 @@ export interface DirectoryPerson {
   jobTitle: string | null;
   role: OrgRoleName | null;
   email: string | null;
+  /** `/api/avatars/<id>` — the picture they uploaded, or null for their initials. */
+  avatarUrl?: string | null;
 }
 
 /**
@@ -31,7 +33,7 @@ export function StaffDirectory({ people, t, linkProfiles }: { people: readonly D
       {people.map((p) => {
         const row = (
           <>
-            <Avatar name={p.name} className="h-11 w-11 text-sm" />
+            <Avatar name={p.name} src={p.avatarUrl} className="h-11 w-11 text-sm" />
             <div className="min-w-0 flex-1">
               <p className="break-words text-sm font-medium text-fg">{p.name}</p>
               {p.jobTitle ? <p className="break-words text-xs text-fg-muted">{p.jobTitle}</p> : null}

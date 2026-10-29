@@ -468,7 +468,7 @@ export async function markDelivered(ctx: OrgAccessContext, conversationId: strin
 /** The include every message query uses, so presentMessage always has what it needs. */
 export function messageInclude() {
   return {
-    author: { select: { id: true, name: true } },
+    author: { select: { id: true, name: true, avatarUrl: true } },
     deletedBy: { select: { name: true } },
     replyTo: { select: { id: true, body: true, deletedAt: true, author: { select: { name: true } } } },
     forwardedFrom: { select: { author: { select: { name: true } } } },

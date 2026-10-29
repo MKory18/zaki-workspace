@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
+import { NotFoundError } from "@/server/auth";
+import { parseMultipartUpload } from "@/server/files/multipart";
+import { uploadTempDir, UploadStreamError } from "@/server/files/upload-stream";
+import { MAX_FILE_BYTES } from "@/server/files/sniff";
 import { withApi } from "@/server/api";
 import { db } from "@/server/db";
-import { NotFoundError } from "@/server/auth";
 import { activeOrgCtx } from "@/server/services/integrations";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { assertMayReadFile, ingest, PENDING_PATH } from "@/server/services/files";
-import { BodyTooLargeError, readFormDataLimited } from "@/server/http/body-limit";
-import { MAX_FILE_BYTES } from "@/server/files/sniff";
-
-/** One version's form: the biggest file the library takes, plus the multipart envelope. */
-const MAX_FORM_BYTES = MAX_FILE_BYTES + 1024 * 1024;
 
 /** POST multipart/form-data: file= — stores a NEW VERSION in the same family of a LIBRARY file (never for guests). */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -30,24 +28,23 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     });
     if (!head) throw new NotFoundError("files.not_found");
 
-    let form: FormData;
+    let received;
     try {
-      form = await readFormDataLimited(req, MAX_FORM_BYTES);
+      ({ upload: received } = await parseMultipartUpload(req, { fieldName: "file", maxBytes: MAX_FILE_BYTES, tempDir: uploadTempDir }));
+      const made = await ingest(ctx, { name: received.name, path: received.path, size: received.size, prefix: received.prefix }, {
+        familyId: head.familyId,
+        latestVersion: head.version,
+      });
+      return NextResponse.json(made, { status: 201 });
     } catch (err) {
-      if (err instanceof BodyTooLargeError) {
-        return NextResponse.json({ error: "bad_request", message: "files.too_large" }, { status: 413 });
+      if (err instanceof UploadStreamError && (err.kind === "empty" || err.kind === "invalid")) {
+        return NextResponse.json({ error: "bad_request", message: err.message }, { status: 400 });
       }
+      // a body over the ceiling is answered 413 before its bytes are buffered (security review D2)
+      if (err instanceof UploadStreamError && err.kind === "too_large") return NextResponse.json({ error: "payload_too_large", message: "files.too_large" }, { status: 413 });
       throw err;
+    } finally {
+      await received?.cleanup();
     }
-    const entry = form.get("file");
-    if (!(entry instanceof File)) {
-      return NextResponse.json({ error: "bad_request", message: "files.empty" }, { status: 400 });
-    }
-    const bytes = new Uint8Array(await entry.arrayBuffer());
-    const made = await ingest(ctx, { name: entry.name, bytes }, {
-      familyId: head.familyId,
-      latestVersion: head.version,
-    });
-    return NextResponse.json(made, { status: 201 });
   });
 }

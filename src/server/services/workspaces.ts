@@ -145,6 +145,7 @@ export async function listWorkspaceMembers(workspaceId: string, viewerId?: strin
           id: true,
           name: true,
           email: true,
+          avatarUrl: true,
           memberships: { where: { organizationId: ws.organizationId, status: "ACTIVE" }, select: { role: true } },
         },
       },
@@ -156,6 +157,7 @@ export async function listWorkspaceMembers(workspaceId: string, viewerId?: strin
     id: r.user.id,
     name: r.user.name,
     email: r.user.email,
+    avatarUrl: r.user.avatarUrl,
     role: workspaceRoleOf(r.user.memberships[0]?.role, r.role) as WorkspaceRoleName,
   }));
 }

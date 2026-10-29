@@ -35,11 +35,9 @@ function todayValue(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** The end of that day in the person's own clock, sent as an instant. */
+/** The day as picked, sent as a day: the server makes it noon in the COMPANY's zone (review B5) — the browser's clock never decides. */
 function dueOf(day: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
-  const [y, m, d] = day.split("-").map(Number) as [number, number, number];
-  return new Date(y, m - 1, d, 23, 59, 0).toISOString();
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
 }
 
 export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; onSent?: () => void }) {

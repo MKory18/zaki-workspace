@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Writes the decoration stylesheet from its source of truth.
  *

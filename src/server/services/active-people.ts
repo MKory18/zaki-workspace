@@ -16,7 +16,10 @@ import { sectionGridOn } from "@/server/policy/section-grid";
 export async function activeMember(orgId: string, userId: string, client: DbClient = db) {
   const member = await client.organizationMember.findUnique({
     where: { organizationId_userId: { organizationId: orgId, userId } },
-    select: { role: true, status: true, capabilities: true, revokedCapabilities: true },
+    // `primaryOwner` decides whether an OWNER is the owner or a partner: a partner's removed boxes
+    // count, the primary owner's do not. Leaving it out read every partner as the primary owner, so
+    // a capability the owner took away came back in every service guard (security review C2).
+    select: { role: true, primaryOwner: true, status: true, capabilities: true, revokedCapabilities: true },
   });
   return member && member.status === "ACTIVE" ? member : null;
 }
@@ -48,4 +51,20 @@ export async function assertCapability(
   const member = await activeMember(ctx.orgId, ctx.userId, client);
   if (!member) throw new ForbiddenError("not_org_member");
   if (!can(member, capability, { sectionGrid: await sectionGridOn(ctx.orgId, client) })) throw new ForbiddenError("insufficient_role");
+}
+
+/**
+ * The same rule as `assertCapability`, as a question instead of a refusal: for the case where the
+ * person may read the ROW but not one FIELD of it (`prices.view` and an opportunity's amount), so the
+ * answer is a hidden value, not a 403 on the whole screen. A non-member, a suspended person and a
+ * guest hold nothing, so all three answer false.
+ */
+export async function holdsCapability(
+  ctx: { orgId: string; userId: string },
+  capability: Capability,
+  client: DbClient = db,
+): Promise<boolean> {
+  const member = await activeMember(ctx.orgId, ctx.userId, client);
+  if (!member) return false;
+  return can(member, capability, { sectionGrid: await sectionGridOn(ctx.orgId, client) });
 }

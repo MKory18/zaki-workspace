@@ -20,7 +20,7 @@ export async function GET() {
         .map((p) => ({
           userId: p.userId,
           role: p.role,
-          user: { id: p.userId, name: p.name, jobTitle: p.jobTitle },
+          user: { id: p.userId, name: p.name, jobTitle: p.jobTitle, avatarUrl: p.avatarUrl ?? null },
         })),
     });
   });

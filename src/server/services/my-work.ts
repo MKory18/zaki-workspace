@@ -12,6 +12,20 @@ import { resolveTimeZone } from "@/lib/zoned-time";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 
 /**
+ * The company's zone as the person's My Work page reads it: the first company they are an ACTIVE member
+ * of. The page needs it to show and send a due day in the company's calendar (review B5); the tabs
+ * themselves are cut per organization, each in its own zone.
+ */
+export async function myWorkTimeZone(userId: string): Promise<string> {
+  const member = await db.organizationMember.findFirst({
+    where: { userId, status: "ACTIVE" },
+    orderBy: { createdAt: "asc" },
+    select: { organization: { select: { timezone: true } } },
+  });
+  return resolveTimeZone(member?.organization.timezone);
+}
+
+/**
  * "My Work": the signed-in user's own tasks, in the workspaces they can open.
  *
  * Rules (the page only renders what this returns):

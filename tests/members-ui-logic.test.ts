@@ -324,11 +324,21 @@ describe("capability switches: rank defaults + extras - revoked", () => {
     }
   });
 
-  it("flags the sensitive switches (accounts, integrations), and only switches that are offered", () => {
+  it("flags the sensitive switches (accounts, integrations, the company's money), and only switches that are offered", () => {
     const r = rows(person({ role: "MEMBER" }));
     for (const cap of ["users.manage", "integrations.manage"] as const) expect(r.get(cap)?.sensitive, cap).toBe(true);
     expect(r.get("crm.view")?.sensitive).toBe(false);
     for (const cap of SENSITIVE_CAPABILITIES) expect(WIRED_CAPABILITIES, cap).toContain(cap);
+  });
+
+  it("the amount's switch is offered and marked ⚠️: a member does not hold it by rank, and it shows the company's money", () => {
+    const member = person({ role: "MEMBER" });
+    expect(offered(member)).toContain("prices.view");
+    expect(rows(member).get("prices.view")).toMatchObject({ on: false, rankDefault: false, sensitive: true, locked: null });
+    // the ranks the catalogue gives it to start switched on
+    expect(rows(person({ role: "LEAD" })).get("prices.view")).toMatchObject({ on: true, rankDefault: true });
+    // and a guest can never be handed it
+    expect(rows(person({ role: "GUEST" })).get("prices.view")).toMatchObject({ on: false, locked: "not_grantable" });
   });
 
   it("the users.manage switch says what it really allows, and to whom to give it", () => {
@@ -343,15 +353,15 @@ describe("capability switches: rank defaults + extras - revoked", () => {
 
 describe("capabilities the screen does not show are never lost", () => {
   it("a stored capability that is not displayed still travels in the lists a switch flip sends", () => {
-    // LEAD: prices.view is a default (hidden today) switched off earlier; cash.view an owner's extra (hidden today)
-    const lead = person({ role: "LEAD", capabilities: ["cash.view"], revokedCapabilities: ["prices.view"] });
+    // a LEAD: cash.view is an owner's extra the screen does not show, and announce.send is stored as revoked (hidden too)
+    const lead = person({ role: "LEAD", capabilities: ["cash.view"], revokedCapabilities: ["announce.send"] });
     expect(toggleCapability(lead, "crm.edit", false)).toEqual({
       capabilities: ["cash.view"],
-      revokedCapabilities: ["crm.edit", "prices.view"],
+      revokedCapabilities: ["crm.edit", "announce.send"],
     });
     expect(toggleCapability(lead, "integrations.manage", true)).toEqual({
       capabilities: ["integrations.manage", "cash.view"],
-      revokedCapabilities: ["prices.view"],
+      revokedCapabilities: ["announce.send"],
     });
   });
 
@@ -381,7 +391,8 @@ describe("capabilities the screen does not show are never lost", () => {
     const owner = actorOf("OWNER");
     expect(canResetCapabilities(person(), owner)).toBe(false);
     expect(canResetCapabilities(person({ capabilities: ["cash.view"], revokedCapabilities: [] }), owner)).toBe(false);
-    expect(canResetCapabilities(person({ role: "LEAD", revokedCapabilities: ["prices.view"] }), owner)).toBe(false);
+    // announce.send is an ADMIN default (hidden today) switched off: not the screen's to clear
+    expect(canResetCapabilities(person({ role: "ADMIN", revokedCapabilities: ["announce.send"] }), owner)).toBe(false);
     expect(canResetCapabilities(person({ revokedCapabilities: ["crm.edit"] }), owner)).toBe(true);
   });
 
@@ -409,7 +420,7 @@ describe("what a rank change does to the switches (the server's own composition)
     const admin = actorOf("ADMIN", { caps: RANK_DEFAULTS.ADMIN.filter((c) => c !== "crm.edit") });
     const guest = person({ role: "GUEST" });
     expect(capabilityListsAfterRankChange(admin, guest, "MEMBER")).toEqual({ capabilities: [], revokedCapabilities: ["crm.edit"] });
-    // hidden defaults count too: the admin without prices.view promotes a member to lead
+    // defaults count too: the admin without prices.view promotes a member to lead
     const noPrices = actorOf("ADMIN", { caps: RANK_DEFAULTS.ADMIN.filter((c) => c !== "prices.view") });
     expect(capabilityListsAfterRankChange(noPrices, person({ role: "MEMBER" }), "LEAD")).toEqual({
       capabilities: [],
