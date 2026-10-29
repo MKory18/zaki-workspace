@@ -7,31 +7,13 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 import { weekdayName } from "@/lib/format";
-import { zonedParts } from "@/lib/zoned-time";
+import { dayOfInstant } from "@/lib/due-day";
 
 export interface CalTask {
   id: string;
   key: string;
   title: string;
   dueDate: string;
-}
-
-function toLocalNoonISO(dayIso: string): string {
-  const [y, m, d] = dayIso.split("-").map(Number);
-  if (!y || !m || !d) return dayIso;
-  return new Date(y, m - 1, d, 12).toISOString();
-}
-
-/** The calendar day "YYYY-MM-DD" of `timeZone` that an instant falls in (the grid's bucket key). */
-function bucketIso(dueIso: string, timeZone: string): string {
-  const p = zonedParts(new Date(dueIso), timeZone);
-  return (
-    p.year.toString().padStart(4, "0") +
-    "-" +
-    p.month.toString().padStart(2, "0") +
-    "-" +
-    p.day.toString().padStart(2, "0")
-  );
 }
 
 /** Month grid with drag-to-reschedule. Drops persist via PATCH /api/tasks/[id]. */
@@ -70,7 +52,7 @@ export function CalendarGrid({
   const byDay = new Map<string, CalTask[]>();
   for (const task of tasks) {
     // the company's day for this instant (the server already cut the month there too)
-    const key = bucketIso(task.dueDate, timeZone);
+    const key = dayOfInstant(task.dueDate, timeZone);
     const arr = byDay.get(key) ?? [];
     arr.push(task);
     byDay.set(key, arr);
@@ -82,7 +64,8 @@ export function CalendarGrid({
     setDragId(null);
     setOverKey(null);
     try {
-      await apiPatch(`/api/tasks/${taskId}`, { dueDate: toLocalNoonISO(dayIso) });
+      // the day the card was dropped on, as a day: the server makes it noon in the COMPANY's zone (review B5)
+      await apiPatch(`/api/tasks/${taskId}`, { dueDate: dayIso });
       toast(t("task.updated"), "success");
       router.refresh();
     } catch {
