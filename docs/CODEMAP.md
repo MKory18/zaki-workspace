@@ -51,7 +51,7 @@ Two rules the code keeps, and a reviewer can check by reading the map:
 | `src/lib/` | pure helpers that run on both sides: `i18n/`, `format.ts`, `features.ts`, `nav/`, `themes/` |
 | `src/server/` | everything that may only run on the server |
 | `src/server/policy/` | who may do what: ranks, capabilities, the section grid, conversation and call rules |
-| `src/server/services/` | 44 services — the business rules (§6) |
+| `src/server/services/` | 45 services — the business rules (§6) |
 | `src/server/chat/`, `calls/`, `files/`, `watch/`, `realtime/` | the larger features, split out of `services/` |
 | `prisma/` | the schema and the additive-only migrations |
 | `worker/` | a heartbeat placeholder: no scheduled job runs today |
@@ -163,7 +163,7 @@ Doors in use: `activeOrgCtx` 71 · `requireActor` 17 · `requireTeamWork` 11 · 
 | POST | `/api/ideas/[id]/share` | ideaAccessCtx | `ideas`: ideaAccessCtx, shareIdea |
 | POST | `/api/ideas/[id]/vote` | ideaAccessCtx | `ideas`: ideaAccessCtx, toggleIdeaVote |
 | GET | `/api/instant` | activeOrgCtx | `integrations`: activeOrgCtx<br>`current-space`: currentSpace<br>`features`: isFeatureOn<br>`workspaces`: listWorkspaceMembers |
-| POST | `/api/instant/task` | activeOrgCtx | `integrations`: activeOrgCtx<br>`current-space`: currentSpace<br>`instant-work`: createInstantTask |
+| POST | `/api/instant/task` | activeOrgCtx | `integrations`: activeOrgCtx<br>`current-space`: currentSpace<br>`instant-work`: createInstantTask<br>`org-day`: orgTimeZone |
 | POST | `/api/instant/ticket` | activeOrgCtx | `integrations`: activeOrgCtx<br>`features`: assertFeatureOn<br>`guest-guard`: assertNotGuest<br>`tickets`: createInstantTicket, instantTicketSchema |
 | GET, DELETE | `/api/integrations/google` | activeOrgCtx | `integrations`: activeOrgCtx, assertOrgManager<br>`google`: disconnectGoogle, getGoogleStatus, listDriveFiles, type DriveFile |
 | POST, DELETE | `/api/integrations/google/app` | activeOrgCtx | `integrations`: activeOrgCtx, assertOrgManager<br>`google`: clearGoogleApp, saveGoogleApp |
@@ -208,8 +208,8 @@ Doors in use: `activeOrgCtx` 71 · `requireActor` 17 · `requireTeamWork` 11 · 
 | GET, PATCH | `/api/settings/features` | activeOrgCtx | `integrations`: activeOrgCtx<br>`guest-guard`: assertNotGuest<br>`features`: listFeatures, setFeature |
 | GET | `/api/spaces/unplaced` | requireActor | `move-to-space`: listUnplaced |
 | POST | `/api/spaces/unplaced/move` | requireActor | `move-to-space`: moveSchema, moveToSpace |
-| GET, POST | `/api/tasks` | requireWorkspace | `team-scope`: teamFilterInSpace<br>`tasks`: createTask, listTasks<br>`n8n`: dispatchEvent |
-| GET, PATCH, DELETE | `/api/tasks/[id]` | requireTaskAccess | `team-scope`: userSeesProject<br>`tasks`: updateTask, deleteTask<br>`active-people`: assertActiveAssignee |
+| GET, POST | `/api/tasks` | requireWorkspace | `team-scope`: teamFilterInSpace<br>`tasks`: createTask, listTasks<br>`org-day`: orgTimeZone<br>`n8n`: dispatchEvent |
+| GET, PATCH, DELETE | `/api/tasks/[id]` | requireTaskAccess | `team-scope`: userSeesProject<br>`tasks`: updateTask, deleteTask<br>`active-people`: assertActiveAssignee<br>`org-day`: orgTimeZone |
 | POST, GET | `/api/tasks/[id]/comments` | requireTeamWork ‡ | `n8n`: dispatchEvent |
 | PATCH, DELETE | `/api/tasks/[id]/comments/[commentId]` | requireTeamWork ‡ | — |
 | POST | `/api/tasks/[id]/complete` | requireTeamWork | `tasks`: setTaskCompletion<br>`n8n`: dispatchEvent |
@@ -259,33 +259,34 @@ high count is a wide surface: changing its signature reaches all of them.
 | Service | Lines | Imported by | What it owns |
 |---|---|---|---|
 | `integrations` | 180 | 79 | Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. |
-| `current-space` | 111 | 41 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
+| `current-space` | 123 | 41 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
 | `guest-guard` | 30 | 36 | Org GUESTs are external partners (for example the factory): they see only what is shared with them, never write business data, and never see prices or the staff directory. |
 | `team-scope` | 149 | 16 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
 | `features` | 48 | 15 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
-| `tasks` | 448 | 14 | no header comment — exports `TASK_INCLUDE`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, `moveTask`, … |
+| `tasks` | 454 | 14 | no header comment — exports `TASK_INCLUDE`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, `moveTask`, … |
 | `n8n` | 294 | 9 | Events we allow orgs to forward to n8n — the UI shows exactly this list. |
 | `access` | 76 | 8 | Workspace-level isolation — the company's master switch. |
 | `google` | 355 | 8 | Only the files the app itself creates (the library's): a non-sensitive scope, so Google asks for no review and the owner's published app keeps its connection. |
 | `space-place` | 30 | 8 | WHERE A SPACE'S OWN THINGS ARE READ (the owner's decision, 2026-10-25: each space is like a separate site) — for the goals, the daily routines, the customers and the opportuniti… |
-| `tickets` | 491 | 8 | IT tickets live inside a department. |
+| `tickets` | 501 | 8 | IT tickets live inside a department. |
 | `workspaces` | 325 | 8 | Spaces (workspaces): who is in one, who may change it. |
-| `active-people` | 52 | 7 | "Nobody who was suspended or removed still counts." A suspended or offboarded member keeps their OrganizationMember row (history, authorship), so a query that reads that table w… |
-| `files` | 450 | 7 | no header comment — exports `fileLibrary`, `PENDING_PATH`, `PREVIEWABLE`, `INLINE_TEXT`, `logFile`, … |
+| `active-people` | 71 | 7 | "Nobody who was suspended or removed still counts." A suspended or offboarded member keeps their OrganizationMember row (history, authorship), so a query that reads that table w… |
+| `files` | 505 | 7 | no header comment — exports `fileLibrary`, `PENDING_PATH`, `PREVIEWABLE`, `INLINE_TEXT`, `logFile`, … |
 | `ideas` | 395 | 7 | Membership context resolved from the idea's own org (shared by API routes). |
-| `accounts` | 855 | 6 | The account lifecycle: the owner (and, below him, whoever holds `users.manage`) creates, edits, suspends, reactivates and offboards people, resets passwords and ends sessions. |
+| `accounts` | 859 | 6 | The account lifecycle: the owner (and, below him, whoever holds `users.manage`) creates, edits, suspends, reactivates and offboards people, resets passwords and ends sessions. |
 | `watch` | 372 | 6 | «نتفرّج سوا» — people of a space watch one link together (the owner's ask, 2026-10-26). |
 | `campaigns` | 235 | 5 | Campaigns live inside a department (marketing calendars). |
 | `production` | 262 | 5 | Daily production. |
 | `teams` | 223 | 5 | TEAMS INSIDE A SPACE — who is in which team, and which project belongs to which (the reading rule is in team-scope.ts). |
 | `telegram` | 299 | 5 | Validates a bot token by calling getMe. |
-| `crm` | 207 | 4 | no header comment — exports `OPPORTUNITY_STAGES`, `createCustomerSchema`, `updateCustomerSchema`, `createOpportunitySchema`, `updateOpportunitySchema`, … |
-| `departments` | 229 | 4 | The departments area is the company's staff directory (who works where, with which job title), so org GUESTs get 403 on every function here, read or write. |
+| `crm` | 228 | 4 | no header comment — exports `OPPORTUNITY_STAGES`, `createCustomerSchema`, `updateCustomerSchema`, `createOpportunitySchema`, `updateOpportunitySchema`, … |
+| `departments` | 240 | 4 | The departments area is the company's staff directory (who works where, with which job title), so org GUESTs get 403 on every function here, read or write. |
 | `users` | 287 | 4 | no header comment — exports `updateProfile`, `getProfileForViewer`, `getPublicProfile`, `memberDirectory` |
 | `views` | 359 | 4 | Zones already warned about, per organization, so a bad stored zone is logged once and not on every request. |
+| `org-day` | 26 | 3 | The start of the COMPANY's today — `Organization.timezone`, never the server's clock and never the browser's. |
 | `registration` | 145 | 3 | Opening a company is open to anyone (owner's decision 23/10), behind three guards: The address is checked. |
 | `space-manage` | 61 | 3 | MANAGING THE SPACES FROM «كل المساحات» (the owner's asks, 2026-10-26): put them in order by dragging, archive one (it leaves every list — the switcher, the overview, search by s… |
-| `spaces-overview` | 63 | 3 | «كل المساحات» — the owner's and the admins' one look over every space they can open (the owner's decision, 2026-10-25): each space stays a separate site, and this page only coun… |
+| `spaces-overview` | 73 | 3 | «كل المساحات» — the owner's and the admins' one look over every space they can open (the owner's decision, 2026-10-25): each space stays a separate site, and this page only coun… |
 | `goals` | 168 | 2 | no header comment — exports `periodWindow`, `goalSchema`, `goalStatus`, `listGoals`, `createGoal`, … |
 | `member-rules` | 184 | 2 | The rank rules of account management, in ONE place, as pure functions with no database and no server-only import — so the members screen can offer exactly what the server allows… |
 | `move-to-space` | 106 | 2 | «انقل لمساحة» (the plan, 2026-10-25: each space is like a separate site). |
@@ -299,7 +300,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `department-space` | 93 | 1 | EVERY DEPARTMENT HAS ITS SPACE (the owner's decision, 2026-10-25: each space is like a separate site). |
 | `first-steps` | 100 | 1 | The first-steps card («خطواتك الأولى») computed from REAL data for the signed-in actor: nothing is stored about "progress" - a step is done because the rows say so (a theme chos… |
 | `instant-work` | 105 | 1 | «مهمة فورية» (the owner's ask, 2026-10-27: «+ بالمهام ومهمة فورية لشخص محدد مع أولوية»): a task typed in one go — a title, the person, the priority, a day — with no project to p… |
-| `my-work` | 135 | 1 | "My Work": the signed-in user's own tasks, in the workspaces they can open. |
+| `my-work` | 149 | 1 | The company's zone as the person's My Work page reads it: the first company they are an ACTIVE member of. |
 | `space-delete` | 93 | 1 | DELETING A SPACE WITH ALL ITS WORK (the owner's decision, 2026-10-26: «كلها مع شغلها»). |
 | `today` | 289 | 1 | «اليوم» — everything the Today page shows, in one call (`getToday(actor)`), so the page decides nothing. |
 
@@ -322,7 +323,7 @@ to be added to, and the places a bug can leave the row half-written.
 | `RoutineLog` | 2 | `server/services/production.ts`: 2 |
 | `Goal` | 5 | `server/services/goals.ts`: 3<br>`server/services/move-to-space.ts`: 1<br>`server/services/space-delete.ts`: 1 |
 | `DepartmentMember` | 3 | `server/services/departments.ts`: 2<br>`server/services/accounts.ts`: 1 |
-| `StoredFile` | 10 | `server/services/files.ts`: 6<br>`server/chat/attachments.ts`: 1<br>`server/chat/purge.ts`: 1<br>`server/services/move-to-space.ts`: 1<br>+1 more |
+| `StoredFile` | 11 | `server/services/files.ts`: 7<br>`server/chat/attachments.ts`: 1<br>`server/chat/purge.ts`: 1<br>`server/services/move-to-space.ts`: 1<br>+1 more |
 | `Conversation` | 17 | `server/chat/topics.ts`: 6<br>`server/chat/dm.ts`: 3<br>`server/chat/messages.ts`: 2<br>`server/chat/hq.ts`: 1<br>+5 more |
 | `ConversationMember` | 18 | `server/chat/topics.ts`: 6<br>`server/chat/dm.ts`: 4<br>`server/chat/messages.ts`: 3<br>`server/services/workspaces.ts`: 2<br>+3 more |
 | `ChatMessage` | 6 | `server/chat/messages.ts`: 5<br>`server/chat/system.ts`: 1 |
