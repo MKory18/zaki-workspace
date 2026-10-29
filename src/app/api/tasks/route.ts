@@ -5,6 +5,8 @@ import { withApi } from "@/server/api";
 import { teamFilterInSpace } from "@/server/services/team-scope";
 import { parseJson, priorities, taskTypes } from "@/server/validation";
 import { createTask, listTasks } from "@/server/services/tasks";
+import { orgTimeZone } from "@/server/services/org-day";
+import { dueInstantForDay, parseDayText } from "@/lib/due-day";
 import { dispatchEvent } from "@/server/services/n8n";
 
 const createSchema = z.object({
@@ -65,6 +67,12 @@ export async function POST(req: Request) {
   return withApi(async () => {
     const input = await parseJson(createSchema, req);
     const ctx = await requireWorkspace(input.workspaceId, ["ADMIN", "MEMBER"]);
+    // a plain day ("2026-11-05", the date box) is noon in the COMPANY's zone, never the browser's (review B5)
+    const dueDate = input.dueDate
+      ? parseDayText(input.dueDate)
+        ? dueInstantForDay(input.dueDate, await orgTimeZone(ctx.orgId))
+        : new Date(input.dueDate)
+      : null;
     const task = await createTask(ctx, {
       workspaceId: input.workspaceId,
       projectId: input.projectId,
@@ -75,7 +83,7 @@ export async function POST(req: Request) {
       priority: input.priority,
       type: input.type,
       assigneeId: input.assigneeId ?? null,
-      dueDate: input.dueDate ? new Date(input.dueDate) : null,
+      dueDate,
       labelIds: reqLabels(input),
     });
     await audit("task.created", {

@@ -8,7 +8,21 @@ import { withApi } from "@/server/api";
 import { parseJson, priorities, taskTypes } from "@/server/validation";
 import { updateTask, deleteTask } from "@/server/services/tasks";
 import { assertActiveAssignee } from "@/server/services/active-people";
+import { orgTimeZone } from "@/server/services/org-day";
+import { dueInstantForDay, parseDayText } from "@/lib/due-day";
 import { notifyAssignment } from "@/server/notify";
+
+/**
+ * A due (or start) date the API accepts: a full instant (`2026-11-05T09:00:00Z`) or a plain day
+ * (`2026-11-05` — the date box). A plain day is noon in the COMPANY's zone; the browser's zone never
+ * decides which day a person picked (review B5).
+ */
+async function dueFromInput(orgId: string, value: string | null | undefined): Promise<Date | null | undefined> {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (parseDayText(value)) return dueInstantForDay(value, await orgTimeZone(orgId));
+  return new Date(value);
+}
 
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -74,8 +88,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       priority: input.priority,
       type: input.type,
       assigneeId: input.assigneeId === null ? null : input.assigneeId,
-      dueDate: input.dueDate === null ? null : input.dueDate ? new Date(input.dueDate) : undefined,
-      startDate: input.startDate === null ? null : input.startDate ? new Date(input.startDate) : undefined,
+      dueDate: await dueFromInput(ctx.orgId, input.dueDate),
+      startDate: await dueFromInput(ctx.orgId, input.startDate),
       archived: input.archived,
       labelIds: input.labelIds,
     });
