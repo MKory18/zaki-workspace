@@ -1,10 +1,10 @@
 import { z } from "zod";
 import type { OpportunityStage } from "@prisma/client";
 import { db } from "@/server/db";
-import { NotFoundError, audit, type OrgAccessContext } from "@/server/auth";
+import { ForbiddenError, NotFoundError, audit, type OrgAccessContext } from "@/server/auth";
 import { nextTaskNumber, type Tx } from "@/server/services/tasks";
 import { assertNotGuest } from "@/server/services/guest-guard";
-import { assertCapability } from "@/server/services/active-people";
+import { assertCapability, holdsCapability } from "@/server/services/active-people";
 import { mySpacesWhere, placeWhere, type SpacePlace } from "@/server/services/space-place";
 
 export const OPPORTUNITY_STAGES = [
@@ -55,13 +55,23 @@ export type OpportunityInput = z.infer<typeof createOpportunitySchema>;
  * CRM is staff-only and runs on the customers row of the person's grid: `crm.view` for every read, `crm.edit` for
  * every create and update, `crm.delete` for every delete (without `crm.view` the other two fall too). Members, team leads and admins hold both by default (the owner can
  * switch either off for one person: 403 `insufficient_role`); org GUESTs hold neither and keep the
- * message they always got (`guest.no_access`). Opportunity `value` is price data, but hiding it
- * from staff is `prices.view`'s job, which is wired later - not here.
+ * message they always got (`guest.no_access`).
+ *
+ * An opportunity's `value` is price data, and it is a box of its own: `prices.view`. Whoever does not
+ * hold it still reads the opportunity — its title, its customer, its stage — but the amount comes back
+ * `null` and cannot be written (403 `crm.prices_denied`). The primary owner and every partner hold
+ * everything, so nothing moves for them; the switch exists so the owner can hide the money from one
+ * member of staff without taking the whole screen away (security review C2).
  * Every exported function below takes the caller's context for that.
  */
 async function assertCrm(ctx: OrgAccessContext, capability: "crm.view" | "crm.edit" | "crm.delete"): Promise<void> {
   assertNotGuest(ctx);
   await assertCapability(ctx, capability);
+}
+
+/** Does this caller see an opportunity's amount? (`prices.view`; a guest never gets this far.) */
+export async function seesPrices(ctx: OrgAccessContext): Promise<boolean> {
+  return holdsCapability(ctx, "prices.view");
 }
 
 export async function listCustomers(ctx: OrgAccessContext, place?: SpacePlace) {
@@ -84,7 +94,9 @@ export async function getCustomer(ctx: OrgAccessContext, id: string) {
     },
   });
   if (!customer) throw new NotFoundError("crm.not_found");
-  return customer;
+  // the customer's opportunities come with it, so the amounts must be hidden here too
+  if (await seesPrices(ctx)) return customer;
+  return { ...customer, opportunities: customer.opportunities.map((o) => ({ ...o, value: null })) };
 }
 
 export async function createCustomer(ctx: OrgAccessContext, input: CustomerInput, spaceId: string | null = null) {
@@ -125,7 +137,7 @@ export async function deleteCustomer(ctx: OrgAccessContext, id: string) {
 
 export async function listOpportunities(ctx: OrgAccessContext, place?: SpacePlace) {
   await assertCrm(ctx, "crm.view");
-  return db.opportunity.findMany({
+  const rows = await db.opportunity.findMany({
     // the space the person is in (and in «الشركة» the ones from before spaces had their own)
     where: { orgId: ctx.orgId, ...(place ? { AND: [placeWhere(place)] } : {}) },
     orderBy: { createdAt: "desc" },
@@ -134,6 +146,8 @@ export async function listOpportunities(ctx: OrgAccessContext, place?: SpacePlac
       owner: { select: { id: true, name: true } },
     },
   });
+  if (await seesPrices(ctx)) return rows;
+  return rows.map((row) => ({ ...row, value: null }));
 }
 
 export async function getOpportunity(ctx: OrgAccessContext, id: string) {
@@ -146,13 +160,17 @@ export async function getOpportunity(ctx: OrgAccessContext, id: string) {
     },
   });
   if (!opportunity) throw new NotFoundError("crm.not_found");
-  return opportunity;
+  if (await seesPrices(ctx)) return opportunity;
+  return { ...opportunity, value: null };
 }
 
 export async function createOpportunity(ctx: OrgAccessContext, input: OpportunityInput) {
   await assertCrm(ctx, "crm.edit");
   const customer = await db.customer.findFirst({ where: { id: input.customerId, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] } });
   if (!customer) throw new NotFoundError("crm.not_found");
+  // a caller without `prices.view` may open an opportunity; it starts at 0 and carries no amount
+  const priceVisible = await seesPrices(ctx);
+  if (input.value !== 0 && !priceVisible) throw new ForbiddenError("crm.prices_denied");
 
   const opportunity = await db.$transaction(async (tx: Tx) => {
     const num = await nextTaskNumber(ctx.orgId, tx);
@@ -174,7 +192,7 @@ export async function createOpportunity(ctx: OrgAccessContext, input: Opportunit
   });
 
   await audit("crm.opportunity_created", { actorId: ctx.userId, orgId: ctx.orgId, target: opportunity.id });
-  return opportunity;
+  return priceVisible ? opportunity : { ...opportunity, value: null };
 }
 
 export async function updateOpportunity(
@@ -185,6 +203,9 @@ export async function updateOpportunity(
   await assertCrm(ctx, "crm.edit");
   const opportunity = await db.opportunity.findFirst({ where: { id, orgId: ctx.orgId, AND: [await mySpacesWhere(ctx.userId)] } });
   if (!opportunity) throw new NotFoundError("crm.not_found");
+  // the amount is `prices.view`'s to write, not `crm.edit`'s (the row above is readable either way)
+  const priceVisible = await seesPrices(ctx);
+  if (input.value !== undefined && !priceVisible) throw new ForbiddenError("crm.prices_denied");
 
   const data: Record<string, unknown> = { ...input };
   if (input.expectedCloseAt !== undefined) {
@@ -194,7 +215,7 @@ export async function updateOpportunity(
 
   const updated = await db.opportunity.update({ where: { id: opportunity.id }, data });
   await audit("crm.opportunity_updated", { actorId: ctx.userId, orgId: ctx.orgId, target: opportunity.id });
-  return updated;
+  return priceVisible ? updated : { ...updated, value: null };
 }
 
 export async function deleteOpportunity(ctx: OrgAccessContext, id: string) {
