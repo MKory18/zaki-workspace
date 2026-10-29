@@ -4,8 +4,13 @@ import { activeOrgCtx } from "@/server/services/integrations";
 import { assertMemberCan } from "@/server/policy/actor";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { ingest, listFiles } from "@/server/services/files";
+import { BodyTooLargeError, readFormDataLimited } from "@/server/http/body-limit";
+import { MAX_FILE_BYTES } from "@/server/files/sniff";
 import { currentSpace } from "@/server/services/current-space";
 import { libraryOnDrive } from "@/server/services/google";
+
+/** One upload's form: the biggest file the library takes, plus the multipart envelope. */
+const MAX_FORM_BYTES = MAX_FILE_BYTES + 1024 * 1024;
 
 /**
  * The file library is closed to org GUESTs on every route (list, details, bytes, versions,
@@ -20,7 +25,13 @@ export async function POST(req: Request) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
     assertNotGuest(ctx);
-    const form = await req.formData();
+    let form: FormData;
+    try {
+      form = await readFormDataLimited(req, MAX_FORM_BYTES);
+    } catch (err) {
+      if (err instanceof BodyTooLargeError) return NextResponse.json({ error: "bad_request", message: "files.too_large" }, { status: 413 });
+      throw err;
+    }
     const entry = form.get("file");
     if (!(entry instanceof File)) return NextResponse.json({ error: "bad_request", message: "files.empty" }, { status: 400 });
     const bytes = new Uint8Array(await entry.arrayBuffer());

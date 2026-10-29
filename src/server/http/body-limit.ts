@@ -17,10 +17,15 @@ export class BodyTooLargeError extends Error {
 
 /** The body as UTF-8 text, refusing (BodyTooLargeError) anything bigger than `maxBytes`. */
 export async function readTextLimited(req: Request, maxBytes: number): Promise<string> {
+  return new TextDecoder().decode(await readBytesLimited(req, maxBytes));
+}
+
+/** The body as bytes, refusing (BodyTooLargeError) anything bigger than `maxBytes`. */
+export async function readBytesLimited(req: Request, maxBytes: number): Promise<Uint8Array> {
   // a declared length is a hint only: it can be missing or a lie, so the stream is counted too
   const declared = Number(req.headers.get("content-length") ?? "");
   if (Number.isFinite(declared) && declared > maxBytes) throw new BodyTooLargeError(maxBytes);
-  if (!req.body) return "";
+  if (!req.body) return new Uint8Array(0);
 
   const reader = req.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -45,5 +50,19 @@ export async function readTextLimited(req: Request, maxBytes: number): Promise<s
     bytes.set(chunk, at);
     at += chunk.byteLength;
   }
-  return new TextDecoder().decode(bytes);
+  return bytes;
+}
+
+/**
+ * An upload's form, read with a ceiling. `await req.formData()` parses whatever arrived, and a route
+ * handler has no body limit of its own: a member could post gigabytes and the container held them
+ * all before the per-kind check could refuse (security review D2). The bytes are read once, bounded,
+ * and the SAME multipart body is then parsed — the route still sees one form.
+ */
+export async function readFormDataLimited(req: Request, maxBytes: number): Promise<FormData> {
+  const contentType = req.headers.get("content-type") ?? "";
+  const bytes = await readBytesLimited(req, maxBytes);
+  // a fresh copy types as Uint8Array<ArrayBuffer>, which is what a Request body accepts
+  const body = new Blob([new Uint8Array(bytes)]);
+  return new Request(req.url, { method: "POST", headers: { "content-type": contentType }, body }).formData();
 }

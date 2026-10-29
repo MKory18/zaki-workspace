@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withApi } from "@/server/api";
 import { ValidationError } from "@/server/auth";
+import { BodyTooLargeError, readFormDataLimited } from "@/server/http/body-limit";
+import { CHAT_LIMITS } from "@/server/files/sniff";
 import { requireActor } from "@/server/policy/actor";
 import { createChatUpload } from "@/server/chat/attachments";
 
@@ -13,10 +15,19 @@ import { createChatUpload } from "@/server/chat/attachments";
  */
 const formKind = z.enum(["IMAGE", "VIDEO", "AUDIO", "FILE", "VOICE"]);
 
+/** One form: the biggest kind chat accepts (a video), plus the multipart envelope. */
+const MAX_FORM_BYTES = CHAT_LIMITS.VIDEO + 1024 * 1024;
+
 export async function POST(req: Request) {
   return withApi(async () => {
     const actor = await requireActor();
-    const form = await req.formData();
+    let form: FormData;
+    try {
+      form = await readFormDataLimited(req, MAX_FORM_BYTES);
+    } catch (err) {
+      if (err instanceof BodyTooLargeError) throw new ValidationError([{ path: "file", message: "chat.f.too_large" }]);
+      throw err;
+    }
     const entry = form.get("file");
     if (!(entry instanceof File)) throw new ValidationError([{ path: "file", message: "chat.f.empty" }]);
     const rawKind = form.get("kind");
