@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 import { apiPatch, apiPost, ApiError } from "@/lib/api-client";
 import { PRIORITY_STYLES, fmtDMY, fmtRelative } from "@/lib/format";
+import { dayOfInstant } from "@/lib/due-day";
 import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
@@ -22,6 +23,8 @@ export interface RowTask {
   assigneeName: string | null;
   projectName?: string;
   columnName?: string;
+  /** The due day as the company reads it (`YYYY-MM-DD`) — what the date box shows; without it the row derives it in the company's zone. */
+  dueDay?: string | null;
 }
 
 export interface RowMember {
@@ -36,12 +39,15 @@ export function TaskRow({
   editable,
   showProject = false,
   showColumn = false,
+  timeZone,
 }: {
   task: RowTask;
   members?: RowMember[];
   editable: boolean;
   showProject?: boolean;
   showColumn?: boolean;
+  /** The company's zone: the day a person picks is that zone's day, never the browser's (review B5). */
+  timeZone: string;
 }) {
   const { t } = useI18n();
   const router = useRouter();
@@ -73,8 +79,10 @@ export function TaskRow({
     if (busy) return;
     setBusy(true);
     try {
+      // the day as picked (`YYYY-MM-DD`): the server turns it into noon in the COMPANY's zone. Building the
+      // instant here meant the browser's clock decided which day was saved (review B5).
       await apiPatch(`/api/tasks/${task.id}`, {
-        dueDate: value === "" ? null : new Date(`${value}T12:00:00`).toISOString(),
+        dueDate: value === "" ? null : value,
       });
       toast(t("task.updated"), "success");
       router.refresh();
@@ -99,7 +107,7 @@ export function TaskRow({
     }
   }
 
-  const dueValue = task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : "";
+  const dueValue = task.dueDay ?? (task.dueDate ? dayOfInstant(task.dueDate, timeZone) : "");
 
   return (
     <li className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2">

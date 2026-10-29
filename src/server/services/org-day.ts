@@ -14,3 +14,12 @@ export async function orgDayStart(orgId: string, now: Date = new Date()): Promis
   const org = await db.organization.findUnique({ where: { id: orgId }, select: { timezone: true } });
   return zonedDayStart(now, resolveTimeZone(org?.timezone));
 }
+
+/**
+ * The company's zone, resolved (a wrong stored name falls back to the default). A day a person picks
+ * («يوم الاستحقاق») belongs to this zone, never to the browser it was picked on.
+ */
+export async function orgTimeZone(orgId: string): Promise<string> {
+  const org = await db.organization.findUnique({ where: { id: orgId }, select: { timezone: true } });
+  return resolveTimeZone(org?.timezone);
+}
