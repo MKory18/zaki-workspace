@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * A secret that reaches a commit is a secret that has to be changed.
  *
