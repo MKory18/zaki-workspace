@@ -257,6 +257,17 @@ export function isOffered(capability: Capability): boolean {
   return WIRED_CAPABILITIES.includes(capability);
 }
 
+/**
+ * The capabilities the catalogue has a group for, and nothing in this repository asks yet (the
+ * security review's C3: `cash.view`, `penalties.view`, `announce.send`, `escalation.configure`).
+ * They are not switches — a switch that does nothing is a lie — but hiding them completely let the
+ * owner believe he had closed a door that is not built yet, so the panel lists them as «قريبًا».
+ * The list empties by itself as each phase wires its capability.
+ */
+export const SOON_CAPABILITIES: readonly Capability[] = CAPABILITY_GROUPS.flatMap((group) => group.capabilities).filter(
+  (capability) => !WIRED_CAPABILITIES.includes(capability),
+);
+
 /** What a person holds as far as handing capabilities out goes (the OWNER holds everything, whatever list the page was given). */
 function holderOf(actor: ActorInfo): CapabilityHolder {
   return { role: actor.role, caps: new Set<string>(actor.role === "OWNER" && actor.primaryOwner !== false ? CAPABILITIES : actor.caps) };
