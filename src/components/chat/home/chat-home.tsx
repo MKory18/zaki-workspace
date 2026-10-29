@@ -7,6 +7,7 @@ import type { OrgsResponse } from "@/components/shell/space-switcher";
 import { NewDmDialog } from "./new-dm-dialog";
 import { SpaceTopics } from "./space-topics";
 import { RowMenu } from "./row-menu";
+import { Avatar } from "@/components/ui/avatar";
 import { ct, ctCount } from "@/lib/chat/text";
 
 import Link from "next/link";
@@ -40,7 +41,7 @@ export function ChatHome({ home, guest, onChanged = () => undefined }: { home: H
     return () => { active = false; };
   }, [allCompany, home.canOversee]);
   return (
-    <div dir="rtl" className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 text-fg">
+    <div dir="rtl" className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-3 p-3 text-fg sm:gap-4 sm:p-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">{ct("chath.title")}</h1>
         {home.canOversee && <div className="inline-flex rounded-xl border border-border bg-surface-1 p-1" role="group" aria-label={ct("chath.scope")}>
@@ -59,7 +60,7 @@ export function ChatHome({ home, guest, onChanged = () => undefined }: { home: H
           </section>
         )}
         {!guest && <section aria-labelledby="chat-dms" className="rounded-2xl border border-border bg-surface-1 p-4"><h2 id="chat-dms" className="mb-3 font-semibold">{ct("chath.dms")}</h2>
-          {home.dms.length ? <ul className="divide-y divide-border">{home.dms.map((dm) => <li key={dm.id} className="flex items-center gap-1"><Link href={`/chat/${dm.id}`} className="flex min-h-12 min-w-0 flex-1 items-center gap-3 py-2"><span className="grid size-9 place-items-center rounded-full bg-accent/10">{dm.peer.name.slice(0, 1)}</span><span className="min-w-0 flex-1 truncate">{dm.peer.name}<small className="block truncate text-fg-muted">{dm.lastMessage?.preview ?? ct("chath.start")}</small></span>{dm.lastMessage?.mine && <span role="img" aria-label={ct("chath.sent")}>✓</span>}{dm.unread > 0 && <span className="rounded-full bg-accent/10 px-2 text-xs">{dm.unread}</span>}</Link>{menu && <RowMenu id={dm.id} title={dm.peer.name} kind="dm" canPurge={menu.canPurge} onChanged={onChanged} />}</li>)}</ul> : <p className="text-sm text-fg-muted">{ct("chath.no_dms")}</p>}
+          {home.dms.length ? <ul className="divide-y divide-border">{home.dms.map((dm) => <li key={dm.id} className="flex items-center gap-1"><Link href={`/chat/${dm.id}`} className="flex min-h-12 min-w-0 flex-1 items-center gap-3 py-2"><Avatar name={dm.peer.name} src={dm.peer.avatarUrl} className="size-9"/><span className="min-w-0 flex-1 truncate">{dm.peer.name}<small className="block truncate text-fg-muted">{dm.lastMessage?.preview ?? ct("chath.start")}</small></span>{dm.lastMessage?.mine && <span role="img" aria-label={ct("chath.sent")}>✓</span>}{dm.unread > 0 && <span className="rounded-full bg-accent/10 px-2 text-xs">{dm.unread}</span>}</Link>{menu && <RowMenu id={dm.id} title={dm.peer.name} kind="dm" canPurge={menu.canPurge} onChanged={onChanged} />}</li>)}</ul> : <p className="text-sm text-fg-muted">{ct("chath.no_dms")}</p>}
           <button type="button" onClick={() => setNewDm(true)} className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-accent px-3 text-sm text-accent-fg">{ct("chath.new_dm")}</button>
         </section>}
       </>}

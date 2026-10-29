@@ -141,9 +141,11 @@ describe("(f) a role refusal says why, in its own words", () => {
 });
 
 describe("(g) the shell is handed only what it draws", () => {
-  it("the layout passes name, username and e-mail — never tv, locale or the onboarding flags", () => {
+  it("the layout passes name, username, e-mail and the picture — never tv, locale or the onboarding flags", () => {
     const layout = read("src/app/(app)/layout.tsx");
-    expect(layout).toContain("user={{ name: user.name, username: user.username, email: user.email }}");
+    expect(layout).toContain(
+      "user={{ name: user.name, username: user.username, email: user.email, avatarUrl: avatarUrl }}",
+    );
     expect(layout).not.toMatch(/user=\{user\}/);
     const shell = read("src/components/app-shell.tsx");
     expect(shell).toContain("user: AvatarUser;");

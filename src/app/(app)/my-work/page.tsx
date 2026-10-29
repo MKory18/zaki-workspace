@@ -1,7 +1,7 @@
 import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
 import { actorCanWork } from "@/server/policy/actor";
 import { currentSpace } from "@/server/services/current-space";
-import { MY_WORK_TABS, getMyWork, type MyWorkTab } from "@/server/services/my-work";
+import { MY_WORK_TABS, getMyWork, myWorkTimeZone, type MyWorkTab } from "@/server/services/my-work";
 import { TaskRow } from "@/components/task-row";
 import { InstantWorkButton } from "@/components/instant-work";
 import { getServerT } from "@/lib/i18n/server";
@@ -31,6 +31,7 @@ export default async function MyWorkPage({ searchParams }: { searchParams: { tab
   // …of the space they are in
   const data = await getMyWork(user.id, new Date(), { spaceId: (await currentSpace(actor))?.id ?? null });
   const rows = data[tab];
+  const timeZone = await myWorkTimeZone(user.id);
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-y-auto">
@@ -70,7 +71,7 @@ export default async function MyWorkPage({ searchParams }: { searchParams: { tab
         ) : (
           <ul className="max-w-4xl divide-y divide-border/60">
             {rows.map(({ task, editable }) => (
-              <TaskRow key={task.id} task={task} editable={editable} showProject />
+              <TaskRow key={task.id} task={task} editable={editable} showProject timeZone={timeZone} />
             ))}
           </ul>
         )}

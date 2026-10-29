@@ -52,6 +52,8 @@ export interface MessageDto {
   mine: boolean;
   authorId: string;
   authorName: string;
+  /** `/api/avatars/<id>` — the sender's picture, or null (the initials are drawn). */
+  authorAvatar?: string | null;
   createdAt: string;
   clientId?: string | null;
   replyTo?: { id: string; preview: string | null; authorName: string; deleted?: boolean } | null;
@@ -112,7 +114,7 @@ export interface TopicSummaryDto {
 
 export interface DmSummaryDto {
   id: string;
-  peer: { id: string; name: string };
+  peer: { id: string; name: string; avatarUrl?: string | null };
   unread: number;
   lastMessage: { at: string; preview: string | null; mine: boolean } | null;
 }
@@ -133,12 +135,14 @@ export interface MemberDto {
   online: boolean;
   role?: string;
   muted?: boolean;
+  avatarUrl?: string | null;
 }
 
 export interface ReaderDto {
   userId: string;
   name: string;
   messageId: string;
+  avatarUrl?: string | null;
 }
 
 export interface ConversationDto {
@@ -234,6 +238,7 @@ export interface DirectoryPersonDto {
   role: string;
   name: string;
   jobTitle: string | null;
+  avatarUrl?: string | null;
 }
 
 /** A search hit in the chat (src/server/chat/search.ts). */

@@ -72,7 +72,7 @@ describe("the layout draws each person's own places", () => {
     expect(shell.props).toMatchObject({ rank: "OWNER", isGuest: false, audience: "managers" });
     // the shell gets the three fields it draws, never the session facts (WP-ARABIC2 (g))
     // WP-ARABIC2 (g): only what the shell draws crosses to the browser — never session facts
-    expect(Object.keys(shell.props.user).sort()).toEqual(["email", "name", "username"]);
+    expect(Object.keys(shell.props.user).sort()).toEqual(["avatarUrl", "email", "name", "username"]);
     expect(shell.props.user.name).toBe(owner.name);
     expect(shell.props.user).not.toHaveProperty("id");
     expect(shell.props.user).not.toHaveProperty("tv");

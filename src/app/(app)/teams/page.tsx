@@ -43,7 +43,7 @@ export default async function TeamsPage() {
               const rowClass = "flex items-center gap-3 px-3 py-2.5";
               const content = (
                 <>
-                  <Avatar name={m.name} />
+                  <Avatar name={m.name} src={m.avatarUrl} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-fg">{m.name}</p>
                     {org.restricted ? null : (

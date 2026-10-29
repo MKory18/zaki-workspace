@@ -172,6 +172,7 @@ export default async function ListPage({
                       members={members}
                       showProject={group !== "project"}
                       showColumn={group !== "status"}
+                      timeZone={ctx.timeZone}
                     />
                   ))}
                 </ul>

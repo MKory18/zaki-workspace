@@ -1,5 +1,7 @@
-import { promises as fs } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, promises as fs } from "node:fs";
 import { join } from "node:path";
+import type { ReceivedUpload } from "@/server/files/upload-stream";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
 import type { Actor } from "@/server/policy/actor";
@@ -76,7 +78,8 @@ function readMeta(raw: unknown): UploadMeta {
 export interface ChatUploadInput {
   actor: Actor;
   name: string;
-  bytes: Uint8Array;
+  bytes?: Uint8Array;
+  upload?: ReceivedUpload;
   declaredKind: ChatAttachmentKind | "VOICE";
   durationMs?: unknown;
   peaks?: unknown;
@@ -110,20 +113,24 @@ function clampPeaks(raw: unknown): number[] | undefined {
  * Everything the attachment row will need travels in `meta` on the StoredFile row.
  */
 export async function createChatUpload(input: ChatUploadInput): Promise<ChatUploadResult> {
-  const { actor, bytes } = input;
+  const upload = input.upload;
+  const bytes = input.bytes;
+  if (!upload && !bytes) throw new ForbiddenError("files.empty");
+  const size = upload?.size ?? bytes!.length;
+  const prefix = upload?.prefix ?? bytes!;
   // anyone ACTIVE may upload for the chat (a guest posts in the topics of his spaces)
-  if (bytes.length === 0) throw new ForbiddenError("files.empty");
+  if (size === 0) throw new ForbiddenError("files.empty");
 
-  const sn = sniffChatMedia(bytes, input.declaredKind, input.name);
+  const sn = sniffChatMedia(prefix, input.declaredKind, input.name);
   if (!sn.ok) throw new ForbiddenError(sn.key);
   const limit = input.declaredKind === "VOICE" ? CHAT_LIMITS.VOICE : CHAT_LIMITS[sn.kind];
-  if (bytes.length > limit) throw new ForbiddenError("chat.f.too_large");
+  if (size > limit) throw new ForbiddenError("chat.f.too_large");
 
   const meta: UploadMeta = { kind: sn.kind };
   let width: number | undefined;
   let height: number | undefined;
   if (sn.kind === "IMAGE") {
-    const dims = await imageDimensions(bytes);
+    const dims = await imageDimensions(upload?.path, bytes);
     if (dims) {
       width = dims.width;
       height = dims.height;
@@ -141,31 +148,25 @@ export async function createChatUpload(input: ChatUploadInput): Promise<ChatUplo
     meta.kind = "AUDIO";
   }
 
+  const checksum = upload ? await checksumFile(upload.path) : checksumHex(bytes!);
   const made = await ingest(
-    { orgId: actor.orgId, orgRole: actor.role, userId: actor.userId },
-    { name: input.name, bytes },
+    { orgId: input.actor.orgId, orgRole: input.actor.role, userId: input.actor.userId },
+    upload ? { name: input.name, path: upload.path, size: upload.size, prefix: upload.prefix } : { name: input.name, bytes: bytes! },
     undefined,
     input.declaredKind === "VOICE" ? "VOICE" : "CHAT",
-    undefined,
-    { sniffedMime: sn.mime }, // audio/webm stays audio/webm (the plain sniffer says video/webm)
+    meta,
+    { sniffedMime: sn.mime, maxBytes: limit, checksum }, // audio/webm stays audio/webm (the plain sniffer says video/webm)
   );
-  // The upload metadata rides on the StoredFile row until the message claims it. Written with
-  // parameterised raw SQL because the generated Prisma client does not know the column yet
-  // (`meta Json?` was added in migration 20261024093000_stored_file_meta; the coordinator
-  // regenerates the client between waves — switch to `update({ data: { meta } })` then).
-  if (Object.keys(meta).length > 0) {
-    await db.$executeRaw`UPDATE "StoredFile" SET meta = ${JSON.stringify(meta)}::jsonb WHERE id = ${made.id}`;
-  }
 
-  await logFile(actor.orgId, "file.chat_upload", {
+  await logFile(input.actor.orgId, "file.chat_upload", {
     fileId: made.id,
     kind: meta.kind,
     mime: made.mimeType,
-    size: bytes.length,
-    checksum: checksumHex(bytes),
+    size,
+    checksum,
   });
 
-  const out: ChatUploadResult = { id: made.id, kind: meta.kind, mime: made.mimeType, size: bytes.length };
+  const out: ChatUploadResult = { id: made.id, kind: meta.kind, mime: made.mimeType, size };
   if (width !== undefined) out.width = width;
   if (height !== undefined) out.height = height;
   if (durationMs !== undefined) out.durationMs = durationMs;
@@ -180,14 +181,20 @@ function clampDuration(raw: unknown): number | undefined {
 }
 
 /** Image width/height from the real bytes with sharp (the client's numbers are never trusted). */
-async function imageDimensions(bytes: Uint8Array): Promise<{ width: number; height: number } | null> {
+async function imageDimensions(path?: string, bytes?: Uint8Array): Promise<{ width: number; height: number } | null> {
   try {
     const sharp = (await import("sharp")).default;
-    const m = await sharp(Buffer.from(bytes)).metadata();
+    const m = await (path ? sharp(path).metadata() : sharp(Buffer.from(bytes!)).metadata());
     return m.width && m.height ? { width: m.width, height: m.height } : null;
   } catch {
     return null; // sharp missing/unusable: attachments still work, just without dimensions
   }
+}
+
+async function checksumFile(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest("hex").slice(0, 32);
 }
 
 /* ---------------- claim (called inside the message service transaction) ---------------- */

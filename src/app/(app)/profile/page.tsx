@@ -9,7 +9,7 @@ export default async function ProfilePage() {
   if (!user) redirect("/login");
   const me = await db.user.findUnique({
     where: { id: user.id },
-    select: { id: true, email: true, name: true, jobTitle: true, bio: true, locale: true },
+    select: { id: true, email: true, name: true, jobTitle: true, bio: true, locale: true, avatarUrl: true },
   });
   if (!me) redirect("/login");
   return <ProfileForm me={{ ...me, hue: avatarHue(me.name) }} />;

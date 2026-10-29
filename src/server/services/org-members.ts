@@ -77,6 +77,8 @@ export interface RosterMember {
   effectiveCapabilities: string[];
   lastLoginAt: Date | null;
   mustChangePassword: boolean;
+  /** `/api/avatars/<id>` — the picture the person uploaded, or null for the initials (the owner, 2026-10-29). */
+  avatarUrl: string | null;
   /** Open tasks + open tickets + active routines assigned to the person (offboarding needs a receiver when > 0). */
   openWork: number;
   /** The person's spaces in this organization — only those the caller may see themselves. */
@@ -123,6 +125,7 @@ export async function listOrgMembers(actor: Pick<Actor, "userId" | "orgId" | "ro
           jobTitle: true,
           lastLoginAt: true,
           mustChangePassword: true,
+          avatarUrl: true,
         },
       },
     },
@@ -173,6 +176,7 @@ export async function listOrgMembers(actor: Pick<Actor, "userId" | "orgId" | "ro
     effectiveCapabilities: inCatalogueOrder(effectiveCapabilities(r, { sectionGrid })),
     lastLoginAt: r.user.lastLoginAt,
     mustChangePassword: r.user.mustChangePassword,
+    avatarUrl: r.user.avatarUrl,
     openWork: openWork.get(r.user.id) ?? 0,
     workspaces: spacesOf.get(r.user.id) ?? [],
   }));

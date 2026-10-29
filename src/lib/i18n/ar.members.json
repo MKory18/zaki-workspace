@@ -118,6 +118,8 @@
   "members.caps_reset": "إرجاع كل المفاتيح إلى افتراضي الرتبة",
   "members.caps_locked_actor": "لا تملك هذا المفتاح لتمنحه.",
   "members.caps_sensitive": "⚠️ مفتاح حسّاس. 🔧 أطفئه إذا لم يعد الشخص يحتاجه.",
+  "members.caps_soon_title": "قريبًا",
+  "members.caps_soon_hint": "مفاتيح في الخطة، ولم تُبنَ شاشاتها بعد: لا تُمنح ولا تُسحب، ولا تعمل قبل أن تصل بياناتها.",
   "members.caps_saved": "تم حفظ المفاتيح",
   "members.caps_reset_done": "عادت المفاتيح إلى افتراضي الرتبة",
   "members.group_people": "الناس والمساحات",

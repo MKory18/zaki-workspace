@@ -306,7 +306,7 @@ export async function conversationDetail(
           // a suspended or offboarded person is nobody: their leftover row is not shown among the members
           // (nor as a reader) — the same rule the policy applies to reading
           where: { user: { memberships: { some: { organizationId: ctx.orgId, status: "ACTIVE" } } } },
-          include: { user: { select: { id: true, name: true } } },
+          include: { user: { select: { id: true, name: true, avatarUrl: true } } },
           orderBy: { joinedAt: "asc" },
         },
       },
@@ -354,6 +354,7 @@ export async function conversationDetail(
     name: m.user.name,
     online: online.has(m.userId),
     role: m.role,
+    avatarUrl: m.user.avatarUrl,
   }));
 
   const title =
@@ -403,7 +404,7 @@ export async function conversationDetail(
         ? []
         : readersOf(
             page,
-            conv.members.filter((m) => m.userId !== ctx.userId && !ownerIds.has(m.userId)).map((m) => ({ userId: m.userId, name: m.user.name, lastReadAt: m.lastReadAt })),
+            conv.members.filter((m) => m.userId !== ctx.userId && !ownerIds.has(m.userId)).map((m) => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl, lastReadAt: m.lastReadAt })),
           ),
     oldestId: hasOlder ? (messages[0]?.id ?? null) : null,
   };
@@ -416,14 +417,14 @@ export async function conversationDetail(
  */
 export function readersOf(
   page: { id: string; createdAt: Date; kind: string; deletedAt: Date | null }[],
-  people: { userId: string; name: string; lastReadAt: Date }[],
+  people: { userId: string; name: string; avatarUrl?: string | null; lastReadAt: Date }[],
 ): ReaderDto[] {
   const visible = page.filter((m) => m.kind !== "SYSTEM" && !m.deletedAt);
   const out: ReaderDto[] = [];
   for (const p of people) {
     // `page` is newest first: the first one at or before the mark is the newest they read
     const at = visible.find((m) => m.createdAt <= p.lastReadAt);
-    if (at) out.push({ userId: p.userId, name: p.name, messageId: at.id });
+    if (at) out.push({ userId: p.userId, name: p.name, messageId: at.id, ...(p.avatarUrl ? { avatarUrl: p.avatarUrl } : {}) });
   }
   return out;
 }

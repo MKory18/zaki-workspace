@@ -41,7 +41,7 @@ export function MemberCard({
           dimmed && "opacity-70",
         )}
       >
-        <Avatar name={member.name} className="h-11 w-11 text-sm" />
+        <Avatar name={member.name} src={member.avatarUrl} className="h-11 w-11 text-sm" />
         <span className="min-w-0 flex-1 space-y-1.5">
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="break-words text-sm font-semibold text-fg">{member.name}</span>

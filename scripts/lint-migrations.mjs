@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Migration linter - the rules that came out of the 2026-10-19 deployment
  * incident (docs/DEPLOYMENT-INCIDENT-2026-10-19.md), enforced instead of remembered.

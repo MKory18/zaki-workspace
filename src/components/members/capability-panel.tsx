@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n";
 import {
   capabilityGroups,
   canResetCapabilities,
+  SOON_CAPABILITIES,
   type ActorInfo,
   type CapabilityPanelMode,
   type CapabilityRow,
@@ -23,7 +24,8 @@ import { SwitchRow } from "./switch-row";
  * explanation and a small label that shows whether it is what the rank gives or something the owner
  * changed. A guest (external partner) shows the sentence that partners hold no capability instead of
  * switches. Only capabilities that are wired today are offered (see `capabilityGroups`): the owner-only
- * archive and the ones later phases will wire are not listed, and a group with none is not shown.
+ * archive is never listed, and the ones a later phase will wire are named as «قريبًا» under the
+ * switches — never as a switch, since a switch that does nothing is a lie.
  * Each flip is saved at once by the caller.
  */
 export function CapabilityPanel({
@@ -92,6 +94,22 @@ export function CapabilityPanel({
           </section>
         );
       })}
+
+      {SOON_CAPABILITIES.length > 0 ? (
+        <section aria-labelledby={`${uid}-soon`} className="rounded-xl border border-dashed border-border p-3">
+          <h4 id={`${uid}-soon`} className="text-xs font-semibold text-fg-muted">
+            {t("members.caps_soon_title")}
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-fg-muted">{t("members.caps_soon_hint")}</p>
+          <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+            {SOON_CAPABILITIES.map((capability) => (
+              <li key={capability} className="text-xs text-muted">
+                {t(`members.cap.${capability}.title`)}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {editable && canResetCapabilities(member, actor) ? (
         <Button

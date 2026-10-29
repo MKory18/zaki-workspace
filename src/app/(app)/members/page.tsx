@@ -14,10 +14,10 @@ async function loadDirectory(actor: Actor): Promise<DirectoryPerson[]> {
   const rows = await db.organizationMember.findMany({
     where: { organizationId: actor.orgId, status: "ACTIVE" },
     orderBy: { createdAt: "asc" },
-    select: { role: true, user: { select: { id: true, name: true, jobTitle: true, email: true } } },
+    select: { role: true, user: { select: { id: true, name: true, jobTitle: true, email: true, avatarUrl: true } } },
   });
   return rows
-    .map((r) => ({ id: r.user.id, name: r.user.name, jobTitle: r.user.jobTitle, role: r.role, email: r.user.email }))
+    .map((r) => ({ id: r.user.id, name: r.user.name, jobTitle: r.user.jobTitle, role: r.role, email: r.user.email, avatarUrl: r.user.avatarUrl }))
     .sort((a, b) => RANK[b.role] - RANK[a.role]);
 }
 
