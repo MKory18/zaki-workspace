@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { TASK_INCLUDE } from "@/server/services/tasks";
 import { loadWorkScope, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace, workspaceRoleOf } from "@/server/workspace-role";
+import { orgDayStart } from "@/server/services/org-day";
 
 // ---------- workspace access resolution for RSC pages ----------
 
@@ -260,9 +261,12 @@ export interface ViewQuery {
   /**
    * With `overdueOnly`: the line before which an open task is overdue. My Work gives the START of the company's
    * today, the same line as the Today page and the reports (a task due today at 09:00 is "today" at 15:00, never
-   * "overdue"). Without it the line is this very moment.
+   * "overdue"). Without it this service reads the company's own line itself — never "this very moment", which
+   * would make the same task late here and not on the next screen.
    */
   overdueBefore?: Date;
+  /** The moment the caller is asking as (tests pin it; the routes and pages pass nothing and get now). */
+  now?: Date;
   openOnly?: boolean;
   completedOnly?: boolean;
   search?: string;
@@ -315,7 +319,7 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
     };
   }
   if (q.overdueOnly) {
-    where.dueDate = { lt: q.overdueBefore ?? new Date() };
+    where.dueDate = { lt: q.overdueBefore ?? (await orgDayStart(q.orgId, q.now)) };
     where.completedAt = null;
   }
   if (q.openOnly) where.completedAt = null;
