@@ -600,6 +600,7 @@
   "crm.stage_won": "تمت الصفقة",
   "crm.title": "العنوان",
   "crm.value": "القيمة",
+  "crm.prices_denied": "لا تملك صلاحية الأسعار",
   "goal.achieved": "محقق",
   "goal.anchorLabel": "تاريخ ضمن الفترة",
   "goal.deleted": "حُذف الهدف",

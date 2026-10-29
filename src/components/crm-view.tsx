@@ -38,7 +38,8 @@ interface OpportunityRow {
 	id: string;
 	number: number;
 	title: string;
-	value: number;
+	/** `null` when the server hid the amount: `prices.view` is a box of its own (the row is still readable). */
+	value: number | null;
 	stage: string;
 	expectedCloseAt: string | null;
 	notes: string | null;
@@ -62,8 +63,18 @@ const STAGE_STYLES: Record<string, string> = {
  * `canEdit` is the customers box «يضيف ويعدّل» (`crm.edit`, the page reads it from the person's capabilities):
  * without it the screen only reads - no create, edit or stage change is offered. `canDelete` is «يحذف» (`crm.delete`;
  * absent: as `canEdit`). The server refuses those requests too; this keeps the screen honest.
+ * `canSeePrices` is `prices.view`: without it the amount is a dash and its box is not in the form — the
+ * server answers `null` for it and refuses a value (security review C2).
  */
-export function CrmView({ canEdit, canDelete = canEdit }: { canEdit: boolean; canDelete?: boolean }) {
+export function CrmView({
+	canEdit,
+	canDelete = canEdit,
+	canSeePrices,
+}: {
+	canEdit: boolean;
+	canDelete?: boolean;
+	canSeePrices: boolean;
+}) {
 	const { t } = useI18n();
 	const qc = useQueryClient();
 	const { toast } = useToast();
@@ -215,6 +226,7 @@ export function CrmView({ canEdit, canDelete = canEdit }: { canEdit: boolean; ca
 				<OpportunityModal
 					row={oppModal === "new" ? null : oppModal}
 					customers={customers}
+					canSeePrices={canSeePrices}
 					pending={saveOpp.isPending}
 					onClose={() => setOppModal(null)}
 					onSave={(body) =>
@@ -350,7 +362,9 @@ export function OpportunitiesTab({
 							</div>
 						</div>
 						<div className="flex items-center gap-2">
-							<span className="text-sm font-semibold text-fg">{fmtNumber(o.value)}</span>
+							<span className="text-sm font-semibold text-fg">
+								{o.value == null ? t("enum.none") : fmtNumber(o.value)}
+							</span>
 							{canEdit ? (
 								<>
 									<Select
@@ -463,12 +477,14 @@ function CustomerModal({
 function OpportunityModal({
 	row,
 	customers,
+	canSeePrices,
 	pending,
 	onClose,
 	onSave,
 }: {
 	row: OpportunityRow | null;
 	customers: CustomerRow[];
+	canSeePrices: boolean;
 	pending: boolean;
 	onClose: () => void;
 	onSave: (body: Record<string, unknown>) => void;
@@ -484,7 +500,14 @@ function OpportunityModal({
 			<form
 				onSubmit={(e) => {
 					e.preventDefault();
-					onSave({ customerId: customerId || undefined, title, value: Number(value) || 0, stage, notes: notes || null });
+					// without `prices.view` the amount is not ours to send: the server refuses it anyway (C2)
+					onSave({
+						customerId: customerId || undefined,
+						title,
+						...(canSeePrices ? { value: Number(value) || 0 } : {}),
+						stage,
+						notes: notes || null,
+					});
 				}}
 				className="space-y-3"
 			>
@@ -504,10 +527,12 @@ function OpportunityModal({
 					<Input value={title} onChange={(e) => setTitle(e.target.value)} required minLength={3} />
 				</div>
 				<div className="grid grid-cols-2 gap-3">
-					<div>
-						<label className="text-xs text-muted">{t("crm.value")}</label>
-						<Input type="number" min={0} value={value} onChange={(e) => setValue(Number(e.target.value))} />
-					</div>
+					{canSeePrices ? (
+						<div>
+							<label className="text-xs text-muted">{t("crm.value")}</label>
+							<Input type="number" min={0} value={value} onChange={(e) => setValue(Number(e.target.value))} />
+						</div>
+					) : null}
 					<div>
 						<label className="text-xs text-muted">{t("crm.stage")}</label>
 						<Select value={stage} onChange={(e) => setStage(e.target.value)}>

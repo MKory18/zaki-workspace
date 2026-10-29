@@ -93,6 +93,12 @@ describe("CRM: everyone else keeps working access", () => {
   for (const role of ["member", "admin", "owner"] as const) {
     it(`${role.toUpperCase()} can read, create, edit and delete customers and opportunities`, async () => {
       const w = await crmWorld();
+      // the amount is `prices.view`, a box of its own (security review C2): this test is about full
+      // access, so the acting person holds it (tests/db/crm-prices.test.ts covers the member without it)
+      await db.organizationMember.update({
+        where: { organizationId_userId: { organizationId: w.org.id, userId: w[role].id } },
+        data: { capabilities: ["prices.view"] },
+      });
       await loginAs(w[role].id);
 
       const list = await call(customersRoute.GET);
@@ -110,7 +116,7 @@ describe("CRM: everyone else keeps working access", () => {
       });
       expect(patched.status).toBe(200);
 
-      // prices are visible to staff
+      // prices are visible to staff who hold `prices.view`
       const opportunities = await call(opportunitiesRoute.GET);
       expect(opportunities.status).toBe(200);
       expect(opportunities.text).toContain(String(PRICE));

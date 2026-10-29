@@ -692,8 +692,8 @@ describe("the CRM view without crm.edit (a person who may read, not change)", ()
   const noop = () => {};
 
   it("shows the customers but no 'new customer' button", () => {
-    const editor = render(createElement(CrmView, { canEdit: true }), crmClient());
-    const reader = render(createElement(CrmView, { canEdit: false }), crmClient());
+    const editor = render(createElement(CrmView, { canEdit: true, canSeePrices: true }), crmClient());
+    const reader = render(createElement(CrmView, { canEdit: false, canSeePrices: true }), crmClient());
     expect(editor).toContain(AR["crm.newCustomer"]);
     expect(reader).not.toContain(AR["crm.newCustomer"]);
     expect(reader).toContain(CUSTOMER.name);
@@ -730,9 +730,20 @@ describe("the CRM view without crm.edit (a person who may read, not change)", ()
     expect(reader).toContain("OP-7");
   });
 
+  it("an amount the server hid is a dash, never a number (no `prices.view`)", () => {
+    const rows = [{ ...OPPORTUNITY, value: null }];
+    const props = { rows, loading: false, canEdit: false, onEdit: noop, onDelete: noop, onStageChange: noop };
+    const html = render(createElement(OpportunitiesTab, props));
+    expect(html).toContain(AR["enum.none"]);
+    expect(html).not.toContain("12,500");
+    // the rest of the row is still there: the deal is readable without its money
+    expect(html).toContain(OPPORTUNITY.title);
+    expect(html).toContain("OP-7");
+  });
+
   it("a person who cannot edit gets no 'new opportunity' button either (the CRM view as a whole)", () => {
     const client = crmClient();
-    const reader = render(createElement(CrmView, { canEdit: false }), client);
+    const reader = render(createElement(CrmView, { canEdit: false, canSeePrices: true }), client);
     expect(reader).not.toContain(AR["crm.newOpportunity"]);
     expect(reader).not.toContain(AR["crm.newCustomer"]);
   });
