@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { driveRequest } from "@/server/services/google";
 
 /**
@@ -106,17 +107,22 @@ async function oldVersionsFolder(orgId: string, space: DriveSpace | null): Promi
  * Uploads one version (a resumable session: one request for the metadata, one for the bytes) and
  * checks that Drive holds exactly these bytes. Returns the `path` to store.
  */
+type DriveUploadSource =
+  | { bytes: Uint8Array }
+  | { path: string; size: number };
+
 export async function uploadToDrive(
   orgId: string,
-  input: { name: string; mimeType: string; bytes: Uint8Array; space: DriveSpace | null; fileId: string },
+  input: { name: string; mimeType: string; space: DriveSpace | null; fileId: string } & DriveUploadSource,
 ): Promise<string> {
   const parent = await spaceFolder(orgId, input.space);
+  const size = "bytes" in input ? input.bytes.length : input.size;
   const start = await driveRequest(orgId, `${UPLOAD_URL}?uploadType=resumable&fields=id,size,md5Checksum`, {
     method: "POST",
     headers: {
       "content-type": "application/json; charset=UTF-8",
       "x-upload-content-type": input.mimeType,
-      "x-upload-content-length": String(input.bytes.length),
+      "x-upload-content-length": String(size),
     },
     body: JSON.stringify({ name: input.name, parents: [parent], appProperties: { zakiFile: input.fileId } }),
   });
@@ -125,18 +131,28 @@ export async function uploadToDrive(
   const session = start.headers.get("location");
   if (!session) throw new DriveStoreError("upload_no_session");
   // the session address is itself the credential: no token on this request
+  const body = "bytes" in input ? new Uint8Array(input.bytes) : createReadStream(input.path);
   const put = await fetch(session, {
     method: "PUT",
-    headers: { "content-type": input.mimeType, "content-length": String(input.bytes.length) },
-    body: new Uint8Array(input.bytes),
-  });
+    headers: { "content-type": input.mimeType, "content-length": String(size) },
+    body: body as unknown as BodyInit,
+    ...(body instanceof Uint8Array ? {} : { duplex: "half" }),
+  } as RequestInit & { duplex?: "half" });
   const made = await jsonOf<{ id: string; size?: string; md5Checksum?: string }>(put, "upload");
-  const md5 = createHash("md5").update(input.bytes).digest("hex");
-  if (Number(made.size) !== input.bytes.length || made.md5Checksum !== md5) {
+  try {
+    const md5 = "bytes" in input ? createHash("md5").update(input.bytes).digest("hex") : await md5File(input.path);
+    if (Number(made.size) !== size || made.md5Checksum !== md5) throw new DriveStoreError("upload_mismatch");
+  } catch (err) {
     await trashOnDrive(orgId, made.id).catch(() => undefined);
-    throw new DriveStoreError("upload_mismatch");
+    throw err;
   }
   return `${DRIVE_PREFIX}${made.id}`;
+}
+
+async function md5File(path: string): Promise<string> {
+  const hash = createHash("md5");
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest("hex");
 }
 
 /** An upload that did not become a file goes to Drive's bin (the owner's, for 30 days). */

@@ -2,6 +2,8 @@ import { promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 
+export const uploadTempDir = join(process.env.UPLOAD_DIR || join(process.cwd(), ".data", "uploads"), ".incoming");
+
 export class UploadStreamError extends Error {
   constructor(
     public readonly kind: "empty" | "too_large" | "invalid",
@@ -78,7 +80,9 @@ export async function receiveUpload(source: ByteSource, options: ReceiveUploadOp
       name: options.name,
       size,
       prefix: joinBytes(prefixParts, prefixLength),
-      cleanup: async () => fs.rm(path, { force: true }),
+      cleanup: async () => {
+        await fs.rm(path, { force: true }).catch(() => undefined);
+      },
     };
   } finally {
     if (handle) await handle.close().catch(() => undefined);

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { createReadStream, createWriteStream } from "node:fs";
 import { promises as fs } from "node:fs";
 import { assertMemberCan } from "@/server/policy/actor";
 import { join } from "node:path";
@@ -284,9 +286,22 @@ async function fileStream(full: string, range: { start: number; end: number }): 
 
 /* ---------------- writes ---------------- */
 
-export interface IngestFile {
+export interface IngestBytes {
   name: string;
   bytes: Uint8Array;
+}
+
+export interface IngestPath {
+  name: string;
+  path: string;
+  size: number;
+  prefix: Uint8Array;
+}
+
+export type IngestFile = IngestBytes | IngestPath;
+
+function isIngestPath(input: IngestFile): input is IngestPath {
+  return "path" in input;
 }
 
 /** Validate bytes, write to disk + DB as a new head in a version family. */
@@ -301,16 +316,19 @@ export async function ingest(
    * kind, which is the only way to tell audio/webm from video/webm; the plain sniffer here would
    * store a voice note as a video. Trusted callers only, never a client's claim.
    */
-  opts: { sniffedMime?: string; workspaceId?: string | null } = {},
+  opts: { sniffedMime?: string; workspaceId?: string | null; maxBytes?: number; checksum?: string } = {},
 ): Promise<{ id: string; version: number; mimeType: string }> {
   // a guest posts in the topics of their spaces (files and voice notes included), never in the library
   if (ctx.orgRole === "GUEST" && purpose === "LIBRARY") throw new ForbiddenError("chat.guest_forbidden");
   // adding to the library (a file or a new version) is its «يضيف ويعدّل» box; chat files are the topic's
   if (purpose === "LIBRARY") await assertMemberCan(ctx, "files.edit", "section.edit_denied");
-  if (input.bytes.length === 0) throw new ForbiddenError("files.empty");
-  if (input.bytes.length > MAX_FILE_BYTES) throw new ForbiddenError("files.too_large");
+  const size = isIngestPath(input) ? input.size : input.bytes.length;
+  const prefix = isIngestPath(input) ? input.prefix : input.bytes;
+  if (size === 0) throw new ForbiddenError("files.empty");
+  const maxBytes = opts.maxBytes ?? MAX_FILE_BYTES;
+  if (size > maxBytes) throw new ForbiddenError(purpose === "LIBRARY" ? "files.too_large" : "chat.f.too_large");
 
-  const mime = opts.sniffedMime ?? sniffMimeType(input.bytes);
+  const mime = opts.sniffedMime ?? sniffMimeType(prefix);
   if (!mime) throw new ForbiddenError("files.unsupported");
 
   const display = safeStoredName(input.name.split(/[\\/]/).pop() ?? "file");
@@ -323,6 +341,7 @@ export async function ingest(
       : familyOf
         ? ((await db.storedFile.findFirst({ where: { familyId, orgId: ctx.orgId }, select: { workspaceId: true } }))?.workspaceId ?? null)
         : (opts.workspaceId ?? null);
+  const checksum = opts.checksum ?? (isIngestPath(input) ? await checksumFile(input.path) : checksumHex(input.bytes));
 
   // The row comes first (its id is part of the file name) and is PENDING until the bytes are on disk.
   const created = await db.storedFile.create({
@@ -333,7 +352,7 @@ export async function ingest(
       name: display,
       path: PENDING_PATH,
       mimeType: mime,
-      size: input.bytes.length,
+      size,
       version,
       purpose,
       workspaceId,
@@ -343,20 +362,33 @@ export async function ingest(
   if (meta && Object.keys(meta).length > 0) {
     // Parameterised raw SQL until the generated client knows the column
     // (migration 20261024093000_stored_file_meta; the coordinator regenerates between waves).
-    await db.$executeRaw`UPDATE "StoredFile" SET meta = ${JSON.stringify(meta)}::jsonb WHERE id = ${created.id}`;
+    try {
+      await db.$executeRaw`UPDATE "StoredFile" SET meta = ${JSON.stringify(meta)}::jsonb WHERE id = ${created.id}`;
+    } catch (err) {
+      await db.storedFile.deleteMany({ where: { id: created.id } }).catch(() => undefined);
+      throw err;
+    }
   }
 
   const finalFamilyId = familyId || created.id;
   // A library file goes to the owner's Drive when it is connected for it; on any Drive failure it is
   // kept on the server exactly as before, so an upload never fails because of Drive.
-  const space = purpose === "LIBRARY" && (await libraryOnDrive(ctx.orgId)) ? { of: await driveSpaceOf(workspaceId) } : null;
-  const steppingDown = space && familyOf ? await previousHeadPath(ctx.orgId, finalFamilyId) : null;
+  let space: { of: DriveSpace | null } | null = null;
+  let steppingDown: string | null = null;
   let path = "";
   let target: string | null = null;
   let updated: { id: string; version: number; mimeType: string };
   try {
+    space = purpose === "LIBRARY" && (await libraryOnDrive(ctx.orgId)) ? { of: await driveSpaceOf(workspaceId) } : null;
+    steppingDown = space && familyOf ? await previousHeadPath(ctx.orgId, finalFamilyId) : null;
     if (space) {
-      path = await uploadToDrive(ctx.orgId, { name: driveNameFor(display, version), mimeType: mime, bytes: input.bytes, space: space.of, fileId: created.id }).catch(
+      path = await uploadToDrive(ctx.orgId, {
+        name: driveNameFor(display, version),
+        mimeType: mime,
+        ...(isIngestPath(input) ? { path: input.path, size } : { bytes: input.bytes }),
+        space: space.of,
+        fileId: created.id,
+      }).catch(
         async (err: unknown) => {
           await logEvent(ctx.orgId, { direction: "OUT", type: "file.drive_failed", status: "FAILED", detail: err instanceof DriveStoreError ? err.message : "drive.error" });
           return "";
@@ -367,7 +399,8 @@ export async function ingest(
       path = join(ctx.orgId, `${created.id}_v${version}_${display}`);
       target = join(fileLibrary, path);
       await fs.mkdir(join(fileLibrary, ctx.orgId), { recursive: true });
-      await fs.writeFile(target, input.bytes);
+      if (isIngestPath(input)) await copyFile(input.path, target);
+      else await fs.writeFile(target, input.bytes);
     }
     // The row becomes a file, and the previous head steps down, in ONE transaction.
     updated = await db.$transaction(async (tx) => {
@@ -402,10 +435,32 @@ export async function ingest(
     familyId: finalFamilyId,
     version,
     mime,
-    size: input.bytes.length,
-    checksum: checksumHex(input.bytes),
+    size,
+    checksum,
   });
   return { id: updated.id, version: updated.version, mimeType: updated.mimeType };
+}
+
+async function copyFile(source: string, target: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const input = createReadStream(source);
+    const output = createWriteStream(target);
+    const fail = (err: unknown) => {
+      input.destroy();
+      output.destroy();
+      reject(err);
+    };
+    input.on("error", fail);
+    output.on("error", fail);
+    output.on("finish", resolve);
+    input.pipe(output);
+  });
+}
+
+async function checksumFile(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest("hex").slice(0, 32);
 }
 
 /** The Drive folder of a library file's space (none: a file from before spaces had libraries). */
