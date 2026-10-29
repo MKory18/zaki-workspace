@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { originAllowed } from "@/lib/origin-guard";
+import { securityHeaders } from "@/lib/security-headers";
 import { verifySessionTokenWith } from "@/lib/session-token";
 import { safeNextPath } from "@/lib/safe-next";
 
@@ -144,6 +145,13 @@ function redirectTo(req: NextRequest, pathname: string): NextResponse {
 }
 
 export async function middleware(req: NextRequest) {
+  const res = await handleRequest(req);
+  const proto = publicBase(req)?.proto ?? req.nextUrl.protocol.replace(":", "");
+  for (const [name, value] of securityHeaders({ https: proto === "https" })) res.headers.set(name, value);
+  return res;
+}
+
+async function handleRequest(req: NextRequest): Promise<NextResponse> {
   const raw = req.nextUrl.pathname;
   const { path: pathname, malformed } = canonicalPath(raw);
   // Next resolves a STATIC route from the decoded path and matches a DYNAMIC route on the raw one
