@@ -107,7 +107,9 @@ export function presentMessage(
     mine: isMine,
     authorId: row.authorId,
     authorName: row.author?.name ?? "",
-    authorAvatar: row.author?.avatarUrl ?? null,
+    // a GUEST never receives a picture address: the bytes route refuses him, so an address in his
+    // payload would only be a broken image on his screen (his chat draws initials)
+    authorAvatar: viewer.role === "GUEST" ? null : (row.author?.avatarUrl ?? null),
     createdAt: row.createdAt.toISOString(),
     clientId: row.clientId ?? null,
     mentions: (Array.isArray(row.mentions) ? (row.mentions as string[]) : []),
