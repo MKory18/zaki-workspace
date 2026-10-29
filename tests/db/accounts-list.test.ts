@@ -19,6 +19,7 @@ interface Row {
 type Roster = { members: Row[]; actorRole: string; spaces: { id: string; name: string }[] };
 
 const FIELDS = [
+  "avatarUrl",
   "capabilities",
   "effectiveCapabilities",
   "email",

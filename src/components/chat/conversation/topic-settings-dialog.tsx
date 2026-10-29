@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import type { ConversationDto } from "@/server/chat/dto";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ct } from "@/lib/chat/text";
+import { Avatar } from "@/components/ui/avatar";
 
 type TopicType = NonNullable<ConversationDto["topicType"]>;
 type Audience = "space" | "section" | "people";
-type Person = { id: string; name: string };
+type Person = { id: string; name: string; avatarUrl?: string | null };
 
 const TYPES: { value: TopicType; emoji: string }[] = [
   { value: "DISCUSSION", emoji: "💬" },
@@ -226,6 +227,7 @@ export function TopicSettingsDialog({
                     <li key={p.id}>
                       <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3">
                         <input type="checkbox" checked={picked.has(p.id)} onChange={() => toggle(p.id)} className="size-4" />
+                        <Avatar name={p.name} src={p.avatarUrl} className="size-7 text-xs" />
                         <bdi className="min-w-0 flex-1 truncate">{p.name}</bdi>
                       </label>
                     </li>

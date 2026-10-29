@@ -107,7 +107,7 @@ export async function listDepartments(ctx: OrgAccessContext, now: Date = new Dat
     include: {
       memberships: {
         where: activeRoster(ctx.orgId),
-        select: { user: { select: { id: true, name: true, jobTitle: true } }, role: true },
+        select: { user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } }, role: true },
       },
       projects: {
         where: { workspaceId: { in: wsIds }, AND: [projectVisibleWhere(scope)] },
@@ -126,7 +126,7 @@ export async function listDepartments(ctx: OrgAccessContext, now: Date = new Dat
       emoji: d.emoji,
       color: d.color,
       leadId: d.leadId,
-      members: d.memberships.map((m) => ({ id: m.user.id, name: m.user.name, jobTitle: m.user.jobTitle, role: m.role })),
+      members: d.memberships.map((m) => ({ id: m.user.id, name: m.user.name, jobTitle: m.user.jobTitle, role: m.role, avatarUrl: m.user.avatarUrl })),
       projectsCount: d.projects.length,
       openTasks: open,
       overdueTasks: overdue,
@@ -142,7 +142,7 @@ export async function getDepartment(ctx: OrgAccessContext, id: string) {
   if (!d) throw new NotFoundError("dept.not_found");
   const members = await db.departmentMember.findMany({
     where: { departmentId: d.id, ...activeRoster(ctx.orgId) },
-    include: { user: { select: { id: true, name: true, jobTitle: true } } },
+    include: { user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } } },
   });
   // only the spaces this person can open: a department's projects live in spaces, and a space is
   // visible to the people in it (and the OWNER), not to a rank
@@ -165,7 +165,7 @@ export async function getDepartment(ctx: OrgAccessContext, id: string) {
     emoji: d.emoji,
     color: d.color,
     leadId: d.leadId,
-    members: members.map((m) => ({ id: m.user.id, name: m.user.name, jobTitle: m.user.jobTitle, role: m.role })),
+    members: members.map((m) => ({ id: m.user.id, name: m.user.name, jobTitle: m.user.jobTitle, role: m.role, avatarUrl: m.user.avatarUrl })),
     projects: projects.map((p) => {
       const open = p.tasks.filter((t) => !t.completedAt).length;
       const done = p.tasks.filter((t) => t.completedAt).length;

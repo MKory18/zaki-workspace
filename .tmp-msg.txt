@@ -1,0 +1,16 @@
+feat(profile): the face travels with the name on every list
+
+A person's picture was drawn only in the chat and the people dock; every other
+list still drew their initials. The address now rides along with the name:
+
+- the staff directory (/members, /teams) and a colleague's profile page;
+- the picker of «رسالة جديدة» and the two topic pickers;
+- a department's members, in the cards and in its sheet;
+- a call: the people in the room, whoever started it, and the ringing card.
+
+A GUEST keeps names only: their lists carry no picture address at all, which
+the bytes route would refuse anyway.
+
+tests/db/avatar-surfaces.test.ts pins each surface (six cases, all red before
+this change), and tests/db/accounts-list.test.ts now expects avatarUrl on the
+roster contract.

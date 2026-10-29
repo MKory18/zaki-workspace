@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/ui/avatar";
 import { DepartmentTickets } from "@/components/department-tickets";
 import { DepartmentCampaigns } from "@/components/department-campaigns";
 import type { SectionMay } from "@/lib/section-may";
@@ -20,7 +21,7 @@ interface DeptRow {
   emoji: string | null;
   color: string | null;
   leadId: string | null;
-  members: { id: string; name: string; jobTitle: string | null; role: string }[];
+  members: { id: string; name: string; jobTitle: string | null; role: string; avatarUrl?: string | null }[];
   projectsCount: number;
   openTasks: number;
   overdueTasks: number;
@@ -123,11 +124,8 @@ export function DepartmentsView({ me }: { me: { role: string; id: string; ticket
                     </div>
                     <div className="mt-2 flex -space-x-1.5" title={d.members.map((m) => m.name).join(", ")}>
                       {d.members.slice(0, 6).map((m) => (
-                        <span
-                          key={m.id}
-                          className="grid size-6 place-items-center rounded-full border border-surface-1 bg-surface-2 text-xs font-semibold"
-                        >
-                          {m.name.slice(0, 1)}
+                        <span key={m.id} className="rounded-full border border-surface-1">
+                          <Avatar name={m.name} src={m.avatarUrl} className="size-6 text-xs" />
                         </span>
                       ))}
                       {d.members.length > 6 && <span className="text-xs text-muted">+{d.members.length - 6}</span>}
@@ -352,6 +350,7 @@ function DeptMembersModal({
         <ul className="max-h-48 divide-y divide-border overflow-y-auto rounded-lg border border-border">
           {(detail.data?.members ?? []).map((m) => (
             <li key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+              <Avatar name={m.name} src={m.avatarUrl} className="size-7 text-xs" />
               <span className="min-w-0 flex-1 truncate">{m.name}</span>
               <span className="text-xs text-muted">{m.jobTitle ?? ""}</span>
               {canManage && (

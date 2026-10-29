@@ -36,7 +36,7 @@ export default async function PublicProfilePage({ params }: { params: { id: stri
   return (
     <div className="mx-auto max-w-2xl space-y-5 p-4 md:p-6">
       <header className="flex items-center gap-3 rounded-xl border border-border bg-surface p-5">
-        <Avatar name={profile.name} className="h-14 w-14 text-base" />
+        <Avatar name={profile.name} src={profile.avatarUrl} className="h-14 w-14 text-base" />
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold text-fg">{profile.name}</h1>
           <p className="text-sm font-medium text-accent">{profile.jobTitle ?? t("teams.noTitle")}</p>

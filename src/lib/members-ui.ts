@@ -70,6 +70,8 @@ export interface ContractMember {
   effectiveCapabilities: string[];
   lastLoginAt: string | null;
   mustChangePassword: boolean;
+  /** `/api/avatars/<id>` — the picture the person uploaded, or null for the initials. */
+  avatarUrl?: string | null;
   /** Open tasks + open tickets + active routines assigned to the person: an offboarding needs a transfer target when > 0. */
   openWork: number;
   workspaces: MemberWorkspace[];
