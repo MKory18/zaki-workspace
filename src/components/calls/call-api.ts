@@ -13,9 +13,9 @@ export interface CallView {
   video: boolean;
   startedAt: string;
   endedAt: string | null;
-  startedBy: { id: string; name: string };
+  startedBy: { id: string; name: string; avatarUrl?: string | null };
   path: string;
-  people: { userId: string; name: string; canRemove: boolean; canMute: boolean }[];
+  people: { userId: string; name: string; canRemove: boolean; canMute: boolean; avatarUrl?: string | null }[];
   can: { invite: boolean; end: boolean };
 }
 

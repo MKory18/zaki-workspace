@@ -43,11 +43,11 @@ export interface CallDto {
   video: boolean;
   startedAt: string;
   endedAt: string | null;
-  startedBy: { id: string; name: string };
+  startedBy: { id: string; name: string; avatarUrl: string | null };
   /** the page of the call: share it, it opens the call for whoever may join */
   path: string;
   /** who is in the room now (from the calls server; [] when it cannot be asked) */
-  people: { userId: string; name: string; canRemove: boolean; canMute: boolean }[];
+  people: { userId: string; name: string; canRemove: boolean; canMute: boolean; avatarUrl: string | null }[];
   /** `end`: the viewer is a host and may end the call for everybody («إنهاء للكل»); everybody may leave */
   can: { invite: boolean; end: boolean };
 }
@@ -265,13 +265,13 @@ export async function callDetail(ctx: OrgAccessContext, callId: string): Promise
       video: true,
       startedAt: true,
       endedAt: true,
-      startedBy: { select: { id: true, name: true } },
+      startedBy: { select: { id: true, name: true, avatarUrl: true } },
       conversation: { select: { title: true, kind: true } },
     },
   });
   const inRoom = facts.endedAt ? [] : ((await peopleInRoom(callId)) ?? []);
   const ranks = inRoom.length
-    ? await db.organizationMember.findMany({ where: { organizationId: ctx.orgId, userId: { in: inRoom.map((p) => p.identity) } }, select: { userId: true, role: true, user: { select: { name: true } } } }) // all-statuses: names of the people the calls server says are in the room
+    ? await db.organizationMember.findMany({ where: { organizationId: ctx.orgId, userId: { in: inRoom.map((p) => p.identity) } }, select: { userId: true, role: true, user: { select: { name: true, avatarUrl: true } } } }) // all-statuses: names of the people the calls server says are in the room
     : [];
   const byId = new Map(ranks.map((r) => [r.userId, r] as const));
   return {
@@ -283,14 +283,14 @@ export async function callDetail(ctx: OrgAccessContext, callId: string): Promise
     video: call.video,
     startedAt: call.startedAt.toISOString(),
     endedAt: call.endedAt?.toISOString() ?? null,
-    startedBy: { id: call.startedBy.id, name: call.startedBy.name },
+    startedBy: { id: call.startedBy.id, name: call.startedBy.name, avatarUrl: call.startedBy.avatarUrl },
     path: `/calls/${call.id}`,
     people: inRoom
       .filter((p) => byId.has(p.identity))
       .map((p) => {
         const row = byId.get(p.identity)!;
         const target = { userId: p.identity, role: row.role };
-        return { userId: p.identity, name: row.user.name, canRemove: canRemoveFromCall(facts, org, ctx.userId, target), canMute: canMuteInCall(facts, org, ctx.userId, target) };
+        return { userId: p.identity, name: row.user.name, avatarUrl: row.user.avatarUrl, canRemove: canRemoveFromCall(facts, org, ctx.userId, target), canMute: canMuteInCall(facts, org, ctx.userId, target) };
       }),
     can: { invite: canInviteToCall(facts, org), end: !facts.endedAt && canEndCall(facts, org, ctx.userId) },
   };

@@ -4,8 +4,9 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ct } from "@/lib/chat/text";
+import { Avatar } from "@/components/ui/avatar";
 
-type Person = { userId: string; user: { name: string; jobTitle: string | null } };
+type Person = { userId: string; user: { name: string; jobTitle: string | null; avatarUrl?: string | null } };
 
 /**
  * «رسالة جديدة»: pick a colleague and land in the DM with them (opened or found by the server).
@@ -52,7 +53,7 @@ export function NewDmDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         {!people && !error && <p role="status" className="mt-3 text-sm text-fg-muted">{ct("chath.loading")}</p>}
         {people && !shown.length && <p className="mt-3 text-sm text-fg-muted">{ct("chath.dm.none")}</p>}
         <ul className="mt-3 divide-y divide-border">{shown.map((p) => <li key={p.userId}><button type="button" disabled={busy} onClick={() => void start(p.userId)} className="flex min-h-12 w-full items-center gap-3 py-2 text-start hover:bg-surface-2 disabled:opacity-60">
-          <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-accent/10">{p.user.name.slice(0, 1)}</span>
+          <Avatar name={p.user.name} src={p.user.avatarUrl} className="size-9 text-xs" />
           <span className="min-w-0 flex-1 truncate"><bdi>{p.user.name}</bdi>{p.user.jobTitle && <small className="block truncate text-fg-muted"><bdi>{p.user.jobTitle}</bdi></small>}</span>
         </button></li>)}</ul>
       </DialogBody>

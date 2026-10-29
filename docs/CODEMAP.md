@@ -273,7 +273,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `google` | 355 | 8 | Only the files the app itself creates (the library's): a non-sensitive scope, so Google asks for no review and the owner's published app keeps its connection. |
 | `space-place` | 30 | 8 | WHERE A SPACE'S OWN THINGS ARE READ (the owner's decision, 2026-10-25: each space is like a separate site) — for the goals, the daily routines, the customers and the opportuniti… |
 | `tickets` | 501 | 8 | IT tickets live inside a department. |
-| `workspaces` | 325 | 8 | Spaces (workspaces): who is in one, who may change it. |
+| `workspaces` | 327 | 8 | Spaces (workspaces): who is in one, who may change it. |
 | `active-people` | 71 | 7 | "Nobody who was suspended or removed still counts." A suspended or offboarded member keeps their OrganizationMember row (history, authorship), so a query that reads that table w… |
 | `ideas` | 395 | 7 | Membership context resolved from the idea's own org (shared by API routes). |
 | `accounts` | 859 | 6 | The account lifecycle: the owner (and, below him, whoever holds `users.manage`) creates, edits, suspends, reactivates and offboards people, resets passwords and ends sessions. |
@@ -284,18 +284,18 @@ high count is a wide surface: changing its signature reaches all of them.
 | `telegram` | 299 | 5 | Validates a bot token by calling getMe. |
 | `crm` | 228 | 4 | no header comment — exports `OPPORTUNITY_STAGES`, `createCustomerSchema`, `updateCustomerSchema`, `createOpportunitySchema`, `updateOpportunitySchema`, … |
 | `departments` | 240 | 4 | The departments area is the company's staff directory (who works where, with which job title), so org GUESTs get 403 on every function here, read or write. |
-| `users` | 287 | 4 | no header comment — exports `updateProfile`, `getProfileForViewer`, `getPublicProfile`, `memberDirectory` |
+| `users` | 296 | 4 | no header comment — exports `updateProfile`, `getProfileForViewer`, `getPublicProfile`, `memberDirectory` |
 | `views` | 359 | 4 | Zones already warned about, per organization, so a bad stored zone is logged once and not on every request. |
 | `org-day` | 26 | 3 | The start of the COMPANY's today — `Organization.timezone`, never the server's clock and never the browser's. |
 | `registration` | 145 | 3 | Opening a company is open to anyone (owner's decision 23/10), behind three guards: The address is checked. |
 | `space-manage` | 61 | 3 | MANAGING THE SPACES FROM «كل المساحات» (the owner's asks, 2026-10-26): put them in order by dragging, archive one (it leaves every list — the switcher, the overview, search by s… |
 | `spaces-overview` | 73 | 3 | «كل المساحات» — the owner's and the admins' one look over every space they can open (the owner's decision, 2026-10-25): each space stays a separate site, and this page only coun… |
-| `avatars` | 99 | 2 | A PERSON'S PICTURE (the owner's ask, 2026-10-29: «خيار إن المستخدم يحط صورة بروفايل»). |
+| `avatars` | 118 | 2 | A PERSON'S PICTURE (the owner's ask, 2026-10-29: «خيار إن المستخدم يحط صورة بروفايل»). |
 | `goals` | 168 | 2 | no header comment — exports `periodWindow`, `goalSchema`, `goalStatus`, `listGoals`, `createGoal`, … |
 | `member-rules` | 184 | 2 | The rank rules of account management, in ONE place, as pure functions with no database and no server-only import — so the members screen can offer exactly what the server allows… |
 | `move-to-space` | 106 | 2 | «انقل لمساحة» (the plan, 2026-10-25: each space is like a separate site). |
 | `onboarding` | 88 | 2 | The one-time onboarding every account goes through (the owner creates accounts with a temporary password and nobody has accepted the transparency notice yet): choose your own pa… |
-| `org-members` | 192 | 2 | Organization members: the rank rules of account management and the roster. |
+| `org-members` | 196 | 2 | Organization members: the rank rules of account management and the roster. |
 | `orgs` | 154 | 2 | no header comment — exports `JOIN_CODE_ALPHABET`, `generateJoinCode`, `registrationOpen`, `registerOrganization`, `canManageOrg` |
 | `timeline` | 76 | 2 | Microsoft-Project-style timeline data for one project: dated tasks become bars, milestones become diamonds, undated tasks are reported separately. |
 | `analytics` | 66 | 1 | Numbers behind the analytics page. |

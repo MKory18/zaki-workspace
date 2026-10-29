@@ -52,7 +52,7 @@ export function CallRing() {
   const where = ringing.conversationTitle || ringing.title;
   return (
     <div role="alertdialog" aria-live="assertive" aria-label={ct("calls.ring.from", { name: ringing.startedBy.name })} dir="rtl" lang="ar" className="fixed inset-x-3 top-3 z-50 mx-auto flex max-w-sm items-center gap-3 rounded-2xl border border-border bg-surface-1 p-3 shadow-lg">
-      <Avatar name={ringing.startedBy.name} className="h-11 w-11" />
+      <Avatar name={ringing.startedBy.name} src={ringing.startedBy.avatarUrl} className="h-11 w-11" />
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold">{ct("calls.ring.from", { name: ringing.startedBy.name })}</p>
         <p className="truncate text-sm text-fg-muted">

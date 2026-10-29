@@ -12,7 +12,7 @@ import { readAvatar } from "@/server/services/avatars";
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const actor = await requireActor();
-    const file = await readAvatar({ orgId: actor.orgId, orgRole: actor.role }, params.id);
+    const file = await readAvatar({ orgId: actor.orgId, userId: actor.userId, orgRole: actor.role }, params.id);
     return new NextResponse(new Uint8Array(file.buffer), {
       status: 200,
       headers: {

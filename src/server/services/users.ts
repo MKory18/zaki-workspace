@@ -35,6 +35,8 @@ export interface PublicProfile {
   organizationId: string;
   organizationName: string;
   organizationRole: string;
+  /** `/api/avatars/<id>` — the picture they uploaded, or null for their initials. */
+  avatarUrl: string | null;
   stats: {
     ideasCreated: number;
     ideasVotesReceived: number;
@@ -80,6 +82,7 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
       jobTitle: true,
       bio: true,
       createdAt: true,
+      avatarUrl: true,
       memberships: {
         // somebody who is no longer ACTIVE in a shared organization is not there to be looked at
         where: { organizationId: { in: visibleOrgIds }, status: "ACTIVE" },
@@ -143,6 +146,9 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
       organizationId: membership.organization.id,
       organizationName: membership.organization.name,
       organizationRole: membership.role,
+      // the picture is the person's, and this branch is only reached by somebody who may see the
+      // staff directory: a GUEST stops at `limited` above and never gets here
+      avatarUrl: target.avatarUrl,
       stats: {
         ideasCreated: stats[0],
         ideasVotesReceived: votesReceived,
@@ -190,7 +196,7 @@ async function guestDirectoryMembers(viewerId: string, orgId: string) {
     if (me) people.set(me.id, me.name);
   }
   return [...people.entries()]
-    .map(([userId, name]) => ({ userId, name, jobTitle: null, role: "", email: null }))
+    .map(([userId, name]) => ({ userId, name, jobTitle: null, role: "", email: null, avatarUrl: null }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -206,6 +212,8 @@ type DirectoryOrg = {
     jobTitle: string | null;
     role: string;
     email: string | null; // e-mail exposed only to people who hold `users.manage` (the owner, admins by default)
+    /** `/api/avatars/<id>` — their picture; null for the names-only list a GUEST gets. */
+    avatarUrl: string | null;
   }[];
 };
 
@@ -256,7 +264,7 @@ export async function memberDirectory(viewerId: string, space?: { orgId: string;
         where: { organizationId: m.organizationId, status: "ACTIVE", ...inSpace },
         select: {
           role: true,
-          user: { select: { id: true, name: true, jobTitle: true, email: true } },
+          user: { select: { id: true, name: true, jobTitle: true, email: true, avatarUrl: true } },
         },
         orderBy: { createdAt: "asc" },
       });
@@ -275,6 +283,7 @@ export async function memberDirectory(viewerId: string, space?: { orgId: string;
           jobTitle: r.user.jobTitle,
           role: r.role,
           email: canManage ? r.user.email : null,
+          avatarUrl: r.user.avatarUrl,
         })),
       };
     }),
