@@ -618,3 +618,26 @@ describe("n8n inbound: only while the connection exists", () => {
     expect((await postRaw(inboundRoute.POST, INBOUND_URL, ping, { "x-zaki-org": org.id, "x-zaki-token": s2 })).status).toBe(200);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Security review D2: no caller makes the server hold an unbounded body
+// ---------------------------------------------------------------------------
+
+describe("n8n inbound: the body has a ceiling", () => {
+  it("a body over 1 MB is refused with 413 before anything is created — even when it is signed", async () => {
+    const f = await inboundFixture();
+    const raw = JSON.stringify({ ...f.task("Huge"), description: "x".repeat(1024 * 1024 + 1024) });
+    const res = await postRaw(inboundRoute.POST, INBOUND_URL, raw, signedHeaders(f.org.id, raw));
+    expect(res.status).toBe(413);
+    expect(res.json).toMatchObject({ ok: false, error: "n8n.body_too_large" });
+    expect(await f.tasksTitled("Huge")).toHaveLength(0);
+  });
+
+  it("a body just under the ceiling goes through unchanged (the cap is the only thing that changed)", async () => {
+    const f = await inboundFixture();
+    const raw = JSON.stringify(f.task("Normal size"));
+    const res = await postRaw(inboundRoute.POST, INBOUND_URL, raw, signedHeaders(f.org.id, raw));
+    expect(res.status).toBe(201);
+    expect(await f.tasksTitled("Normal size")).toHaveLength(1);
+  });
+});

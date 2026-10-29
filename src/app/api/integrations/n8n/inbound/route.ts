@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
+import { BodyTooLargeError, readTextLimited } from "@/server/http/body-limit";
 import { handleInbound } from "@/server/services/n8n";
+
+/**
+ * The body is read with a ceiling: this route answers without a session, so the signature can only
+ * be checked AFTER the body is in memory. 1 MB is far above a createTask request and small enough
+ * that no caller can make the container hold more (security review D2).
+ */
+const MAX_BODY_BYTES = 1024 * 1024;
 
 /**
  * Public inbound webhook for n8n (no session cookie). The organisation is named by
@@ -29,8 +37,11 @@ export async function POST(req: Request) {
     }
     let raw = "";
     try {
-      raw = await req.text();
-    } catch {
+      raw = await readTextLimited(req, MAX_BODY_BYTES);
+    } catch (err) {
+      if (err instanceof BodyTooLargeError) {
+        return NextResponse.json({ ok: false, error: "n8n.body_too_large" }, { status: 413 });
+      }
       raw = "";
     }
     const result = await handleInbound(
