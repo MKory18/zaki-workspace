@@ -310,7 +310,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
      ))}
     </ul>
    )}
-   <div className="flex items-end gap-2">
+   <div className="flex min-w-0 items-end gap-1.5 sm:gap-2">
     {!editing && <DropdownMenu>
      <DropdownMenuTrigger asChild>
       <button type="button" className={`${iconButton} border border-border text-xl`} aria-label={t("chat.f.attach_menu")} disabled={busy}>
@@ -334,7 +334,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
      // Enter sends (the owner, 2026-10-26), Shift+Enter is a new line; never while an input method is composing a word
      onKeyDown={event => { if (enterSends({ key: event.key, shiftKey: event.shiftKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (body.trim()) event.currentTarget.form?.requestSubmit(); } }}
      enterKeyHint="send"
-     className="max-h-40 min-h-11 flex-1 resize-none rounded-2xl border border-border bg-surface px-3 py-2 text-base"
+     className="max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-2xl border border-border bg-surface px-3 py-2 text-base"
      placeholder={t("chatc.message")}
     />
     {empty ? (

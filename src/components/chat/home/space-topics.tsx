@@ -105,7 +105,7 @@ export function SpaceTopics({ space, menu }: { space: SpaceSummaryDto; menu?: Om
   const chip = "inline-flex min-h-9 items-center rounded-full border border-border px-3 text-sm aria-pressed:border-accent aria-pressed:bg-accent/10";
   const select = "h-9 rounded-lg border border-muted bg-surface px-2 text-sm";
   return (
-    <section aria-labelledby={`space-${space.id}`} className="rounded-2xl border border-border bg-surface-1 p-4">
+    <section aria-labelledby={`space-${space.id}`} className="min-w-0 rounded-2xl border border-border bg-surface-1 p-3 sm:p-4">
       <header className="mb-2 flex flex-wrap items-center gap-2">
         <h2 id={`space-${space.id}`} className="min-w-0 flex-1 truncate text-lg font-semibold">
           <span aria-hidden="true">{space.emoji ?? "🏢"} </span>
