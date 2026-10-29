@@ -5,6 +5,7 @@ import { assertNotGuest } from "@/server/services/guest-guard";
 import { loadWorkScope, projectVisibleWhere, scopeSpaceIds } from "@/server/services/team-scope";
 import { assertCapability } from "@/server/services/active-people";
 import { alignDepartmentSpace, syncDepartmentSpace } from "@/server/services/department-space";
+import { orgDayStart } from "@/server/services/org-day";
 
 /**
  * The departments area is the company's staff directory (who works where, with
@@ -85,11 +86,14 @@ export async function createDepartment(ctx: OrgAccessContext, input: z.infer<typ
   return dept;
 }
 
-export async function listDepartments(ctx: OrgAccessContext) {
+export async function listDepartments(ctx: OrgAccessContext, now: Date = new Date()) {
   assertNotGuest(ctx);
   await assertCapability(ctx, "directory.view");
   const scope = await loadWorkScope(ctx.userId);
   const wsIds = scopeSpaceIds(scope);
+  // «متأخرة» is the company's day, like My Work, Today and the reports: due strictly before the start of
+  // the company's today, never "before this very moment" (a task due today at 09:00 is not late at 15:00)
+  const todayStart = await orgDayStart(ctx.orgId, now);
   const rows = await db.department.findMany({
     where: { orgId: ctx.orgId },
     orderBy: { createdAt: "asc" },
@@ -108,7 +112,7 @@ export async function listDepartments(ctx: OrgAccessContext) {
   return rows.map((d) => {
     const all = d.projects.flatMap((p) => p.tasks);
     const open = all.filter((t) => !t.completedAt).length;
-    const overdue = all.filter((t) => !t.completedAt && t.dueDate && t.dueDate < new Date()).length;
+    const overdue = all.filter((t) => !t.completedAt && t.dueDate && t.dueDate < todayStart).length;
     return {
       id: d.id,
       name: d.name,
