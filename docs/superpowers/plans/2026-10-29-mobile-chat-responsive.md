@@ -10,6 +10,22 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-29-mobile-chat-responsive-design.md`
 
+## Status (2026-10-29)
+
+Shipped on `feature/mobile-chat-responsive` in one slice instead of five commits, because the
+whole change is class-only and one test file proves it (`tests/mobile-chat-responsive.test.ts`):
+
+- `top-bar.tsx`: two rows on a phone (the space's name folds away below 380px), tighter gaps.
+- `chat-home.tsx` / `space-topics.tsx`: `p-3` phone gutter that steps to `p-4`, `min-w-0`.
+- `conversation-screen.tsx`: log gutter `px-2.5 py-3 md:p-3`, one scroll area kept.
+- `message-item.tsx`: my bubbles start at the left of an RTL log, the others at the right
+  (`flex-row-reverse` / `flex-row`), accent tint on mine, `min-w-0 break-words` so a long URL
+  stays inside the bubble.
+- `chat-composer.tsx`: `min-w-0` row and textarea, `gap-1.5 sm:gap-2`, 44px buttons kept.
+
+`app-shell.tsx` and `bottom-nav.tsx` needed no change: the runtime check showed the bottom
+navigation and the composer already clear each other at 360/375/390.
+
 ## Global Constraints
 
 - Preserve current API, database, authorization, and message behavior.
