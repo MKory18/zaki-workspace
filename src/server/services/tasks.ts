@@ -1,6 +1,7 @@
 import { Prisma, type Task } from "@prisma/client";
 import { assertMemberCan } from "@/server/policy/actor";
 import { userSeesProject } from "./team-scope";
+import { orgDayStart } from "./org-day";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
 import { AR } from "@/lib/i18n/dict";
@@ -417,6 +418,8 @@ export interface ListFilters {
   overdue?: boolean;
   limit: number;
   cursor?: string;
+  /** The moment the caller is asking as (tests pin it; the route passes nothing and gets now). */
+  now?: Date;
 }
 
 export async function listTasks(actor: ActorContext, filters: ListFilters): Promise<TaskDTO[]> {
@@ -432,7 +435,9 @@ export async function listTasks(actor: ActorContext, filters: ListFilters): Prom
     assigneeId: filters.assigneeId,
   };
   if (filters.overdue) {
-    where.dueDate = { lt: new Date() };
+    // the same line as My Work, Today and the reports: due strictly before the START of the company's today,
+    // never before "this very moment" (a task due today at 09:00 is not late at 15:00)
+    where.dueDate = { lt: await orgDayStart(actor.orgId, filters.now) };
     where.completedAt = null;
   }
   if (filters.cursor) {
