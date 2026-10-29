@@ -10,6 +10,7 @@ import type { NewActionKey } from "@/lib/nav/new-actions";
 import type { AvatarUser } from "@/components/shell/avatar-menu";
 import { DolphinMark } from "@/components/logo";
 import { BottomNav } from "@/components/shell/bottom-nav";
+import { PeopleDock } from "@/components/shell/people-dock";
 import { PlaceTabs } from "@/components/shell/place-tabs";
 import { Sidebar } from "@/components/shell/sidebar";
 import { SpaceSwitcher, useCurrentSpace, type ShellSpace } from "@/components/shell/space-switcher";
@@ -137,10 +138,12 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
           }
         />
         {/* on a phone the content stops above the fixed bottom bar (its 56px, its border and the home-indicator inset) */}
-        <div className="flex min-h-0 flex-1 pb-[calc(3.5rem+1px+env(safe-area-inset-bottom))] md:pb-0">
+        <div className="flex min-h-0 flex-1 flex-col pb-[calc(3.5rem+1px+env(safe-area-inset-bottom))] md:pb-0">
           <main id="zk-main" tabIndex={-1} className="zk-safe-x min-w-0 flex-1 overflow-y-auto focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0">
             {children}
           </main>
+          {/* who is here and who is at their screen: its own 40px row above the phone's bar, so it covers no page (never for a guest) */}
+          <PeopleDock enabled={!isGuest} />
         </div>
       </div>
 
