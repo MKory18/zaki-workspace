@@ -35,6 +35,8 @@
   "enum.ReminderStatus.PENDING": "بانتظار وقته",
   "enum.ReminderStatus.FIRED": "وصل وقته",
   "enum.ReminderStatus.DISMISSED": "انتهى",
+  "enum.RecurrenceMode.ON_COMPLETE": "عند الإنجاز",
+  "enum.RecurrenceMode.SCHEDULE": "حسب الجدول",
   "enum.WorkspaceKind.STANDARD": "مساحة عادية",
   "enum.WorkspaceKind.DEPARTMENT": "مساحة قسم",
   "enum.WorkspaceKind.HQ": "المقر",
