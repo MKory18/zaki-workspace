@@ -215,6 +215,7 @@ other way is a bug.
 - **A space is visible only to the people in it, and to the OWNER.** `requireWorkspace` and
   `accessibleWorkspaceIds` need a `WorkspaceMember` row (an ADMIN inherits nothing; the owner needs
   no row, and reading as the owner leaves no trace: no membership, no "seen", no notification).
+- **Who may give a task to whom is decided by rank** (`policy/assign-rank.ts`, judged for every way a task gets an assignee by `services/task-assign.ts`): yourself, anybody below and anybody of the SAME rank is direct; somebody ABOVE is a request (`TaskAssignRequest`: no assignee, the higher person is told, accepts or returns it with a written reason, only once; only the addressed person or the OWNER answers). The OWNER gives to anybody; a GUEST gives and receives only inside a space both are in and never asks upward. A new place that sets `assigneeId` on a task goes through `createTask` / `updateTask`, never around them.
 - **Accounts are created by the owner**, or by anybody holding `users.manage`, from the People
   screen (`/api/organizations/[id]/members`): username, optional e-mail, a temporary password the
   person must change at the first sign-in, and the transparency notice they must accept once

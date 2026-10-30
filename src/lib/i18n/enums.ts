@@ -33,6 +33,7 @@ export type PrismaEnumName =
   | "TaskPriority"
   | "TaskType"
   | "TaskDependencyKind"
+  | "TaskAssignRequestStatus"
   | "IdeaStatus"
   | "IntegrationType"
   | "OpportunityStage";
@@ -104,6 +105,7 @@ export const ENUM_KEYS: Record<EnumName, Readonly<Record<string, string>>> = {
     "AI_AGENT",
   ]),
   TaskDependencyKind: own("TaskDependencyKind", ["BLOCKS", "BLOCKED_BY", "DUPLICATES"]),
+  TaskAssignRequestStatus: own("TaskAssignRequestStatus", ["PENDING", "ACCEPTED", "RETURNED"]),
   IdeaStatus: {
     NEW: "ideas.status.NEW",
     UNDER_REVIEW: "ideas.status.UNDER_REVIEW",

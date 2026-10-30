@@ -8,6 +8,8 @@ import { keepInSpace } from "@/server/services/current-space";
 import { loadWorkScope, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { TaskDetail } from "@/components/task-detail";
+import { isRequestTo } from "@/server/policy/assign-rank";
+import { pendingRequestOf } from "@/server/services/task-assign";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
   const user = await pageUser();
@@ -69,6 +71,18 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       })
     : [];
 
+  // a request to give this task to somebody of a higher rank, and what the viewer may do with it
+  const pending = await pendingRequestOf(task.id);
+  const requestMode = !pending
+    ? null
+    : pending.toUserId === user.id
+      ? "addressee"
+      : membership?.role === "OWNER"
+        ? "owner"
+        : pending.fromUserId === user.id
+          ? "waiting"
+          : null;
+
   const [members, labels, linkCandidates] = await Promise.all([
     // the people who can be assigned: the space's members who are still ACTIVE in the company (a
     // suspended person keeps their space row so that reactivating them restores everything, but
@@ -102,6 +116,13 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       : Promise.resolve([]),
   ]);
 
+  // the ranks of the people offered: somebody above the viewer is only ASKED (marked «طلب» in the picker)
+  const ranks = await db.organizationMember.findMany({
+    where: { organizationId: task.orgId, status: "ACTIVE", userId: { in: members.map((m) => m.user.id) } },
+    select: { userId: true, role: true },
+  });
+  const roleOf = new Map(ranks.map((r) => [r.userId, r.role]));
+
   return (
     <TaskDetail
       task={{
@@ -132,7 +153,11 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       }}
       canEdit={canEdit}
       currentUserId={user.id}
-      members={members.map((m) => ({ id: m.user.id, name: m.user.name }))}
+      members={members.map((m) => {
+        const role = roleOf.get(m.user.id);
+        return { id: m.user.id, name: m.user.name, request: !!membership && m.user.id !== user.id && role !== undefined && isRequestTo(membership.role, role) };
+      })}
+      assignRequest={pending && requestMode ? { mode: requestMode, fromName: pending.fromName, toName: pending.toName } : null}
       labels={labels}
       links={
         linksOn

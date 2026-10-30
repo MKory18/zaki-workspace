@@ -16,6 +16,7 @@ import chatErrors from "./ar.chat-errors.json";
 import chatFiles from "./ar.chat-files.json";
 import chatConversation from "./ar.chat-conversation.json";
 import chatHome from "./ar.chat-home.json";
+import chatOrder from "./ar.chat-order.json";
 import archive from "./ar.archive.json";
 import whiteboard from "./ar.whiteboard.json";
 import calls from "./ar.calls.json";
@@ -27,6 +28,7 @@ import taskLinks from "./ar.task-links.json";
 import milestones from "./ar.milestones.json";
 import profileCard from "./ar.profile-card.json";
 import navOrder from "./ar.nav-order.json";
+import taskRequests from "./ar.task-requests.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
@@ -54,6 +56,7 @@ export const AR: Record<string, string> = {
   ...chatFiles,
   ...chatConversation,
   ...chatHome,
+  ...chatOrder,
   ...archive,
   ...whiteboard,
   ...calls,
@@ -65,4 +68,5 @@ export const AR: Record<string, string> = {
   ...milestones,
   ...profileCard,
   ...navOrder,
+  ...taskRequests,
 };
