@@ -126,12 +126,12 @@ describe("the frame for the owner, on a project page", () => {
 
   it("the bottom bar (phone) holds the six places, in order, each linking to its landing page", () => {
     const bar = bottomBar(html);
-    expect(hrefs(bar)).toEqual(["/", "/chat", "/my-work", "/files", "/members", "/watch"]);
-    for (const key of ["nav.place.today", "nav.place.chat", "nav.place.work", "nav.place.library", "nav.place.admin", "nav.place.watch"]) expect(bar, key).toContain(AR[key] as string);
+    expect(hrefs(bar)).toEqual(["/", "/chat", "/my-work", "/files", "/watch", "/members"]);
+    for (const key of ["nav.place.today", "nav.place.chat", "nav.place.work", "nav.place.library", "nav.place.watch", "nav.place.admin"]) expect(bar, key).toContain(AR[key] as string);
   });
 
   it("the side menu (computer) holds the same six places", () => {
-    expect(hrefs(sidebarPlaces(html))).toEqual(["/", "/chat", "/my-work", "/files", "/members", "/watch"]);
+    expect(hrefs(sidebarPlaces(html))).toEqual(["/", "/chat", "/my-work", "/files", "/watch", "/members"]);
   });
 
   it("both are in the page and CSS shows one: the bottom bar below md, the side menu from md", () => {
@@ -263,7 +263,7 @@ describe("the frame for a plain member", () => {
   it("calls the admin place «الفريق» (its only tab) and shows no tab strip for it", () => {
     const html = shell("MEMBER", "/members");
     const bar = bottomBar(html);
-    expect(hrefs(bar)).toEqual(["/", "/chat", "/my-work", "/files", "/members", "/watch"]);
+    expect(hrefs(bar)).toEqual(["/", "/chat", "/my-work", "/files", "/watch", "/members"]);
     expect(bar).toContain(AR["nav.tab.team"]);
     expect(bar).not.toContain(AR["nav.place.admin"]);
     expect(linkTo(bar, "/members")).toContain('aria-current="page"');
