@@ -75,6 +75,7 @@ export type TabKey =
   | "tickets"
   | "campaigns"
   | "crm"
+  | "checkins"
   | "files"
   | "team"
   | "space"
@@ -168,6 +169,9 @@ export const PLACES: readonly PlaceDef[] = [
       { key: "tickets", href: "/tickets", labelKey: "nav.tickets", requires: { capability: "tickets.view" } },
       { key: "campaigns", href: "/campaigns", labelKey: "nav.campaigns", requires: { capability: "campaigns.view" } },
       { key: "crm", href: "/crm", labelKey: "nav.crm", requires: { capability: "crm.view" } },
+      // «التسجيل اليومي» (the owner's ask, 2026-10-31): the space's short stand-up. Staff only (an external partner never sees the
+      // team's answers), and only while its switch in «الميزات» is on; the page and the routes decide again on the server.
+      { key: "checkins", href: "/checkins", labelKey: "nav.tab.checkins", requires: "staff", feature: "checkins" },
     ],
   },
   {

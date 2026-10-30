@@ -20,6 +20,7 @@ import { PinnedStrip } from "@/components/rewards/pinned-strip";
 import { pinnedTasks } from "@/server/services/pinned";
 import { rewardLensFor } from "@/server/services/rewards";
 import { MyTimeToday } from "@/components/time/my-time-today";
+import { MyCheckinCard } from "@/components/checkins/my-checkin-card";
 
 /** The browser tab says «اليوم» (the root layout adds the app name). */
 export const metadata = { title: getServerT().t("today.title") };
@@ -59,6 +60,9 @@ export default async function TodayPage() {
   // «وقتي اليوم»: a compact line of the person's own time, only while the company's «حساب الوقت» switch is on and never for a partner
   const timeOn = !actor.isExternal && (await actorFeatureOn(actor, "timeTracking"));
 
+  // «تسجيلك اليومي»: one compact line, only while the company's «التسجيل اليومي» switch is on and never for a partner
+  const checkinsOn = !actor.isExternal && (await actorFeatureOn(actor, "checkins"));
+
   // «مثبّتة»: a compact card of the tasks pinned in this space (draws nothing when none, or when the switch is off)
   const pinned = await pinnedTasks(actor, { spaceId: space?.id ?? null }, await rewardLensFor(actor, space?.id ?? null));
 
@@ -80,6 +84,7 @@ export default async function TodayPage() {
           <PinnedStrip tasks={pinned} variant="card" />
           {remindersOn ? <MyRemindersCard /> : null}
           {timeOn ? <MyTimeToday /> : null}
+          {checkinsOn ? <MyCheckinCard /> : null}
           {data.pulse ? <TeamPulse pulse={data.pulse} /> : null}
           <ActiveProjects projects={data.projects} isExternal={data.isExternal} />
         </div>
