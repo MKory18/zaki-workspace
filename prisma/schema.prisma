@@ -55,6 +55,7 @@ model User {
   chatMessages    ChatMessage[]        @relation("ChatAuthor")
   chatDeletions   ChatMessage[]        @relation("ChatDeleter")
   chatReactions   ChatReaction[]
+  pollVotes       PollVote[]
   messageRevisions MessageRevision[]   @relation("RevisionEditor")
   messageNotes    MessageNote[]        @relation("NoteAuthor")
   uploadedFiles   StoredFile[]         @relation("FileUploader")
@@ -420,7 +421,7 @@ model ChatMessage {
   // Deleting a message KEEPS its text from Phase 3 on (the owner reads the original in the archive);
   // what people see is decided in one place: src/server/chat/redact.ts.
   body            String
-  kind            String    @default("TEXT") // TEXT | VOICE | SYSTEM
+  kind            String    @default("TEXT") // TEXT | VOICE | SYSTEM | POLL
   replyToId       String?
   pinned          Boolean   @default(false)
   editedAt        DateTime?
@@ -443,6 +444,8 @@ model ChatMessage {
   forwardedFrom ChatMessage?        @relation("ChatForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
   forwards      ChatMessage[]       @relation("ChatForwards")
   reactions     ChatReaction[]
+  // «استطلاع»: the poll a POLL message carries (its question is the message body)
+  poll          Poll?
   revisions     MessageRevision[]
   notes         MessageNote[]
   attachments   MessageAttachment[]
@@ -466,6 +469,53 @@ model ChatReaction {
 
   @@unique([messageId, userId, emoji])
   @@index([messageId])
+}
+
+// «استطلاع»: a poll inside a topic. The message (kind POLL) carries the question in its body; the poll,
+// its options and the votes hang off it, so deleting the message hides the poll like any message.
+model Poll {
+  id         String    @id @default(cuid())
+  messageId  String    @unique
+  multiple   Boolean   @default(false)
+  anonymous  Boolean   @default(false)
+  closesAt   DateTime? // the deadline («يُغلق بعد»), at most 7 days from the creation
+  closedAt   DateTime? // closed early by hand
+  closedById String?
+  createdAt  DateTime  @default(now())
+
+  message ChatMessage  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  options PollOption[]
+  votes   PollVote[]
+}
+
+model PollOption {
+  id       String @id @default(cuid())
+  pollId   String
+  text     String
+  position Int
+
+  poll  Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes PollVote[]
+
+  @@index([pollId, position])
+}
+
+// One row per person per chosen option. A single-choice poll keeps at most one row per person (the service
+// replaces it); the owner in silent oversight never has a row (voting makes him join first).
+model PollVote {
+  id        String   @id @default(cuid())
+  pollId    String
+  optionId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, optionId, userId])
+  @@index([pollId, userId])
+  @@index([optionId])
 }
 
 // The text a message had BEFORE an edit. One row per edit; only the owner reads them.

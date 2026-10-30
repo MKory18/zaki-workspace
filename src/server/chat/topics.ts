@@ -323,7 +323,7 @@ export async function conversationDetail(
   const online = new Set(await onlineUserIds(ctx.orgId));
 
   const canModerateHere = canModerate(facts, org!);
-  const viewer: Viewer = { userId: ctx.userId, role: org!.role, canModerateHere };
+  const viewer: Viewer = { userId: ctx.userId, role: org!.role, canModerateHere, isMember: facts.viewerIsMember };
 
   // the OWNER's reading is silent: his read mark never shows, in ticks or reader avatars
   const ownerIds = new Set(
@@ -388,6 +388,7 @@ export async function conversationDetail(
       canMakeTask: (await memberCan(ctx, "tasks.edit")) === true,
       canMakeTicket: (await memberCan(ctx, "tickets.edit")) === true,
       canMentionAll: facts.kind === "TOPIC" && org!.role !== "GUEST" && canPost(facts, org!, { ownerJoined: facts.viewerIsMember }),
+      canPoll: facts.kind === "TOPIC" && org!.role !== "GUEST" && canPost(facts, org!, { ownerJoined: facts.viewerIsMember }),
       id: ctx.userId,
     },
     pinnedMessages: (

@@ -10,7 +10,6 @@ import { Card, CardBody, Badge, EmptyState } from "@/components/ui/card";
 import { ProjectsToolbar } from "@/components/projects-toolbar";
 import { WorkspaceMembersButton } from "@/components/workspace-members-button";
 import { WorkspaceTeamsButton } from "@/components/workspace-teams-button";
-import { WorkspaceEditButton } from "@/components/workspace-edit-button";
 import { fmtDMY } from "@/lib/format";
 import { enumLabel } from "@/lib/i18n/enums";
 import { getServerT } from "@/lib/i18n/server";
@@ -79,8 +78,9 @@ export default async function ProjectsPage({
         <div className="flex items-center gap-2">
           {wsInfo ? (
             <>
-              <WorkspaceEditButton workspaceId={wsFilter as string} name={wsInfo.name} description={wsInfo.description} />
-              <WorkspaceMembersButton workspaceId={wsFilter as string} />
+              {/* «تعديل المساحة» and «أعضاء المساحة» moved to «الإدارة» > «المساحة» for whoever manages the space
+                  (2026-10-30); the people list stays here, read-only, for everybody else in it (it was never taken away) */}
+              {space?.manager ? null : <WorkspaceMembersButton workspaceId={wsFilter as string} />}
               <WorkspaceTeamsButton workspaceId={wsFilter as string} />
             </>
           ) : null}

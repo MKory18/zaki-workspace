@@ -193,12 +193,14 @@ describe("«المهمّة الجاية»: the mission card («نجمة وطري
     expect(css).toMatch(/\.zk-hero-photo \{\s*display: none;\s*\}/);
     expect(css).toContain('[data-theme="night"]:not([data-decor="off"]) .zk-hero-photo');
     expect(css).toContain('[data-theme="day"]:not([data-decor="off"]) .zk-hero-photo');
-    expect(css).toContain('url("/brand/hero/amman-dusk.webp")');
-    const file = path.join(ROOT, "public/brand/hero/amman-dusk.webp");
-    const buf = readFileSync(file);
-    expect(buf.subarray(8, 12).toString("ascii")).toBe("WEBP");
+    expect(css).toContain('url("/brand/hero/workspace-dusk.svg")');
+    const file = path.join(ROOT, "public/brand/hero/workspace-dusk.svg");
+    const svg = readFileSync(file, "utf8");
+    expect(svg.startsWith("<svg")).toBe(true);
     expect(statSync(file).size / 1024).toBeLessThanOrEqual(150);
-    expect(readFileSync(path.join(ROOT, "public/brand/CREDITS.md"), "utf8")).toMatch(/brand\/hero\/amman-dusk\.webp[^\n]*CC BY 4\.0/);
+    // the scene is the project's own drawing: no photograph in it, and the credits say so
+    expect(svg).not.toMatch(/<image|data:image/);
+    expect(readFileSync(path.join(ROOT, "public/brand/CREDITS.md"), "utf8")).toMatch(/brand\/hero\/workspace-dusk\.svg[^\n]*own original/);
   });
 
   it("a task the person may not change gets «ابدأ» and no «خلّصتها»", () => {

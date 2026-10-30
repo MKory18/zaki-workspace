@@ -6,7 +6,7 @@
 export type TopicType = "DISCUSSION" | "ANNOUNCEMENTS" | "TASKS" | "IDEAS" | "FOLLOWUP";
 export type PostingPolicy = "ALL" | "ADMINS";
 export type ConversationKind = "DM" | "GROUP" | "TOPIC";
-export type MessageKind = "TEXT" | "VOICE" | "SYSTEM";
+export type MessageKind = "TEXT" | "VOICE" | "SYSTEM" | "POLL";
 
 /** `{k, p}` of a system message — the client composes the Arabic sentence from it. */
 export interface SystemMeta {
@@ -41,6 +41,33 @@ export interface NoteDto {
   createdAt: string;
 }
 
+export interface PollOptionDto {
+  id: string;
+  text: string;
+  count: number;
+  /** of the people who voted (0-100); in a multiple-choice poll the percentages add up to more than 100 */
+  percent: number;
+  mine: boolean;
+  /** who chose it: only on a poll that is not anonymous, and never for a GUEST */
+  voters?: { id: string; name: string }[];
+}
+
+/** «استطلاع»: the poll a POLL message carries, for ONE viewer (src/server/chat/poll-shared.ts). */
+export interface PollDto {
+  id: string;
+  multiple: boolean;
+  anonymous: boolean;
+  closesAt: string | null;
+  closed: boolean;
+  /** how many different people voted */
+  voters: number;
+  options: PollOptionDto[];
+  /** the server decides again: not a guest, not the owner in silent oversight, not closed */
+  canVote: boolean;
+  /** the creator or a moderator, while it is open */
+  canClose: boolean;
+}
+
 export interface MessageDto {
   id: string;
   kind: MessageKind;
@@ -70,6 +97,8 @@ export interface MessageDto {
   /** the OWNER only, on an edited message. */
   history?: { body: string; editedAt: string }[];
   system?: SystemMeta | null;
+  /** a POLL message's poll (absent on any other message and on a deleted one). */
+  poll?: PollDto;
   /** the tasks and tickets made from this message («صارت مهمة»). */
   work?: { kind: "task" | "ticket"; id: string }[];
   /** «نتفرّج سوا»: the second of the video it was written at. */
@@ -177,6 +206,8 @@ export interface ConversationDto {
     canMakeTicket?: boolean;
     /** may write «@الكل» here: a topic, not a guest, and may post */
     canMentionAll?: boolean;
+    /** may start a poll here: a topic, not a guest, and may post */
+    canPoll?: boolean;
     id?: string;
   };
   /** the pinned messages, newest first (the bar on top of the conversation) */

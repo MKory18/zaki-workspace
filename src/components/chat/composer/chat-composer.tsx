@@ -8,9 +8,11 @@ import { buildChatMessagePayload, createChatUploadFormData, createVoiceUploadFor
 import { filterMentionChoices, findMentionQuery, insertMention, MENTION_ALL_NAME, mentionsAll, selectedMentionIds } from "@/lib/chat/conversation/mentions";
 import { Avatar } from "@/components/ui/avatar";
 import { useTyping } from "@/lib/realtime/use-realtime";
+import { playChatSound } from "@/lib/chat/sounds";
 import { uploadWithProgress } from "@/lib/chat/upload-with-progress";
 import { VoiceRecorder, type VoiceTake } from "@/lib/chat/voice-recorder";
 import { barsFor, formatDuration } from "@/lib/chat/waveform";
+import { PollDialog } from "@/components/chat/composer/poll-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type PendingFile = { file: File; kind: FileKind; preview: string | null };
@@ -35,6 +37,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
  const mediaInput = React.useRef<HTMLInputElement | null>(null);
  const fileInput = React.useRef<HTMLInputElement | null>(null);
  const [clientId, setClientId] = React.useState(() => messageClientId());
+ const [pollOpen, setPollOpen] = React.useState(false);
  // who «@» offers: everybody the conversation reaches (an open topic: its whole space), never myself; «@الكل» first where I may use it
  const memberOptions=(detail.mentionables??detail.members??[]).filter(m=>m.id!==detail.me.id); const activeMention=findMentionQuery(body); const query=activeMention?.query??"";
  const canAll=Boolean(detail.me.canMentionAll);
@@ -95,6 +98,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
   });
   if (!response.ok) throw new Error(t("chatc.message_failed"));
   onMessage(await response.json() as MessageDto);
+  playChatSound("sent");
  }
 
  async function saveEdit() {
@@ -342,6 +346,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
       <DropdownMenuItem onSelect={() => mediaInput.current?.click()}>{t("chat.f.attach_media")}</DropdownMenuItem>
       <DropdownMenuItem onSelect={() => fileInput.current?.click()}>{t("chat.f.attach_file")}</DropdownMenuItem>
       <DropdownMenuItem onSelect={() => void startRecording(false)}>{t("chat.f.voice_label")}</DropdownMenuItem>
+      {detail.me.canPoll && <DropdownMenuItem onSelect={() => setPollOpen(true)}>{t("chatc.poll.menu")}</DropdownMenuItem>}
      </DropdownMenuContent>
     </DropdownMenu>}
     <input ref={mediaInput} type="file" accept="image/*,video/*" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => { addFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
@@ -387,6 +392,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
    </div>
    {busy && files.length === 0 && progress.length > 0 && <p className="text-xs text-fg-muted" role="status">{t("chat.f.uploading")}</p>}
    {error && <p role="alert">{error}</p>}
+   {detail.me.canPoll && <PollDialog open={pollOpen} conversationId={conversationId} onClose={() => setPollOpen(false)} onCreated={message => { setPollOpen(false); onMessage(message); }} />}
   </form>
  );
 }
