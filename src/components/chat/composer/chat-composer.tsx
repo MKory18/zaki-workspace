@@ -7,6 +7,7 @@ import { compressImage } from "@/lib/chat/compress-image";
 import { buildChatMessagePayload, createChatUploadFormData, createVoiceUploadFormData, enterSends, messageClientId } from "@/lib/chat/conversation/client";
 import { filterMentionChoices, findMentionQuery, insertMention, MENTION_ALL_NAME, mentionsAll, selectedMentionIds } from "@/lib/chat/conversation/mentions";
 import { Avatar } from "@/components/ui/avatar";
+import { useTyping } from "@/lib/realtime/use-realtime";
 import { uploadWithProgress } from "@/lib/chat/upload-with-progress";
 import { VoiceRecorder, type VoiceTake } from "@/lib/chat/voice-recorder";
 import { barsFor, formatDuration } from "@/lib/chat/waveform";
@@ -26,7 +27,7 @@ const iconButton = "flex h-11 w-11 shrink-0 items-center justify-center rounded-
  * loaded here, «+» and the microphone step aside, and sending saves the edit.
  */
 export function ChatComposer({ conversationId, detail, onMessage, reply, onCancelReply, editing = null, onCancelEdit, onEdited }: { conversationId: string; detail: ConversationDto; onMessage: (message: MessageDto) => void; reply: MessageDto | null; onCancelReply: () => void; editing?: MessageDto | null; onCancelEdit?: () => void; onEdited?: (message: MessageDto) => void }) {
- const { t } = useI18n(); const [body,setBody]=React.useState(""); const [files,setFiles]=React.useState<PendingFile[]>([]); const [mentions,setMentions]=React.useState<Array<{id:string;name:string}>>([]); const [busy,setBusy]=React.useState(false); const [error,setError]=React.useState("");
+ const { t } = useI18n(); const { notifyTyping } = useTyping(conversationId); const [body,setBody]=React.useState(""); const [files,setFiles]=React.useState<PendingFile[]>([]); const [mentions,setMentions]=React.useState<Array<{id:string;name:string}>>([]); const [busy,setBusy]=React.useState(false); const [error,setError]=React.useState("");
  const [progress, setProgress] = React.useState<number[]>([]);
  const [voice, setVoice] = React.useState<VoiceState>({ mode: "idle" });
  const recorder = React.useRef<VoiceRecorder | null>(null);
@@ -350,7 +351,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
      id="chat-message"
      rows={1}
      value={body}
-     onChange={event => { setClientId(messageClientId()); setBody(event.currentTarget.value); }}
+     onChange={event => { setClientId(messageClientId()); setBody(event.currentTarget.value); if (!editing && event.currentTarget.value.trim()) notifyTyping(); }}
      // Enter sends (the owner, 2026-10-26), Shift+Enter is a new line; never while an input method is composing a word
      onKeyDown={event => {
       // while the list of people is open the keys drive IT: arrows move, Enter or Tab picks, Escape closes it

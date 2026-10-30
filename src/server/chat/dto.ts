@@ -142,6 +142,8 @@ export interface ReaderDto {
   userId: string;
   name: string;
   messageId: string;
+  /** when this person last read (their own read mark): «who and when» */
+  readAt?: string;
   avatarUrl?: string | null;
 }
 

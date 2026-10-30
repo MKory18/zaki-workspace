@@ -429,7 +429,7 @@ export function readersOf(
   for (const p of people) {
     // `page` is newest first: the first one at or before the mark is the newest they read
     const at = visible.find((m) => m.createdAt <= p.lastReadAt);
-    if (at) out.push({ userId: p.userId, name: p.name, messageId: at.id, ...(p.avatarUrl ? { avatarUrl: p.avatarUrl } : {}) });
+    if (at) out.push({ userId: p.userId, name: p.name, messageId: at.id, readAt: p.lastReadAt.toISOString(), ...(p.avatarUrl ? { avatarUrl: p.avatarUrl } : {}) });
   }
   return out;
 }
