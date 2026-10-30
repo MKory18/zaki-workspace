@@ -71,7 +71,7 @@ export interface InstantTaskInput {
 }
 
 /** `ctx`: the caller checked for this space (`requireWorkspace(spaceId, ["ADMIN", "MEMBER"])`). */
-export async function createInstantTask(ctx: OrgAccessContext, workspaceId: string, input: InstantTaskInput): Promise<{ id: string; number: number }> {
+export async function createInstantTask(ctx: OrgAccessContext, workspaceId: string, input: InstantTaskInput): Promise<{ id: string; number: number; requested: boolean }> {
   await assertFeatureOn(ctx.orgId, "instantWork");
   assertNotGuest(ctx);
   const [inSpace, owner] = await Promise.all([
@@ -89,7 +89,8 @@ export async function createInstantTask(ctx: OrgAccessContext, workspaceId: stri
     assigneeId: input.assigneeId,
     dueDate: input.dueDate,
   });
-  if (input.assigneeId !== ctx.userId) {
+  // by RANK (task-assign.ts): somebody of a higher rank was asked, not assigned: they were told by the request instead
+  if (task.assigneeId && task.assigneeId !== ctx.userId) {
     const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
     await notifyAssignment({
       assigneeId: input.assigneeId,
@@ -100,5 +101,5 @@ export async function createInstantTask(ctx: OrgAccessContext, workspaceId: stri
       workspaceId,
     });
   }
-  return { id: task.id, number: task.number };
+  return { id: task.id, number: task.number, requested: task.assignRequest !== null };
 }

@@ -5,10 +5,14 @@ import { currentSpace } from "@/server/services/current-space";
 import { isFeatureOn } from "@/server/services/features";
 import { listWorkspaceMembers } from "@/server/services/workspaces";
 import { memberCan } from "@/server/policy/actor";
+import { isRequestTo } from "@/server/policy/assign-rank";
+import { db } from "@/server/db";
 
 /**
  * GET: what «مهمة فورية» and «تذكرة فورية» may offer this person: whether each is on for them, and the people they
  * can hand one to (the people of the space they are in). A guest, or the switch off: nothing.
+ * `request: true` marks somebody of a HIGHER rank: a task for them is only a request they accept or return
+ * (src/server/services/task-assign.ts), so the picker shows it as «طلب».
  */
 export async function GET() {
   return withApi(async () => {
@@ -22,11 +26,19 @@ export async function GET() {
       memberCan(ctx, "tickets.edit"),
       listWorkspaceMembers(space.id, ctx.userId),
     ]);
+    const ranks = await db.organizationMember.findMany({
+      where: { organizationId: ctx.orgId, status: "ACTIVE", userId: { in: members.map((m) => m.id) } },
+      select: { userId: true, role: true },
+    });
+    const roleOf = new Map(ranks.map((r) => [r.userId, r.role]));
     return NextResponse.json({
       task: task === true,
       ticket: ticket === true,
       space: { id: space.id, name: space.name },
-      people: members.map((m) => ({ id: m.id, name: m.name })),
+      people: members.map((m) => {
+        const role = roleOf.get(m.id);
+        return { id: m.id, name: m.name, request: m.id !== ctx.userId && role !== undefined && isRequestTo(ctx.orgRole, role) };
+      }),
     });
   });
 }
