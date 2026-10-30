@@ -26,7 +26,7 @@ import type { MessageMenuContext, MessageMenuId } from "@/components/chat/messag
  * a mouse or the keyboard, a long press on a phone. What the menu offers comes from
  * message-menu-registry.ts, which mirrors the server's rules.
  */
-export interface MessageItemProps { message: MessageDto; canModerate: boolean; oversight?: boolean; readers?: ReaderDto[]; conversationKind?: "DM" | "GROUP" | "TOPIC"; canPost?: boolean; canMakeWork?: boolean; canMakeTask?: boolean; canMakeTicket?: boolean; onReact: (message: MessageDto, emoji: string) => void; onAction: (message: MessageDto, id: MessageMenuId) => void;
+export interface MessageItemProps { message: MessageDto; canModerate: boolean; oversight?: boolean; readers?: ReaderDto[]; conversationKind?: "DM" | "GROUP" | "TOPIC"; canPost?: boolean; canMakeWork?: boolean; canMakeTask?: boolean; canMakeTicket?: boolean; canRemind?: boolean; onReact: (message: MessageDto, emoji: string) => void; onAction: (message: MessageDto, id: MessageMenuId) => void;
   /** the names «@» can point at here (the people of the conversation and «الكل»): their mentions are drawn highlighted */
   mentionNames?: string[];
   /** me: a message that mentions me (by name or «@الكل») is marked for me */
@@ -48,13 +48,13 @@ export function ReaderList({readers}:{readers:ReaderDto[]}){return <ul data-read
 export function TypingLine({names}:{names:string[]}){if(!names.length)return null;const text=names.length===1?ct("chatc.typing.one",{name:names[0]??""}):names.length===2?ct("chatc.typing.two",{a:names[0]??"",b:names[1]??""}):ct("chatc.typing.many",{names:names.join(ct("chatc.list_sep"))});return <p role="status" aria-live="polite" data-typing className="px-3 pb-1 text-xs text-fg-muted">{text}</p>;}
 /** The small row of people whose newest read message is this one (topics and groups), five at most and «+n»; a tap opens who read and when. */
 export function ReaderRow({readers}:{readers:ReaderDto[]}){const [open,setOpen]=React.useState(false);if(!readers.length)return null;const shown=readers.slice(0,MAX_READER_AVATARS);const more=readers.length-shown.length;const names=shown.map(r=>r.name).join(ct("chatc.list_sep"))+(more>0?` ${interpolate(AR["chatc.readers_more"]??"",{count:more})}`:"");return <div data-readers className="mt-1 flex flex-col items-end"><button type="button" aria-expanded={open} aria-label={interpolate(AR["chatc.readers"]??"",{names})} onClick={()=>setOpen(v=>!v)} className="flex min-h-6 justify-end gap-0.5">{shown.map(r=><Avatar key={r.userId} name={r.name} src={r.avatarUrl} className="h-6 w-6"/>)}{more>0&&<span aria-hidden="true" className="self-center text-xs text-fg-muted">+{more}</span>}</button>{open&&<ReaderList readers={readers}/>}</div>;}
-export function MessageItem({message,canModerate,oversight=false,readers=[],conversationKind="TOPIC",canPost=true,canMakeWork=false,canMakeTask,canMakeTicket,classic=false,mentionNames=[],meId,groupStart=true,groupEnd=true,onReact,onAction,onOpenWork}: MessageItemProps) {
+export function MessageItem({message,canModerate,oversight=false,readers=[],conversationKind="TOPIC",canPost=true,canMakeWork=false,canMakeTask,canMakeTicket,canRemind=false,classic=false,mentionNames=[],meId,groupStart=true,groupEnd=true,onReact,onAction,onOpenWork}: MessageItemProps) {
  const [sheetOpen,setSheetOpen]=React.useState(false);
  const press=React.useRef<{timer:ReturnType<typeof setTimeout>;x:number;y:number}|null>(null);
  const canAct=!oversight&&!message.deleted&&message.kind!=="SYSTEM";
  // a system line is a quiet sentence in the middle, never a bubble with an empty body
  if(message.kind==="SYSTEM")return <p dir="rtl" role="note" className="my-2 text-center text-xs text-fg-muted">{systemSentence(message.system,message.authorName)}</p>;
- const context:MessageMenuContext={mine:message.mine,deleted:message.deleted,kind:message.kind,hasText:Boolean(message.body&&message.body.trim()),pinned:message.pinned,conversationKind,canPost,canModerate,oversight,canMakeWork,canMakeTask,canMakeTicket};
+ const context:MessageMenuContext={mine:message.mine,deleted:message.deleted,kind:message.kind,hasText:Boolean(message.body&&message.body.trim()),pinned:message.pinned,conversationKind,canPost,canModerate,oversight,canMakeWork,canMakeTask,canMakeTicket,canRemind};
  // a phone's long press opens the menu sheet; moving the finger (a scroll) or lifting early is no press
  const endPress=()=>{if(press.current){clearTimeout(press.current.timer);press.current=null;}};
  const onPointerDown=(e:React.PointerEvent)=>{if(e.pointerType==="mouse"||!canAct)return;const {clientX:x,clientY:y}=e;press.current={x,y,timer:setTimeout(()=>{press.current=null;setSheetOpen(true);},LONG_PRESS_MS)};};

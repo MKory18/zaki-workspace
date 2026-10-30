@@ -12,11 +12,14 @@
  * - note: the moderators (addNote);
  * - copy: a message with text;
  * - task / ticket: a message with text, for anybody who may make work of it (not a guest, not the owner in
- *   silent oversight — src/server/chat/make-work.ts).
+ *   silent oversight — src/server/chat/make-work.ts);
+ * - remind: «ذكّرني», a reminder for MYSELF on a message I may read: any message with the company's `reminders` switch on
+ *   (`me.canRemind`: the server sets it from the switch and never in silent oversight; the reminder itself is checked
+ *   again when it is set, src/server/services/reminders.ts).
  *
  * Nothing at all on a deleted message, a system line, or for the owner in silent oversight.
  */
-export type MessageMenuId = "reply" | "pin" | "forward" | "edit" | "delete" | "note" | "copy" | "task" | "ticket";
+export type MessageMenuId = "reply" | "pin" | "forward" | "edit" | "delete" | "note" | "copy" | "task" | "ticket" | "remind";
 
 export interface MessageMenuContext {
   mine: boolean;
@@ -33,6 +36,8 @@ export interface MessageMenuContext {
   /** …and holds the tasks / tickets «يضيف ويعدّل» box of the section grid (absent: yes) */
   canMakeTask?: boolean;
   canMakeTicket?: boolean;
+  /** may set a reminder on this message (`me.canRemind`: the «ذكّرني» switch is on; absent: no) */
+  canRemind?: boolean;
 }
 
 /** `labelKey`: a key of ar.chat-conversation.json (the strings live there, not here). */
@@ -47,6 +52,7 @@ export const messageMenuItems: MessageMenuAction[] = [
   { id: "copy", labelKey: () => "chatc.menu.copy", available: (c) => c.hasText },
   { id: "task", labelKey: () => "chatc.menu.task", available: (c) => c.hasText && !!c.canMakeWork && c.canMakeTask !== false },
   { id: "ticket", labelKey: () => "chatc.menu.ticket", available: (c) => c.hasText && !!c.canMakeWork && c.canMakeTicket !== false },
+  { id: "remind", labelKey: () => "chatc.menu.remind", available: (c) => !!c.canRemind },
   { id: "delete", labelKey: () => "chatc.menu.delete", danger: true, available: (c) => c.mine || c.canModerate },
 ];
 
