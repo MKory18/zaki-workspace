@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -75,6 +75,10 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // under /api/me/calendar-feed and every private feed link answer «not found»; the links already made stay and work again
   // with the switch
   calendarFeed: true,
+  // «مهمة بمكافأة» and «تثبيت» (src/server/services/rewards.ts): off, no reward toggle, card or badge, no pin button, the
+  // routes answer «not found» and the owner-only lock on reward tasks is lifted (a task is a plain task again); the rewards
+  // and pins already stored stay in the data and come back with the switch
+  taskRewards: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

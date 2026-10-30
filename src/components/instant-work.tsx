@@ -14,6 +14,7 @@ import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { PeopleMulti } from "@/components/ui/people-multi";
 import { errText } from "@/components/department-tickets";
+import { RewardToggleBlock, draftReady, emptyDraft, rewardBodyOf, rewardErrorText, type RewardDraft } from "@/components/rewards/reward-fields";
 
 /**
  * «+ مهمة فورية» on «مهامي» and «+ تذكرة فورية» on «التذاكر» (the owner's ask, 2026-10-27): one small form — what is
@@ -29,6 +30,8 @@ interface InstantInfo {
   space: { id: string; name: string } | null;
   /** `request`: somebody of a higher rank than the viewer; a task for them is only a request (task-assign.ts). */
   people: { id: string; name: string; request?: boolean }[];
+  /** «مهمة بمكافأة»: only for the OWNER while the switch is on (the toggle is drawn for nobody else); the company's default currency, if any. */
+  reward?: { defaultCurrency: string | null } | null;
 }
 
 /** Today as `yyyy-mm-dd` in the person's own clock (what a date field holds). */
@@ -65,13 +68,16 @@ export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; o
   const [people, setPeople] = useState<string[]>([]);
   const [priority, setPriority] = useState("NORMAL");
   const [day, setDay] = useState(todayValue);
+  // «مهمة بمكافأة»: the owner's toggle, with the amount, the currency and a note; the day above becomes required
+  const [rewardOn, setRewardOn] = useState(false);
+  const [draft, setDraft] = useState<RewardDraft>(() => emptyDraft(null));
 
   async function send() {
     setPending(true);
     try {
       let asked = false;
       if (kind === "task") {
-        const res = await apiPost<{ task: { requested?: boolean } }>("/api/instant/task", { title: title.trim(), description: details.trim() || null, assigneeIds: people, priority, dueDate: dueOf(day) });
+        const res = await apiPost<{ task: { requested?: boolean } }>("/api/instant/task", { title: title.trim(), description: details.trim() || null, assigneeIds: people, priority, dueDate: dueOf(day), ...(rewardOn ? { reward: rewardBodyOf(draft) } : {}) });
         asked = res.task.requested === true;
       } else {
         await apiPost("/api/instant/ticket", { title: title.trim(), description: details.trim() || null, assigneeId: people[0], priority });
@@ -84,19 +90,22 @@ export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; o
       setPeople([]);
       setPriority("NORMAL");
       setDay(todayValue());
+      setRewardOn(false);
+      setDraft(emptyDraft(info?.reward?.defaultCurrency));
       onSent?.();
       router.refresh();
     } catch (err) {
-      toast(errText(err, t), "error");
+      toast(rewardOn ? rewardErrorText(err, t) : errText(err, t), "error");
     } finally {
       setPending(false);
     }
   }
 
   if (!info?.[kind]) return null;
+  const rewardOffered = kind === "task" && Boolean(info.reward);
   const label = t(kind === "task" ? "instant.task.button" : "instant.ticket.button");
   const minTitle = kind === "ticket" ? 3 : 1;
-  const ready = title.trim().length >= minTitle && people.length > 0;
+  const ready = title.trim().length >= minTitle && people.length > 0 && (!rewardOn || (draftReady(draft) && dueOf(day) !== null));
 
   return (
     <>
@@ -167,10 +176,22 @@ export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; o
               {kind === "task" ? (
                 <label className="block space-y-1 text-xs">
                   <span className="font-medium text-fg">{t("instant.field.due")}</span>
-                  <Input type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+                  <Input type="date" value={day} onChange={(e) => setDay(e.target.value)} required={rewardOn} />
                 </label>
               ) : null}
             </div>
+            <RewardToggleBlock
+              offered={rewardOffered}
+              on={rewardOn}
+              onToggle={(next) => {
+                setRewardOn(next);
+                if (next && !draft.currency && info.reward?.defaultCurrency) setDraft({ ...draft, currency: info.reward.defaultCurrency });
+              }}
+              draft={draft}
+              onDraft={setDraft}
+              dayMissing={dueOf(day) === null}
+              idPrefix="instant-reward"
+            />
             <Textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={2} placeholder={t("instant.field.details")} aria-label={t("instant.field.details")} />
             <div className="flex justify-end">
               <Button type="submit" disabled={!ready || pending}>

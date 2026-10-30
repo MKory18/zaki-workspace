@@ -67,6 +67,8 @@ export async function pushNotification(input: {
   type: string;
   title: string;
   body?: string | null;
+  /** When given, the Web Push carries THIS text instead of `body` (the bell keeps `body`): for a body that must not leave the app, e.g. an amount. */
+  pushBody?: string | null;
   taskId?: string | null;
   linkUrl?: string | null;
   workspaceId?: string | null;
@@ -85,7 +87,7 @@ export async function pushNotification(input: {
       organizationId: input.organizationId ?? (await orgOfSpace(input.workspaceId)),
     },
   });
-  pushOut([input.userId], input);
+  pushOut([input.userId], input.pushBody === undefined ? input : { ...input, body: input.pushBody });
 }
 
 /**

@@ -12,6 +12,10 @@ import type { RequestBannerMode } from "@/components/task-assign-request-banner"
 import { isRequestTo } from "@/server/policy/assign-rank";
 import { pendingRequestsOf } from "@/server/services/task-assign";
 import { stepsOfTask } from "@/server/services/task-steps";
+import { defaultCurrencyOf, rewardLensFor } from "@/server/services/rewards";
+import { isRewardTaskStatus } from "@/lib/rewards";
+import { RewardCard, type RewardCardData } from "@/components/rewards/reward-card";
+import { PinButton } from "@/components/rewards/pin-button";
 import { buildTaskTimeCard } from "@/server/services/time-tracking";
 import { recurrenceOfTask } from "@/server/services/task-recurrence";
 
@@ -104,6 +108,34 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
     return mode ? [{ id: r.id, mode, fromName: r.fromName, toName: r.toName }] : [];
   });
 
+  // «مهمة بمكافأة» and «تثبيت»: what this person may be shown and do, from the database. A partner is handed no reward at all.
+  const lens = await rewardLensFor(actor, task.workspaceId);
+  const rewardStatus = isRewardTaskStatus(task.rewardStatus) ? task.rewardStatus : null;
+  // a reward task is the owner's: everybody else reads the title, the day and the rest (the server refuses their writes anyway)
+  const lockedFields = lens.pins && rewardStatus !== null && !lens.owner;
+  const holderIds = [...(task.assigneeId ? [task.assigneeId] : []), ...task.coAssignees.map((r) => r.userId)];
+  const awardedToId = task.rewardAwardedToId;
+  const rewardPeople =
+    lens.rewards && rewardStatus
+      ? await db.user.findMany({ where: { id: { in: [...new Set([...holderIds, ...(awardedToId ? [awardedToId] : [])])] } }, select: { id: true, name: true } })
+      : [];
+  const nameOf = new Map(rewardPeople.map((p) => [p.id, p.name]));
+  const rewardData: RewardCardData | null =
+    lens.rewards && rewardStatus
+      ? {
+          status: rewardStatus,
+          amountMinor: task.rewardAmountMinor,
+          currency: task.rewardCurrency,
+          note: task.rewardNote,
+          dueDate: task.dueDate?.toISOString() ?? null,
+          completed: task.completedAt != null,
+          awardedToName: awardedToId ? (nameOf.get(awardedToId) ?? null) : null,
+          awardedAt: task.rewardAwardedAt?.toISOString() ?? null,
+          cancelReason: task.rewardCancelReason,
+        }
+      : null;
+  const defaultCurrency = lens.owner ? await defaultCurrencyOf(task.orgId) : null;
+
   const [members, labels, linkCandidates] = await Promise.all([
     // the people who can be assigned: the space's members who are still ACTIVE in the company (a
     // suspended person keeps their space row so that reactivating them restores everything, but
@@ -195,6 +227,19 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       milestones={milestonesOn ? projectMilestones : null}
       steps={steps ? { initial: steps.steps, canEdit: canEdit && !(membership?.role === "OWNER" && !spaceRow) } : null}
       remind={remindOn}
+      lockedFields={lockedFields}
+      rewardSlot={
+        lens.rewards && (rewardData || lens.owner) ? (
+          <RewardCard
+            taskId={task.id}
+            reward={rewardData}
+            owner={lens.owner}
+            people={holderIds.flatMap((id) => (nameOf.get(id) ? [{ id, name: nameOf.get(id)! }] : []))}
+            defaultCurrency={defaultCurrency}
+          />
+        ) : null
+      }
+      pinSlot={lens.canPin ? <PinButton taskId={task.id} pinned={task.pinnedAt != null} /> : null}
       time={timeCard}
       recurrence={recurrence ? { initial: recurrence.recurrence, timeZone: recurrence.timeZone, canEdit: canEdit && !(membership?.role === "OWNER" && !spaceRow) } : null}
     />

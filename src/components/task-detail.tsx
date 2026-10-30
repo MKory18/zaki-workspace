@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { CalendarDays, Pencil, Trash2, User, Flag, Type as TypeIcon, Send } from "lucide-react";
@@ -63,6 +63,9 @@ export function TaskDetail({
   assignRequests = [],
   steps = null,
   remind = false,
+  rewardSlot = null,
+  pinSlot = null,
+  lockedFields = false,
   time = null,
   recurrence = null,
 }: {
@@ -83,11 +86,19 @@ export function TaskDetail({
   steps?: { initial: StepDto[]; canEdit: boolean } | null;
   /** «ذكّرني»: the button is drawn only while the company's switch is on. */
   remind?: boolean;
+  /** «مهمة بمكافأة»: the reward card (the page draws it only for somebody who may see rewards: never a partner). */
+  rewardSlot?: ReactNode;
+  /** «تثبيت»: the pin button (the owner and the space's admin). */
+  pinSlot?: ReactNode;
+  /** A reward task is the owner's: the title, the description, the day and the rest are read-only for everybody else (the server refuses too). */
+  lockedFields?: boolean;
   /** «الوقت»: null when the company switched it off or the person is an external partner (the card is not drawn). */
   time?: TimeCardData | null;
   /** «تكرار»: null when the company switched «مهمة متكررة» off (nothing is drawn); `canEdit` is the series' own rule (never a guest, never the owner reading silently). */
   recurrence?: { initial: RecurrenceDto | null; timeZone: string; canEdit: boolean } | null;
 }) {
+  // «مهمة بمكافأة»: what the person may still change on a reward task is who holds it and the comments
+  const fieldsEdit = canEdit && !lockedFields;
   const router = useRouter();
   const { toast } = useToast();
   const { t } = useI18n();
@@ -207,13 +218,14 @@ export function TaskDetail({
         <span dir="ltr" className="font-mono text-xs text-muted">{task.key}</span>
         <Badge>{columnLabel(task.status)}</Badge>
         <span className="text-xs text-fg-muted">{t("task.inBoard", { name: task.boardName })}</span>
-        {remind || recurrence ? (
+        {remind || recurrence || pinSlot ? (
           <span className="ms-auto flex items-start gap-2">
+            {pinSlot}
             {recurrence ? <RecurrenceControl taskId={task.id} initial={recurrence.initial} timeZone={recurrence.timeZone} canEdit={recurrence.canEdit} /> : null}
             {remind ? <RemindTaskButton taskId={task.id} taskTitle={task.title} /> : null}
           </span>
         ) : null}
-        {canEdit ? null : <span className={cn("text-xs text-muted", remind || recurrence ? undefined : "ms-auto")}>{t("task.readOnly")}</span>}
+        {canEdit ? null : <span className={cn("text-xs text-muted", remind || recurrence || pinSlot ? undefined : "ms-auto")}>{t("task.readOnly")}</span>}
       </header>
 
       {assignRequests.map((r) => (
@@ -230,7 +242,7 @@ export function TaskDetail({
 
       <Card>
         <CardBody className="space-y-4">
-          {canEdit ? (
+          {fieldsEdit ? (
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -274,7 +286,7 @@ export function TaskDetail({
               <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
                 <Flag className="h-3 w-3" /> {t("task.priority")}
               </span>
-              {canEdit ? (
+              {fieldsEdit ? (
                 <Select
                   value={priority}
                   onChange={(e) => {
@@ -297,7 +309,7 @@ export function TaskDetail({
               <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
                 <CalendarDays className="h-3 w-3" /> {t("task.due")}
               </span>
-              {canEdit ? (
+              {fieldsEdit ? (
                 <Input
                   type="date"
                   value={dueDate}
@@ -314,7 +326,7 @@ export function TaskDetail({
                 <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
                   <Flag className="h-3 w-3" /> {t("task.milestone")}
                 </span>
-                {canEdit ? (
+                {fieldsEdit ? (
                   <Select
                     value={milestoneId}
                     onChange={(e) => {
@@ -337,7 +349,7 @@ export function TaskDetail({
             ) : null}
             <div>
               <span className="mb-1 block text-xs text-fg-muted">{t("task.labels")}</span>
-              {canEdit ? (
+              {fieldsEdit ? (
                 <div className="flex flex-wrap gap-1">
                   {labels.map((l) => {
                     const active = selectedLabels.includes(l.id);
@@ -390,7 +402,7 @@ export function TaskDetail({
             <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
               <TypeIcon className="h-3 w-3" /> {t("task.description")}
             </span>
-            {canEdit ? (
+            {fieldsEdit ? (
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -407,6 +419,8 @@ export function TaskDetail({
           {save.isPending ? <p className="text-xs text-muted">{t("common.saving")}</p> : null}
         </CardBody>
       </Card>
+
+      {rewardSlot}
 
       {steps ? <TaskSteps taskId={task.id} initial={steps.initial} canEdit={steps.canEdit} /> : null}
 

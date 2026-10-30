@@ -37,6 +37,7 @@ import taskSteps from "./ar.task-steps.json";
 import timeTracking from "./ar.time-tracking.json";
 import recurring from "./ar.recurring.json";
 import cardsNav from "./ar.cards-nav.json";
+import taskRewards from "./ar.task-rewards.json";
 import calendarFeed from "./ar.calendar-feed.json";
 
 /**
@@ -86,5 +87,6 @@ export const AR: Record<string, string> = {
   ...timeTracking,
   ...recurring,
   ...cardsNav,
+  ...taskRewards,
   ...calendarFeed,
 };
