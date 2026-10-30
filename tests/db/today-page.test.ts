@@ -70,7 +70,7 @@ async function busyWorld(now: Date = new Date()) {
 // `/` is the page itself (a step that says «add your first task»); `/guide…` are the guide pages the
 // first-steps card points at; `/chat` is the card's «ابعت أول رسالة بـ«عام»» step (phase 3). None is a
 // wall of navigation: each is the one place a first step happens.
-const allowedLinks = /^(\/|\/tasks\/[\w-]+|\/projects(\/[\w-]+)?|\/my-work(\?tab=\w+)?|\/guide(\/[\w-]+)?|\/chat)$/;
+const allowedLinks = /^(\/|\/tasks\/[\w-]+|\/projects(\/[\w-]+)?|\/my-work(\?tab=\w+)?|\/guide(\/[\w-]+)?|\/chat|\/time)$/;
 
 describe("the home page: «اليوم»", () => {
   it("greets by first name, writes the date in Arabic, and shows the member's own tasks in three groups with the done button", async () => {

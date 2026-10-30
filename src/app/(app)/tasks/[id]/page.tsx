@@ -12,6 +12,7 @@ import type { RequestBannerMode } from "@/components/task-assign-request-banner"
 import { isRequestTo } from "@/server/policy/assign-rank";
 import { pendingRequestsOf } from "@/server/services/task-assign";
 import { stepsOfTask } from "@/server/services/task-steps";
+import { buildTaskTimeCard } from "@/server/services/time-tracking";
 import { recurrenceOfTask } from "@/server/services/task-recurrence";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
@@ -81,6 +82,15 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   const stepsOn = await actorFeatureOn(actor, "taskSteps");
   const steps = stepsOn ? await stepsOfTask(task.id) : null;
   const remindOn = await actorFeatureOn(actor, "reminders");
+  // «الوقت»: the card exists only while the switch is on, and never for an external partner (an org guest, or a guest row of
+  // the space); the owner reading a space he is not in sees it without the buttons
+  const timeOn = (await actorFeatureOn(actor, "timeTracking")) && !actor.isExternal && spaceRow?.role !== "GUEST";
+  const timeCard = timeOn
+    ? await buildTaskTimeCard(
+        { userId: user.id, orgId: task.orgId, orgRole: membership?.role ?? actor.role, spaceRole: spaceRow?.role, workspaceId: task.workspaceId, archived: task.archived },
+        task.id,
+      )
+    : null;
   // «تكرار»: drawn only while the switch is on; who may change it is who may edit the task, except that the owner reading a
   // space he is not in does not (a series acts as the person who set it: silent reading leaves no trace)
   const recurrenceOn = await actorFeatureOn(actor, "recurringTasks");
@@ -185,6 +195,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       milestones={milestonesOn ? projectMilestones : null}
       steps={steps ? { initial: steps.steps, canEdit: canEdit && !(membership?.role === "OWNER" && !spaceRow) } : null}
       remind={remindOn}
+      time={timeCard}
       recurrence={recurrence ? { initial: recurrence.recurrence, timeZone: recurrence.timeZone, canEdit: canEdit && !(membership?.role === "OWNER" && !spaceRow) } : null}
     />
   );

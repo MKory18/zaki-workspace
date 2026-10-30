@@ -37,6 +37,7 @@ const PAGES: [string, string][] = [
   ["/members", "members"],
   ["/files", "files"],
   ["/crm", "crm"],
+  ["/time", "time"],
   ["/analytics", "analytics"],
   ["/automation", "automation"],
   ["/telegram", "telegram"],

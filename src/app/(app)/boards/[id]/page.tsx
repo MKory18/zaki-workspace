@@ -10,6 +10,7 @@ import { canWriteInWorkspace } from "@/server/workspace-role";
 import { BoardView, type TaskCardData } from "@/components/board-view";
 import { actorFeatureOn } from "@/server/services/features";
 import { stepProgressFor } from "@/server/services/task-steps";
+import { myRunningTaskId } from "@/server/services/time-tracking";
 import { recurringTaskIds } from "@/server/services/task-recurrence";
 
 /**
@@ -72,6 +73,8 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
 
   // «٣ من ٥» on the cards: one grouped read for the whole board, and only while the company's switch is on
   const progress = (await actorFeatureOn(actor, "taskSteps")) ? await stepProgressFor(tasks.map((t) => t.id)) : new Map();
+  // «الوقت شغّال» on the card of the task the person's own timer runs on
+  const runningTaskId = await myRunningTaskId(actor);
 
   // «🔁 متكررة» on the cards: one read for the whole board, and only while the company's switch is on
   const recurring = (await actorFeatureOn(actor, "recurringTasks")) ? await recurringTaskIds(tasks.map((t) => t.id)) : new Set<string>();
@@ -89,6 +92,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     commentCount: t._count.comments,
     completed: t.completedAt != null,
     steps: progress.get(t.id),
+    running: t.id === runningTaskId,
     recurring: recurring.has(t.id),
   }));
 
