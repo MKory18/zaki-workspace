@@ -25,6 +25,7 @@ import libraryDrive from "./ar.library-drive.json";
 import instant from "./ar.instant.json";
 import taskLinks from "./ar.task-links.json";
 import milestones from "./ar.milestones.json";
+import quickChat from "./ar.quick-chat.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
@@ -61,4 +62,5 @@ export const AR: Record<string, string> = {
   ...instant,
   ...taskLinks,
   ...milestones,
+  ...quickChat,
 };
