@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { assertMemberCan } from "@/server/policy/actor";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { NotFoundError, requireTeamWork } from "@/server/auth";
+import { audit, NotFoundError, requireTeamWork } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { parseJson } from "@/server/validation";
 import type { Prisma } from "@prisma/client";
@@ -89,6 +89,8 @@ export async function PATCH(
       data: input,
       select: { id: true, name: true, archived: true },
     });
+    // a renamed or archived board leaves a trail, like every other change of a name (Phase E)
+    await audit("board.updated", { actorId: access.userId, orgId: access.orgId, target: board.id, meta: input });
     return NextResponse.json({ board: updated });
   });
 }
@@ -119,6 +121,7 @@ export async function POST(
       }),
     );
     await db.$transaction(txs);
+    await audit("board.columns_reordered", { actorId: access.userId, orgId: access.orgId, target: board.id, meta: { order } });
     const columns = await db.boardColumn.findMany({
       where: { boardId: board.id },
       orderBy: { position: "asc" },
