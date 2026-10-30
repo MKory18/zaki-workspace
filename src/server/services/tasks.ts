@@ -3,8 +3,10 @@ import { assertMemberCan } from "@/server/policy/actor";
 import { userSeesProject } from "./team-scope";
 import { orgDayStart } from "./org-day";
 import { db } from "@/server/db";
-import { ForbiddenError, NotFoundError } from "@/server/auth";
+import { ForbiddenError, NotFoundError, ValidationError } from "@/server/auth";
 import { AR } from "@/lib/i18n/dict";
+import { prepareReward, REWARD_EVENTS, type RewardRequest } from "./rewards";
+import { assertRewardEditable } from "./reward-guard";
 import {
   assertNoPendingRequest,
   judgeAssignment,
@@ -36,6 +38,11 @@ export interface CreateTaskInput {
   dueDate?: Date | null;
   startDate?: Date | null;
   labelIds?: string[];
+  /**
+   * «مهمة بمكافأة»: the OWNER's alone (403 `reward.owner_only` for anybody else, 404 while the switch is off); needs a due
+   * date and an amount (src/server/services/rewards.ts `prepareReward`). Every way a task is born comes through here.
+   */
+  reward?: RewardRequest;
 }
 
 export interface MoveTaskInput {
@@ -152,6 +159,8 @@ interface ScopedTask {
   dueDate: Date | null;
   completedAt: Date | null;
   archived: boolean;
+  /** «مهمة بمكافأة»: null/NONE = a plain task; OPEN, AWARDED or CANCELLED = a reward task (locked for everybody but the owner). */
+  rewardStatus: string | null;
 }
 
 /** Takes the task's row for the rest of the transaction (`FOR UPDATE`): what is read after this is what the last writer left. */
@@ -176,6 +185,7 @@ async function assertTaskScope(taskId: string, orgId: string, tx: Tx): Promise<S
       dueDate: true,
       completedAt: true,
       archived: true,
+      rewardStatus: true,
     },
   });
   if (!task) throw new NotFoundError("task.not_found");
@@ -203,6 +213,8 @@ export async function notifyCreatedRequests(made: TaskWithRequest, actor: ActorC
  * Every rule (the project chain, the team, the labels, the rank judge) is here, once.
  */
 export async function createTaskInTx(tx: Tx, actor: ActorContext, input: CreateTaskInput): Promise<TaskWithRequest> {
+  // «مهمة بمكافأة»: the owner only, with a due date and an amount: refused BEFORE anything is written
+  const rewardData = input.reward ? await prepareReward(actor, input.reward, input.dueDate ?? null, tx) : null;
   // integrity: ids must chain to the actor's organization
   const chain = await tx.project.findFirst({
     where: {
@@ -282,6 +294,7 @@ export async function createTaskInTx(tx: Tx, actor: ActorContext, input: CreateT
       position: await positionAt(column.id, undefined, tx),
       // born in a done column is finished: the same rule as `moveTask`, or no counter would see it
       completedAt: column.done ? new Date() : null,
+      ...(rewardData ?? {}),
       coAssignees: coIds.length
         ? { create: coIds.map((userId) => ({ userId })) }
         : undefined,
@@ -299,6 +312,18 @@ export async function createTaskInTx(tx: Tx, actor: ActorContext, input: CreateT
       meta: { columnId: column.id },
     },
   });
+  if (rewardData) {
+    await tx.auditLog.create({
+      data: {
+        action: REWARD_EVENTS.set,
+        actorId: actor.userId,
+        orgId: actor.orgId,
+        target: task.id,
+        workspaceId: input.workspaceId,
+        meta: { after: { status: "OPEN", amountMinor: rewardData.rewardAmountMinor, currency: rewardData.rewardCurrency } },
+      },
+    });
+  }
   const assignRequest = requestTo
     ? await storeAssignRequest(tx, { orgId: actor.orgId, taskId: task.id, fromUserId: actor.userId, toUserId: requestTo })
     : null;
@@ -377,6 +402,16 @@ export async function updateTask(
   await assertMemberCan(actor, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
   const saved = await db.$transaction(async (tx) => {
     const before = await assertTaskScope(taskId, actor.orgId, tx);
+    // «مهمة بمكافأة»: on a reward task the owner alone changes anything but who holds it (assigning keeps its own rank rule,
+    // status moves are `moveTask` / `setTaskCompletion`); a day can never be taken off a reward that is still open
+    const touchesLocked =
+      data.title !== undefined || data.description !== undefined || data.priority !== undefined || data.type !== undefined ||
+      data.dueDate !== undefined || data.startDate !== undefined || data.milestoneId !== undefined || data.archived !== undefined ||
+      data.labelIds !== undefined;
+    if (touchesLocked) await assertRewardEditable(actor, before);
+    if (data.dueDate === null && before.rewardStatus === "OPEN") {
+      throw new ValidationError([{ path: "dueDate", message: "reward.due_required" }]);
+    }
     let requestTo: string | null = null;
     const updateData: Prisma.TaskUpdateInput = {};
     let coSetChanged = false;
@@ -492,7 +527,9 @@ export async function updateTask(
 
 export async function deleteTask(actor: ActorContext, taskId: string): Promise<void> {
   await assertMemberCan(actor, "tasks.delete", "section.delete_denied", { spaceGuestsPass: true });
-  await assertTaskScope(taskId, actor.orgId, db);
+  const task = await assertTaskScope(taskId, actor.orgId, db);
+  // «مهمة بمكافأة»: only the owner deletes it
+  await assertRewardEditable(actor, task);
   await db.task.delete({ where: { id: taskId } });
 }
 

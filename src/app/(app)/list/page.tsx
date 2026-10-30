@@ -5,6 +5,7 @@ import {
   queryTasksForView,
   resolveWorkspaceView,
   sortByDue,
+  sortPinnedFirst,
   type ViewTask,
 } from "@/server/services/views";
 import { TaskRow, type RowMember } from "@/components/task-row";
@@ -15,6 +16,9 @@ import { currentSpace } from "@/server/services/current-space";
 import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 import { actorFeatureOn } from "@/server/services/features";
 import { stepProgressFor } from "@/server/services/task-steps";
+import { NO_LENS, openRewardTotals, rewardLensFor } from "@/server/services/rewards";
+import { fmtReward } from "@/lib/rewards";
+import { fmtNumber } from "@/lib/format";
 import { myRunningTaskId } from "@/server/services/time-tracking";
 import { recurringTaskIds } from "@/server/services/task-recurrence";
 
@@ -26,7 +30,7 @@ const PRIORITY_ORDER = ["URGENT", "HIGH", "NORMAL", "LOW", "NONE"] as const;
 export default async function ListPage({
   searchParams,
 }: {
-  searchParams: { workspace?: string; group?: string; priority?: string; assignee?: string; q?: string };
+  searchParams: { workspace?: string; group?: string; priority?: string; assignee?: string; q?: string; reward?: string };
 }) {
   const { t } = getServerT();
   // the space the person is in, never one named in the address (that is entered through the switcher)
@@ -67,7 +71,11 @@ export default async function ListPage({
   // org members: the org's people; org guests: only those who share this workspace
   const members: RowMember[] = ctx.denied ? [] : await listWorkspacePeople(ctx);
 
-  const tasks: ViewTask[] = ctx.denied
+  // «مهمة بمكافأة» and «تثبيت»: what this person may be shown (never a reward to a partner; nothing while the switch is off)
+  const lens = ctx.denied ? NO_LENS : await rewardLensFor(actor, ctx.workspaceId);
+  const onlyRewards = lens.rewards && searchParams.reward === "1";
+
+  const found: ViewTask[] = ctx.denied
     ? []
     : sortByDue(
         await queryTasksForView({
@@ -78,8 +86,14 @@ export default async function ListPage({
           priority: validPriority as ViewTask["priority"] | undefined,
           search: q || undefined,
           limit: 300,
+          pinnedFirst: lens.pins,
+          rewards: lens.rewards,
         }),
       ).filter((task) => (assigneeId === "__none__" ? task.assigneeId === null : true));
+  // pinned first (the newest pin first), then the list's own order; and «المهام بمكافأة» narrows to the ones with a reward
+  const tasks = (lens.pins ? sortPinnedFirst(found) : found).filter((task) => (onlyRewards ? Boolean(task.reward) : true));
+  // «مجموع المكافآت المفتوحة»: the owner's alone, added in SQL per currency
+  const totals = lens.owner ? await openRewardTotals(actor, { workspaceId: ctx.workspaceId }) : [];
 
   // «٣ من ٥» on the rows: one grouped read for the page, and only while the company's «الخطوات» switch is on
   const progress = (await actorFeatureOn(actor, "taskSteps")) ? await stepProgressFor(tasks.map((t) => t.id)) : new Map();
@@ -150,6 +164,12 @@ export default async function ListPage({
       <header className="border-b border-border bg-surface px-5 py-4">
         <h1 className="text-base font-semibold text-fg">{t("list.title")}</h1>
         <p className="text-xs text-fg-muted">{ctx.denied ? t("forbidden") : ctx.workspaceName}</p>
+        {totals.length > 0 ? (
+          <p data-reward-totals className="mt-1 text-xs text-fg-muted">
+            <span className="font-medium text-fg">{t("reward.total.title")}: </span>
+            {totals.map((row) => t("reward.total.line", { amount: fmtReward(row.minor, row.currency), count: fmtNumber(row.count) })).join("، ")}
+          </p>
+        ) : null}
       </header>
 
       <ListFilters
@@ -160,6 +180,7 @@ export default async function ListPage({
         q={q}
         members={members}
         labels={labels}
+        rewardChip={lens.rewards ? { label: t("reward.filter"), on: onlyRewards } : undefined}
       />
 
       <div className="flex-1 px-3 py-3">
@@ -179,7 +200,7 @@ export default async function ListPage({
                   {b.rows.map((task) => (
                     <TaskRow
                       key={task.id}
-                      task={{ ...task, steps: progress.get(task.id), running: task.id === runningTaskId, recurring: recurring.has(task.id) }}
+                      task={{ ...task, steps: progress.get(task.id), running: task.id === runningTaskId, recurring: recurring.has(task.id), reward: task.reward ?? null, pinnedAt: task.pinnedAt ?? null }}
                       editable={ctx.editable}
                       members={members}
                       showProject={group !== "project"}

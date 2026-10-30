@@ -7,6 +7,8 @@ import { listWorkspaceMembers } from "@/server/services/workspaces";
 import { memberCan } from "@/server/policy/actor";
 import { isRequestTo } from "@/server/policy/assign-rank";
 import { db } from "@/server/db";
+import { isOrgOwner } from "@/server/services/reward-guard";
+import { defaultCurrencyOf } from "@/server/services/rewards";
 
 /**
  * GET: what «مهمة فورية» and «تذكرة فورية» may offer this person: whether each is on for them, and the people they
@@ -31,7 +33,10 @@ export async function GET() {
       select: { userId: true, role: true },
     });
     const roleOf = new Map(ranks.map((r) => [r.userId, r.role]));
+    // «مهمة بمكافأة»: the toggle is offered to the OWNER alone, while the switch is on (the server refuses anybody else anyway)
+    const reward = (await isFeatureOn(ctx.orgId, "taskRewards")) && (await isOrgOwner(ctx));
     return NextResponse.json({
+      reward: reward ? { defaultCurrency: await defaultCurrencyOf(ctx.orgId) } : null,
       task: task === true,
       ticket: ticket === true,
       space: { id: space.id, name: space.name },

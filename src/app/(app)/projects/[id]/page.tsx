@@ -17,6 +17,9 @@ import { TimelineBadgeButton } from "@/components/timeline-badge-button";
 import { ProjectTeamPicker } from "@/components/project-team-picker";
 import { actorFeatureOn } from "@/server/services/features";
 import { listMilestones } from "@/server/services/milestones";
+import { rewardLensFor } from "@/server/services/rewards";
+import { pinnedTasks } from "@/server/services/pinned";
+import { PinnedStrip } from "@/components/rewards/pinned-strip";
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
   const { t } = getServerT();
@@ -57,6 +60,10 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     actorCanWork(actor, "projects.edit");
   const milestones = milestonesOn ? await listMilestones(project.id, actor.orgId) : [];
 
+  // «مثبّتة»: the tasks pinned in this project, first thing on the page (while the company's switch is on)
+  const lens = await rewardLensFor(actor, project.workspace.id);
+  const pinned = await pinnedTasks(actor, { projectId: project.id }, lens);
+
   const doneColumnIds = await db.boardColumn.findMany({
     where: { board: { projectId: project.id }, done: true },
     select: { id: true },
@@ -88,6 +95,8 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         {project.description ? <p className="max-w-2xl text-sm text-fg-muted">{project.description}</p> : null}
         <ProjectTeamPicker projectId={project.id} workspaceId={project.workspace.id} teamId={project.teamId} />
       </header>
+
+      <PinnedStrip tasks={pinned} />
 
       <section>
         <div className="mb-2 flex items-center justify-between">

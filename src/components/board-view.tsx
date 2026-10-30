@@ -32,6 +32,7 @@ import { StepProgressChip } from "@/components/task-steps/step-progress";
 import { RunningChip } from "@/components/time/running-chip";
 import { RecurringBadge } from "@/components/recurrence/recurring-badge";
 import type { StepProgress } from "@/lib/task-steps";
+import { PinMark, RewardBadge } from "@/components/rewards/reward-badge";
 
 export interface ColumnData {
   id: string;
@@ -60,6 +61,10 @@ export interface TaskCardData {
   running?: boolean;
   /** «🔁 متكررة»: the task belongs to a running series; absent when it does not or the company's «مهمة متكررة» switch is off. */
   recurring?: boolean;
+  /** «مهمة بمكافأة»: only for a viewer who may see rewards (the board of a partner carries none). */
+  reward?: { status: string; amountMinor: number; currency: string } | null;
+  /** «تثبيت»: the task is pinned (and the company's switch is on). */
+  pinned?: boolean;
 }
 
 interface BoardViewProps {
@@ -403,6 +408,7 @@ function TaskCardContent({ task }: { task: TaskCardData }) {
       <div className="flex items-center gap-1.5">
         <span dir="ltr" className="font-mono text-xs text-muted">{task.key}</span>
         {overdue ? <span className="text-xs font-medium text-danger">{t("dash.overdue")}</span> : null}
+        {task.pinned ? <PinMark className="ms-auto" /> : null}
       </div>
       <p className={cn("mt-1 text-xs font-medium text-fg", task.completed && "line-through opacity-60")}>
         {task.title}
@@ -413,6 +419,7 @@ function TaskCardContent({ task }: { task: TaskCardData }) {
             {l.name}
           </Badge>
         ))}
+        <RewardBadge reward={task.reward} />
         <span
           className="ms-auto h-3 w-3 rounded-full"
           title={enumLabel("TaskPriority", task.priority)}

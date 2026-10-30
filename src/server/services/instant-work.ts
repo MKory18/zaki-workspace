@@ -6,6 +6,7 @@ import { notifyAssignment } from "@/server/notify";
 import { assertNotGuest } from "@/server/services/guest-guard";
 import { assertFeatureOn } from "@/server/services/features";
 import { createTask, DEFAULT_BOARD_COLUMNS } from "@/server/services/tasks";
+import type { RewardRequest } from "@/server/services/rewards";
 
 /**
  * «مهمة فورية» (the owner's ask, 2026-10-27: «+ بالمهام ومهمة فورية لشخص محدد مع أولوية»): a task typed in one go —
@@ -71,6 +72,8 @@ export interface InstantTaskInput {
   priority: TaskPriority;
   dueDate: Date | null;
   description?: string | null;
+  /** «مهمة بمكافأة»: the OWNER's alone (`createTask` refuses anybody else: 403 `reward.owner_only`); needs `dueDate`. */
+  reward?: RewardRequest;
 }
 
 /** `ctx`: the caller checked for this space (`requireWorkspace(spaceId, ["ADMIN", "MEMBER"])`). */
@@ -100,6 +103,7 @@ export async function createInstantTask(ctx: OrgAccessContext, workspaceId: stri
     assigneeId: people[0]!,
     coAssigneeIds: people.slice(1),
     dueDate: input.dueDate,
+    reward: input.reward,
   });
   // by RANK (task-assign.ts): somebody of a HIGHER rank was asked, not assigned: they were told by the request instead.
   // Only the people the task really went to (its assignee and the people beside them) are told «أُسندت إليك».

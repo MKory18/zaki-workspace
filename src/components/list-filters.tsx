@@ -15,6 +15,7 @@ export function ListFilters({
   q,
   members,
   labels,
+  rewardChip,
 }: {
   wsId: string;
   group: string;
@@ -23,6 +24,8 @@ export function ListFilters({
   q: string;
   members: { id: string; name: string }[];
   labels: Record<string, string>;
+  /** «المهام بمكافأة»: the chip, drawn only for somebody who may see rewards; `on` = the filter is applied. */
+  rewardChip?: { label: string; on: boolean };
 }) {
   const router = useRouter();
 
@@ -30,6 +33,7 @@ export function ListFilters({
   function push(next: { group?: string; priority?: string; assignee?: string; q?: string }) {
     const sp = new URLSearchParams({ workspace: wsId, group, priority, assignee: assigneeId });
     if (q) sp.set("q", q);
+    if (rewardChip?.on) sp.set("reward", "1");
     for (const [k, v] of Object.entries(next)) {
       if (v) sp.set(k, v);
     }
@@ -82,6 +86,26 @@ export function ListFilters({
           </option>
         ))}
       </select>
+
+      {rewardChip ? (
+        <button
+          type="button"
+          data-reward-filter
+          aria-pressed={rewardChip.on}
+          onClick={() => {
+            const sp = new URLSearchParams({ workspace: wsId, group, priority, assignee: assigneeId });
+            if (q) sp.set("q", q);
+            if (!rewardChip.on) sp.set("reward", "1");
+            router.push(`/list?${sp.toString()}`);
+          }}
+          className={
+            "min-h-11 md:h-8 rounded-lg border px-2.5 text-base md:text-xs " +
+            (rewardChip.on ? "border-warn/60 bg-warn/10 text-warn" : "border-muted bg-surface-1 text-fg")
+          }
+        >
+          {rewardChip.label}
+        </button>
+      ) : null}
 
       <form
         className="flex flex-1 items-center justify-end"

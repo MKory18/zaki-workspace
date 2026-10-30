@@ -11,6 +11,9 @@ import { assertActiveAssignee } from "@/server/services/active-people";
 import { orgTimeZone } from "@/server/services/org-day";
 import { dueInstantForDay, parseDayText } from "@/lib/due-day";
 import { notifyAssignment } from "@/server/notify";
+import { rewardsVisibleTo, setReward } from "@/server/services/rewards";
+import { rewardBodySchema, toRewardRequest } from "@/server/services/reward-input";
+import { withoutReward } from "@/server/policy/reward";
 
 /**
  * A due (or start) date the API accepts: a full instant (`2026-11-05T09:00:00Z`) or a plain day
@@ -51,7 +54,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       },
     });
     if (!task) throw new NotFoundError("task.not_found");
-    return NextResponse.json({ task });
+    // «مهمة بمكافأة»: an external partner (or a switch that is off) is handed the task with no reward field at all
+    return NextResponse.json({ task: (await rewardsVisibleTo(access, task.workspaceId)) ? task : withoutReward(task) });
   });
 }
 
@@ -71,12 +75,18 @@ const patchSchema = z.object({
   milestoneId: z.string().min(1).nullable().optional(),
   archived: z.boolean().optional(),
   labelIds: z.array(z.string().min(1)).max(15).optional(),
+  /** «مهمة بمكافأة»: the OWNER's alone (403 `reward.owner_only`); a day must exist (the task's or `dueDate` here). */
+  reward: rewardBodySchema.optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return withApi(async () => {
     const input = await parseJson(patchSchema, req);
     const ctx = await requireTaskAccess(params.id, ["ADMIN", "MEMBER"]);
+    // «مهمة بمكافأة»: a reward is the owner's: refused (403 / 404 / 422) BEFORE any other field of the request is written
+    if (input.reward) {
+      await setReward(ctx, params.id, { ...toRewardRequest(input.reward), dueDate: await dueFromInput(ctx.orgId, input.dueDate) });
+    }
     const prev = await db.task.findUnique({
       where: { id: params.id },
       select: {

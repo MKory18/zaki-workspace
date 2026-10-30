@@ -10,6 +10,8 @@ import { canWriteInWorkspace } from "@/server/workspace-role";
 import { BoardView, type TaskCardData } from "@/components/board-view";
 import { actorFeatureOn } from "@/server/services/features";
 import { stepProgressFor } from "@/server/services/task-steps";
+import { rewardLensFor } from "@/server/services/rewards";
+import { listBadgeStatus } from "@/lib/rewards";
 import { myRunningTaskId } from "@/server/services/time-tracking";
 import { recurringTaskIds } from "@/server/services/task-recurrence";
 
@@ -76,6 +78,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
   // «الوقت شغّال» on the card of the task the person's own timer runs on
   const runningTaskId = await myRunningTaskId(actor);
 
+  const lens = await rewardLensFor(actor, board.project.workspace.id);
   // «🔁 متكررة» on the cards: one read for the whole board, and only while the company's switch is on
   const recurring = (await actorFeatureOn(actor, "recurringTasks")) ? await recurringTaskIds(tasks.map((t) => t.id)) : new Set<string>();
 
@@ -92,6 +95,11 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     commentCount: t._count.comments,
     completed: t.completedAt != null,
     steps: progress.get(t.id),
+    // «مهمة بمكافأة» / «تثبيت»: for a viewer who may see them, while the company's switch is on
+    reward: lens.rewards && listBadgeStatus(t.rewardStatus) && t.rewardAmountMinor != null && t.rewardCurrency
+      ? { status: t.rewardStatus as string, amountMinor: t.rewardAmountMinor, currency: t.rewardCurrency }
+      : null,
+    pinned: lens.pins && t.pinnedAt != null,
     running: t.id === runningTaskId,
     recurring: recurring.has(t.id),
   }));
