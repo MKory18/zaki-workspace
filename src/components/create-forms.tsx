@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { goHref } from "@/lib/space-link";
+import { layoutOf } from "@/lib/cards/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { useI18n as useT } from "@/lib/i18n";
@@ -10,6 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 
 function useCreate<T>({ path, onDone }: { path: string; onDone?: (data: T) => void }) {
@@ -62,6 +64,8 @@ export function WorkspaceCreateModal({
       organizationId: String(fd.get("organizationId")),
       name: String(fd.get("name")),
       description: String(fd.get("description") || "") || undefined,
+      // «نوع المساحة»: a general space, or one made of «لوحات» only
+      layout: layoutOf(fd.get("layout")),
     });
   }
 
@@ -89,6 +93,14 @@ export function WorkspaceCreateModal({
         <div>
           <Label>{t("ws.desc")}</Label>
           <Textarea name="description" rows={2} maxLength={2000} />
+        </div>
+        <div>
+          <Label>{t("cards.space_type")}</Label>
+          <Select name="layout" defaultValue="STANDARD">
+            <option value="STANDARD">{t("cards.space_type.STANDARD")}</option>
+            <option value="CARDS">{t("cards.space_type.CARDS")}</option>
+            <option value="MANUFACTURING">{t("cards.space_type.MANUFACTURING")}</option>
+          </Select>
         </div>
         {error ? <p className="text-xs text-danger">{t(error)}</p> : null}
         <Button type="submit" disabled={mutation.isPending} className="w-full">

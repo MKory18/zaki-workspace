@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { pageActor } from "@/app/(app)/_access";
 import { FirstStepsCard } from "@/components/guide/first-steps-card";
 import { GuideCard } from "@/components/guide/guide-card";
@@ -12,6 +13,7 @@ import { getToday } from "@/server/services/today";
 import { getTodayDashboard } from "@/server/services/today-dashboard";
 import { currentSpace } from "@/server/services/current-space";
 import { missionOf } from "@/lib/today";
+import { opensOnCards } from "@/lib/cards/shared";
 
 /** The browser tab says «اليوم» (the root layout adds the app name). */
 export const metadata = { title: getServerT().t("today.title") };
@@ -38,6 +40,8 @@ export default async function TodayPage() {
   const { actor } = await pageActor();
   // the space the person is in: its «اليوم» only (entering a space opens here)
   const space = await currentSpace(actor);
+  // a space of «لوحات» opens on its cards (decided here, on the server; the sidebar is not touched)
+  if (opensOnCards(space?.layout)) redirect("/cards");
   const [data, dashboard] = await Promise.all([
     getToday(actor, { spaceId: space?.id ?? null }),
     // the smart cards: numbers over the same space, from their own service call (a guest gets none)

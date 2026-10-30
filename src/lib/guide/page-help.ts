@@ -173,6 +173,14 @@ export const PAGE_HELP: readonly PageHelp[] = [
     article: "ideas-goals",
   },
   {
+    id: "cards",
+    pattern: "/cards",
+    whatKey: "guide.page.cards.what",
+    nextKey: "guide.page.cards.next",
+    guestNextKey: "guide.page.cards.next_guest",
+    tour: "shell",
+  },
+  {
     id: "ideas",
     pattern: "/ideas",
     whatKey: "guide.page.ideas.what",
