@@ -9,6 +9,7 @@ import { writeSystemMessage } from "@/server/chat/system";
 import type { ConversationDto, MemberDto, MessageDto, ReaderDto } from "@/server/chat/dto";
 import { presentMessage, previewOf, type Viewer } from "@/server/chat/redact";
 import { messageInclude, dmStatusFor } from "@/server/chat/messages";
+import { isFeatureOn } from "@/server/services/features";
 import type { Prisma } from "@prisma/client";
 
 /** ---------- create topic ---------- */
@@ -407,6 +408,8 @@ export async function conversationDetail(
             conv.members.filter((m) => m.userId !== ctx.userId && !ownerIds.has(m.userId)).map((m) => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl, lastReadAt: m.lastReadAt })),
           ),
     oldestId: hasOlder ? (messages[0]?.id ?? null) : null,
+    // the company's switch, so the log draws the shape it is set to (the words of a message never change)
+    chatBubbles: await isFeatureOn(ctx.orgId, "chatBubbles"),
   };
 }
 

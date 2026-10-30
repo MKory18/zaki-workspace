@@ -9,10 +9,10 @@
 ## What this answers
 
 1. **Where does a job live?** — the folder map (§2).
-2. **Who may call this door, and what does it call?** — all 148 routes, one row each (§4).
+2. **Who may call this door, and what does it call?** — all 150 routes, one row each (§4).
 3. **If I change a service, what breaks?** — every service and its callers (§6).
 4. **If I change a table, who writes it?** — every model and the code that writes it (§7).
-5. **If I flip a switch, what disappears?** — the seven feature switches and every place that reads them (§8).
+5. **If I flip a switch, what disappears?** — the 12 feature switches and every place that reads them (§8).
 
 ## 1. The layers
 
@@ -45,13 +45,13 @@ Two rules the code keeps, and a reviewer can check by reading the map:
 | Where | Job |
 |---|---|
 | `src/app/(app)/` | the signed-in screens: one folder per place (today, boards, chat, crm, …) |
-| `src/app/api/` | 148 route handlers — the only mutating surface (§4) |
+| `src/app/api/` | 150 route handlers — the only mutating surface (§4) |
 | `src/app/login`, `register`, `onboarding`, `go` | the doors that work without a session |
 | `src/components/` | the interface, grouped by feature; `shell/` is the frame, `ui/` the primitives |
 | `src/lib/` | pure helpers that run on both sides: `i18n/`, `format.ts`, `features.ts`, `nav/`, `themes/` |
 | `src/server/` | everything that may only run on the server |
 | `src/server/policy/` | who may do what: ranks, capabilities, the section grid, conversation and call rules |
-| `src/server/services/` | 48 services — the business rules (§6) |
+| `src/server/services/` | 49 services — the business rules (§6) |
 | `src/server/chat/`, `calls/`, `files/`, `watch/`, `realtime/` | the larger features, split out of `services/` |
 | `prisma/` | the schema and the additive-only migrations |
 | `worker/` | a heartbeat placeholder: no scheduled job runs today |
@@ -87,7 +87,7 @@ writes to the database itself, instead of through a service, is marked with ‡ 
 **Service imports** are the functions the handler imports from `server/services/*` — the door itself
 is often one of them.
 
-Doors in use: `activeOrgCtx` 71 · `requireActor` 20 · `requireTeamWork` 13 · `requireUser` 10 · `requireWorkspace` 8 · `(none)` 6 · `requireAccountsActor` 5 · `crmContext` 4 · `ideaAccessCtx` 4 · `directoryContext` 3 · `currentUser` 1 · `ideasCtx` 1 · `requireOrgMember` 1 · `requireTaskAccess` 1.
+Doors in use: `activeOrgCtx` 71 · `requireActor` 20 · `requireTeamWork` 13 · `requireUser` 10 · `requireWorkspace` 8 · `(none)` 6 · `requireAccountsActor` 5 · `crmContext` 4 · `ideaAccessCtx` 4 · `directoryContext` 3 · `requireTaskAccess` 3 · `currentUser` 1 · `ideasCtx` 1 · `requireOrgMember` 1.
 
 | Method | Path | Door | Service imports |
 |---|---|---|---|
@@ -179,7 +179,7 @@ Doors in use: `activeOrgCtx` 71 · `requireActor` 20 · `requireTeamWork` 13 · 
 | POST | `/api/integrations/telegram/sync` | activeOrgCtx | `integrations`: activeOrgCtx<br>`guest-guard`: assertNotGuest<br>`telegram`: syncUpdates |
 | GET, POST | `/api/labels` | requireWorkspace ‡ | — |
 | GET, PATCH | `/api/me` | requireUser | `users`: updateProfile |
-| POST, DELETE | `/api/me/avatar` | requireActor | `avatars`: clearAvatar, setAvatar, AVATAR_MAX_BYTES |
+| POST, DELETE | `/api/me/avatar` | requireActor | `avatars`: clearAvatar, setAvatar, AVATAR_MAX_BYTES<br>`features`: assertFeatureOn |
 | POST | `/api/me/digits` | requireUser ‡ | — |
 | POST | `/api/me/password` | requireUser | `onboarding`: changeOwnPassword |
 | POST | `/api/me/theme` | requireUser ‡ | — |
@@ -195,7 +195,7 @@ Doors in use: `activeOrgCtx` 71 · `requireActor` 20 · `requireTeamWork` 13 · 
 | POST | `/api/organizations/[id]/members/[userId]/logout` | requireAccountsActor | `accounts`: logoutEverywhere, requireAccountsActor |
 | POST | `/api/organizations/[id]/members/[userId]/password` | requireAccountsActor | `accounts`: requireAccountsActor, resetAccountPassword |
 | POST | `/api/organizations/[id]/members/[userId]/status` | requireAccountsActor | `accounts`: accountStatusSchema, requireAccountsActor, setAccountStatus |
-| GET | `/api/presence` | requireActor | `guest-guard`: assertNotGuest<br>`presence-roster`: presenceRoster |
+| GET | `/api/presence` | requireActor | `guest-guard`: assertNotGuest<br>`features`: assertFeatureOn<br>`presence-roster`: presenceRoster |
 | GET | `/api/production` | requireActor | `production`: dayChecklist, dayIso<br>`guest-guard`: assertNotGuest<br>`space-place`: placeOf |
 | POST | `/api/production/checklist` | requireActor | `production`: setRoutineDone |
 | GET, POST | `/api/production/routines` | requireActor | `production`: createRoutine, listRoutines, routineSchema<br>`guest-guard`: assertNotGuest<br>`space-place`: placeOf |
@@ -218,6 +218,8 @@ Doors in use: `activeOrgCtx` 71 · `requireActor` 20 · `requireTeamWork` 13 · 
 | POST, GET | `/api/tasks/[id]/comments` | requireTeamWork ‡ | `n8n`: dispatchEvent |
 | PATCH, DELETE | `/api/tasks/[id]/comments/[commentId]` | requireTeamWork ‡ | — |
 | POST | `/api/tasks/[id]/complete` | requireTeamWork | `tasks`: setTaskCompletion<br>`n8n`: dispatchEvent |
+| GET, POST | `/api/tasks/[id]/links` | requireTaskAccess | `features`: assertFeatureOn<br>`task-links`: addTaskLink, listTaskLinks |
+| DELETE | `/api/tasks/[id]/links/[linkId]` | requireTaskAccess | `features`: assertFeatureOn<br>`task-links`: removeTaskLink |
 | POST | `/api/tasks/[id]/move` | requireTeamWork | `tasks`: moveTask<br>`n8n`: dispatchEvent |
 | PATCH, DELETE | `/api/tickets/[id]` | activeOrgCtx | `integrations`: activeOrgCtx<br>`tickets`: deleteTicket, updateTicket, updateTicketSchema |
 | PATCH, DELETE | `/api/tickets/[id]/comments/[commentId]` | activeOrgCtx | `integrations`: activeOrgCtx<br>`tickets`: deleteTicketComment, editTicketComment, ticketCommentSchema |
@@ -242,7 +244,7 @@ Doors in use: `activeOrgCtx` 71 · `requireActor` 20 · `requireTeamWork` 13 · 
 
 ## 5. Routes with no guard — and why that is correct
 
-Six of 148. Each one is a door that cannot have a session, or one that is closed.
+Six of 150. Each one is a door that cannot have a session, or one that is closed.
 
 | Route | Why it has no guard |
 |---|---|
@@ -266,7 +268,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `integrations` | 180 | 79 | Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. |
 | `current-space` | 123 | 41 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
 | `guest-guard` | 30 | 37 | Org GUESTs are external partners (for example the factory): they see only what is shared with them, never write business data, and never see prices or the staff directory. |
-| `features` | 48 | 20 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
+| `features` | 48 | 26 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
 | `team-scope` | 149 | 16 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
 | `tasks` | 459 | 14 | no header comment — exports `TASK_INCLUDE`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, `moveTask`, … |
 | `n8n` | 294 | 9 | Events we allow orgs to forward to n8n — the UI shows exactly this list. |
@@ -300,6 +302,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `onboarding` | 88 | 2 | The one-time onboarding every account goes through (the owner creates accounts with a temporary password and nobody has accepted the transparency notice yet): choose your own pa… |
 | `org-members` | 196 | 2 | Organization members: the rank rules of account management and the roster. |
 | `orgs` | 154 | 2 | no header comment — exports `JOIN_CODE_ALPHABET`, `generateJoinCode`, `registrationOpen`, `registerOrganization`, `canManageOrg` |
+| `task-links` | 170 | 2 | «التبعيات» — the links between two tasks (the owner, 2026-10-30: the table existed and nothing wrote it). |
 | `timeline` | 76 | 2 | Microsoft-Project-style timeline data for one project: dated tasks become bars, milestones become diamonds, undated tasks are reported separately. |
 | `analytics` | 66 | 1 | Numbers behind the analytics page. |
 | `calendar` | 62 | 1 | The calendar's data logic, taken out of the page so it can be tested with an injected `now`. |
@@ -358,6 +361,7 @@ to be added to, and the places a bug can leave the row half-written.
 | `TaskCounter` | 1 | `server/services/tasks.ts`: 1 |
 | `Task` | 9 | `server/services/tasks.ts`: 5<br>`server/chat/make-work.ts`: 1<br>`server/services/accounts.ts`: 1<br>`server/services/space-delete.ts`: 1<br>+1 more |
 | `Label` | 1 | `app/api/labels/route.ts`: 1 |
+| `TaskDependency` | 2 | `server/services/task-links.ts`: 2 |
 | `TaskComment` | 3 | `app/api/tasks/[id]/comments/[commentId]/route.ts`: 2<br>`app/api/tasks/[id]/comments/route.ts`: 1 |
 | `TaskActivity` | 7 | `server/services/tasks.ts`: 4<br>`app/api/tasks/[id]/comments/route.ts`: 1<br>`server/activity.ts`: 1<br>`server/services/accounts.ts`: 1 |
 | `Notification` | 7 | `server/notify.ts`: 2<br>`app/api/notifications/[id]/route.ts`: 1<br>`app/api/notifications/read/route.ts`: 1<br>`server/chat/notify.ts`: 1<br>+2 more |
@@ -373,7 +377,6 @@ to be added to, and the places a bug can leave the row half-written.
 | `PendingRegistration` | 4 | `server/services/registration.ts`: 4 |
 
 `TaskLabel` has no direct write of its own: it is filled only through a nested write on `Task.labels` in `server/services/tasks.ts` — counted here so a change there is read as a change here.
-⚠️ **Nothing writes `TaskDependency` — not a route, not a service, not the seed, not a nested write.** The table was created by the first migration and has never held a row: a feature that was not built. 🔧 Keep the table (additive-only) and either build the feature or stop selecting it in Phase E.
 
 ## 8. Feature switches → where they are read
 
@@ -382,21 +385,25 @@ before it. A switch is only honest if something reads it, so this is the list of
 
 | Switch | Places that read it |
 |---|---|
-| `watch` | 27 — `app/(app)/watch/[id]/page.tsx`, `app/(app)/watch/page.tsx`, `app/api/watch/[id]/end/route.ts`, `app/api/watch/[id]/remote/route.ts`, `app/api/watch/[id]/route.ts`, `app/api/watch/route.ts`, `components/calls/call-room.tsx`, `components/shell/nav-icons.tsx`, `components/shell/new-wheel.tsx`, `components/watch/watch-comments.tsx`, `components/watch/watch-home.tsx`, `components/watch/watch-player.tsx`, `components/watch/watch-room.tsx`, `components/whiteboard/whiteboard-screen.tsx`, `lib/guide/page-help.ts`, `lib/i18n/dict.ts`, `lib/nav/new-actions.ts`, `lib/nav/places.ts`, `lib/watch/convert.ts`, `lib/watch/source.ts`, `server/chat/make-work.ts`, `server/chat/purge.ts`, `server/policy/capabilities.ts`, `server/policy/watch.ts`, `server/realtime/emit.ts`, `server/services/watch.ts`, `server/watch/title.ts` |
-| `sectionPermissions` | 2 — `server/policy/capabilities.ts`, `server/policy/section-grid.ts` |
-| `libraryDrive` | 2 — `lib/i18n/dict.ts`, `server/services/google.ts` |
+| `watch` | 12 — `app/(app)/watch/[id]/page.tsx`, `app/(app)/watch/page.tsx`, `app/api/watch/[id]/end/route.ts`, `app/api/watch/[id]/remote/route.ts`, `app/api/watch/[id]/route.ts`, `app/api/watch/route.ts`, `components/watch/watch-home.tsx`, `lib/guide/page-help.ts`, `lib/nav/new-actions.ts`, `lib/nav/places.ts`, `lib/watch/source.ts`, `server/policy/capabilities.ts` |
+| `sectionPermissions` | 1 — `server/policy/section-grid.ts` |
+| `libraryDrive` | 1 — `server/services/google.ts` |
 | `pushEverything` | 1 — `server/notify.ts` |
 | `chatRowMenu` | 2 — `server/chat/home.ts`, `server/chat/purge.ts` |
 | `callNoiseFilter` | 1 — `server/calls/calls.ts` |
-| `instantWork` | 4 — `app/api/instant/route.ts`, `app/api/instant/ticket/route.ts`, `components/instant-work.tsx`, `server/services/instant-work.ts` |
-| `milestones` | 12 — `app/(app)/projects/[id]/page.tsx`, `app/(app)/projects/[id]/timeline/page.tsx`, `app/(app)/tasks/[id]/page.tsx`, `app/api/milestones/[id]/route.ts`, `app/api/projects/[id]/milestones/route.ts`, `components/milestones-card.tsx`, `components/task-detail.tsx`, `components/timeline-gantt.tsx`, `lib/i18n/dict.ts`, `server/services/accounts.ts`, `server/services/milestones.ts`, `server/services/timeline.ts` |
+| `instantWork` | 3 — `app/api/instant/route.ts`, `app/api/instant/ticket/route.ts`, `server/services/instant-work.ts` |
+| `avatars` | 2 — `app/(app)/profile/page.tsx`, `app/api/me/avatar/route.ts` |
+| `peopleDock` | 1 — `app/api/presence/route.ts` |
+| `chatBubbles` | 1 — `server/chat/topics.ts` |
+| `taskLinks` | 3 — `app/(app)/tasks/[id]/page.tsx`, `app/api/tasks/[id]/links/[linkId]/route.ts`, `app/api/tasks/[id]/links/route.ts` |
+| `milestones` | 5 — `app/(app)/projects/[id]/page.tsx`, `app/(app)/tasks/[id]/page.tsx`, `app/api/milestones/[id]/route.ts`, `app/api/projects/[id]/milestones/route.ts`, `server/services/milestones.ts` |
 
 ## 9. What this map noticed
 
 Written down, not fixed: Phase E decides what becomes a PR. Every item was read in the code, not guessed.
 
-- **Every guarded route asks a guard — none compares a role name.** 142 of 148 routes open with a function from §3; the other 6 are the doors listed in §5.
+- **Every guarded route asks a guard — none compares a role name.** 144 of 150 routes open with a function from §3; the other 6 are the doors listed in §5.
 - **Two doors carry most of the traffic.** `activeOrgCtx()` and `requireActor()` are the first call of 91 routes; both re-read the membership and its status from the database on every request, so a suspension takes effect on the next call, not on the next sign-in.
-- **16 route handlers write to the database themselves instead of calling a service.** 9 of them write their own `audit()` row (`/api/auth/login`, `/api/boards`, `/api/boards/[id]/columns`, `/api/boards/[id]/columns/[columnId]`, `/api/labels`, `/api/organizations/[id]`, `/api/projects`, `/api/projects/[id]`, `/api/workspaces/[id]`); one writes a task-feed row instead (`/api/tasks/[id]/comments`); 6 write neither (`/api/boards/[id]`, `/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read`, `/api/tasks/[id]/comments/[commentId]`); 4 of those are one person's own preference (`/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read`), which is right; the 2 left (`/api/boards/[id]`, `/api/tasks/[id]/comments/[commentId]`) are the ones Phase E looks at. Nothing is silently lost today, but *who may, what is logged and what is notified* lives in the handler, not in one place. No screen file writes directly: every write comes through `/api`.
+- **16 route handlers write to the database themselves instead of calling a service.** 10 of them write their own `audit()` row (`/api/auth/login`, `/api/boards`, `/api/boards/[id]`, `/api/boards/[id]/columns`, `/api/boards/[id]/columns/[columnId]`, `/api/labels`, `/api/organizations/[id]`, `/api/projects`, `/api/projects/[id]`, `/api/workspaces/[id]`); 2 write a task-feed row instead (`/api/tasks/[id]/comments`, `/api/tasks/[id]/comments/[commentId]`); 4 write neither (`/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read`); 4 of those are one person's own preference (`/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read`), which is right. Nothing is silently lost today, but *who may, what is logged and what is notified* lives in the handler, not in one place. No screen file writes directly: every write comes through `/api`.
 - **14 models are written from more than three files** — see §7 for the list. Those are where a new invariant has to be added more than once, and where a half-written row is possible if one caller forgets a field.
 

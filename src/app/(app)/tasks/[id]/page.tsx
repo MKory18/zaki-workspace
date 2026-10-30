@@ -2,11 +2,11 @@ import { notFound, redirect } from "next/navigation";
 import { pageUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { actorCanWork, requireActor } from "@/server/policy/actor";
+import { actorFeatureOn } from "@/server/services/features";
 import { SectionOffNotice } from "@/app/(app)/_access";
 import { keepInSpace } from "@/server/services/current-space";
 import { loadWorkScope, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace } from "@/server/workspace-role";
-import { actorFeatureOn } from "@/server/services/features";
 import { TaskDetail } from "@/components/task-detail";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
@@ -55,6 +55,9 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   // the space's rule, and the tasks row's «يضيف ويعدّل» box of the section grid
   const canEdit = membership ? canWriteInWorkspace(membership.role, spaceRow?.role) && actorCanWork(actor, "tasks.edit") : false;
 
+  // «التبعيات»: the switch decides whether the card exists at all, and the picker offers the other
+  // tasks of the SAME space that this person may see (the team rule, not the whole company)
+  const linksOn = await actorFeatureOn(actor, "taskLinks");
   // «المعالم»: the picker on the task is drawn only while the company's switch is on, and only when the
   // task's project actually has milestones to point at
   const milestonesOn = await actorFeatureOn(actor, "milestones");
@@ -66,7 +69,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       })
     : [];
 
-  const [members, labels] = await Promise.all([
+  const [members, labels, linkCandidates] = await Promise.all([
     // the people who can be assigned: the space's members who are still ACTIVE in the company (a
     // suspended person keeps their space row so that reactivating them restores everything, but
     // they must not be offered)
@@ -83,6 +86,20 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       select: { id: true, name: true, color: true },
       orderBy: { name: "asc" },
     }),
+    // the other tasks of this space, in the same team scope the page itself was read with
+    linksOn
+      ? db.task.findMany({
+          where: {
+            workspaceId: task.workspaceId,
+            id: { not: task.id },
+            archived: false,
+            AND: [taskVisibleWhere(scope)],
+          },
+          select: { id: true, number: true, title: true, organization: { select: { keyPrefix: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 200,
+        })
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -117,6 +134,17 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       currentUserId={user.id}
       members={members.map((m) => ({ id: m.user.id, name: m.user.name }))}
       labels={labels}
+      links={
+        linksOn
+          ? {
+              candidates: linkCandidates.map((c) => ({
+                id: c.id,
+                key: `${c.organization.keyPrefix}-${c.number}`,
+                title: c.title,
+              })),
+            }
+          : null
+      }
       milestones={milestonesOn ? projectMilestones : null}
     />
   );

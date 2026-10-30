@@ -23,6 +23,7 @@ import watch from "./ar.watch.json";
 import features from "./ar.features.json";
 import libraryDrive from "./ar.library-drive.json";
 import instant from "./ar.instant.json";
+import taskLinks from "./ar.task-links.json";
 import milestones from "./ar.milestones.json";
 
 /**
@@ -58,5 +59,6 @@ export const AR: Record<string, string> = {
   ...features,
   ...libraryDrive,
   ...instant,
+  ...taskLinks,
   ...milestones,
 };

@@ -20,6 +20,7 @@ import * as remoteRoute from "@/app/api/watch/[id]/remote/route";
 import WatchPage from "@/app/(app)/watch/page";
 import { SPACE_COOKIE } from "@/server/services/current-space";
 import { actorFeatureOn, isFeatureOn } from "@/server/services/features";
+import { FEATURES } from "@/lib/features";
 import { call, db, loginAs, makeTeam, makeUser, makeWorkspace } from "./helpers";
 
 const jar = () => (globalThis as { __zkCookieJar?: Map<string, string> }).__zkCookieJar as Map<string, string>;
@@ -45,16 +46,7 @@ describe("«الميزات»: who switches", () => {
     await as(w.member.id, w.ws.id);
     const res = await call(featuresRoute.GET);
     expect(res.status).toBe(200);
-    expect(res.json?.["features"]).toEqual([
-      { key: "watch", on: true },
-      { key: "sectionPermissions", on: true },
-      { key: "libraryDrive", on: true },
-      { key: "pushEverything", on: true },
-      { key: "chatRowMenu", on: true },
-      { key: "callNoiseFilter", on: true },
-      { key: "instantWork", on: true },
-      { key: "milestones", on: true },
-    ]);
+    expect(res.json?.["features"]).toEqual(FEATURES.map((key) => ({ key, on: true })));
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
   });
 

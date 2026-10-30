@@ -3,7 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { audienceOf } from "@/lib/guide/audience";
 import { buildNav } from "@/lib/nav/places";
 import { newActionsFor } from "@/lib/nav/new-actions";
-import { featuresOff } from "@/lib/features";
+import { featuresOff, featuresOf } from "@/lib/features";
 import { db } from "@/server/db";
 import { cookies } from "next/headers";
 import { parseSidebarCookie, SIDEBAR_COOKIE } from "@/components/shell/sidebar-cookie";
@@ -34,6 +34,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // the person's picture, for the avatar in the side menu and the phone's top bar
   const avatarUrl = (await db.user.findUnique({ where: { id: actor.userId }, select: { avatarUrl: true } }))?.avatarUrl ?? null;
   const subject = { role: actor.role, caps: [...actor.caps], off: featuresOff(org?.settings) };
+  // the two places the shell draws that are the owner's switches (a switched-off one is not drawn at all)
+  const on = featuresOf(org?.settings);
   // the space the person is in, named at the top of every page (a space is like a separate site)
   const space = await currentSpace(actor);
   return (
@@ -50,6 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       canOverview={actor.role === "OWNER" || actor.role === "ADMIN"}
       audience={audienceOf(actor)}
       defaultCollapsed={sidebarCollapsed}
+      peopleDock={on.peopleDock}
     >
       {/* a call goes on while the person moves between pages; an incoming call rings on every page */}
       <CallProvider>

@@ -180,6 +180,8 @@ export interface ConversationDto {
   members?: MemberDto[];
   messages: MessageDto[];
   readers: ReaderDto[];
+  /** the company's «شكل الرسائل الحديث» switch, read on the server (`src/lib/features.ts`); absent: on */
+  chatBubbles?: boolean;
   /** pagination: the oldest message id on the page; pass it as `before` for the next page. */
   oldestId?: string | null;
 }

@@ -38,7 +38,7 @@ export function passwordErrorText(err: unknown, t: (key: string) => string): str
 }
 
 /** Self-service account form: the picture, then identity + job title + bio + password change. */
-export function ProfileForm({ me }: { me: MeData }) {
+export function ProfileForm({ me, withPicture = true }: { me: MeData; withPicture?: boolean }) {
   const { t } = useI18n();
   const router = useRouter();
   const { toast } = useToast();
@@ -131,7 +131,8 @@ export function ProfileForm({ me }: { me: MeData }) {
             <p className="text-sm font-semibold text-fg">{t("profile.photo")}</p>
             <p className="mt-0.5 text-xs text-fg-muted">{t("profile.photo.hint")}</p>
           </div>
-          <div className="flex items-center gap-2">
+          {withPicture ? (
+            <div className="flex items-center gap-2">
             <input
               ref={picker}
               type="file"
@@ -153,6 +154,7 @@ export function ProfileForm({ me }: { me: MeData }) {
               </Button>
             ) : null}
           </div>
+          ) : null}
         </div>
         <form onSubmit={saveProfile} className="space-y-3 rounded-xl border border-border bg-surface p-4">
           <div>
