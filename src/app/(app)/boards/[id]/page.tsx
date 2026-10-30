@@ -76,6 +76,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     dueDate: t.dueDate ? t.dueDate.toISOString() : null,
     labels: t.labels.map((l) => ({ id: l.label.id, name: l.label.name, color: l.label.color })),
     assignee: t.assignee ? { id: t.assignee.id, name: t.assignee.name } : null,
+    assigneeNames: [...(t.assignee ? [t.assignee.name] : []), ...t.coAssignees.map((r) => r.user.name)],
     commentCount: t._count.comments,
     completed: t.completedAt != null,
   }));

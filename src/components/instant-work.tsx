@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { PeopleMulti } from "@/components/ui/people-multi";
 import { errText } from "@/components/department-tickets";
 
 /**
@@ -60,7 +61,8 @@ export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; o
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [details, setDetails] = useState("");
-  const [person, setPerson] = useState("");
+  // «لمين»: one person for a ticket, one or more for a task (the first picked is the task's own assignee)
+  const [people, setPeople] = useState<string[]>([]);
   const [priority, setPriority] = useState("NORMAL");
   const [day, setDay] = useState(todayValue);
 
@@ -69,17 +71,17 @@ export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; o
     try {
       let asked = false;
       if (kind === "task") {
-        const res = await apiPost<{ task: { requested?: boolean } }>("/api/instant/task", { title: title.trim(), description: details.trim() || null, assigneeId: person, priority, dueDate: dueOf(day) });
+        const res = await apiPost<{ task: { requested?: boolean } }>("/api/instant/task", { title: title.trim(), description: details.trim() || null, assigneeIds: people, priority, dueDate: dueOf(day) });
         asked = res.task.requested === true;
       } else {
-        await apiPost("/api/instant/ticket", { title: title.trim(), description: details.trim() || null, assigneeId: person, priority });
+        await apiPost("/api/instant/ticket", { title: title.trim(), description: details.trim() || null, assigneeId: people[0], priority });
       }
       // a person of a higher rank was ASKED, not assigned (task-assign.ts)
       toast(t(asked ? "taskreq.created" : kind === "task" ? "instant.task.sent" : "instant.ticket.sent"), "success");
       setOpen(false);
       setTitle("");
       setDetails("");
-      setPerson("");
+      setPeople([]);
       setPriority("NORMAL");
       setDay(todayValue());
       onSent?.();
@@ -94,7 +96,7 @@ export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; o
   if (!info?.[kind]) return null;
   const label = t(kind === "task" ? "instant.task.button" : "instant.ticket.button");
   const minTitle = kind === "ticket" ? 3 : 1;
-  const ready = title.trim().length >= minTitle && person !== "";
+  const ready = title.trim().length >= minTitle && people.length > 0;
 
   return (
     <>
@@ -121,20 +123,35 @@ export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; o
               minLength={minTitle}
               maxLength={kind === "ticket" ? 200 : 280}
             />
-            <label className="block space-y-1 text-xs">
-              <span className="font-medium text-fg">{t("instant.field.person")}</span>
-              <Select value={person} onChange={(e) => setPerson(e.target.value)} required>
-                <option value="">{t("instant.field.pick")}</option>
-                {info.people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {kind === "task" && p.request ? `${p.name} · ${t("taskreq.tag")}` : p.name}
-                  </option>
-                ))}
-              </Select>
-              {kind === "task" && info.people.find((p) => p.id === person)?.request ? (
-                <span className="block text-fg-muted">{t("taskreq.hint")}</span>
-              ) : null}
-            </label>
+            {kind === "task" ? (
+              <div className="space-y-1 text-xs">
+                <span className="block font-medium text-fg">{t("instant.field.people")}</span>
+                <PeopleMulti
+                  people={info.people}
+                  value={people}
+                  onChange={setPeople}
+                  label={t("instant.field.people")}
+                  emptyText={t("instant.field.nobody")}
+                  requestTag={t("taskreq.tag")}
+                />
+                <span className="block text-fg-muted">{t("instant.field.peopleHint")}</span>
+                {info.people.some((p) => p.request && people.includes(p.id)) ? (
+                  <span className="block text-fg-muted">{t("taskreq.hint")}</span>
+                ) : null}
+              </div>
+            ) : (
+              <label className="block space-y-1 text-xs">
+                <span className="font-medium text-fg">{t("instant.field.person")}</span>
+                <Select value={people[0] ?? ""} onChange={(e) => setPeople(e.target.value ? [e.target.value] : [])} required>
+                  <option value="">{t("instant.field.pick")}</option>
+                  {info.people.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <label className="block space-y-1 text-xs">
                 <span className="font-medium text-fg">{t("instant.field.priority")}</span>

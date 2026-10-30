@@ -18,6 +18,7 @@ import { useI18n } from "@/lib/i18n";
 import { TaskLinks, type LinkCandidate } from "@/components/task-links";
 import { TaskAssignRequestBanner, type RequestBannerMode } from "@/components/task-assign-request-banner";
 import { errText } from "@/components/department-tickets";
+import { PeopleMulti, peopleLine } from "@/components/ui/people-multi";
 
 export interface TaskDetailData {
   id: string;
@@ -35,6 +36,8 @@ export interface TaskDetailData {
   creatorName: string;
   assigneeId: string | null;
   assigneeName: string | null;
+  /** Every person the task is for, in order (the first is `assigneeId`); absent means one person. */
+  assigneeIds?: string[];
   /** «المعلم» the task points at, if any (null when the feature is off or the task has none). */
   milestoneId?: string | null;
   milestoneName?: string | null;
@@ -50,7 +53,7 @@ export function TaskDetail({
   labels,
   links = null,
   milestones = null,
-  assignRequest = null,
+  assignRequests = [],
 }: {
   task: TaskDetailData;
   /** Whether the API would let this person change the task (see canWriteInWorkspace). */
@@ -63,8 +66,8 @@ export function TaskDetail({
   links?: { candidates: LinkCandidate[] } | null;
   /** The milestones of this task's project, or `null` when the company's «المعالم» switch is off. */
   milestones?: { id: string; name: string }[] | null;
-  /** The pending request to give this task to somebody of a higher rank, as the viewer reads it (null: none for them). */
-  assignRequest?: { mode: RequestBannerMode; fromName: string; toName: string } | null;
+  /** The pending requests to give this task to somebody of a higher rank, as the viewer reads each (none for them: not listed). */
+  assignRequests?: { id: string; mode: RequestBannerMode; fromName: string; toName: string }[];
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -73,20 +76,36 @@ export function TaskDetail({
   const [description, setDescription] = useState(task.description ?? "");
   const [priority, setPriority] = useState(task.priority);
   const [dueDate, setDueDate] = useState(task.dueDate?.slice(0, 10) ?? "");
-  const [assigneeId, setAssigneeId] = useState(task.assigneeId ?? "");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(
+    task.assigneeIds ?? (task.assigneeId ? [task.assigneeId] : []),
+  );
   const [milestoneId, setMilestoneId] = useState(task.milestoneId ?? "");
   const [selectedLabels, setSelectedLabels] = useState<string[]>(task.labelIds);
   const [commentBody, setCommentBody] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  // «فلان وفلان»: the people the task is for, read out of the same list the boxes show (never a raw id)
+  const assigneeNames =
+    peopleLine(
+      assigneeIds.map((id) => members.find((m) => m.id === id)?.name ?? "").filter(Boolean),
+      t("common.and"),
+    ) || (task.assigneeName ?? "");
+
   const save = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      apiPatch<{ task: { assignRequest?: { toUserId: string } | null } }>(`/api/tasks/${task.id}`, data),
+      apiPatch<{
+        task: {
+          assigneeId?: string | null;
+          coAssignees?: { userId: string }[];
+          assignRequest?: { toUserId: string } | null;
+          coRequests?: { toUserId: string }[];
+        };
+      }>(`/api/tasks/${task.id}`, data),
     onSuccess: (res) => {
       setError(null);
-      if (res.task.assignRequest) {
-        // somebody of a higher rank was ASKED: the task keeps the person it had until they answer
-        setAssigneeId(task.assigneeId ?? "");
+      if (res.task.assignRequest || res.task.coRequests?.length) {
+        // somebody of a higher rank was ASKED: the task keeps the people it had (and gets the others) until they answer
+        setAssigneeIds([...(res.task.assigneeId ? [res.task.assigneeId] : []), ...(res.task.coAssignees ?? []).map((r) => r.userId)]);
         toast(t("taskreq.created"), "success");
       } else {
         toast(t("task.updated"), "success");
@@ -134,10 +153,10 @@ export function TaskDetail({
   });
 
   const answer = useMutation({
-    mutationFn: (body: { accept: true } | { accept: false; reason: string }) =>
+    mutationFn: (body: { requestId: string; accept: true } | { requestId: string; accept: false; reason: string }) =>
       body.accept
-        ? apiPost(`/api/tasks/${task.id}/request/accept`, {})
-        : apiPost(`/api/tasks/${task.id}/request/return`, { reason: body.reason }),
+        ? apiPost(`/api/tasks/${task.id}/request/accept`, { requestId: body.requestId })
+        : apiPost(`/api/tasks/${task.id}/request/return`, { requestId: body.requestId, reason: body.reason }),
     onSuccess: (_res, body) => {
       toast(t(body.accept ? "taskreq.accepted" : "taskreq.returned"), "success");
       router.refresh();
@@ -154,7 +173,9 @@ export function TaskDetail({
     if (description !== (task.description ?? "")) patch.description = description || null;
     if (priority !== task.priority) patch.priority = priority;
     if (dueDate !== (task.dueDate?.slice(0, 10) ?? "")) patch.dueDate = dueDate || null;
-    if (assigneeId !== (task.assigneeId ?? "")) patch.assigneeId = assigneeId || null;
+    // «لمين»: the whole list, the first is the primary — one person works exactly like before
+    const before = task.assigneeIds ?? (task.assigneeId ? [task.assigneeId] : []);
+    if (assigneeIds.join(",") !== before.join(",")) patch.assigneeIds = assigneeIds;
     if (milestoneId !== (task.milestoneId ?? "")) patch.milestoneId = milestoneId || null;
     if (JSON.stringify(selectedLabels) !== JSON.stringify(task.labelIds))
       patch.labelIds = selectedLabels;
@@ -170,16 +191,17 @@ export function TaskDetail({
         {canEdit ? null : <span className="ms-auto text-xs text-muted">{t("task.readOnly")}</span>}
       </header>
 
-      {assignRequest ? (
+      {assignRequests.map((r) => (
         <TaskAssignRequestBanner
-          mode={assignRequest.mode}
-          fromName={assignRequest.fromName}
-          toName={assignRequest.toName}
+          key={r.id}
+          mode={r.mode}
+          fromName={r.fromName}
+          toName={r.toName}
           busy={answer.isPending}
-          onAccept={() => answer.mutate({ accept: true })}
-          onReturn={(reason) => answer.mutate({ accept: false, reason })}
+          onAccept={() => answer.mutate({ requestId: r.id, accept: true })}
+          onReturn={(reason) => answer.mutate({ requestId: r.id, accept: false, reason })}
         />
-      ) : null}
+      ))}
 
       <Card>
         <CardBody className="space-y-4">
@@ -202,23 +224,22 @@ export function TaskDetail({
                 <User className="h-3 w-3" /> {t("task.assignee")}
               </span>
               {canEdit ? (
-                <Select
-                  value={assigneeId}
-                  onChange={(e) => {
-                    setAssigneeId(e.target.value);
-                    save.mutate({ assigneeId: e.target.value || null });
-                  }}
-                  className="h-8"
-                >
-                  <option value="">{t("list.unassigned")}</option>
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.request ? `${m.name} · ${t("taskreq.tag")}` : m.name}
-                    </option>
-                  ))}
-                </Select>
+                <div className="space-y-1">
+                  <PeopleMulti
+                    people={members}
+                    value={assigneeIds}
+                    onChange={(next) => {
+                      setAssigneeIds(next);
+                      save.mutate({ assigneeIds: next });
+                    }}
+                    label={t("task.assignee")}
+                    emptyText={t("instant.field.nobody")}
+                    requestTag={t("taskreq.tag")}
+                  />
+                  <span className="block text-xs text-fg-muted">{t("task.assigneesHint")}</span>
+                </div>
               ) : (
-                <p className="text-sm text-fg">{task.assigneeName ?? t("list.unassigned")}</p>
+                <p className="text-sm text-fg">{assigneeNames || t("list.unassigned")}</p>
               )}
               {canEdit && members.some((m) => m.request) ? (
                 <p className="mt-1 text-xs text-fg-muted">{`${t("taskreq.tag")}: ${t("taskreq.hint")}`}</p>

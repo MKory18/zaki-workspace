@@ -132,10 +132,15 @@ export async function listOrgMembers(actor: Pick<Actor, "userId" | "orgId" | "ro
   });
   const ids = rows.map((r) => r.user.id);
 
-  const [tasks, tickets, routines, links, orgSpaces, mine] = await Promise.all([
+  const [tasks, tickets, routines, coTasks, links, orgSpaces, mine] = await Promise.all([
     db.task.groupBy({ by: ["assigneeId"], where: { ...openTaskWhere(orgId), assigneeId: { in: ids } }, _count: { _all: true } }),
     db.ticket.groupBy({ by: ["assigneeId"], where: { ...openTicketWhere(orgId), assigneeId: { in: ids } }, _count: { _all: true } }),
     db.routine.groupBy({ by: ["assigneeId"], where: { ...activeRoutineWhere(orgId), assigneeId: { in: ids } }, _count: { _all: true } }),
+    // «لمين» with more than one person: the tasks a person holds beside their primary are theirs to count too
+    db.taskCoAssignee.findMany({
+      where: { userId: { in: ids }, task: { ...openTaskWhere(orgId) } },
+      select: { userId: true },
+    }),
     db.workspaceMember.findMany({
       where: { userId: { in: ids }, workspace: { organizationId: orgId } },
       select: { userId: true, role: true, workspace: { select: { id: true, name: true } } },
@@ -151,6 +156,7 @@ export async function listOrgMembers(actor: Pick<Actor, "userId" | "orgId" | "ro
       if (g.assigneeId) openWork.set(g.assigneeId, (openWork.get(g.assigneeId) ?? 0) + g._count._all);
     }
   }
+  for (const row of coTasks) openWork.set(row.userId, (openWork.get(row.userId) ?? 0) + 1);
   const visible = mine === null ? null : new Set(mine);
   const spacesOf = new Map<string, RosterMember["workspaces"]>();
   for (const link of links) {
