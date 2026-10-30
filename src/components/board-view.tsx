@@ -28,6 +28,8 @@ import { peopleLine } from "@/components/ui/people-multi";
 import { PRIORITY_STYLES, fmtDMY, fmtRelative, isOverdue } from "@/lib/format";
 import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 import { useToast } from "@/components/ui/toast";
+import { StepProgressChip } from "@/components/task-steps/step-progress";
+import type { StepProgress } from "@/lib/task-steps";
 
 export interface ColumnData {
   id: string;
@@ -50,6 +52,8 @@ export interface TaskCardData {
   assigneeNames?: string[];
   commentCount: number;
   completed: boolean;
+  /** «٣ من ٥»: the task's checklist progress; absent when it has no steps or the company's «الخطوات» switch is off. */
+  steps?: StepProgress;
 }
 
 interface BoardViewProps {
@@ -434,6 +438,7 @@ function TaskCardContent({ task }: { task: TaskCardData }) {
             {task.commentCount}
           </span>
         ) : null}
+        <StepProgressChip progress={task.steps} />
       </div>
     </div>
   );

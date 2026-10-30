@@ -464,6 +464,8 @@ model ChatMessage {
   attachments   MessageAttachment[]
   // the tasks and tickets made from this message
   tasks         Task[]              @relation("MessageTasks")
+  // «ذكّرني» on this message (src/server/services/reminders.ts)
+  reminders     Reminder[]
   tickets       Ticket[]            @relation("MessageTickets")
 
   @@unique([authorId, clientId])
@@ -1105,6 +1107,9 @@ model Task {
   dependencies TaskDependency[] @relation("Task")
   blocksTask   TaskDependency[] @relation("BlockedTask")
   assignRequests TaskAssignRequest[]
+  // «خطوات»: the short checklist of the task; «ذكّرني»: the reminders people set on it (both die with the task)
+  steps          TaskStep[]
+  reminders      Reminder[]
   // Made from a chat message («اعمل منها مهمة»): the message it came from.
   sourceMessageId String?
   sourceMessage   ChatMessage? @relation("MessageTasks", fields: [sourceMessageId], references: [id], onDelete: SetNull)
@@ -1117,6 +1122,67 @@ model Task {
   @@index([assigneeId])
   @@index([creatorId])
   @@index([dueDate])
+}
+
+/// «خطوات»: the short checklist inside a task (the owner, 2026-10-30). One row per step; `position` is fractional like the
+/// rest of the code (a move writes ONE row). Whoever may edit the task may edit its steps; `doneById` is who ticked it.
+/// No foreign key to the people on purpose (the same as `Notification`): the step is history and outlives a person's row;
+/// it dies with its task.
+model TaskStep {
+  id        String    @id @default(cuid())
+  orgId     String
+  taskId    String
+  title     String
+  done      Boolean   @default(false)
+  doneById  String?
+  doneAt    DateTime?
+  position  Decimal   @db.Decimal(22, 10)
+  createdAt DateTime  @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, position])
+}
+
+enum ReminderRepeat {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ReminderStatus {
+  PENDING
+  FIRED
+  DISMISSED
+}
+
+/// «ذكّرني»: a person's reminder for THEMSELVES (never for somebody else), on a task, on a chat message, or on its own.
+/// The in-app job runner (src/server/jobs/) claims a due PENDING row once (`UPDATE ... WHERE status = 'PENDING'`),
+/// writes the bell notification, and a repeating one is re-armed in the same transaction (`dueAt` moves to the next
+/// occurrence in the company's zone, `status` goes back to PENDING). `snoozedUntil` is the next due time while snoozed
+/// (`dueAt` is moved too: the runner only reads `dueAt`). No foreign key to the person (history, like `Notification`).
+model Reminder {
+  id           String         @id @default(cuid())
+  orgId        String
+  userId       String
+  title        String
+  dueAt        DateTime
+  repeat       ReminderRepeat @default(NONE)
+  taskId       String?
+  messageId    String?
+  status       ReminderStatus @default(PENDING)
+  firedAt      DateTime?
+  snoozedUntil DateTime?
+  createdAt    DateTime       @default(now())
+
+  task    Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  message ChatMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([status, dueAt])
+  @@index([userId, status])
+  @@index([taskId])
+  @@index([messageId])
 }
 
 /// Giving a task to somebody of a HIGHER rank is a request, not an assignment (the owner's rule, 2026-10-30): the task

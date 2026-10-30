@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { AR } from "@/lib/i18n/dict";
 import { featureOn } from "@/lib/features";
 import { goHref } from "@/lib/space-link";
@@ -85,6 +86,39 @@ export async function pushNotification(input: {
     },
   });
   pushOut([input.userId], input);
+}
+
+/**
+ * The same bell row, written on the CALLER's transaction (the reminder runner: the claim, the re-arming and the notice
+ * are one commit, so a reminder that fired always has its notice and never has two). The person must already be known to
+ * be ACTIVE and `organizationId` must be given. Returns the Web Push, to be called AFTER the transaction commits.
+ */
+export async function pushNotificationInTx(
+  tx: Prisma.TransactionClient,
+  input: {
+    userId: string;
+    type: string;
+    title: string;
+    body?: string | null;
+    taskId?: string | null;
+    linkUrl?: string | null;
+    workspaceId?: string | null;
+    organizationId: string;
+  },
+): Promise<() => void> {
+  await tx.notification.create({
+    data: {
+      userId: input.userId,
+      type: input.type,
+      title: input.title,
+      body: input.body ?? null,
+      taskId: input.taskId ?? null,
+      linkUrl: input.linkUrl ?? null,
+      workspaceId: input.workspaceId ?? null,
+      organizationId: input.organizationId,
+    },
+  });
+  return () => pushOut([input.userId], input);
 }
 
 /** The company a space belongs to (null when there is no space). One small read, and the answer is missed nowhere. */

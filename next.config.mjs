@@ -83,6 +83,9 @@ const nextConfig = {
         crypto: false,
         child_process: false,
         os: false,
+        // reached through instrumentation → job runner → reminders → notify → Web Push (`web-push`, `jws`): Node-only.
+        // The Edge pass only (the browser bundle keeps its own fallbacks for these).
+        ...(isEdge ? { stream: false, http: false, https: false, http2: false, zlib: false } : {}),
       };
     }
     return config;

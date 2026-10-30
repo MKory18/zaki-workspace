@@ -390,6 +390,8 @@ export async function conversationDetail(
       canCall: (await memberCan(ctx, "calls.edit", { spaceGuestsPass: true })) === true,
       canMakeTask: (await memberCan(ctx, "tasks.edit")) === true,
       canMakeTicket: (await memberCan(ctx, "tickets.edit")) === true,
+      // «ذكّرني» on a message: the company's switch, and never in silent oversight (a reminder is his own trace; he joins first)
+      canRemind: !(org!.role === "OWNER" && !facts.viewerIsMember) && (await isFeatureOn(ctx.orgId, "reminders")),
       canMentionAll: facts.kind === "TOPIC" && org!.role !== "GUEST" && canPost(facts, org!, { ownerJoined: facts.viewerIsMember }),
       canPoll: facts.kind === "TOPIC" && org!.role !== "GUEST" && canPost(facts, org!, { ownerJoined: facts.viewerIsMember }),
       id: ctx.userId,

@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -57,6 +57,12 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // the floating quick chat in the corner of the shell (src/components/shell/quick-chat.tsx): off, the button is not
   // drawn; the chat itself and every message already sent are untouched
   quickChat: true,
+  // «خطوات» inside a task (src/server/services/task-steps.ts): off, the card is not drawn, the little «3 من 5» on the
+  // cards is gone and the routes answer «not found»; the steps already written stay and come back with the switch
+  taskSteps: true,
+  // «ذكّرني» (src/server/services/reminders.ts): off, no «ذكّرني» button, no «تذكيراتي» card, the routes answer «not found»
+  // and the job runner fires nothing; the reminders already set wait and are due again when the switch is back on
+  reminders: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

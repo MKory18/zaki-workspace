@@ -1,0 +1,24 @@
+{
+  "steps.title": "الخطوات",
+  "steps.hint": "قسّم المهمة لخطوات صغيرة، وعلّم كل وحدة لما تخلص.",
+  "steps.progress": "{done} من {total}",
+  "steps.progress_aria": "تقدّم الخطوات: {done} من {total}",
+  "steps.empty": "ما في خطوات بعد.",
+  "steps.add_placeholder": "أضف خطوة…",
+  "steps.add": "أضف",
+  "steps.tick_aria": "علّم الخطوة كمنجزة: {title}",
+  "steps.untick_aria": "ألغِ إنجاز الخطوة: {title}",
+  "steps.name_aria": "اسم الخطوة",
+  "steps.up": "انقل الخطوة لفوق",
+  "steps.down": "انقل الخطوة لتحت",
+  "steps.remove": "احذف الخطوة",
+  "steps.readonly": "بتقدر تقرا الخطوات بس، ما بتقدر تعدّلها.",
+  "steps.failed": "تعذّر حفظ التغيير، حاول من جديد.",
+
+  "step.not_found": "الخطوة غير موجودة.",
+  "step.title_empty": "اكتب عنوان الخطوة.",
+  "step.title_long": "عنوان الخطوة طويل: الحد الأقصى 200 حرف.",
+  "step.too_many": "بلغت المهمة الحد الأقصى من الخطوات (100 خطوة).",
+  "step.oversight_readonly": "أنت تقرأ هذه المهمة بصمت ولا يمكنك تعديل خطواتها.",
+  "step.nothing": "لا يوجد ما يُغيَّر."
+}

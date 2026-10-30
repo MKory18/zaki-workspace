@@ -14,6 +14,8 @@ import { getTodayDashboard } from "@/server/services/today-dashboard";
 import { currentSpace } from "@/server/services/current-space";
 import { missionOf } from "@/lib/today";
 import { opensOnCards } from "@/lib/cards/shared";
+import { actorFeatureOn } from "@/server/services/features";
+import { MyRemindersCard } from "@/components/reminders/my-reminders-card";
 
 /** The browser tab says «اليوم» (the root layout adds the app name). */
 export const metadata = { title: getServerT().t("today.title") };
@@ -48,6 +50,9 @@ export default async function TodayPage() {
     getTodayDashboard(actor, { space: space ? { id: space.id, kind: space.kind } : null }),
   ]);
 
+  // «تذكيراتي»: a compact card of the person's own reminders, only while the company's «ذكّرني» switch is on
+  const remindersOn = await actorFeatureOn(actor, "reminders");
+
   const name = data.greeting.firstName;
   const greeting = data.greeting.period === "morning" ? t("today.greeting.morning", { name }) : t("today.greeting.evening", { name });
 
@@ -63,6 +68,7 @@ export default async function TodayPage() {
         </div>
         <div className="flex min-w-0 flex-col gap-4 lg:w-80 lg:shrink-0">
           <GuideCard />
+          {remindersOn ? <MyRemindersCard /> : null}
           {data.pulse ? <TeamPulse pulse={data.pulse} /> : null}
           <ActiveProjects projects={data.projects} isExternal={data.isExternal} />
         </div>

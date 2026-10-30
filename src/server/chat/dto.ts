@@ -208,6 +208,8 @@ export interface ConversationDto {
     /** with `canMakeWork`: the tasks / tickets row's «يضيف ويعدّل» box (absent: yes) */
     canMakeTask?: boolean;
     canMakeTicket?: boolean;
+    /** may set a reminder for himself on a message (the «ذكّرني» switch is on; not in silent oversight) */
+    canRemind?: boolean;
     /** may write «@الكل» here: a topic, not a guest, and may post */
     canMentionAll?: boolean;
     /** may start a poll here: a topic, not a guest, and may post */
