@@ -13,6 +13,7 @@ import { peopleLine } from "@/components/ui/people-multi";
 import { cn } from "@/lib/utils";
 import { StepProgressChip } from "@/components/task-steps/step-progress";
 import type { StepProgress } from "@/lib/task-steps";
+import { PinMark, RewardBadge, type RewardBadgeData } from "@/components/rewards/reward-badge";
 
 import Link from "next/link";
 export interface RowTask {
@@ -34,6 +35,10 @@ export interface RowTask {
   dueDay?: string | null;
   /** «٣ من ٥»: the checklist progress; absent when the task has no steps or the «الخطوات» switch is off. */
   steps?: StepProgress;
+  /** «مهمة بمكافأة»: only for a viewer who may see rewards (a partner's rows carry none). */
+  reward?: { status: string; amountMinor: number; currency: string } | null;
+  /** «تثبيت»: when it was pinned (absent: not pinned, or the switch is off). */
+  pinnedAt?: Date | string | null;
 }
 
 export interface RowMember {
@@ -156,6 +161,8 @@ export function TaskRow({
           </span>
         ) : null}
         <StepProgressChip progress={task.steps} />
+        {task.pinnedAt ? <PinMark /> : null}
+        <RewardBadge reward={task.reward as RewardBadgeData | null | undefined} />
       </Link>
 
       <span

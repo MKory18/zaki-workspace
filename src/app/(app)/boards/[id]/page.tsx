@@ -10,6 +10,8 @@ import { canWriteInWorkspace } from "@/server/workspace-role";
 import { BoardView, type TaskCardData } from "@/components/board-view";
 import { actorFeatureOn } from "@/server/services/features";
 import { stepProgressFor } from "@/server/services/task-steps";
+import { rewardLensFor } from "@/server/services/rewards";
+import { listBadgeStatus } from "@/lib/rewards";
 
 /**
  * A board opens for whoever may open its space (`accessibleWorkspaceIds`: a row in the space, or the owner) and is
@@ -72,6 +74,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
   // «٣ من ٥» on the cards: one grouped read for the whole board, and only while the company's switch is on
   const progress = (await actorFeatureOn(actor, "taskSteps")) ? await stepProgressFor(tasks.map((t) => t.id)) : new Map();
 
+  const lens = await rewardLensFor(actor, board.project.workspace.id);
   const taskData: TaskCardData[] = tasks.map((t) => ({
     id: t.id,
     key: `${org?.keyPrefix ?? "ZW"}-${t.number}`,
@@ -85,6 +88,11 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     commentCount: t._count.comments,
     completed: t.completedAt != null,
     steps: progress.get(t.id),
+    // «مهمة بمكافأة» / «تثبيت»: for a viewer who may see them, while the company's switch is on
+    reward: lens.rewards && listBadgeStatus(t.rewardStatus) && t.rewardAmountMinor != null && t.rewardCurrency
+      ? { status: t.rewardStatus as string, amountMinor: t.rewardAmountMinor, currency: t.rewardCurrency }
+      : null,
+    pinned: lens.pins && t.pinnedAt != null,
   }));
 
   return (
