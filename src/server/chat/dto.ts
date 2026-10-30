@@ -156,6 +156,10 @@ export interface HomeDto {
   rowMenu?: boolean;
   /** «حذف نهائي» of any topic or chat with everything in it: the OWNER's, while the menu is on. */
   canPurge?: boolean;
+  /** The lists (`space:<id>`, the DM list's own scope) that have the person's own saved order. */
+  ordered?: string[];
+  /** The scope the person's private chats are ordered under (`dm` or `dm:<spaceId>`). */
+  dmScope?: string;
 }
 
 export interface MemberDto {
