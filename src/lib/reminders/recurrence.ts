@@ -101,3 +101,70 @@ export function parseDueInput(text: string, timeZone: string): Date | null {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// «مهمة متكررة» — the rule of a repeating TASK, on the same clock (the company's zone, wall-clock time, month ends).
+//
+// A reminder repeats from the instant it last fired; a task series repeats from a RULE that stands on its own, so a
+// weekday set, the 31st and a leap day never drift (a monthly «31» is the 28th in February and the 31st again in March;
+// a yearly «29 شباط» is the 28th in a common year and the 29th again in the next leap year).
+// ---------------------------------------------------------------------------------------------------------------------
+
+export type RecurrenceRule =
+  | { kind: "DAILY"; time: string }
+  | { kind: "WEEKLY"; /** 0 is the first day of the week of the JavaScript Date, 6 the last (the screen lays them out from the weekend) */ days: number[]; time: string }
+  | { kind: "MONTHLY"; /** 1..31; a month without that day uses its last day */ day: number; time: string }
+  | { kind: "YEARLY"; month: number; day: number; time: string };
+
+/** `HH:mm` → hour and minute (a malformed time is noon, the hour a plain due date has). */
+function clockOf(time: string): { hour: number; minute: number } {
+  const m = /^(\d{2}):(\d{2})$/.exec(time);
+  const hour = m ? Number(m[1]) : 12;
+  const minute = m ? Number(m[2]) : 0;
+  return hour > 23 || minute > 59 ? { hour: 12, minute: 0 } : { hour, minute };
+}
+
+/** Does the calendar day `y-m-d` (weekday `wd`) belong to the rule? */
+function dayMatches(rule: RecurrenceRule, y: number, m: number, d: number, wd: number): boolean {
+  switch (rule.kind) {
+    case "DAILY":
+      return true;
+    case "WEEKLY":
+      return rule.days.includes(wd);
+    case "MONTHLY":
+      return d === Math.min(rule.day, daysInMonth(y, m));
+    case "YEARLY":
+      return m === rule.month && d === Math.min(rule.day, daysInMonth(y, m));
+  }
+}
+
+/** The rule's instant on the calendar day that is `k` days from the zone's date of `from`, or null when the day is not one. */
+function ruleInstantOn(rule: RecurrenceRule, from: Date, k: number, timeZone: string): Date | null {
+  const p = zonedParts(from, timeZone);
+  const u = new Date(Date.UTC(p.year, p.month - 1, p.day + k));
+  const [y, m, d] = [u.getUTCFullYear(), u.getUTCMonth() + 1, u.getUTCDate()];
+  if (!dayMatches(rule, y, m, d, u.getUTCDay())) return null;
+  const { hour, minute } = clockOf(rule.time);
+  return zonedWallTime({ year: y, month: m, day: d, hour, minute }, timeZone);
+}
+
+/** Far enough for every rule: a yearly one is at most 366 days away. */
+const RULE_HORIZON_DAYS = 800;
+
+/** The first occurrence of the rule STRICTLY AFTER `after`, at the rule's wall-clock time in the company's zone. */
+export function ruleOccurrenceAfter(rule: RecurrenceRule, timeZone: string, after: Date): Date | null {
+  for (let k = 0; k < RULE_HORIZON_DAYS; k++) {
+    const at = ruleInstantOn(rule, after, k, timeZone);
+    if (at && at.getTime() > after.getTime()) return at;
+  }
+  return null;
+}
+
+/** The last occurrence of the rule AT OR BEFORE `until` (what a runner that was down catches up to: one, never all). */
+export function ruleOccurrenceAtOrBefore(rule: RecurrenceRule, timeZone: string, until: Date): Date | null {
+  for (let k = 0; k > -RULE_HORIZON_DAYS; k--) {
+    const at = ruleInstantOn(rule, until, k, timeZone);
+    if (at && at.getTime() <= until.getTime()) return at;
+  }
+  return null;
+}
