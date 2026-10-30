@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -87,6 +87,11 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // /owner/assistant and /api/owner-assistant answer «not found» for everybody, the owner included; the saved settings and
   // conversations stay and come back with the switch. It reads the board, so it also needs «لوحة المالك» on.
   ownerAssistant: false,
+  // «الرسائل بدون نت» (src/lib/chat/outbox/): a message that cannot be sent because the network is gone is kept in the browser,
+  // shown as «بانتظار الإرسال» and sent again by itself (in order, once, even if the first try did reach the server), and what is
+  // typed and not sent is kept per conversation. Off: sending fails with an error and the text stays in the box, as before; the
+  // messages already waiting stay in the browser and are sent when the switch is back on
+  chatOutbox: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

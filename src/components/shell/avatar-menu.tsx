@@ -1,5 +1,6 @@
 "use client";
 
+import { clearAllOutboxes } from "@/lib/chat/outbox/registry";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
@@ -78,7 +79,9 @@ export function AvatarMenu({
 
   const logout = useMutation({
     mutationFn: () => apiPost("/api/auth/logout"),
-    onSuccess: () => {
+    onSuccess: async () => {
+      // nothing of this person stays queued in the browser for the next one to sign in (src/lib/chat/outbox/)
+      await clearAllOutboxes();
       window.location.href = "/login";
     },
     onError: () => toast(t("common.error"), "error"),
