@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { AttachmentDto, MessageDto, ReactionDto, SystemMeta } from "./dto";
 import { attachmentView } from "./attachments";
+import { presentPoll, type PollRow } from "./poll-shared";
 
 export { attachmentView };
 
@@ -16,6 +17,8 @@ export type Viewer = {
   role: string;
   /** true: the viewer moderates the conversation's space (or is the org ADMIN/OWNER) */
   canModerateHere: boolean;
+  /** the viewer is a row of the conversation (the owner only where he joined); absent: not */
+  isMember?: boolean;
 };
 
 type MessageRow = {
@@ -43,6 +46,7 @@ type MessageRow = {
   notes?: { id: string; authorId: string; author: { name: string }; body: string; createdAt: Date }[];
   tasks?: { id: string }[];
   tickets?: { id: string }[];
+  poll?: PollRow | null;
 };
 
 /** Reactions grouped by emoji, oldest entry first, `mine` from the viewer's own rows. */
@@ -120,6 +124,11 @@ export function presentMessage(
     system: systemMeta(row),
   };
   if (row.videoAtSec !== null && row.videoAtSec !== undefined) dto.videoAtSec = row.videoAtSec;
+
+  // a poll: a deleted message hides it like any message (the owner reads the question in `original`)
+  if (row.kind === "POLL" && row.poll && !deleted) {
+    dto.poll = presentPoll(row.poll, { userId: viewer.userId, role: viewer.role, isMember: viewer.isMember === true, canModerateHere: viewer.canModerateHere }, row.authorId, deleted);
+  }
 
   // reply preview: a deleted parent shows the placeholder, never its text
   if (row.replyTo) {
