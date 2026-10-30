@@ -182,7 +182,7 @@ describe("the list, the board and the project", () => {
   it("the board: the card shows the badge to a member, nothing to a partner", async () => {
     const w = await world();
     await w.rewardTask("على اللوحة");
-    const board = (id: string) => html(BoardPage({ params: { id } }));
+    const board = (id: string) => html(BoardPage({ params: { id } }) as never);
     await loginAs(w.member.id);
     expect(await board(w.made.board.id)).toContain("🏆 مكافأة 150.50 دينار");
     await loginAs(w.guest.id);
@@ -195,7 +195,7 @@ describe("the list, the board and the project", () => {
     const w = await world();
     const task = await w.rewardTask("مثبّتة بالمشروع");
     await db.task.update({ where: { id: task.id }, data: { pinnedAt: new Date(), pinnedById: w.owner.id } });
-    const project = (id: string) => html(ProjectPage({ params: { id } }));
+    const project = (id: string) => html(ProjectPage({ params: { id } }) as never);
     await loginAs(w.member.id);
     const page = await project(w.made.project.id);
     expect(page).toContain('data-pinned-strip="strip"');
