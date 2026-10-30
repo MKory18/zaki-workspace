@@ -21,6 +21,8 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
     include: {
       labels: { select: { label: true } },
       assignee: { select: { id: true, name: true } },
+      // «لمين» with more than one person: the others, in the order they were picked
+      coAssignees: { select: { userId: true }, orderBy: { createdAt: "asc" } },
       creator: { select: { id: true, name: true } },
       organization: { select: { keyPrefix: true } },
       milestone: { select: { id: true, name: true } },
@@ -119,6 +121,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
         creatorName: task.creator.name,
         assigneeId: task.assigneeId,
         assigneeName: task.assignee?.name ?? null,
+        assigneeIds: [...(task.assigneeId ? [task.assigneeId] : []), ...task.coAssignees.map((r) => r.userId)],
         milestoneId: task.milestoneId,
         milestoneName: task.milestone?.name ?? null,
         labelIds: task.labels.map((l) => l.label.id),

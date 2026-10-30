@@ -16,6 +16,7 @@ import { columnLabel, enumLabel, enumOptions } from "@/lib/i18n/enums";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 import { TaskLinks, type LinkCandidate } from "@/components/task-links";
+import { PeopleMulti, peopleLine } from "@/components/ui/people-multi";
 
 export interface TaskDetailData {
   id: string;
@@ -33,6 +34,8 @@ export interface TaskDetailData {
   creatorName: string;
   assigneeId: string | null;
   assigneeName: string | null;
+  /** Every person the task is for, in order (the first is `assigneeId`); absent means one person. */
+  assigneeIds?: string[];
   /** «المعلم» the task points at, if any (null when the feature is off or the task has none). */
   milestoneId?: string | null;
   milestoneName?: string | null;
@@ -67,11 +70,20 @@ export function TaskDetail({
   const [description, setDescription] = useState(task.description ?? "");
   const [priority, setPriority] = useState(task.priority);
   const [dueDate, setDueDate] = useState(task.dueDate?.slice(0, 10) ?? "");
-  const [assigneeId, setAssigneeId] = useState(task.assigneeId ?? "");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(
+    task.assigneeIds ?? (task.assigneeId ? [task.assigneeId] : []),
+  );
   const [milestoneId, setMilestoneId] = useState(task.milestoneId ?? "");
   const [selectedLabels, setSelectedLabels] = useState<string[]>(task.labelIds);
   const [commentBody, setCommentBody] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // «فلان وفلان»: the people the task is for, read out of the same list the boxes show (never a raw id)
+  const assigneeNames =
+    peopleLine(
+      assigneeIds.map((id) => members.find((m) => m.id === id)?.name ?? "").filter(Boolean),
+      t("common.and"),
+    ) || (task.assigneeName ?? "");
 
   const save = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -130,7 +142,9 @@ export function TaskDetail({
     if (description !== (task.description ?? "")) patch.description = description || null;
     if (priority !== task.priority) patch.priority = priority;
     if (dueDate !== (task.dueDate?.slice(0, 10) ?? "")) patch.dueDate = dueDate || null;
-    if (assigneeId !== (task.assigneeId ?? "")) patch.assigneeId = assigneeId || null;
+    // «لمين»: the whole list, the first is the primary — one person works exactly like before
+    const before = task.assigneeIds ?? (task.assigneeId ? [task.assigneeId] : []);
+    if (assigneeIds.join(",") !== before.join(",")) patch.assigneeIds = assigneeIds;
     if (milestoneId !== (task.milestoneId ?? "")) patch.milestoneId = milestoneId || null;
     if (JSON.stringify(selectedLabels) !== JSON.stringify(task.labelIds))
       patch.labelIds = selectedLabels;
@@ -167,23 +181,21 @@ export function TaskDetail({
                 <User className="h-3 w-3" /> {t("task.assignee")}
               </span>
               {canEdit ? (
-                <Select
-                  value={assigneeId}
-                  onChange={(e) => {
-                    setAssigneeId(e.target.value);
-                    save.mutate({ assigneeId: e.target.value || null });
-                  }}
-                  className="h-8"
-                >
-                  <option value="">{t("list.unassigned")}</option>
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </Select>
+                <div className="space-y-1">
+                  <PeopleMulti
+                    people={members}
+                    value={assigneeIds}
+                    onChange={(next) => {
+                      setAssigneeIds(next);
+                      save.mutate({ assigneeIds: next });
+                    }}
+                    label={t("task.assignee")}
+                    emptyText={t("instant.field.nobody")}
+                  />
+                  <span className="block text-xs text-fg-muted">{t("task.assigneesHint")}</span>
+                </div>
               ) : (
-                <p className="text-sm text-fg">{task.assigneeName ?? t("list.unassigned")}</p>
+                <p className="text-sm text-fg">{assigneeNames || t("list.unassigned")}</p>
               )}
             </div>
             <div>
