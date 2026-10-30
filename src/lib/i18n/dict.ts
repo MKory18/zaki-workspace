@@ -30,6 +30,7 @@ import profileCard from "./ar.profile-card.json";
 import cards from "./ar.cards.json";
 import navOrder from "./ar.nav-order.json";
 import taskRequests from "./ar.task-requests.json";
+import quickChat from "./ar.quick-chat.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
@@ -71,4 +72,5 @@ export const AR: Record<string, string> = {
   ...cards,
   ...navOrder,
   ...taskRequests,
+  ...quickChat,
 };

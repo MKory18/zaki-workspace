@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -54,6 +54,9 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // at his screen (the people dock, the member pills of a conversation); he still sees himself. OFF (the default): as
   // before. Only what is DRAWN changes: whether he receives a notification still follows his real presence.
   ownerHiddenOnline: false,
+  // the floating quick chat in the corner of the shell (src/components/shell/quick-chat.tsx): off, the button is not
+  // drawn; the chat itself and every message already sent are untouched
+  quickChat: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {
