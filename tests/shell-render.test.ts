@@ -126,12 +126,12 @@ describe("the frame for the owner, on a project page", () => {
 
   it("the bottom bar (phone) holds the six places, in order, each linking to its landing page", () => {
     const bar = bottomBar(html);
-    expect(hrefs(bar)).toEqual(["/", "/chat", "/my-work", "/files", "/members", "/watch"]);
-    for (const key of ["nav.place.today", "nav.place.chat", "nav.place.work", "nav.place.library", "nav.place.admin", "nav.place.watch"]) expect(bar, key).toContain(AR[key] as string);
+    expect(hrefs(bar)).toEqual(["/", "/chat", "/my-work", "/files", "/watch", "/members"]);
+    for (const key of ["nav.place.today", "nav.place.chat", "nav.place.work", "nav.place.library", "nav.place.watch", "nav.place.admin"]) expect(bar, key).toContain(AR[key] as string);
   });
 
   it("the side menu (computer) holds the same six places", () => {
-    expect(hrefs(sidebarPlaces(html))).toEqual(["/", "/chat", "/my-work", "/files", "/members", "/watch"]);
+    expect(hrefs(sidebarPlaces(html))).toEqual(["/", "/chat", "/my-work", "/files", "/watch", "/members"]);
   });
 
   it("both are in the page and CSS shows one: the bottom bar below md, the side menu from md", () => {
@@ -181,6 +181,17 @@ describe("the frame for the owner, on a project page", () => {
     expect(aside.split(">")[0]).toContain("zk-side-rule");
   });
 
+  it("the side menu's header wears the «Z» mark beside the lettering (the owner's screenshot, 2026-10-30: «اللوجو مش موجود»)", () => {
+    const aside = sidebar(html);
+    expect(aside).toContain("data-brand-mark");
+    expect(aside).toMatch(/data-brand-mark[^>]*aria-hidden="true"[^>]*><svg[^>]*viewBox="0 0 100 100"/);
+    // the mark sits inside the link home, before the lettering
+    const open = linkTo(aside, "/");
+    const link = aside.slice(aside.indexOf(open), aside.indexOf("</a>", aside.indexOf(open)));
+    expect(link.indexOf("data-brand-mark")).toBeGreaterThan(-1);
+    expect(link.indexOf("data-brand-mark")).toBeLessThan(link.indexOf("zk-wordmark"));
+  });
+
   it("the space you are in is written where «زاكي» was, in the same lettering (the owner's ask, 2026-10-25)", () => {
     const aside = sidebar(shell("OWNER", "/my-work", { id: "w1", name: "العمل", emoji: "🛠️" }));
     expect(aside).toMatch(/<span aria-hidden="true" class="zk-wordmark[^"]*"><bdi>العمل<\/bdi><\/span>/);
@@ -201,6 +212,30 @@ describe("the frame for the owner, on a project page", () => {
   it("«دليل زاكي» waits at the bottom of the side menu", () => {
     expect(linkTo(sidebar(html), "/guide")).toMatch(/border-dashed border-accent-2/);
     expect(sidebar(html)).toContain(AR["shell.guide"]);
+  });
+
+  it("a short window: the list of places scrolls in the middle and the guide / install / fold / profile block stays pinned below it", () => {
+    const aside = sidebar(html);
+    // the menu is as tall as the window, so only the middle gives way
+    expect(aside).toMatch(/^<aside[^>]*class="[^"]*\bh-full\b[^"]*\bmin-h-0\b/);
+    const places = sidebarPlaces(html);
+    expect(places).toMatch(/^<nav[^>]*class="[^"]*\bmin-h-0\b[^"]*\bflex-1\b[^"]*\boverflow-y-auto\b/);
+    const footer = outerOf(aside, /<div[^>]*data-sidebar="footer"[^>]*>/, "div");
+    expect(footer).toMatch(/^<div[^>]*class="[^"]*\bshrink-0\b/);
+    // the block holds the guide, the install and fold buttons and the person; the list holds none of them
+    expect(hrefs(footer)).toContain("/guide");
+    expect(footer).toContain(AR["shell.sidebar.collapse"] as string);
+    expect(footer).toContain(AR["shell.avatar.open"]?.replace("{name}", USER.name) as string);
+    expect(places).not.toContain("/guide");
+    expect(places).not.toContain(AR["shell.sidebar.collapse"] as string);
+    // and it comes AFTER the list in the page, never inside it, and nothing between them can take its room
+    expect(aside.indexOf(places)).toBeGreaterThanOrEqual(0);
+    expect(aside.indexOf(footer)).toBeGreaterThan(aside.indexOf(places) + places.length - 1);
+    // «الإدارة» is the last place of that list, after «نتفرّج سوا»
+    expect(hrefs(places).slice(-2)).toEqual(["/watch", "/members"]);
+    // a window shorter than 760px takes tighter rows, so the six places fit before any scrolling
+    const source = readFileSync(path.resolve(__dirname, "../src/components/shell/sidebar.tsx"), "utf8");
+    expect(source).toContain("[@media(max-height:760px)]:h-9");
   });
 
   it("the top bar names the place but never as a heading: the page's own h1 is the only one", () => {
@@ -251,7 +286,7 @@ describe("the frame for the owner, on a project page", () => {
     expect(html).toMatch(/<main id="zk-main"[^>]*>.*محتوى الصفحة/s);
   });
 
-  it("gives every dolphin mark its own gradient id (the phone bar draws one; the side menu wears the wordmark now)", () => {
+  it("gives every «Z» mark its own gradient id (the phone bar draws one; the side menu wears the wordmark now)", () => {
     const ids = [...html.matchAll(/<linearGradient id="([^"]+)"/g)].map((m) => m[1]!);
     expect(ids.length).toBeGreaterThanOrEqual(1);
     expect(new Set(ids).size).toBe(ids.length);
@@ -263,7 +298,7 @@ describe("the frame for a plain member", () => {
   it("calls the admin place «الفريق» (its only tab) and shows no tab strip for it", () => {
     const html = shell("MEMBER", "/members");
     const bar = bottomBar(html);
-    expect(hrefs(bar)).toEqual(["/", "/chat", "/my-work", "/files", "/members", "/watch"]);
+    expect(hrefs(bar)).toEqual(["/", "/chat", "/my-work", "/files", "/watch", "/members"]);
     expect(bar).toContain(AR["nav.tab.team"]);
     expect(bar).not.toContain(AR["nav.place.admin"]);
     expect(linkTo(bar, "/members")).toContain('aria-current="page"');

@@ -9,7 +9,7 @@ import * as topicRoute from "@/app/api/chat/topics/[id]/route";
 import * as homeRoute from "@/app/api/chat/home/route";
 import { markDeliveredForUser } from "@/server/chat/read-state";
 import type { ConversationDto, HomeDto } from "@/server/chat/dto";
-import { call, db, loginAs, makeTeam, makeWorkspace } from "./helpers";
+import { call, db, loginAs, makeTeam, makeUser, makeWorkspace } from "./helpers";
 
 const send = async (conversationId: string, body: string) =>
   (await call(messagesRoute.POST, { params: { id: conversationId }, body: { body } })).json?.["id"] as string;
@@ -122,7 +122,10 @@ describe("reader avatars in a topic", () => {
 
     await loginAs(w.member.id);
     const readers = (await detail(w.topic.id)).readers;
-    expect(readers).toEqual([{ userId: w.admin.id, name: "Admin", messageId: first }]);
+    expect(readers).toEqual([{ userId: w.admin.id, name: "Admin", messageId: first, readAt: expect.any(String) }]);
+    // «who and when»: the time is the person's own read mark
+    const mark = await db.conversationMember.findUniqueOrThrow({ where: { conversationId_userId: { conversationId: w.topic.id, userId: w.admin.id } } });
+    expect(readers[0]!.readAt).toBe(mark.lastReadAt.toISOString());
     // the owner's read left no event either
     expect((await eventsOf(w.topic.id, "conversation.read")).map((ids) => ids["userId"])).toEqual([w.admin.id]);
   });
@@ -168,5 +171,49 @@ describe("the chat home's counts", () => {
     await loginAs(w.owner.id);
     const topic = (await home()).spaces.flatMap((s) => s.topics).find((t) => t.id === w.topic.id);
     expect(topic?.unread).toBe(0);
+  });
+});
+
+describe("a second owner (co-owner) is just as silent as the first", () => {
+  async function coOwnerWorld() {
+    const w = await topicWorld();
+    const co = await makeUser({ orgId: w.org.id, role: "OWNER", name: "CoOwner" });
+    await db.organizationMember.update({ where: { organizationId_userId: { organizationId: w.org.id, userId: co.id } }, data: { primaryOwner: false } });
+    return { ...w, co };
+  }
+
+  it("reading in oversight leaves no row, no event, no avatar", async () => {
+    const w = await coOwnerWorld();
+    await loginAs(w.member.id);
+    const id = await send(w.topic.id, "hi");
+    await loginAs(w.co.id);
+    expect((await read(w.topic.id, id)).status).toBe(200);
+    expect(await db.conversationMember.findUnique({ where: { conversationId_userId: { conversationId: w.topic.id, userId: w.co.id } } })).toBeNull();
+    expect(await eventsOf(w.topic.id, "conversation.read")).toEqual([]);
+    await loginAs(w.member.id);
+    expect((await detail(w.topic.id)).readers).toEqual([]);
+  });
+
+  it("a co-owner who JOINED the topic and reads still shows no avatar and sends no read event", async () => {
+    const w = await coOwnerWorld();
+    await loginAs(w.member.id);
+    const id = await send(w.topic.id, "hi");
+    await loginAs(w.co.id);
+    expect((await call(joinRoute.POST, { url: `http://localhost/api/chat/conversations/${w.topic.id}`, params: { id: w.topic.id } })).status).toBe(200);
+    expect((await read(w.topic.id, id)).status).toBe(200);
+    await loginAs(w.member.id);
+    expect((await detail(w.topic.id)).readers).toEqual([]);
+    expect(await eventsOf(w.topic.id, "conversation.read")).toEqual([]);
+  });
+
+  it("in his own DM his reading never turns the other person's ticks blue", async () => {
+    const w = await coOwnerWorld();
+    await loginAs(w.member.id);
+    const dm = await openDm(w.co.id);
+    const id = await send(dm, "hello");
+    await loginAs(w.co.id);
+    expect((await read(dm, id)).status).toBe(200);
+    await loginAs(w.member.id);
+    expect((await detail(dm)).messages.find((m) => m.id === id)?.status).not.toBe("read");
   });
 });

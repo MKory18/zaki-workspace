@@ -4,6 +4,7 @@ import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
 import { can } from "@/server/policy/capabilities";
 import { RANK } from "@/server/policy/rank";
+import { accessibleWorkspaceIds } from "@/server/services/access";
 import { avatarHue } from "@/lib/format";
 
 export interface ProfilePatch {
@@ -43,6 +44,8 @@ export interface PublicProfile {
     openTasksAssigned: number;
     tasksCompleted: number;
   };
+  /** the spaces both people are in (the owner: every space the person is in); never one the viewer may not open */
+  sharedSpaces: { id: string; name: string; emoji: string | null }[];
 }
 
 /**
@@ -125,14 +128,22 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
         });
   if (!membership) throw new ForbiddenError("insufficient_role");
 
+  // a space is like a separate site: the numbers count the work of the spaces the VIEWER may open (an idea
+  // from before spaces had them belongs to the company and counts)
+  const viewerSpaces = await accessibleWorkspaceIds(viewerId);
+  const ideaScope = { orgId: { in: staffOrgIds }, OR: [{ workspaceId: { in: viewerSpaces } }, { workspaceId: null }] };
+  const taskScope = { orgId: { in: staffOrgIds }, workspaceId: { in: viewerSpaces } };
   const stats = await Promise.all([
-    db.idea.count({ where: { creatorId: targetId, orgId: { in: staffOrgIds } } }),
-    db.ideaVote.count({
-      where: { idea: { creatorId: targetId, orgId: { in: staffOrgIds } } },
-    }),
-    db.task.count({ where: { assigneeId: targetId, orgId: { in: staffOrgIds }, completedAt: null, archived: false } }),
-    db.task.count({ where: { assigneeId: targetId, orgId: { in: staffOrgIds }, completedAt: { not: null }, archived: false } }),
+    db.idea.count({ where: { creatorId: targetId, ...ideaScope } }),
+    db.ideaVote.count({ where: { idea: { creatorId: targetId, ...ideaScope } } }),
+    db.task.count({ where: { assigneeId: targetId, ...taskScope, completedAt: null, archived: false } }),
+    db.task.count({ where: { assigneeId: targetId, ...taskScope, completedAt: { not: null }, archived: false } }),
   ]);
+  const targetSpaces = await db.workspaceMember.findMany({
+    where: { userId: targetId, workspaceId: { in: viewerSpaces }, workspace: { organizationId: { in: staffOrgIds } } },
+    select: { workspace: { select: { id: true, name: true, emoji: true } } },
+    orderBy: { workspace: { name: "asc" } },
+  });
   const votesReceived = stats[1];
 
   return {
@@ -155,6 +166,7 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
         openTasksAssigned: stats[2],
         tasksCompleted: stats[3],
       },
+      sharedSpaces: targetSpaces.map((m) => m.workspace),
     },
   };
 }

@@ -15,7 +15,9 @@ import { emitRealtime } from "@/server/realtime/emit";
 import { writeSystemMessage } from "@/server/chat/system";
 import { claimUploads, MAX_ATTACHMENTS_PER_MESSAGE } from "@/server/chat/attachments";
 import { presentMessage, previewOf, type Viewer } from "@/server/chat/redact";
-import { notifyMessageToAudience, notifyCandidates, readersAmong, rewriteMessagePreviews, DELETED_PREVIEW } from "@/server/chat/notify";
+import { cleanPollOptions, pollCreateData, pollInclude, pollInputSchema } from "@/server/chat/poll-shared";
+import { notifyMessageToAudience, notifyCandidates, readersAmong, rewriteMessagePreviews, topicAudienceIds, DELETED_PREVIEW } from "@/server/chat/notify";
+import { MENTION_ALL_ID, mentionsAll } from "@/lib/chat/conversation/mentions";
 import { FixedWindowLimiter, RateLimitedError } from "@/server/rate-limit";
 import type { Prisma } from "@prisma/client";
 import type { MessageDto } from "@/server/chat/dto";
@@ -40,6 +42,8 @@ export const sendSchema = z
     body: z.string().max(MAX_BODY).optional(),
     replyToId: z.string().min(1).max(64).optional(),
     mentions: z.array(z.string().min(1)).max(50).optional(),
+    // «@الكل»: honoured only with the word in the body, in a topic, for somebody who is not a guest
+    mentionAll: z.boolean().optional(),
     attachmentIds: z.array(z.string().min(1)).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
     clientId: z.string().min(1).max(64).optional(),
     // a voice note: exactly one recorded audio attachment (the schema used to drop this flag, so
@@ -47,6 +51,8 @@ export const sendSchema = z
     voice: z.boolean().optional(),
     // «نتفرّج سوا»: the second of the video it was written at; kept only in a watching session's topic
     videoAtSec: z.number().finite().min(0).max(86_400).optional(),
+    // «استطلاع»: the question is the body; a topic only, never with files or a voice note
+    poll: pollInputSchema.optional(),
   })
   .refine((v) => (v.body?.trim().length ?? 0) > 0 || (v.attachmentIds?.length ?? 0) > 0, {
     message: "chat.e.empty",
@@ -55,7 +61,7 @@ export const sendSchema = z
 
 export type SendInput = z.infer<typeof sendSchema>;
 
-async function guard(ctx: OrgAccessContext, conversationId: string) {
+export async function guard(ctx: OrgAccessContext, conversationId: string) {
   const [facts, org] = await Promise.all([
     loadConversationFacts(ctx.userId, conversationId),
     loadOrgFacts(ctx.userId, ctx.orgId),
@@ -66,15 +72,16 @@ async function guard(ctx: OrgAccessContext, conversationId: string) {
 }
 
 /** A viewer object for presentMessage, from the policy facts. */
-function viewerOf(facts: ConversationFacts, org: OrgFacts): Viewer {
+export function viewerOf(facts: ConversationFacts, org: OrgFacts): Viewer {
   return {
     userId: "",
     role: org.role,
     canModerateHere: canModerate(facts, org),
+    isMember: facts.viewerIsMember,
   };
 }
 
-function withViewer(viewer: Viewer, userId: string): Viewer {
+export function withViewer(viewer: Viewer, userId: string): Viewer {
   return { ...viewer, userId };
 }
 
@@ -105,7 +112,18 @@ export async function sendMessage(
     throw new ValidationError([{ path: "attachmentIds", message: "chat.e.voice_needs_one_audio" }]);
   }
 
-  const kind = input.voice === true && isVoice ? "VOICE" : "TEXT";
+  // a poll: a topic's, with 2-10 options and nothing else attached; a guest only votes, never asks
+  let pollOptions: string[] | null = null;
+  if (input.poll) {
+    if (facts.kind !== "TOPIC") throw new ForbiddenError("chat.e.poll_topic_only");
+    if (org.role === "GUEST") throw new ForbiddenError("chat.e.poll_guest");
+    if (attachments.length > 0 || input.voice === true) throw new ValidationError([{ path: "poll", message: "chat.e.poll_alone" }]);
+    if (body.length === 0) throw new ValidationError([{ path: "body", message: "chat.e.poll_question" }]);
+    pollOptions = cleanPollOptions(input.poll.options);
+    if (!pollOptions) throw new ValidationError([{ path: "poll.options", message: "chat.e.poll_options" }]);
+  }
+
+  const kind = input.poll ? "POLL" : input.voice === true && isVoice ? "VOICE" : "TEXT";
 
   // a moment of the video means something only in a «نتفرّج سوا» session's talk; anywhere else it is dropped
   const videoAtSec =
@@ -120,6 +138,10 @@ export async function sendMessage(
   // mentions must be people who may read the conversation (the policy decides, not a member row:
   // an open topic's audience is its whole space, and a row left behind by a removal counts for nothing)
   const mentionIds = await readersAmong(conversationId, [...new Set(input.mentions ?? [])]);
+  // «@الكل»: everybody the topic reaches (a guest may not, and it means nothing in a DM or a group)
+  const wantsAll = input.mentionAll === true && facts.kind === "TOPIC" && mentionsAll(body);
+  if (wantsAll && org.role === "GUEST") throw new ForbiddenError("chat.e.mention_all_denied");
+  const allIds = wantsAll ? await readersAmong(conversationId, await topicAudienceIds(facts, conversationId)) : [];
 
   // idempotent send: the same clientId of the same author returns the same message
   if (input.clientId) {
@@ -141,9 +163,10 @@ export async function sendMessage(
         body,
         kind,
         replyToId: input.replyToId ?? null,
-        mentions: mentionIds,
+        mentions: wantsAll ? [...mentionIds, MENTION_ALL_ID] : mentionIds,
         ...(input.clientId ? { clientId: input.clientId } : {}),
         ...(videoAtSec !== null ? { videoAtSec } : {}),
+        ...(input.poll && pollOptions ? { poll: { create: pollCreateData(input.poll, pollOptions) } } : {}),
       },
       include: messageInclude(),
     });
@@ -172,7 +195,7 @@ export async function sendMessage(
 
   // my own fresh DM message starts at ✓ (sent): the screen shows it from this answer before any refetch
   const dto = presentMessage(created, withViewer(viewerOf(facts, org), ctx.userId), facts.kind === "DM" ? "sent" : undefined);
-  await notifyAfterSend(ctx, facts, conversationId, mentionIds, input.replyToId ?? null, dto);
+  await notifyAfterSend(ctx, facts, conversationId, mentionIds, allIds, input.replyToId ?? null, dto);
   return dto;
 }
 
@@ -182,11 +205,12 @@ async function notifyAfterSend(
   facts: ConversationFacts,
   conversationId: string,
   mentionIds: string[],
+  allIds: string[],
   replyToId: string | null,
   dto: MessageDto,
 ): Promise<void> {
   const parent = replyToId ? await db.chatMessage.findUnique({ where: { id: replyToId }, select: { authorId: true } }) : null;
-  const audience = await readersAmong(conversationId, notifyCandidates(facts, ctx.userId, mentionIds, parent?.authorId ?? null));
+  const audience = await readersAmong(conversationId, notifyCandidates(facts, ctx.userId, [...mentionIds, ...allIds], parent?.authorId ?? null));
   const isDm = facts.kind === "DM";
   await notifyMessageToAudience({
     conversationId,
@@ -195,6 +219,8 @@ async function notifyAfterSend(
     kind: isDm ? "DM" : "TOPIC",
     title: isDm ? dto.authorName : dto.authorName,
     messageId: dto.id,
+    mentionedIds: mentionIds,
+    allIds: allIds.filter((id) => !mentionIds.includes(id)),
     preview: dto.body ? dto.body.slice(0, 140) : "أرسل مرفقًا",
   });
 }
@@ -225,6 +251,7 @@ export async function editMessage(ctx: OrgAccessContext, messageId: string, inpu
   if (msg.authorId !== ctx.userId) throw new ForbiddenError("chat.e.not_author"); // only the author edits
   if (msg.deletedAt) throw new ForbiddenError("chat.e.deleted");
   if (msg.kind === "SYSTEM") throw new ForbiddenError("chat.e.system_immutable");
+  if (msg.kind === "POLL") throw new ForbiddenError("chat.e.poll_immutable"); // people voted on these words
   if (!canRead(facts, org)) throw new NotFoundError("chat.e.not_found");
 
   const updated = await db.$transaction(async (tx) => {
@@ -361,6 +388,7 @@ export async function forwardMessage(ctx: OrgAccessContext, messageId: string, i
   const msg = await db.chatMessage.findUnique({ where: { id: messageId }, include: { conversation: { select: { id: true, orgId: true } } } });
   if (!msg || msg.orgId !== ctx.orgId) throw new NotFoundError("chat.e.not_found");
   if (msg.kind === "SYSTEM") throw new ForbiddenError("chat.e.system_immutable");
+  if (msg.kind === "POLL") throw new ForbiddenError("chat.e.poll_immutable"); // a copy would carry no votes
   const from = await guard(ctx, msg.conversationId);
   const to = await guard(ctx, input.conversationId);
   // the target must be readable AND postable by the viewer; the source must be readable
@@ -481,6 +509,7 @@ export function messageInclude() {
     notes: { orderBy: { createdAt: "asc" as const }, include: { author: { select: { name: true } } } },
     tasks: { select: { id: true } },
     tickets: { select: { id: true } },
+    poll: { include: pollInclude },
   } satisfies Prisma.ChatMessageInclude;
 }
 

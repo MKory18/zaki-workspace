@@ -25,6 +25,7 @@ import libraryDrive from "./ar.library-drive.json";
 import instant from "./ar.instant.json";
 import taskLinks from "./ar.task-links.json";
 import milestones from "./ar.milestones.json";
+import profileCard from "./ar.profile-card.json";
 import quickChat from "./ar.quick-chat.json";
 
 /**
@@ -62,5 +63,6 @@ export const AR: Record<string, string> = {
   ...instant,
   ...taskLinks,
   ...milestones,
+  ...profileCard,
   ...quickChat,
 };
