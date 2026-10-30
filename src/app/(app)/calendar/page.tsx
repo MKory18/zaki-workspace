@@ -11,6 +11,8 @@ import { CalendarGrid, type CalTask } from "@/components/calendar-grid";
 import { getServerT } from "@/lib/i18n/server";
 import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
 import { currentSpace } from "@/server/services/current-space";
+import { actorFeatureOn } from "@/server/services/features";
+import { CalendarFeedCard } from "@/components/calendar-feed/calendar-feed-card";
 
 import Link from "next/link";
 export default async function CalendarPage({
@@ -48,6 +50,8 @@ export default async function CalendarPage({
   const month = cal.month;
   const win = cal.win;
   const mine = searchParams.mine === "1";
+  // «اشتراك التقويم»: the card is drawn for the company's staff while its switch is on (an external partner has no feed)
+  const feedCard = !actor.isExternal && (await actorFeatureOn(actor, "calendarFeed"));
 
   const tasks = ctx.denied
     ? []
@@ -101,7 +105,7 @@ export default async function CalendarPage({
         </nav>
       </header>
 
-      <div className="min-h-0 flex-1 px-3 py-3">
+      <div className={`flex-1 px-3 py-3 ${feedCard ? "min-h-[32rem]" : "min-h-0"}`}>
         {ctx.denied ? (
           <p className="px-2 py-10 text-center text-sm text-muted">{t("forbidden")}</p>
         ) : (
@@ -113,6 +117,12 @@ export default async function CalendarPage({
           </div>
         )}
       </div>
+
+      {feedCard ? (
+        <div className="px-3 pb-3">
+          <CalendarFeedCard timeZone={ctx.timeZone} />
+        </div>
+      ) : null}
     </div>
   );
 }
