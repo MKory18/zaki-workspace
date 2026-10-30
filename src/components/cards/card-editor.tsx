@@ -57,6 +57,10 @@ export interface CardEditorFormProps {
   ledgerNotice?: boolean;
   /** Sends a picked file to the library of this space (the files service); tests pass their own. */
   upload?: (file: File) => Promise<UploadedFile>;
+  /** Typing kept on this device from an earlier, unfinished edit: it fills the form instead of the card's own values. */
+  draft?: Partial<CardPayload> | null;
+  /** Told (after a short pause) what the form holds, so the screen can keep it on this device. */
+  onDraft?: (payload: CardPayload) => void;
 }
 
 async function uploadToLibrary(file: File): Promise<UploadedFile> {
@@ -68,18 +72,19 @@ async function uploadToLibrary(file: File): Promise<UploadedFile> {
 
 const emptyTable = () => ({ columns: ["", ""], rows: [["", ""]] as string[][] });
 
-export function CardEditorForm({ card, initialKind = "NOTE", categories, onSave, onCancel, ledgerNotice = false, upload = uploadToLibrary }: CardEditorFormProps) {
+export function CardEditorForm({ card, initialKind = "NOTE", categories, onSave, onCancel, ledgerNotice = false, upload = uploadToLibrary, draft = null, onDraft }: CardEditorFormProps) {
   const { t } = useI18n();
   const [kind, setKind] = React.useState<CardKind>(card?.kind ?? initialKind);
-  const [title, setTitle] = React.useState(card?.title ?? "");
-  const [body, setBody] = React.useState(card?.body ?? "");
-  const [color, setColor] = React.useState<CardColor>(card?.color ?? "none");
-  const [category, setCategory] = React.useState(card?.category ?? "");
-  const [tagsText, setTagsText] = React.useState((card?.tags ?? []).join("، "));
-  const [pinned, setPinned] = React.useState(card?.pinned ?? false);
-  const [items, setItems] = React.useState<ListItem[]>(card?.data && "items" in card.data ? card.data.items : [{ text: "", done: false }]);
-  const [url, setUrl] = React.useState(card?.data && "url" in card.data ? card.data.url : "");
-  const [table, setTable] = React.useState(card?.data && "columns" in card.data ? { columns: card.data.columns, rows: card.data.rows } : emptyTable());
+  const [title, setTitle] = React.useState(draft?.title ?? card?.title ?? "");
+  const [body, setBody] = React.useState(draft?.body !== undefined ? (draft.body ?? "") : (card?.body ?? ""));
+  const [color, setColor] = React.useState<CardColor>(draft?.color ?? card?.color ?? "none");
+  const [category, setCategory] = React.useState(draft?.category !== undefined ? (draft.category ?? "") : (card?.category ?? ""));
+  const [tagsText, setTagsText] = React.useState((draft?.tags ?? card?.tags ?? []).join("، "));
+  const [pinned, setPinned] = React.useState(draft?.pinned ?? card?.pinned ?? false);
+  const startData = draft?.data !== undefined ? (draft.data as CardItem["data"]) : (card?.data ?? null);
+  const [items, setItems] = React.useState<ListItem[]>(startData && "items" in startData ? startData.items : [{ text: "", done: false }]);
+  const [url, setUrl] = React.useState(startData && "url" in startData ? startData.url : "");
+  const [table, setTable] = React.useState(startData && "columns" in startData ? { columns: startData.columns, rows: startData.rows } : emptyTable());
   const [file, setFile] = React.useState<UploadedFile | null>(card?.file && card.fileId ? { id: card.fileId, name: card.file.name, size: card.file.size } : null);
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -102,6 +107,31 @@ export function CardEditorForm({ card, initialKind = "NOTE", categories, onSave,
     }
   }
 
+  const current = (): CardPayload => ({
+    kind,
+    title: title.trim(),
+    body: body.trim() ? body : null,
+    data: kind === "LIST" ? { items: items.filter((i) => i.text.trim()) } : kind === "LINK" ? { url: url.trim() } : kind === "TABLE" ? table : null,
+    color,
+    category: category.trim() || null,
+    tags: cleanTags(tagsText.split(/[,،\n]/)),
+    pinned,
+    fileId: kind === "FILE" ? (file?.id ?? null) : null,
+  });
+
+  // the typing is kept on this device (the screen decides where) a moment after the person stops
+  const first = React.useRef(true);
+  React.useEffect(() => {
+    if (!onDraft) return;
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => onDraft(current()), 400);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, body, color, category, tagsText, pinned, items, url, table, file]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -109,21 +139,9 @@ export function CardEditorForm({ card, initialKind = "NOTE", categories, onSave,
     if (kind === "PROMPT" && !body.trim()) return setError("cards.e.prompt");
     if (kind === "LINK" && !isSafeHttpsUrl(url)) return setError("cards.e.link");
     if (kind === "FILE" && !file) return setError("cards.e.file");
-    const data =
-      kind === "LIST" ? { items: items.filter((i) => i.text.trim()) } : kind === "LINK" ? { url: url.trim() } : kind === "TABLE" ? table : null;
     setSaving(true);
     try {
-      await onSave({
-        kind,
-        title: title.trim(),
-        body: body.trim() ? body : null,
-        data,
-        color,
-        category: category.trim() || null,
-        tags: cleanTags(tagsText.split(/[,،\n]/)),
-        pinned,
-        fileId: kind === "FILE" ? (file?.id ?? null) : null,
-      });
+      await onSave(current());
     } catch (err) {
       setError(cardErrorKey(err));
       setSaving(false);

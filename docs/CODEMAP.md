@@ -9,7 +9,7 @@
 ## What this answers
 
 1. **Where does a job live?** — the folder map (§2).
-2. **Who may call this door, and what does it call?** — all 164 routes, one row each (§4).
+2. **Who may call this door, and what does it call?** — all 177 routes, one row each (§4).
 3. **If I change a service, what breaks?** — every service and its callers (§6).
 4. **If I change a table, who writes it?** — every model and the code that writes it (§7).
 5. **If I flip a switch, what disappears?** — the 13 feature switches and every place that reads them (§8).
@@ -45,13 +45,13 @@ Two rules the code keeps, and a reviewer can check by reading the map:
 | Where | Job |
 |---|---|
 | `src/app/(app)/` | the signed-in screens: one folder per place (today, boards, chat, crm, …) |
-| `src/app/api/` | 164 route handlers — the only mutating surface (§4) |
+| `src/app/api/` | 177 route handlers — the only mutating surface (§4) |
 | `src/app/login`, `register`, `onboarding`, `go` | the doors that work without a session |
 | `src/components/` | the interface, grouped by feature; `shell/` is the frame, `ui/` the primitives |
 | `src/lib/` | pure helpers that run on both sides: `i18n/`, `format.ts`, `features.ts`, `nav/`, `themes/` |
 | `src/server/` | everything that may only run on the server |
 | `src/server/policy/` | who may do what: ranks, capabilities, the section grid, conversation and call rules |
-| `src/server/services/` | 53 services — the business rules (§6) |
+| `src/server/services/` | 63 services — the business rules (§6) |
 | `src/server/chat/`, `calls/`, `files/`, `watch/`, `realtime/` | the larger features, split out of `services/` |
 | `prisma/` | the schema and the additive-only migrations |
 | `worker/` | a heartbeat placeholder: no scheduled job runs today |
@@ -87,7 +87,7 @@ writes to the database itself, instead of through a service, is marked with ‡ 
 **Service imports** are the functions the handler imports from `server/services/*` — the door itself
 is often one of them.
 
-Doors in use: `activeOrgCtx` 74 · `requireActor` 29 · `requireTeamWork` 13 · `requireUser` 10 · `requireWorkspace` 8 · `(none)` 6 · `requireAccountsActor` 5 · `requireTaskAccess` 5 · `crmContext` 4 · `ideaAccessCtx` 4 · `directoryContext` 3 · `currentUser` 1 · `ideasCtx` 1 · `requireOrgMember` 1.
+Doors in use: `activeOrgCtx` 74 · `requireActor` 42 · `requireTeamWork` 13 · `requireUser` 10 · `requireWorkspace` 8 · `(none)` 6 · `requireAccountsActor` 5 · `requireTaskAccess` 5 · `crmContext` 4 · `ideaAccessCtx` 4 · `directoryContext` 3 · `currentUser` 1 · `ideasCtx` 1 · `requireOrgMember` 1.
 
 | Method | Path | Door | Service imports |
 |---|---|---|---|
@@ -114,10 +114,23 @@ Doors in use: `activeOrgCtx` 74 · `requireActor` 29 · `requireTeamWork` 13 · 
 | GET | `/api/campaigns/mine` | activeOrgCtx | `integrations`: activeOrgCtx<br>`guest-guard`: assertNotGuest<br>`campaigns`: myCampaigns |
 | GET, POST | `/api/cards` | requireActor | `cards`: createCard, createCardSchema, listCards |
 | GET, PATCH, DELETE | `/api/cards/[id]` | requireActor | `cards`: archiveCard, readCard, updateCard, updateCardSchema |
+| GET, POST | `/api/cards/[id]/attachments` | requireActor | `card-attachments`: addAttachment, attachSchema, listGallery |
+| PATCH, DELETE | `/api/cards/[id]/attachments/[attachmentId]` | requireActor | `card-attachments`: captionSchema, removeAttachment, setCaption |
+| PUT | `/api/cards/[id]/attachments/order` | requireActor | `card-attachments`: orderSchema, reorderAttachments |
+| PUT | `/api/cards/[id]/cover` | requireActor | `card-attachments`: coverSchema, setCover |
 | POST | `/api/cards/[id]/duplicate` | requireActor | `cards`: duplicateCard |
+| GET | `/api/cards/[id]/links` | requireActor | `card-links`: listLinks |
+| GET | `/api/cards/[id]/log` | requireActor | `card-log`: listLog |
 | POST | `/api/cards/[id]/move` | requireActor | `cards`: moveCard, moveCardSchema |
+| GET, POST | `/api/cards/[id]/notes` | requireActor | `card-notes`: addNote, listNotes, noteSchema |
+| PATCH, DELETE | `/api/cards/[id]/notes/[noteId]` | requireActor | `card-notes`: deleteNote, editNote, editNoteSchema |
+| GET | `/api/cards/[id]/page` | requireActor | `card-page`: readCardPage |
+| GET, PUT | `/api/cards/[id]/rating` | requireActor | `card-ratings`: rateCard, ratingSchema, readRating |
 | POST | `/api/cards/[id]/restore` | requireActor | `cards`: restoreCard |
+| GET | `/api/cards/[id]/revisions` | requireActor | `card-revisions`: listRevisions |
+| POST | `/api/cards/[id]/revisions/[version]/restore` | requireActor † | `card-revisions`: restoreRevision, restoreSchema |
 | POST | `/api/cards/[id]/send` | requireActor | `cards`: sendCard, sendCardSchema |
+| PUT | `/api/cards/[id]/status` | requireActor | `card-status`: setCardStatus, statusSchema |
 | POST | `/api/cards/[id]/task` | requireActor | `cards`: cardTaskSchema, cardToTask |
 | GET | `/api/cards/topics` | requireActor | `cards`: postableTopics |
 | GET | `/api/chat/archive` | activeOrgCtx | `integrations`: activeOrgCtx |
@@ -258,7 +271,7 @@ Doors in use: `activeOrgCtx` 74 · `requireActor` 29 · `requireTeamWork` 13 · 
 
 ## 5. Routes with no guard — and why that is correct
 
-Six of 164. Each one is a door that cannot have a session, or one that is closed.
+Six of 177. Each one is a door that cannot have a session, or one that is closed.
 
 | Route | Why it has no guard |
 |---|---|
@@ -280,25 +293,28 @@ high count is a wide surface: changing its signature reaches all of them.
 | Service | Lines | Imported by | What it owns |
 |---|---|---|---|
 | `integrations` | 180 | 82 | Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. |
-| `current-space` | 128 | 44 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
+| `current-space` | 128 | 45 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
 | `guest-guard` | 30 | 38 | Org GUESTs are external partners (for example the factory): they see only what is shared with them, never write business data, and never see prices or the staff directory. |
 | `features` | 48 | 26 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
-| `team-scope` | 149 | 17 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
+| `team-scope` | 149 | 18 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
+| `cards` | 614 | 17 | «اللوحات» — the cards of a space. |
 | `tasks` | 489 | 15 | no header comment — exports `TASK_INCLUDE`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, `moveTask`, … |
+| `files` | 505 | 11 | no header comment — exports `fileLibrary`, `PENDING_PATH`, `PREVIEWABLE`, `INLINE_TEXT`, `logFile`, … |
 | `access` | 76 | 10 | Workspace-level isolation — the company's master switch. |
-| `cards` | 503 | 9 | «اللوحات» — the cards of a space. |
-| `files` | 505 | 9 | no header comment — exports `fileLibrary`, `PENDING_PATH`, `PREVIEWABLE`, `INLINE_TEXT`, `logFile`, … |
 | `n8n` | 294 | 9 | Events we allow orgs to forward to n8n — the UI shows exactly this list. |
 | `google` | 355 | 8 | Only the files the app itself creates (the library's): a non-sensitive scope, so Google asks for no review and the owner's published app keeps its connection. |
 | `space-place` | 30 | 8 | WHERE A SPACE'S OWN THINGS ARE READ (the owner's decision, 2026-10-25: each space is like a separate site) — for the goals, the daily routines, the customers and the opportuniti… |
 | `tickets` | 501 | 8 | IT tickets live inside a department. |
 | `workspaces` | 331 | 8 | Spaces (workspaces): who is in one, who may change it. |
 | `active-people` | 71 | 7 | "Nobody who was suspended or removed still counts." A suspended or offboarded member keeps their OrganizationMember row (history, authorship), so a query that reads that table w… |
+| `card-audit` | 36 | 7 | Every card entry of the audit log starts with this, then the `LogAction` (`card.edited`). |
+| `card-guards` | 45 | 7 | The questions the page inside a card asks about its viewer, answered in one place. |
 | `ideas` | 395 | 7 | Membership context resolved from the idea's own org (shared by API routes). |
 | `org-day` | 26 | 7 | The start of the COMPANY's today — `Organization.timezone`, never the server's clock and never the browser's. |
 | `accounts` | 859 | 6 | The account lifecycle: the owner (and, below him, whoever holds `users.manage`) creates, edits, suspends, reactivates and offboards people, resets passwords and ends sessions. |
 | `watch` | 372 | 6 | «نتفرّج سوا» — people of a space watch one link together (the owner's ask, 2026-10-26). |
 | `campaigns` | 235 | 5 | Campaigns live inside a department (marketing calendars). |
+| `card-attachments` | 124 | 5 | «المعرض»: a cover picture and an ordered gallery of pictures and files, with captions. |
 | `production` | 262 | 5 | Daily production. |
 | `teams` | 223 | 5 | TEAMS INSIDE A SPACE — who is in which team, and which project belongs to which (the reading rule is in team-scope.ts). |
 | `telegram` | 299 | 5 | Validates a bot token by calling getMe. |
@@ -312,6 +328,10 @@ high count is a wide surface: changing its signature reaches all of them.
 | `spaces-overview` | 73 | 3 | «كل المساحات» — the owner's and the admins' one look over every space they can open (the owner's decision, 2026-10-25): each space stays a separate site, and this page only coun… |
 | `task-assign` | 193 | 3 | GIVING A TASK BY RANK (the owner's decision, 2026-10-30; the pure rule is `policy/assign-rank.ts`). |
 | `avatars` | 118 | 2 | A PERSON'S PICTURE (the owner's ask, 2026-10-29: «خيار إن المستخدم يحط صورة بروفايل»). |
+| `card-notes` | 113 | 2 | «الملاحظات» (the card's thread). |
+| `card-page` | 47 | 2 | The page inside a card, as ONE read: the card, what the viewer may do on it, the stars, the gallery. |
+| `card-ratings` | 58 | 2 | «التقييم» (the first of the two systems): stars 1 to 5 from the people of the space, one per person per card, changeable. |
+| `card-revisions` | 91 | 2 | «الإصدارات»: the snapshots every saved edit left behind (written by `saveCardEdit`, never changed or removed: the table refuses an UPDATE). |
 | `goals` | 168 | 2 | no header comment — exports `periodWindow`, `goalSchema`, `goalStatus`, `listGoals`, `createGoal`, … |
 | `member-rules` | 184 | 2 | The rank rules of account management, in ONE place, as pure functions with no database and no server-only import — so the members screen can offer exactly what the server allows… |
 | `move-to-space` | 106 | 2 | «انقل لمساحة» (the plan, 2026-10-25: each space is like a separate site). |
@@ -323,6 +343,9 @@ high count is a wide surface: changing its signature reaches all of them.
 | `timeline` | 76 | 2 | Microsoft-Project-style timeline data for one project: dated tasks become bars, milestones become diamonds, undated tasks are reported separately. |
 | `analytics` | 66 | 1 | Numbers behind the analytics page. |
 | `calendar` | 62 | 1 | The calendar's data logic, taken out of the page so it can be tested with an injected `now`. |
+| `card-links` | 64 | 1 | What the card was turned into: the tasks made from it («حوّلها لمهمة») and the topic it was sent to («أرسل»). |
+| `card-log` | 89 | 1 | «السجل»: a read-only timeline made of the AuditLog rows written about this card. |
+| `card-status` | 32 | 1 | «حالة الاعتماد» (the second of the two systems): مسودة → قيد المراجعة → معتمدة → مؤرشفة, set by a moderator of the space or the OWNER. |
 | `credentials` | 64 | 1 | Account credentials as pure functions (no database): what a username may look like, the password policy, and the temporary passwords the owner hands to a new or reset account. |
 | `department-space` | 93 | 1 | EVERY DEPARTMENT HAS ITS SPACE (the owner's decision, 2026-10-25: each space is like a separate site). |
 | `first-steps` | 100 | 1 | The first-steps card («خطواتك الأولى») computed from REAL data for the signed-in actor: nothing is stored about "progress" - a step is done because the rows say so (a theme chos… |
@@ -387,7 +410,7 @@ to be added to, and the places a bug can leave the row half-written.
 | `TaskComment` | 3 | `app/api/tasks/[id]/comments/[commentId]/route.ts`: 2<br>`app/api/tasks/[id]/comments/route.ts`: 1 |
 | `TaskActivity` | 10 | `server/services/tasks.ts`: 4<br>`server/services/task-assign.ts`: 3<br>`app/api/tasks/[id]/comments/route.ts`: 1<br>`server/activity.ts`: 1<br>+1 more |
 | `Notification` | 7 | `server/notify.ts`: 2<br>`app/api/notifications/[id]/route.ts`: 1<br>`app/api/notifications/read/route.ts`: 1<br>`server/chat/notify.ts`: 1<br>+2 more |
-| `AuditLog` | 11 | `server/services/teams.ts`: 5<br>`server/chat/moderation.ts`: 2<br>`server/auth.ts`: 1<br>`server/chat/hq.ts`: 1<br>+2 more |
+| `AuditLog` | 12 | `server/services/teams.ts`: 5<br>`server/chat/moderation.ts`: 2<br>`server/auth.ts`: 1<br>`server/chat/hq.ts`: 1<br>+3 more |
 | `Idea` | 7 | `server/services/ideas.ts`: 5<br>`server/services/move-to-space.ts`: 1<br>`server/services/space-delete.ts`: 1 |
 | `IdeaVote` | 2 | `server/services/ideas.ts`: 2 |
 | `Integration` | 4 | `server/services/integrations.ts`: 2<br>`server/services/google.ts`: 1<br>`server/services/telegram.ts`: 1 |
@@ -397,7 +420,11 @@ to be added to, and the places a bug can leave the row half-written.
 | `Customer` | 5 | `server/services/crm.ts`: 3<br>`server/services/move-to-space.ts`: 1<br>`server/services/space-delete.ts`: 1 |
 | `Opportunity` | 7 | `server/services/crm.ts`: 3<br>`server/services/move-to-space.ts`: 2<br>`server/services/accounts.ts`: 1<br>`server/services/space-delete.ts`: 1 |
 | `PendingRegistration` | 4 | `server/services/registration.ts`: 4 |
-| `Card` | 6 | `server/services/cards.ts`: 6 |
+| `Card` | 8 | `server/services/cards.ts`: 6<br>`server/services/card-attachments.ts`: 1<br>`server/services/card-status.ts`: 1 |
+| `CardRevision` | 1 | `server/services/cards.ts`: 1 |
+| `CardNote` | 3 | `server/services/card-notes.ts`: 3 |
+| `CardRating` | 1 | `server/services/card-ratings.ts`: 1 |
+| `CardAttachment` | 4 | `server/services/card-attachments.ts`: 4 |
 
 `PollOption` has no direct write of its own: it is filled only through a nested write on `Poll.options` in `server/chat/poll-shared.ts` — counted here so a change there is read as a change here.
 `TaskLabel` has no direct write of its own: it is filled only through a nested write on `Task.labels` in `server/services/tasks.ts` — counted here so a change there is read as a change here.
@@ -427,8 +454,8 @@ before it. A switch is only honest if something reads it, so this is the list of
 
 Written down, not fixed: Phase E decides what becomes a PR. Every item was read in the code, not guessed.
 
-- **Every guarded route asks a guard — none compares a role name.** 158 of 164 routes open with a function from §3; the other 6 are the doors listed in §5.
-- **Two doors carry most of the traffic.** `activeOrgCtx()` and `requireActor()` are the first call of 103 routes; both re-read the membership and its status from the database on every request, so a suspension takes effect on the next call, not on the next sign-in.
+- **Every guarded route asks a guard — none compares a role name.** 171 of 177 routes open with a function from §3; the other 6 are the doors listed in §5.
+- **Two doors carry most of the traffic.** `activeOrgCtx()` and `requireActor()` are the first call of 116 routes; both re-read the membership and its status from the database on every request, so a suspension takes effect on the next call, not on the next sign-in.
 - **16 route handlers write to the database themselves instead of calling a service.** 10 of them write their own `audit()` row (`/api/auth/login`, `/api/boards`, `/api/boards/[id]`, `/api/boards/[id]/columns`, `/api/boards/[id]/columns/[columnId]`, `/api/labels`, `/api/organizations/[id]`, `/api/projects`, `/api/projects/[id]`, `/api/workspaces/[id]`); 2 write a task-feed row instead (`/api/tasks/[id]/comments`, `/api/tasks/[id]/comments/[commentId]`); 4 write neither (`/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read`); 4 of those are one person's own preference (`/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read`), which is right. Nothing is silently lost today, but *who may, what is logged and what is notified* lives in the handler, not in one place. No screen file writes directly: every write comes through `/api`.
 - **14 models are written from more than three files** — see §7 for the list. Those are where a new invariant has to be added more than once, and where a half-written row is possible if one caller forgets a field.
 

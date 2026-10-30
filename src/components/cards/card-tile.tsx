@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   Archive,
   Copy,
@@ -34,6 +35,7 @@ import {
 import { copyText } from "@/lib/cards/clipboard";
 import { isSafeHttpsUrl, type CardItem, type CardKind } from "@/lib/cards/shared";
 import { COLOR_STYLE } from "./colors";
+import { StatusBadge } from "./status-badge";
 
 /** The icon of each kind (the kind's name is always written beside it: an icon alone says nothing to a screen reader). */
 export const KIND_ICON: Record<CardKind, React.ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" | "false" }>> = {
@@ -353,7 +355,10 @@ export function CardTile({ card, density, canWrite, owner, archivedView = false,
         <Icon className="size-4 shrink-0 text-fg-muted" aria-hidden="true" />
         <span className="sr-only">{kindLabel}</span>
         {card.pinned ? <Pin className="size-4 shrink-0 text-accent" aria-label={t("cards.pinned")} /> : null}
-        <h3 dir="auto" className="min-w-0 max-w-[50%] shrink-0 truncate text-sm font-semibold text-fg sm:max-w-[40%]">{card.title}</h3>
+        <h3 dir="auto" className="min-w-0 max-w-[50%] shrink-0 truncate text-sm font-semibold text-fg sm:max-w-[40%]">
+          <Link href={`/cards/${card.id}`} className="inline-flex min-h-11 max-w-full items-center truncate hover:underline focus-visible:underline">{card.title}</Link>
+        </h3>
+        {card.status && card.status !== "DRAFT" ? <StatusBadge status={card.status} className="hidden shrink-0 md:inline-flex" /> : null}
         <span dir="auto" className="hidden min-w-0 flex-1 truncate text-xs text-fg-muted sm:block">{snippetOf(card, t)}</span>
         <span className="min-w-0 flex-1 sm:hidden" />
         {card.category ? <span className="hidden shrink-0 rounded-full border border-border bg-surface px-2 py-0.5 text-xs text-fg md:inline">{card.category}</span> : null}
@@ -371,8 +376,11 @@ export function CardTile({ card, density, canWrite, owner, archivedView = false,
             <Icon className="size-3.5 shrink-0" aria-hidden="true" />
             {kindLabel}
             {card.pinned ? <Pin className="size-3.5 shrink-0 text-accent" aria-label={t("cards.pinned")} /> : null}
+            {card.status && card.status !== "DRAFT" ? <StatusBadge status={card.status} className="ms-1" /> : null}
           </span>
-          <h3 dir="auto" className="break-words text-base font-semibold text-fg">{card.title}</h3>
+          <h3 dir="auto" className="break-words text-base font-semibold text-fg">
+            <Link href={`/cards/${card.id}`} className="inline-flex min-h-11 items-center hover:underline focus-visible:underline">{card.title}</Link>
+          </h3>
         </div>
         {menu}
       </header>

@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, Columns3, LayoutGrid, List, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { apiGet, apiPatch, apiPost, apiDelete } from "@/lib/api-client";
+import { ApiError, apiGet, apiPatch, apiPost, apiDelete } from "@/lib/api-client";
+import { browserStorage, draftKey, saveDraft } from "@/lib/cards/draft";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -174,9 +175,18 @@ export function CardsView({ spaceId, spaceName, userId, initial, canWrite, owner
     } else if (editing) {
       const { kind: _kind, ...changes } = payload;
       void _kind;
-      const { card } = await apiPatch<{ card: CardItem }>(`/api/cards/${editing.id}`, changes);
-      mutate((cs) => cs.map((c) => (c.id === card.id ? card : c)));
-      toast(t("cards.saved"), "success");
+      try {
+        // the version this editor started from: a card that moved on answers 409 and nothing is overwritten
+        const { card } = await apiPatch<{ card: CardItem }>(`/api/cards/${editing.id}`, { ...changes, version: editing.version });
+        mutate((cs) => cs.map((c) => (c.id === card.id ? card : c)));
+        toast(t("cards.saved"), "success");
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.status !== 409) throw err;
+        // the typing is kept on this device; the card's own page shows the difference and lets the person decide
+        saveDraft(browserStorage(), draftKey(userId, editing.id), { baseVersion: editing.version ?? 1, savedAt: new Date().toISOString(), payload: changes });
+        toast(t("cards.conflict_grid"), "error");
+        void refetchLive();
+      }
     }
     setEditing(null);
   }
