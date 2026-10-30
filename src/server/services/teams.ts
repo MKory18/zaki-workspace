@@ -179,6 +179,11 @@ export async function setTeamMembers(
         where: { project: { teamId }, assigneeId: { in: removed }, completedAt: null, archived: false },
         data: { assigneeId: null },
       });
+      // «لمين» with more than one person: leaving the team also drops the person from the tasks they merely
+      // shared, or they would keep work in a project they no longer see (the primary ones are freed above)
+      await tx.taskCoAssignee.deleteMany({
+        where: { userId: { in: removed }, task: { project: { teamId }, completedAt: null, archived: false } },
+      });
       unassigned = freed.count;
     }
     await tx.auditLog.create({

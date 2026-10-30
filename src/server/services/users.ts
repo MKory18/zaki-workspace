@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { spacePeopleWhere } from "@/server/chat/space-people";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
+import { assignedTo } from "@/server/services/tasks";
 import { can } from "@/server/policy/capabilities";
 import { RANK } from "@/server/policy/rank";
 import { avatarHue } from "@/lib/format";
@@ -130,8 +131,8 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
     db.ideaVote.count({
       where: { idea: { creatorId: targetId, orgId: { in: staffOrgIds } } },
     }),
-    db.task.count({ where: { assigneeId: targetId, orgId: { in: staffOrgIds }, completedAt: null, archived: false } }),
-    db.task.count({ where: { assigneeId: targetId, orgId: { in: staffOrgIds }, completedAt: { not: null }, archived: false } }),
+    db.task.count({ where: { ...assignedTo(targetId), orgId: { in: staffOrgIds }, completedAt: null, archived: false } }),
+    db.task.count({ where: { ...assignedTo(targetId), orgId: { in: staffOrgIds }, completedAt: { not: null }, archived: false } }),
   ]);
   const votesReceived = stats[1];
 
