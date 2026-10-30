@@ -19,6 +19,8 @@ export const CAPABILITIES = [
   "cash.view", // the cash custody card (data comes from the OMS)
   "penalties.view", // everybody's penalties and rewards (data comes from the OMS)
   "archive.view", // the owner's archive and "all of the company" chat view: never grantable
+  "board.self", // «لوحتي»: the person's OWN page of the owner's board (their days, tasks, steps, message counts)
+  "board.team", // «لوحة الفريق»: the board for the people of the spaces the person manages (never the owner's, never the company's totals)
   // the sections, each with «يشوف» (view), «يضيف ويعدّل» (edit) and «يحذف» (delete): the per-person grid
   "projects.view",
   "projects.edit",
@@ -120,6 +122,8 @@ export const WIRED_CAPABILITIES: readonly Capability[] = [
   "directory.view",
   "integrations.manage",
   "prices.view",
+  "board.self",
+  "board.team",
   ...SECTION_CAPABILITIES,
 ];
 
@@ -142,6 +146,7 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
   ADMIN: [
     "spaces.create",
     "users.manage",
+    "board.self",
     "directory.view",
     "crm.view",
     "crm.edit",
@@ -180,6 +185,7 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "watch.edit",
   ],
   LEAD: [
+    "board.self",
     "directory.view",
     "crm.view",
     "crm.edit",
@@ -211,6 +217,7 @@ export const RANK_DEFAULTS: Record<OrgRole, readonly Capability[]> = {
     "watch.edit",
   ],
   MEMBER: [
+    "board.self",
     "directory.view",
     "crm.view",
     "crm.edit",

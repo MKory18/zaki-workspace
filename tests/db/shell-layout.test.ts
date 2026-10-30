@@ -67,7 +67,7 @@ describe("the layout draws each person's own places", () => {
     expect(places(shell)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
     expect(tabs(shell, "work")).toEqual(WORK_ALL);
     // Phase 3: «الأرشيف» (archive.view, the owner's alone) joined the admin place
-    expect(tabs(shell, "admin")).toEqual(["team", "reports", "automation", "telegram", "settings", "archive"]);
+    expect(tabs(shell, "admin")).toEqual(["team", "board", "reports", "automation", "telegram", "settings", "archive"]);
     expect(placeOf(shell, "admin")?.labelKey).toBe("nav.place.admin");
     expect(shell.props).toMatchObject({ rank: "OWNER", isGuest: false, audience: "managers" });
     // the shell gets the three fields it draws, never the session facts (WP-ARABIC2 (g))
@@ -84,7 +84,7 @@ describe("the layout draws each person's own places", () => {
     await loginAs(admin.id);
     const shell = await frame();
     expect(places(shell)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
-    expect(tabs(shell, "admin")).toEqual(["team", "reports", "automation", "telegram", "settings"]);
+    expect(tabs(shell, "admin")).toEqual(["team", "board", "reports", "automation", "telegram", "settings"]);
     expect(shell.props).toMatchObject({ rank: "ADMIN", isGuest: false, audience: "managers" });
   });
 
@@ -93,17 +93,17 @@ describe("the layout draws each person's own places", () => {
     const lead = await makeUser({ orgId: org.id, role: "LEAD" });
     await loginAs(lead.id);
     const shell = await frame();
-    expect(tabs(shell, "admin")).toEqual(["team", "reports"]);
+    expect(tabs(shell, "admin")).toEqual(["team", "board", "reports"]);
     expect(shell.props).toMatchObject({ rank: "LEAD", audience: "staff" });
   });
 
-  it("a plain member: the admin place is «الفريق» alone; the staff guide", async () => {
+  it("a plain member: the admin place is «الفريق» and «لوحتي» (on by rank); the staff guide", async () => {
     const { member } = await makeTeam();
     await loginAs(member.id);
     const shell = await frame();
     expect(places(shell)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
     expect(tabs(shell, "work")).toEqual(WORK_ALL);
-    expect(placeOf(shell, "admin")).toMatchObject({ labelKey: "nav.tab.team", href: "/members", tabs: [{ key: "team" }] });
+    expect(placeOf(shell, "admin")).toMatchObject({ labelKey: "nav.place.admin", href: "/members", tabs: [{ key: "team" }, { key: "board", href: "/owner", labelKey: "nav.tab.boardSelf" }] });
     expect(shell.props).toMatchObject({ rank: "MEMBER", isGuest: false, audience: "staff" });
   });
 
@@ -122,7 +122,7 @@ describe("the layout draws each person's own places", () => {
     await loginAs(member.id);
     await db.organizationMember.update({
       where: { organizationId_userId: { organizationId: org.id, userId: member.id } },
-      data: { revokedCapabilities: ["directory.view", "crm.view"] },
+      data: { revokedCapabilities: ["directory.view", "crm.view", "board.self"] },
     });
     let shell = await frame();
     expect(places(shell)).toEqual(["today", "chat", "work", "library", "watch"]);
@@ -133,7 +133,7 @@ describe("the layout draws each person's own places", () => {
       data: { revokedCapabilities: [], capabilities: ["users.manage"] },
     });
     shell = await frame();
-    expect(tabs(shell, "admin")).toEqual(["team", "settings"]);
+    expect(tabs(shell, "admin")).toEqual(["team", "board", "settings"]);
     expect(placeOf(shell, "admin")?.labelKey).toBe("nav.place.admin");
     expect(shell.props.audience).toBe("managers");
   });
@@ -146,7 +146,7 @@ describe("the layout draws each person's own places", () => {
       data: { capabilities: ["users.manage"], revokedCapabilities: ["directory.view"] },
     });
     const shell = await frame();
-    expect(tabs(shell, "admin")).toEqual(["team", "settings"]);
+    expect(tabs(shell, "admin")).toEqual(["team", "board", "settings"]);
     expect(placeOf(shell, "admin")).toMatchObject({ labelKey: "nav.place.admin", href: "/members" });
     expect(shell.props.audience).toBe("managers");
   });

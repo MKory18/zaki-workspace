@@ -59,12 +59,13 @@ describe("a space of «لوحات» or «تصنيع»: «اللوحات» first,
         }
       });
 
-      it("a manager of the space gets «المساحة» among the tabs of «الإدارة»; a plain member gets «الفريق» alone", () => {
+      it("a manager of the space gets «المساحة» among the tabs of «الإدارة»; a plain member gets «الفريق» and «لوحتي»", () => {
         const manager = buildNav(who("MEMBER", { spaceManager: true, spaceLayout: layout }));
         expect(manager.places.find((p) => p.key === "admin")?.tabs.map((t) => t.key)).toContain("space");
         const member = buildNav(who("MEMBER", { spaceLayout: layout }));
         expect(keys(member)).toEqual(["cards", "admin"]);
-        expect(member.places[1]).toMatchObject({ labelKey: "nav.tab.team", href: "/members" });
+        expect(member.places[1]).toMatchObject({ labelKey: "nav.place.admin", href: "/members" });
+        expect(member.places[1]?.tabs.map((t) => t.key)).toEqual(["team", "board"]);
       });
 
       it("every other place is hidden: «اليوم» «الدردشة» «الشغل» «المكتبة» «نتفرّج سوا», for every rank", () => {
@@ -82,7 +83,8 @@ describe("a space of «لوحات» or «تصنيع»: «اللوحات» first,
       });
 
       it("a person without the directory switch has «اللوحات» alone (the admin place keeps its own rule)", () => {
-        const caps = effectiveCapabilities({ role: "MEMBER", revokedCapabilities: ["directory.view"] });
+        // «لوحتي» is on by rank, so it is switched off too: nothing else is left for the admin place
+        const caps = effectiveCapabilities({ role: "MEMBER", revokedCapabilities: ["directory.view", "board.self"] });
         expect(keys(buildNav({ role: "MEMBER", caps: [...caps], spaceLayout: layout }))).toEqual(["cards"]);
       });
 

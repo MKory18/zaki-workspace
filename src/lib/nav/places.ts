@@ -82,7 +82,8 @@ export type TabKey =
   | "automation"
   | "telegram"
   | "settings"
-  | "archive";
+  | "archive"
+  | "board";
 
 /** An icon by NAME: the shell maps it to a drawing (src/components/shell/nav-icons.tsx). Data only, so it crosses from server to browser. */
 export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings" | "watch" | "cards";
@@ -115,6 +116,10 @@ export interface TabDef {
   readonly icon?: NavIconKey;
   /** Other addresses that are this tab's pages (a board is part of a project, an old URL that moved). */
   readonly also?: readonly string[];
+  /** The owner's switch this tab is behind («الميزات»): off, the tab is gone for everybody. */
+  readonly feature?: FeatureKey;
+  /** A tab that is called differently for different people («لوحة المالك» / «لوحة الفريق» / «لوحتي»): the dictionary key for this person. */
+  readonly labelFor?: (subject: NavSubject) => string;
 }
 
 export interface PlaceDef {
@@ -199,6 +204,18 @@ export const PLACES: readonly PlaceDef[] = [
       // «تعديل المساحة» and «أعضاء المساحة», moved here from the projects page (the owner's ask, 2026-10-30): the space
       // the person is in, for whoever manages it. The flag comes from the layout (a space role is not a capability).
       { key: "space", href: "/spaces/current", labelKey: "nav.tab.space", icon: "admin", requires: { spaceManager: true } },
+      // «لوحة المالك» (the owner's ask, 2026-10-30): the owner and his partners read everything on it; a person holding
+      // `board.team` («لوحة الفريق») reads the people of the spaces they manage; `board.self` («لوحتي», on for every staff
+      // rank) reads one's own page. One tab, called by what the person may read there; every route decides again on the server.
+      {
+        key: "board",
+        href: "/owner",
+        labelKey: "nav.tab.board",
+        icon: "reports",
+        requires: { anyOf: [{ capability: "board.self" }, { capability: "board.team" }] },
+        feature: "ownerBoard",
+        labelFor: (subject) => (subject.role === "OWNER" ? "nav.tab.board" : subject.caps.includes("board.team") ? "nav.tab.boardTeam" : "nav.tab.boardSelf"),
+      },
       { key: "reports", href: "/analytics", labelKey: "nav.analytics", icon: "reports", requires: { capability: "reports.view" } },
       { key: "automation", href: "/automation", labelKey: "nav.tab.automation", icon: "automation", requires: { capability: "integrations.manage" } },
       { key: "telegram", href: "/telegram", labelKey: "nav.telegram", icon: "telegram", requires: { capability: "integrations.manage" } },
@@ -309,7 +326,7 @@ function findTab(tabKey: TabKey): { place: PlaceDef; tab: TabDef } | undefined {
  */
 export function canOpenTab(subject: NavSubject, tabKey: TabKey): boolean {
   const found = findTab(tabKey);
-  return found !== undefined && meets(found.place.requires, subject) && meets(found.tab.requires, subject);
+  return found !== undefined && meets(found.place.requires, subject) && meets(found.tab.requires, subject) && !(found.tab.feature && subject.off?.includes(found.tab.feature));
 }
 
 /**
@@ -361,19 +378,20 @@ export function buildNav(subject: NavSubject): NavModel {
   for (const def of placesFor(subject.spaceLayout)) {
     if (!meets(def.requires, subject)) continue;
     if (def.feature && subject.off?.includes(def.feature)) continue;
-    const allowed = def.tabs.filter((tab) => meets(tab.requires, subject));
+    const allowed = def.tabs.filter((tab) => meets(tab.requires, subject) && !(tab.feature && subject.off?.includes(tab.feature)));
     if (def.tabs.length > 0 && allowed.length === 0) continue;
 
     const first = allowed[0];
     const only = def.singleTabTakesLabel && allowed.length === 1 ? first : undefined;
+    const onlyLabel = only ? (only.labelFor?.(subject) ?? only.labelKey) : undefined;
     const href = !first || allowed.some((tab) => tab.href === def.href) ? (def.href ?? "/") : first.href;
 
     places.push({
       key: def.key,
       href,
-      labelKey: only?.labelKey ?? def.labelKey,
+      labelKey: onlyLabel ?? def.labelKey,
       icon: only?.icon ?? def.icon,
-      tabs: allowed.map(({ key, href: tabHref, labelKey }) => ({ key, href: tabHref, labelKey })),
+      tabs: allowed.map((tab) => ({ key: tab.key, href: tab.href, labelKey: tab.labelFor?.(subject) ?? tab.labelKey })),
     });
   }
   return { places };

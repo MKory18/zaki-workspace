@@ -295,14 +295,14 @@ describe("the frame for the owner, on a project page", () => {
 });
 
 describe("the frame for a plain member", () => {
-  it("calls the admin place «الفريق» (its only tab) and shows no tab strip for it", () => {
+  it("calls the admin place «الإدارة» (the team and «لوحتي», on by rank: two tabs) and shows the tab strip for it", () => {
     const html = shell("MEMBER", "/members");
     const bar = bottomBar(html);
     expect(hrefs(bar)).toEqual(["/", "/chat", "/my-work", "/files", "/watch", "/members"]);
-    expect(bar).toContain(AR["nav.tab.team"]);
-    expect(bar).not.toContain(AR["nav.place.admin"]);
+    expect(bar).toContain(AR["nav.place.admin"]);
     expect(linkTo(bar, "/members")).toContain('aria-current="page"');
-    expect(html).not.toContain('data-tour="tabs"');
+    expect(html).toContain('data-tour="tabs"');
+    expect(tabStrip(html)).toContain(AR["nav.tab.boardSelf"]);
   });
 
   it("on Today: Today is the current page and there is no tab strip", () => {
@@ -323,7 +323,6 @@ describe("the frame for a plain member", () => {
     expect(profile).not.toContain('data-tour="tabs"');
     const settings = shell("MEMBER", "/settings");
     expect(linkTo(bottomBar(settings), "/members")).toContain('aria-current="true"');
-    expect(settings).not.toContain('data-tour="tabs"');
   });
 
   it("the library's single tab shows no strip either", () => {

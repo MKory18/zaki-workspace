@@ -294,10 +294,12 @@ describe("capability switches: rank defaults + extras - revoked", () => {
     expect(r.get("users.manage")).toMatchObject({ on: false, rankDefault: false, customized: false });
   });
 
-  it("the OWNER may switch every wired switch of a non-guest; an ADMIN, who holds them all, too", () => {
+  it("the OWNER may switch every wired switch of a non-guest; an ADMIN, who holds them all but «لوحة الفريق» (the owner's alone to hand out), too", () => {
     const member = person({ role: "MEMBER" });
     for (const row of rows(member, actorOf("OWNER")).values()) expect(row.locked, row.capability).toBeNull();
-    for (const row of rows(member, actorOf("ADMIN")).values()) expect(row.locked, row.capability).toBeNull();
+    for (const row of rows(member, actorOf("ADMIN")).values()) {
+      expect(row.locked, row.capability).toBe(row.capability === "board.team" ? "actor_lacks" : null);
+    }
   });
 
   it("a person can hand out only what they hold: the other switches show locked", () => {
