@@ -51,6 +51,7 @@ model User {
   notifications   Notification[]
   ideas           Idea[]               @relation("IdeaCreator")
   ideaVotes       IdeaVote[]           @relation("IdeaVoter")
+  cards           Card[]               @relation("CardCreator")
   chatMemberships ConversationMember[] @relation("ChatMember")
   chatMessages    ChatMessage[]        @relation("ChatAuthor")
   chatDeletions   ChatMessage[]        @relation("ChatDeleter")
@@ -333,6 +334,7 @@ model StoredFile {
   uploader     User                @relation("FileUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
   workspace    Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   chatLinks    MessageAttachment[]
+  cards        Card[]
 
   @@index([orgId, familyId, isLatest])
   @@index([familyId])
@@ -726,6 +728,7 @@ model Organization {
   tasks            Task[]
   ideas            Idea[]
   ideaVotes        IdeaVote[]
+  cards            Card[]
   integrations     Integration[]
   conversations    Conversation[]
   IntegrationEvent IntegrationEvent[]
@@ -803,6 +806,10 @@ model Workspace {
   description    String?
   // STANDARD: made by people | DEPARTMENT: the chat of a department | HQ: the company-wide space (one per company)
   kind           WorkspaceKind @default(STANDARD)
+  // What the space is made of: STANDARD (work, chat, files ...) | CARDS (only «لوحات»: notes, prompts, lists, links, files, tables)
+  // | MANUFACTURING («تصنيع»: the same cards for now, plus the note that stock and cost numbers come from the official ledger).
+  // A plain string, not an enum: `kind` keeps its own meaning (who the space is for).
+  layout         String        @default("STANDARD")
   emoji          String?
   // The role of a system space: "hq". Unique per company, so there is exactly one HQ.
   systemKey      String?
@@ -830,6 +837,7 @@ model Workspace {
   opportunities Opportunity[]
   calls         Call[]
   watchSessions WatchSession[]
+  cards         Card[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, systemKey])
@@ -1406,4 +1414,36 @@ model PendingRegistration {
 
   @@index([email])
   @@index([createdAt])
+}
+
+/// A «لوحة» (card) of a space whose layout is CARDS (it works in any space): a note, a prompt, a list, a link, a file or a
+/// small hand-typed table. Never hard-deleted: «حذف» sets `archivedAt` and only the OWNER reads the archive.
+/// `position` is a fractional rank (one write per move). `data` holds the list items, the table cells or the link url;
+/// a FILE card points at a library file (`StoredFile`), it never stores bytes of its own.
+model Card {
+  id          String    @id @default(cuid())
+  orgId       String
+  workspaceId String
+  createdById String
+  kind        String // NOTE | PROMPT | LIST | LINK | FILE | TABLE
+  title       String
+  body        String?
+  data        Json?
+  color       String    @default("none") // a theme token name from a small fixed set (src/lib/cards/shared.ts)
+  category    String? // «تصنيف»
+  tags        String[]
+  pinned      Boolean   @default(false)
+  position    Float     @default(0)
+  fileId      String?
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("CardCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  file         StoredFile?  @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, archivedAt, pinned, position])
+  @@index([orgId, workspaceId])
 }

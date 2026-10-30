@@ -6,6 +6,7 @@ import { HQ_SYSTEM_KEY } from "@/server/chat/hq";
 import { isSpaceManager } from "@/server/workspace-role";
 
 import { goHref } from "@/lib/space-link";
+import { layoutOf, type SpaceLayout } from "@/lib/cards/shared";
 
 export { goHref, safeNext } from "@/lib/space-link";
 
@@ -27,6 +28,8 @@ export interface SpaceEntry {
   name: string;
   emoji: string | null;
   kind: WorkspaceKind;
+  /** STANDARD, CARDS or MANUFACTURING (the last two are made of «لوحات» only: their home is /cards). */
+  layout: SpaceLayout;
   /** The person's own row in the space (none for a space the OWNER sees without being put in it). */
   role: WorkspaceRole | null;
 }
@@ -36,6 +39,7 @@ export interface CurrentSpace {
   name: string;
   emoji: string | null;
   kind: WorkspaceKind;
+  layout: SpaceLayout;
   /** OWNER, the space's ADMIN, an org ADMIN in it: sees every «مقطع» and manages the space. */
   manager: boolean;
 }
@@ -55,7 +59,7 @@ export async function spacesOf(who: SpaceSubject): Promise<SpaceEntry[]> {
         who.role === "OWNER"
           ? { organizationId: who.orgId, archivedAt: null }
           : { organizationId: who.orgId, archivedAt: null, members: { some: { userId: who.userId } } },
-      select: { id: true, name: true, emoji: true, kind: true, systemKey: true },
+      select: { id: true, name: true, emoji: true, kind: true, layout: true, systemKey: true },
       // the order the owner put them in by dragging, then by name
       orderBy: [{ position: "asc" }, { name: "asc" }, { id: "asc" }],
     }),
@@ -66,7 +70,7 @@ export async function spacesOf(who: SpaceSubject): Promise<SpaceEntry[]> {
   ]);
   const roleOf = new Map(rows.map((r) => [r.workspaceId, r.role] as const));
   const hqFirst = [...spaces.filter((s) => s.systemKey === HQ_SYSTEM_KEY), ...spaces.filter((s) => s.systemKey !== HQ_SYSTEM_KEY)];
-  return hqFirst.map((s) => ({ id: s.id, name: s.name, emoji: s.emoji, kind: s.kind, role: roleOf.get(s.id) ?? null }));
+  return hqFirst.map((s) => ({ id: s.id, name: s.name, emoji: s.emoji, kind: s.kind, layout: layoutOf(s.layout), role: roleOf.get(s.id) ?? null }));
 }
 
 /** The space the person is in: the wanted one when it is theirs, else «الشركة», else the first; null with none. */
@@ -79,6 +83,7 @@ export async function resolveCurrentSpace(who: SpaceSubject, wanted: string | nu
     name: chosen.name,
     emoji: chosen.emoji,
     kind: chosen.kind,
+    layout: chosen.layout,
     manager: isSpaceManager(who.role, chosen.role),
   };
 }

@@ -12,6 +12,7 @@ import { createWorkspace } from "@/server/services/workspaces";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { unreadBySpace } from "@/server/chat/unread";
 import { currentSpace } from "@/server/services/current-space";
+import { SPACE_LAYOUTS } from "@/lib/cards/shared";
 
 /**
  * Workspace switcher — only the spaces the caller may open: the OWNER sees every space of the
@@ -92,6 +93,8 @@ const createSchema = z.object({
   description: z.string().max(2000).optional(),
   /** People to put in the new space from the start (ACTIVE members of the same organization). */
   memberIds: z.array(z.string().min(1)).max(200).optional(),
+  /** «نوع المساحة»: a general space (default) or a space of «لوحات» only. */
+  layout: z.enum(SPACE_LAYOUTS).optional(),
 });
 
 /**
@@ -122,6 +125,7 @@ export async function POST(req: Request) {
       name: input.name,
       description: input.description ?? null,
       memberIds: input.memberIds,
+      layout: input.layout,
     });
     if (added.length) {
       await notifyMembership({
