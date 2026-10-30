@@ -6,7 +6,7 @@
  * - reply: wherever I may post (`me.canPost`);
  * - react: any message I may read, except while the OWNER reads in silent oversight (toggleReact);
  * - pin: a DM's two people; in a topic or group, its moderators (togglePin);
- * - forward: any message I may read (forwardMessage checks the target when it is picked);
+ * - forward: any message I may read except a poll (forwardMessage checks the target when it is picked);
  * - edit: my own message only, never a voice note (editMessage: author only; a voice note has no text);
  * - delete: my own message, or a moderator's (deleteMessage), after a confirmation;
  * - note: the moderators (addNote);
@@ -21,7 +21,7 @@ export type MessageMenuId = "reply" | "pin" | "forward" | "edit" | "delete" | "n
 export interface MessageMenuContext {
   mine: boolean;
   deleted: boolean;
-  kind: "TEXT" | "VOICE" | "SYSTEM";
+  kind: "TEXT" | "VOICE" | "SYSTEM" | "POLL";
   hasText: boolean;
   pinned: boolean;
   conversationKind: "DM" | "GROUP" | "TOPIC";
@@ -41,7 +41,7 @@ export type MessageMenuAction = { id: MessageMenuId; labelKey: (c: MessageMenuCo
 export const messageMenuItems: MessageMenuAction[] = [
   { id: "reply", labelKey: () => "chatc.menu.reply", available: (c) => c.canPost },
   { id: "pin", labelKey: (c) => (c.pinned ? "chatc.menu.unpin" : "chatc.menu.pin"), available: (c) => (c.conversationKind === "DM" ? true : c.canModerate) },
-  { id: "forward", labelKey: () => "chatc.menu.forward", available: () => true },
+  { id: "forward", labelKey: () => "chatc.menu.forward", available: (c) => c.kind !== "POLL" },
   { id: "edit", labelKey: () => "chatc.menu.edit", available: (c) => c.mine && c.kind === "TEXT" && c.hasText },
   { id: "note", labelKey: () => "chatc.menu.note", available: (c) => c.canModerate },
   { id: "copy", labelKey: () => "chatc.menu.copy", available: (c) => c.hasText },
