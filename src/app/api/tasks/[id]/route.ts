@@ -35,6 +35,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       include: {
         labels: { select: { label: true } },
         assignee: { select: { id: true, name: true } },
+        coAssignees: { select: { userId: true, user: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
         creator: { select: { id: true, name: true } },
         milestone: { select: { id: true, name: true } },
         comments: { orderBy: { createdAt: "desc" }, include: { author: { select: { id: true, name: true } } } },
@@ -60,6 +61,10 @@ const patchSchema = z.object({
   priority: z.enum(priorities).optional(),
   type: z.enum(taskTypes).optional(),
   assigneeId: z.string().min(1).nullable().optional(),
+  /** «لمين» with more than one person: the full ordered list, the first is the primary (`assigneeId`). */
+  assigneeIds: z.array(z.string().min(1)).max(50).optional(),
+  /** The people beside the primary, when the primary is sent on its own (`assigneeId` + these). */
+  coAssigneeIds: z.array(z.string().min(1)).max(50).optional(),
   dueDate: z.string().datetime({ offset: true }).or(z.string().date()).nullable().optional(),
   startDate: z.string().datetime({ offset: true }).or(z.string().date()).nullable().optional(),
   /** A milestone of THIS task's project, or null to detach it (`updateTask` refuses another project's). */
@@ -72,24 +77,39 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return withApi(async () => {
     const input = await parseJson(patchSchema, req);
     const ctx = await requireTaskAccess(params.id, ["ADMIN", "MEMBER"]);
-    const prevAssignee = await db.task.findUnique({
+    const prev = await db.task.findUnique({
       where: { id: params.id },
-      select: { assigneeId: true, number: true, orgId: true },
+      select: {
+        assigneeId: true,
+        number: true,
+        orgId: true,
+        coAssignees: { select: { userId: true } },
+      },
     });
+    // «لمين» with more than one person: `assigneeIds` is the whole list (the first is the primary); without it
+    // the old single box and the extras keep working exactly as before.
+    const people = input.assigneeIds
+      ? [...new Set(input.assigneeIds)]
+      : null;
+    const primary = people ? (people[0] ?? null) : input.assigneeId;
+    const coIds = people ? people.slice(1) : input.coAssigneeIds;
+    const held = new Set([...(prev?.assigneeId ? [prev.assigneeId] : []), ...(prev?.coAssignees ?? []).map((r) => r.userId)]);
     // Handing the task to somebody NEW: they must be an ACTIVE member of the org (never a stranger,
-    // never someone who was suspended or has left). Re-sending the current assignee, who may have
+    // never someone who was suspended or has left). Re-sending somebody who already holds it, who may have
     // been suspended since, changes nothing: work somebody holds stays editable until it is moved.
-    if (input.assigneeId && input.assigneeId !== prevAssignee?.assigneeId) {
-      await assertActiveAssignee(ctx.orgId, input.assigneeId);
+    const newcomers = [...new Set([...(primary ? [primary] : []), ...(coIds ?? [])])].filter((id) => !held.has(id));
+    for (const userId of newcomers) {
+      await assertActiveAssignee(ctx.orgId, userId);
       // a team's task goes to somebody who sees that team's work (its members and the space's managers)
-      if (ctx.task.teamId && !(await userSeesProject(input.assigneeId, ctx.task))) throw new ForbiddenError("assignee.not_in_team");
+      if (ctx.task.teamId && !(await userSeesProject(userId, ctx.task))) throw new ForbiddenError("assignee.not_in_team");
     }
     const task = await updateTask(ctx, params.id, {
       title: input.title,
       description: input.description ?? undefined,
       priority: input.priority,
       type: input.type,
-      assigneeId: input.assigneeId === null ? null : input.assigneeId,
+      assigneeId: people ? primary : input.assigneeId === null ? null : input.assigneeId,
+      coAssigneeIds: coIds === undefined ? undefined : coIds,
       dueDate: await dueFromInput(ctx.orgId, input.dueDate),
       startDate: await dueFromInput(ctx.orgId, input.startDate),
       milestoneId: input.milestoneId === null ? null : input.milestoneId,
@@ -97,15 +117,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       labelIds: input.labelIds,
     });
     await audit("task.updated", { actorId: ctx.userId, orgId: ctx.orgId, target: params.id });
-    if (input.assigneeId && input.assigneeId !== prevAssignee?.assigneeId) {
-      await notifyAssignment({
-        assigneeId: input.assigneeId,
-        taskNumber: prevAssignee?.number ?? 0,
-        orgPrefix: await orgPrefix(prevAssignee?.orgId ?? task.orgId),
-        taskId: task.id,
-        title: task.title,
-        workspaceId: ctx.task.workspaceId,
-      });
+    const toTell = newcomers.filter((id) => id !== ctx.userId);
+    if (toTell.length) {
+      const orgPrefix = await orgPrefixOf(prev?.orgId ?? task.orgId);
+      for (const assigneeId of toTell) {
+        await notifyAssignment({
+          assigneeId,
+          taskNumber: prev?.number ?? 0,
+          orgPrefix,
+          taskId: task.id,
+          title: task.title,
+          workspaceId: ctx.task.workspaceId,
+        });
+      }
     }
     return NextResponse.json({ task });
   });
@@ -120,7 +144,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   });
 }
 
-async function orgPrefix(orgId: string): Promise<string> {
+async function orgPrefixOf(orgId: string): Promise<string> {
   const org = await db.organization.findUnique({
     where: { id: orgId },
     select: { keyPrefix: true },

@@ -64,7 +64,8 @@ async function instantBoard(workspaceId: string): Promise<{ projectId: string; b
 
 export interface InstantTaskInput {
   title: string;
-  assigneeId: string;
+  /** «لمين» — one or more people of the space; the first is the task's own assignee, the rest ride beside them. */
+  assigneeIds: string[];
   priority: TaskPriority;
   dueDate: Date | null;
   description?: string | null;
@@ -74,11 +75,19 @@ export interface InstantTaskInput {
 export async function createInstantTask(ctx: OrgAccessContext, workspaceId: string, input: InstantTaskInput): Promise<{ id: string; number: number }> {
   await assertFeatureOn(ctx.orgId, "instantWork");
   assertNotGuest(ctx);
-  const [inSpace, owner] = await Promise.all([
-    db.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId: input.assigneeId } }, select: { id: true } }),
-    db.organizationMember.findFirst({ where: { organizationId: ctx.orgId, userId: input.assigneeId, role: "OWNER", status: "ACTIVE" }, select: { id: true } }),
-  ]);
-  if (!inSpace && !owner) throw new ForbiddenError("instant.not_in_space");
+  const people = [...new Set(input.assigneeIds.filter(Boolean))];
+  if (people.length === 0) throw new ForbiddenError("instant.pick_person");
+  // every person named must be in this space (or be the company's owner), or they would hold a task they cannot open
+  const allowed = await Promise.all(
+    people.map(async (userId) => {
+      const [inSpace, owner] = await Promise.all([
+        db.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } }, select: { id: true } }),
+        db.organizationMember.findFirst({ where: { organizationId: ctx.orgId, userId, role: "OWNER", status: "ACTIVE" }, select: { id: true } }),
+      ]);
+      return Boolean(inSpace || owner);
+    }),
+  );
+  if (allowed.some((ok) => !ok)) throw new ForbiddenError("instant.not_in_space");
   const where = await instantBoard(workspaceId);
   const task = await createTask(ctx, {
     workspaceId,
@@ -86,19 +95,25 @@ export async function createInstantTask(ctx: OrgAccessContext, workspaceId: stri
     title: input.title,
     description: input.description ?? null,
     priority: input.priority,
-    assigneeId: input.assigneeId,
+    assigneeId: people[0]!,
+    coAssigneeIds: people.slice(1),
     dueDate: input.dueDate,
   });
-  if (input.assigneeId !== ctx.userId) {
+  const toTell = people.filter((id) => id !== ctx.userId);
+  if (toTell.length) {
     const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
-    await notifyAssignment({
-      assigneeId: input.assigneeId,
-      taskNumber: task.number,
-      orgPrefix: org?.keyPrefix ?? "ZK",
-      taskId: task.id,
-      title: task.title,
-      workspaceId,
-    });
+    await Promise.all(
+      toTell.map((assigneeId) =>
+        notifyAssignment({
+          assigneeId,
+          taskNumber: task.number,
+          orgPrefix: org?.keyPrefix ?? "ZK",
+          taskId: task.id,
+          title: task.title,
+          workspaceId,
+        }),
+      ),
+    );
   }
   return { id: task.id, number: task.number };
 }

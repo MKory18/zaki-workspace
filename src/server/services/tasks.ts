@@ -21,6 +21,8 @@ export interface CreateTaskInput {
   priority?: Task["priority"];
   type?: Task["type"];
   assigneeId?: string | null;
+  /** «لمين» with more than one person: the people beside `assigneeId` (which stays the first of them). */
+  coAssigneeIds?: string[];
   dueDate?: Date | null;
   startDate?: Date | null;
   labelIds?: string[];
@@ -35,12 +37,26 @@ export interface MoveTaskInput {
 export const TASK_INCLUDE = {
   labels: { select: { label: { select: { id: true, name: true, color: true } } } },
   assignee: { select: { id: true, name: true } },
+  // «لمين» with more than one person: the rows beside the primary, oldest first (the order they were picked)
+  coAssignees: {
+    select: { userId: true, user: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "asc" },
+  },
   _count: { select: { comments: true } },
 } satisfies Prisma.TaskInclude;
 
 export type TaskDTO = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;
 
 export type Tx = Prisma.TransactionClient;
+
+/**
+ * «مهمة لأكثر من شخص»: the tasks whose people include this one — the primary column (`assigneeId`)
+ * plus the extra names (`TaskCoAssignee`). Every read that means «الشغل المطلوب من هذا الشخص» uses it,
+ * so a second assignee sees the task in «مهامي» and «اليوم» exactly like the first one.
+ */
+export function assignedTo(userId: string): Prisma.TaskWhereInput {
+  return { OR: [{ assigneeId: userId }, { coAssignees: { some: { userId } } }] };
+}
 
 export interface DefaultBoardColumn {
   name: string;
@@ -173,17 +189,23 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
     }
 
     // P1: never allow assigning a task to a user outside the actor's org, nor to one who is no
-    // longer active in it (suspended or offboarded keep their row, but they do not count)
-    if (input.assigneeId) {
+    // longer active in it (suspended or offboarded keep their row, but they do not count) — the same
+    // rule for the primary and for every other person named («لمين» with more than one).
+    const assertPerson = async (userId: string): Promise<void> => {
       const member = await tx.organizationMember.findFirst({
-        where: { organizationId: actor.orgId, userId: input.assigneeId },
+        where: { organizationId: actor.orgId, userId },
         select: { status: true },
       });
       if (!member) throw new ForbiddenError("assignee.not_member");
       if (member.status !== "ACTIVE") throw new ForbiddenError("assignee.not_active");
       // a team's task goes to somebody who sees that team's work (its members and the space's managers)
-      if (chain.teamId && !(await userSeesProject(input.assigneeId, chain))) throw new ForbiddenError("assignee.not_in_team");
-    }
+      if (chain.teamId && !(await userSeesProject(userId, chain))) throw new ForbiddenError("assignee.not_in_team");
+    };
+    const extras = [...new Set(input.coAssigneeIds ?? [])];
+    const primary = input.assigneeId ?? extras.shift() ?? null;
+    if (primary) await assertPerson(primary);
+    const coIds = extras.filter((id) => id !== primary);
+    for (const userId of coIds) await assertPerson(userId);
 
     const number = await nextTaskNumber(actor.orgId, tx);
     const task = await tx.task.create({
@@ -198,13 +220,16 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
         description: input.description ?? null,
         priority: input.priority ?? "NORMAL",
         type: input.type ?? "TASK",
-        assigneeId: input.assigneeId ?? null,
+        assigneeId: primary,
         dueDate: input.dueDate ?? null,
         startDate: input.startDate ?? null,
         creatorId: actor.userId,
         position: await positionAt(column.id, undefined, tx),
         // born in a done column is finished: the same rule as `moveTask`, or no counter would see it
         completedAt: column.done ? new Date() : null,
+        coAssignees: coIds.length
+          ? { create: coIds.map((userId) => ({ userId })) }
+          : undefined,
         labels: input.labelIds?.length
           ? { create: [...new Set(input.labelIds)].map((labelId) => ({ labelId })) }
           : undefined,
@@ -269,6 +294,8 @@ export interface TaskUpdateData {
   priority?: Task["priority"];
   type?: Task["type"];
   assigneeId?: string | null;
+  /** Replaces the people beside the primary (`assigneeId`) when provided. */
+  coAssigneeIds?: string[];
   dueDate?: Date | null;
   startDate?: Date | null;
   milestoneId?: string | null;
@@ -286,6 +313,7 @@ export async function updateTask(
   return db.$transaction(async (tx) => {
     const before = await assertTaskScope(taskId, actor.orgId, tx);
     const updateData: Prisma.TaskUpdateInput = {};
+    let coSetChanged = false;
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined) updateData.description = data.description;
     if (data.priority !== undefined) updateData.priority = data.priority;
@@ -306,6 +334,28 @@ export async function updateTask(
         data.assigneeId === null
           ? { disconnect: true }
           : { connect: { id: data.assigneeId } };
+    }
+    if (data.coAssigneeIds !== undefined) {
+      // «لمين» with more than one person: the full new set of the people BESIDE the primary. An id already
+      // on the task is not re-checked (the same rule as the primary above), a new one must be an active member.
+      const primary = data.assigneeId === undefined ? before.assigneeId : data.assigneeId;
+      const wanted = [...new Set(data.coAssigneeIds)].filter((id) => id !== primary);
+      const held = await tx.taskCoAssignee.findMany({ where: { taskId }, select: { userId: true } });
+      const heldIds = new Set(held.map((r) => r.userId));
+      for (const userId of wanted) {
+        if (heldIds.has(userId)) continue;
+        const member = await tx.organizationMember.findFirst({
+          where: { organizationId: actor.orgId, userId },
+          select: { status: true },
+        });
+        if (!member) throw new ForbiddenError("assignee.not_member");
+        if (member.status !== "ACTIVE") throw new ForbiddenError("assignee.not_active");
+      }
+      updateData.coAssignees = {
+        deleteMany: {},
+        create: wanted.map((userId) => ({ userId })),
+      };
+      coSetChanged = wanted.length !== heldIds.size || wanted.some((id) => !heldIds.has(id));
     }
     if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
     if (data.startDate !== undefined) updateData.startDate = data.startDate;
@@ -345,6 +395,7 @@ export async function updateTask(
     if (data.priority !== undefined && data.priority !== before.priority) changed.push("priority");
     if (data.type !== undefined && data.type !== before.type) changed.push("type");
     if (data.assigneeId !== undefined && data.assigneeId !== before.assigneeId) changed.push("assignee");
+    if (coSetChanged) changed.push("assignees");
     if (data.labelIds) changed.push("labels");
     const dueBefore = before.dueDate?.getTime() ?? null;
     const dueAfter = data.dueDate === undefined ? dueBefore : (data.dueDate?.getTime() ?? null);
@@ -438,7 +489,8 @@ export async function listTasks(actor: ActorContext, filters: ListFilters): Prom
     archived: false,
     projectId: filters.projectId,
     boardId: filters.boardId,
-    assigneeId: filters.assigneeId,
+    // «assigned to»: the primary column and the extra people, or a second assignee would not find their work
+    ...(filters.assigneeId ? assignedTo(filters.assigneeId) : {}),
   };
   if (filters.overdue) {
     // the same line as My Work, Today and the reports: due strictly before the START of the company's today,

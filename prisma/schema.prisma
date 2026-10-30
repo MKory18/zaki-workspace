@@ -46,6 +46,8 @@ model User {
   teamLinks       TeamMember[]
   createdTasks    Task[]               @relation("TaskCreator")
   assignedTasks   Task[]               @relation("TaskAssignee")
+  // «مهمة لأكثر من شخص»: the tasks that named this person beside their own assigneeId.
+  coAssignedTasks TaskCoAssignee[]     @relation("TaskCoAssignees")
   comments        TaskComment[]
   activity        TaskActivity[]
   notifications   Notification[]
@@ -1008,6 +1010,8 @@ model Task {
   column       BoardColumn      @relation(fields: [columnId], references: [id])
   creator      User             @relation("TaskCreator", fields: [creatorId], references: [id])
   assignee     User?            @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  // «لمين» with more than one person: the people beside assigneeId (who stays the first of them).
+  coAssignees  TaskCoAssignee[]
   milestone    Milestone?       @relation(fields: [milestoneId], references: [id])
   labels       TaskLabel[]
   comments     TaskComment[]
@@ -1026,6 +1030,21 @@ model Task {
   @@index([assigneeId])
   @@index([creatorId])
   @@index([dueDate])
+}
+
+// «المهمة لأكثر من شخص» — the extra people a task is for, beside the one in Task.assigneeId
+// (that column stays the first person named, so every old read keeps working). A row is a pairing,
+// like TaskLabel: no state of its own.
+model TaskCoAssignee {
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation("TaskCoAssignees", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
 }
 
 model TaskLabel {

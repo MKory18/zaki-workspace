@@ -9,14 +9,21 @@ import { createInstantTask } from "@/server/services/instant-work";
 import { orgTimeZone } from "@/server/services/org-day";
 import { dueInstantForDay, parseDayText } from "@/lib/due-day";
 
-const schema = z.object({
-  title: z.string().trim().min(1, "title.required").max(280),
-  description: z.string().trim().max(4000).nullable().optional(),
-  assigneeId: z.string().min(1, "instant.pick_person"),
-  priority: z.enum(["URGENT", "HIGH", "NORMAL", "LOW"]).default("NORMAL"),
-  // a day ("2026-11-05") or a full instant: a day is noon in the COMPANY's zone, never the browser's (review B5)
-  dueDate: z.string().datetime({ offset: true }).or(z.string().date()).nullable().optional(),
-});
+const schema = z
+  .object({
+    title: z.string().trim().min(1, "title.required").max(280),
+    description: z.string().trim().max(4000).nullable().optional(),
+    /** The one person (older forms), or `assigneeIds` for «لمين» with more than one. */
+    assigneeId: z.string().min(1).optional(),
+    assigneeIds: z.array(z.string().min(1)).max(50).optional(),
+    priority: z.enum(["URGENT", "HIGH", "NORMAL", "LOW"]).default("NORMAL"),
+    // a day ("2026-11-05") or a full instant: a day is noon in the COMPANY's zone, never the browser's (review B5)
+    dueDate: z.string().datetime({ offset: true }).or(z.string().date()).nullable().optional(),
+  })
+  .refine((v) => (v.assigneeIds?.length ?? 0) > 0 || Boolean(v.assigneeId), {
+    message: "instant.pick_person",
+    path: ["assigneeIds"],
+  });
 
 /** POST: «مهمة فورية» in the space the person is in (src/server/services/instant-work.ts). */
 export async function POST(req: Request) {
@@ -34,7 +41,7 @@ export async function POST(req: Request) {
     const task = await createInstantTask(ctx, space.id, {
       title: input.title,
       description: input.description ?? null,
-      assigneeId: input.assigneeId,
+      assigneeIds: input.assigneeIds?.length ? input.assigneeIds : [input.assigneeId!],
       priority: input.priority,
       dueDate,
     });
