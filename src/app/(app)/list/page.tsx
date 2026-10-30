@@ -16,6 +16,7 @@ import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 import { actorFeatureOn } from "@/server/services/features";
 import { stepProgressFor } from "@/server/services/task-steps";
 import { myRunningTaskId } from "@/server/services/time-tracking";
+import { recurringTaskIds } from "@/server/services/task-recurrence";
 
 import Link from "next/link";
 const GROUPS = ["status", "priority", "project", "assignee"] as const;
@@ -84,6 +85,9 @@ export default async function ListPage({
   const progress = (await actorFeatureOn(actor, "taskSteps")) ? await stepProgressFor(tasks.map((t) => t.id)) : new Map();
   // «الوقت شغّال» on the row of the task the person's own timer runs on
   const runningTaskId = await myRunningTaskId(actor);
+
+  // «🔁 متكررة» on the rows: one read for the page, and only while the company's «مهمة متكررة» switch is on
+  const recurring = (await actorFeatureOn(actor, "recurringTasks")) ? await recurringTaskIds(tasks.map((t) => t.id)) : new Set<string>();
 
   // grouping still depends on the same rows; no requery
   interface GroupBucket {
@@ -175,7 +179,7 @@ export default async function ListPage({
                   {b.rows.map((task) => (
                     <TaskRow
                       key={task.id}
-                      task={{ ...task, steps: progress.get(task.id), running: task.id === runningTaskId }}
+                      task={{ ...task, steps: progress.get(task.id), running: task.id === runningTaskId, recurring: recurring.has(task.id) }}
                       editable={ctx.editable}
                       members={members}
                       showProject={group !== "project"}

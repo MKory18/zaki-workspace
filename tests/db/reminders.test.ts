@@ -179,7 +179,7 @@ describe("the runner: a reminder fires once", () => {
     const r = await row(w, w.member.id, { taskId: w.task.id });
     const run = await runDueJobs(AFTER);
     await flushPushesForTests();
-    expect(run).toEqual({ reminders: { fired: 1, dismissed: 0 }, timeEntries: { stopped: 0 }, failed: [] });
+    expect(run).toMatchObject({ reminders: { fired: 1, dismissed: 0 }, failed: [] });
     const [note] = await notices(w.member.id);
     expect(note).toMatchObject({ type: "reminder", body: "اتصل بالمورّد", linkUrl: `/tasks/${w.task.id}`, taskId: w.task.id, workspaceId: w.ws.id, organizationId: w.org.id });
     expect(note!.title).toMatch(/[؀-ۿ]/);

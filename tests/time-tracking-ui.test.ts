@@ -371,12 +371,12 @@ describe("«حساب وقت الشغل»: wiring", () => {
   });
 
   it("the migration is additive, hand-writes the partial unique index, and the entry keeps its task title when the task goes", () => {
-    const sql = read("prisma/migrations/20261031120000_time_entries/migration.sql");
+    const sql = read("prisma/migrations/20261031140000_time_entries/migration.sql");
     expect(sql).toContain('CREATE UNIQUE INDEX "TimeEntry_one_running_per_user" ON "TimeEntry"("userId") WHERE "stoppedAt" IS NULL');
     expect(sql).toContain('ON DELETE SET NULL');
     expect(sql).toContain('"seconds" INTEGER NOT NULL');
     expect(sql).not.toMatch(/DROP |TRUNCATE|DELETE FROM|ALTER COLUMN/i);
-    expect(read("prisma/migrations/RELEASED.txt")).not.toContain("20261031120000_time_entries");
+    expect(read("prisma/migrations/RELEASED.txt")).not.toContain("20261031140000_time_entries");
   });
 
   it("holds no money: no rate, no cost, no price anywhere in the feature", () => {

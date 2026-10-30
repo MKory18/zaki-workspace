@@ -11,6 +11,7 @@ import { BoardView, type TaskCardData } from "@/components/board-view";
 import { actorFeatureOn } from "@/server/services/features";
 import { stepProgressFor } from "@/server/services/task-steps";
 import { myRunningTaskId } from "@/server/services/time-tracking";
+import { recurringTaskIds } from "@/server/services/task-recurrence";
 
 /**
  * A board opens for whoever may open its space (`accessibleWorkspaceIds`: a row in the space, or the owner) and is
@@ -75,6 +76,9 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
   // «الوقت شغّال» on the card of the task the person's own timer runs on
   const runningTaskId = await myRunningTaskId(actor);
 
+  // «🔁 متكررة» on the cards: one read for the whole board, and only while the company's switch is on
+  const recurring = (await actorFeatureOn(actor, "recurringTasks")) ? await recurringTaskIds(tasks.map((t) => t.id)) : new Set<string>();
+
   const taskData: TaskCardData[] = tasks.map((t) => ({
     id: t.id,
     key: `${org?.keyPrefix ?? "ZW"}-${t.number}`,
@@ -89,6 +93,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     completed: t.completedAt != null,
     steps: progress.get(t.id),
     running: t.id === runningTaskId,
+    recurring: recurring.has(t.id),
   }));
 
   return (

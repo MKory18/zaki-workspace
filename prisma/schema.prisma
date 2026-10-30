@@ -862,6 +862,7 @@ model Workspace {
   teams         Team[]
   files         StoredFile[]
   projects      Project[]
+  taskRecurrences TaskRecurrence[]
   conversations Conversation[]
   goals         Goal[]
   routines      Routine[]
@@ -974,6 +975,7 @@ model Project {
   boards     Board[]
   tasks      Task[]
   milestones Milestone[]
+  taskRecurrences TaskRecurrence[]
 
   @@unique([workspaceId, systemKey])
   @@index([workspaceId])
@@ -1018,6 +1020,7 @@ model Board {
   project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   columns BoardColumn[]
   tasks   Task[]
+  taskRecurrences TaskRecurrence[]
 
   @@index([projectId])
 }
@@ -1112,6 +1115,10 @@ model Task {
   reminders      Reminder[]
   // «حساب وقت الشغل»: the time people logged on it. An entry OUTLIVES the task (the foreign key sets taskId to null).
   timeEntries    TimeEntry[]
+  // «مهمة متكررة»: the series this task belongs to (every occurrence points at it), and the series it is the template of
+  recurrenceId   String?
+  recurrence     TaskRecurrence? @relation("RecurrenceTasks", fields: [recurrenceId], references: [id], onDelete: SetNull)
+  templateOf     TaskRecurrence? @relation("RecurrenceTemplate")
   // Made from a chat message («اعمل منها مهمة»): the message it came from.
   sourceMessageId String?
   sourceMessage   ChatMessage? @relation("MessageTasks", fields: [sourceMessageId], references: [id], onDelete: SetNull)
@@ -1124,6 +1131,44 @@ model Task {
   @@index([assigneeId])
   @@index([creatorId])
   @@index([dueDate])
+  @@index([recurrenceId])
+}
+
+enum RecurrenceMode {
+  ON_COMPLETE
+  SCHEDULE
+}
+
+/// «مهمة متكررة»: one repeating series. The template task is the one the person marked repeating; every occurrence is a
+/// REAL task made by `createTask` on behalf of `createdById` and points back here (`Task.recurrenceId`). `rule` is the
+/// zod-validated shape of src/lib/task-recurrence.ts; `mode`: ON_COMPLETE (the next one is made when the current one is
+/// finished) or SCHEDULE (the job runner makes it at `nextDueAt`, claimed with an UPDATE so it happens once). `endsAt` is
+/// the last instant of the day the series ends; `stoppedReason` says why an automatic stop happened (null: a person stopped it).
+model TaskRecurrence {
+  id             String         @id @default(cuid())
+  orgId          String
+  workspaceId    String
+  projectId      String
+  boardId        String
+  templateTaskId String         @unique
+  createdById    String
+  rule           Json
+  mode           RecurrenceMode
+  nextDueAt      DateTime?
+  endsAt         DateTime?
+  active         Boolean        @default(true)
+  stoppedReason  String?
+  lastCreatedAt  DateTime?
+  createdAt      DateTime       @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  board     Board     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  template  Task      @relation("RecurrenceTemplate", fields: [templateTaskId], references: [id], onDelete: Cascade)
+  tasks     Task[]    @relation("RecurrenceTasks")
+
+  @@index([active, mode, nextDueAt])
+  @@index([orgId])
 }
 
 /// «خطوات»: the short checklist inside a task (the owner, 2026-10-30). One row per step; `position` is fractional like the
@@ -1222,6 +1267,25 @@ model TimeEntry {
   @@index([userId, startedAt])
   @@index([taskId])
   @@index([workspaceId, startedAt])
+}
+
+/// «اشتراك التقويم»: the private link a person adds ONCE to Google / Apple / Outlook calendar. The link carries a random
+/// token that IS the credential; only its SHA-256 is stored here, the token itself is shown once, on creation. No foreign
+/// keys on purpose (the same as `Reminder`): nothing is ever deleted, and the feed re-checks the person on every request.
+/// `sessionVersion` is the person's `User.tokenVersion` at creation: a suspend, reset or "log out everywhere" bumps it and
+/// the link stops working at once.
+model CalendarFeedToken {
+  id             String    @id @default(cuid())
+  orgId          String
+  userId         String
+  tokenHash      String    @unique
+  label          String
+  sessionVersion Int       @default(0)
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+
+  @@index([userId, revokedAt])
 }
 
 /// Giving a task to somebody of a HIGHER rank is a request, not an assignment (the owner's rule, 2026-10-30): the task

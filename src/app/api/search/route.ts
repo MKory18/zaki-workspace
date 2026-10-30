@@ -8,11 +8,9 @@ import { actorCan, actorCanWork, requireActor } from "@/server/policy/actor";
 import { loadWorkScope, narrowScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 import { searchChat } from "@/server/chat/search";
 import { searchLibrary } from "@/server/services/files";
-
-/** Strip LIKE wildcards so user input is a literal substring. */
-function sanitize(q: string): string {
-  return q.replace(/[%_\\]/g, " ").trim().slice(0, 80);
-}
+import { arabicSearch, cleanQuery } from "@/lib/search/arabic";
+import { rankedSearch, sqlIn } from "@/server/search/ranked";
+import { Prisma } from "@prisma/client";
 
 const NOTHING = { tasks: [], projects: [], topics: [], messages: [], people: [], files: [] };
 
@@ -29,8 +27,10 @@ export async function GET(req: Request) {
   return withApi(async () => {
     const user = await requireUser();
     const url = new URL(req.url);
-    const q = sanitize(url.searchParams.get("q") ?? "");
-    if (q.length < 2) return NextResponse.json(NOTHING);
+    // what was typed, cleaned (control characters out, spaces collapsed, 100 characters at most)
+    const q = cleanQuery(url.searchParams.get("q") ?? "");
+    const search = arabicSearch(q);
+    if (!search || search.text.length < 2) return NextResponse.json(NOTHING);
 
     const memberships = await db.organizationMember.findMany({
       where: { userId: user.id, status: "ACTIVE" },
@@ -47,58 +47,84 @@ export async function GET(req: Request) {
     const workspaceIds = scopeSpaceIds(scope);
     if (workspaceIds.length === 0) return NextResponse.json(NOTHING);
 
-    const contains = { contains: q, mode: "insensitive" as const };
-
     // the space's own chat, people and library: only inside a space
     const place = space ? { spaceId: space.id, isHq: space.kind === "HQ" } : null;
     const ctx = { orgId: actor.orgId, userId: actor.userId, orgRole: actor.role };
+    const taskSpaces = actorCanWork(actor, "tasks.view") ? workspaceIds : [];
+    const projectSpaces = actorCanWork(actor, "projects.view") ? workspaceIds : [];
     const [tasks, projects, chat, people, files] = await Promise.all([
-      db.task.findMany({
-        where: {
-          orgId: { in: orgIds },
-          // the tasks «يشوف» box of the section grid
-          workspaceId: { in: actorCanWork(actor, "tasks.view") ? workspaceIds : [] },
-          AND: [taskVisibleWhere(scope)],
-          archived: false,
-          title: contains,
-        },
-        orderBy: [{ updatedAt: "desc" }],
-        take: 8,
-        select: {
-          id: true,
-          number: true,
-          title: true,
-          priority: true,
-          organization: { select: { keyPrefix: true } },
-          project: { select: { id: true, name: true } },
-        },
-      }),
-      db.project.findMany({
-        where: {
-          workspaceId: { in: actorCanWork(actor, "projects.view") ? workspaceIds : [] },
-          AND: [projectVisibleWhere(scope)],
-          name: contains,
-        },
-        orderBy: [{ createdAt: "desc" }],
-        take: 6,
-        select: {
-          id: true,
-          name: true,
-          workspace: { select: { id: true, name: true } },
-        },
-      }),
+      // the pool of ids by spelling (src/server/search/ranked.ts), then the SAME access where as ever on those ids
+      taskSpaces.length === 0
+        ? []
+        : rankedSearch({
+            query: {
+              table: "Task",
+              search,
+              rank: true,
+              where: [sqlIn("orgId", orgIds), sqlIn("workspaceId", taskSpaces), Prisma.sql`"archived" = FALSE`],
+              order: Prisma.sql`"updatedAt" DESC`,
+            },
+            take: 8,
+            load: (ids) =>
+              db.task.findMany({
+                where: {
+                  orgId: { in: orgIds },
+                  // the tasks «يشوف» box of the section grid
+                  workspaceId: { in: taskSpaces },
+                  AND: [taskVisibleWhere(scope)],
+                  archived: false,
+                  id: { in: ids },
+                },
+                select: {
+                  id: true,
+                  number: true,
+                  title: true,
+                  priority: true,
+                  organization: { select: { keyPrefix: true } },
+                  project: { select: { id: true, name: true } },
+                },
+              }),
+          }),
+      projectSpaces.length === 0
+        ? []
+        : rankedSearch({
+            query: { table: "Project", search, rank: true, where: [sqlIn("workspaceId", projectSpaces)], order: Prisma.sql`"createdAt" DESC` },
+            take: 6,
+            load: (ids) =>
+              db.project.findMany({
+                where: { workspaceId: { in: projectSpaces }, AND: [projectVisibleWhere(scope)], id: { in: ids } },
+                select: {
+                  id: true,
+                  name: true,
+                  workspace: { select: { id: true, name: true } },
+                },
+              }),
+          }),
       place ? searchChat(ctx, { id: place.spaceId, isHq: place.isHq }, q) : { topics: [], messages: [] },
       // the people of this space (a guest gets no staff directory)
       actor.isExternal || !place
         ? []
-        : db.workspaceMember.findMany({
-            where: {
-              workspaceId: place.spaceId,
-              user: { name: contains, memberships: { some: { organizationId: actor.orgId, status: "ACTIVE" } } },
+        : rankedSearch({
+            query: {
+              table: "User",
+              search,
+              rank: true,
+              where: [Prisma.sql`"id" IN (SELECT "userId" FROM "WorkspaceMember" WHERE "workspaceId" = ${place.spaceId})`],
+              order: Prisma.sql`"name" ASC`,
             },
-            orderBy: { user: { name: "asc" } },
             take: 6,
-            select: { user: { select: { id: true, name: true } } },
+            load: async (ids) => {
+              const rows = await db.workspaceMember.findMany({
+                where: {
+                  workspaceId: place.spaceId,
+                  userId: { in: ids },
+                  user: { memberships: { some: { organizationId: actor.orgId, status: "ACTIVE" } } },
+                },
+                select: { userId: true, user: { select: { id: true, name: true } } },
+              });
+              // `rankedSearch` orders by `id`: the person's id, not the membership row's
+              return rows.map((m) => ({ id: m.userId, user: m.user }));
+            },
           }),
       // the library's files only for whoever holds its «يشوف» box
       actor.isExternal || !place || !actorCan(actor, "files.view") ? [] : searchLibrary(actor.orgId, place, q),

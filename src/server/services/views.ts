@@ -4,6 +4,8 @@ import { TASK_INCLUDE } from "@/server/services/tasks";
 import { loadWorkScope, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace, workspaceRoleOf } from "@/server/workspace-role";
 import { orgDayStart } from "@/server/services/org-day";
+import { arabicSearch } from "@/lib/search/arabic";
+import { rankedSearch, sqlIn } from "@/server/search/ranked";
 
 // ---------- workspace access resolution for RSC pages ----------
 
@@ -327,21 +329,40 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
   }
   if (q.openOnly) where.completedAt = null;
   if (q.completedOnly) where.completedAt = { not: null };
-  if (q.search) {
-    where.title = { contains: q.search, mode: "insensitive" };
-  }
+  const take = Math.min(q.limit ?? 200, 500);
+  const orderBy: Prisma.TaskOrderByWithRelationInput[] = [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }];
+  const include = {
+    ...TASK_INCLUDE,
+    project: { select: { id: true, name: true } },
+    column: { select: { id: true, name: true, done: true } },
+    organization: { select: { keyPrefix: true } },
+  } satisfies Prisma.TaskInclude;
 
-  const rows = await db.task.findMany({
-    where,
-    orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
-    take: Math.min(q.limit ?? 200, 500),
-    include: {
-      ...TASK_INCLUDE,
-      project: { select: { id: true, name: true } },
-      column: { select: { id: true, name: true, done: true } },
-      organization: { select: { keyPrefix: true } },
-    },
-  });
+  // a text filter is spelling-tolerant (src/lib/search/arabic.ts): the pool of ids by spelling, narrowed by the
+  // plain filters, then THIS `where` — every access rule of the caller — on those ids. The view's own order stays.
+  const search = q.search ? arabicSearch(q.search) : null;
+  const rows = search
+    ? await rankedSearch({
+        query: {
+          table: "Task",
+          search,
+          rank: false,
+          where: [
+            Prisma.sql`"orgId" = ${q.orgId}`,
+            Prisma.sql`"archived" = FALSE`,
+            ...(q.workspaceIds !== undefined ? [sqlIn("workspaceId", q.workspaceId ? q.workspaceIds.filter((id) => id === q.workspaceId) : q.workspaceIds)] : []),
+            ...(q.workspaceIds === undefined && q.workspaceId ? [Prisma.sql`"workspaceId" = ${q.workspaceId}`] : []),
+            ...(q.projectId ? [Prisma.sql`"projectId" = ${q.projectId}`] : []),
+            ...(q.creatorId ? [Prisma.sql`"creatorId" = ${q.creatorId}`] : []),
+            // the same precedence as `where` above: «completedOnly» is the last word on `completedAt`
+            ...(q.completedOnly ? [Prisma.sql`"completedAt" IS NOT NULL`] : q.openOnly || q.overdueOnly ? [Prisma.sql`"completedAt" IS NULL`] : []),
+          ],
+          order: Prisma.sql`"dueDate" ASC NULLS LAST, "updatedAt" DESC`,
+        },
+        take,
+        load: (ids) => db.task.findMany({ where: { ...where, id: { in: ids } }, orderBy, include }),
+      })
+    : await db.task.findMany({ where, orderBy, take, include });
 
   return rows.map((t): ViewTask => {
     // «لمين» with more than one person: the primary first, then the people beside them

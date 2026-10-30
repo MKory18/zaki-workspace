@@ -1,5 +1,6 @@
 import { log } from "@/server/log";
 import { fireDueReminders, type RemindersRun } from "./reminders";
+import { fireDueRecurrences, type RecurrencesRun } from "./recurrence";
 import { autoStopTimers, type TimeEntriesRun } from "./time-entries";
 
 /**
@@ -11,18 +12,27 @@ import { autoStopTimers, type TimeEntriesRun } from "./time-entries";
  */
 export interface JobsRun {
   reminders: RemindersRun | null;
+  /** «مهمة متكررة» (حسب الجدول): the tasks made for the series whose day has come. */
+  recurrences: RecurrencesRun | null;
+  /** «حساب وقت الشغل»: the timers left running more than 12 hours, closed at the 12th hour. */
   timeEntries: TimeEntriesRun | null;
   /** The names of the jobs that threw. */
   failed: string[];
 }
 
 export async function runDueJobs(now: Date = new Date()): Promise<JobsRun> {
-  const result: JobsRun = { reminders: null, timeEntries: null, failed: [] };
+  const result: JobsRun = { reminders: null, recurrences: null, timeEntries: null, failed: [] };
   try {
     result.reminders = await fireDueReminders(now);
   } catch (err) {
     result.failed.push("reminders");
     log.error("jobs.failed", { job: "reminders", message: err instanceof Error ? err.message : String(err) });
+  }
+  try {
+    result.recurrences = await fireDueRecurrences(now);
+  } catch (err) {
+    result.failed.push("recurrences");
+    log.error("jobs.failed", { job: "recurrences", message: err instanceof Error ? err.message : String(err) });
   }
   try {
     result.timeEntries = await autoStopTimers(now);
