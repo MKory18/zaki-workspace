@@ -303,7 +303,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `team-scope` | 149 | 19 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
 | `tasks` | 562 | 18 | no header comment — exports `TASK_INCLUDE`, `assignedTo`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, … |
 | `cards` | 614 | 17 | «اللوحات» — the cards of a space. |
-| `files` | 505 | 11 | no header comment — exports `fileLibrary`, `PENDING_PATH`, `PREVIEWABLE`, `INLINE_TEXT`, `logFile`, … |
+| `files` | 526 | 11 | no header comment — exports `fileLibrary`, `PENDING_PATH`, `PREVIEWABLE`, `INLINE_TEXT`, `logFile`, … |
 | `access` | 76 | 10 | Workspace-level isolation — the company's master switch. |
 | `n8n` | 294 | 9 | Events we allow orgs to forward to n8n — the UI shows exactly this list. |
 | `org-day` | 26 | 9 | The start of the COMPANY's today — `Organization.timezone`, never the server's clock and never the browser's. |
@@ -327,7 +327,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `crm` | 228 | 4 | no header comment — exports `OPPORTUNITY_STAGES`, `createCustomerSchema`, `updateCustomerSchema`, `createOpportunitySchema`, `updateOpportunitySchema`, … |
 | `departments` | 240 | 4 | The departments area is the company's staff directory (who works where, with which job title), so org GUESTs get 403 on every function here, read or write. |
 | `reminders` | 169 | 4 | «ذكّرني» — a person's reminder for THEMSELVES (never for somebody else), on a task, on a chat message, or on its own. |
-| `views` | 372 | 4 | Zones already warned about, per organization, so a bad stored zone is logged once and not on every request. |
+| `views` | 393 | 4 | Zones already warned about, per organization, so a bad stored zone is logged once and not on every request. |
 | `milestones` | 173 | 3 | «المعالم» — the milestones of a project (the owner, 2026-10-30: the table, the project page's list and the timeline's diamonds all existed and nothing in the repository ever cre… |
 | `registration` | 145 | 3 | Opening a company is open to anyone (owner's decision 23/10), behind three guards: The address is checked. |
 | `space-manage` | 61 | 3 | MANAGING THE SPACES FROM «كل المساحات» (the owner's asks, 2026-10-26): put them in order by dragging, archive one (it leaves every list — the switcher, the overview, search by s… |

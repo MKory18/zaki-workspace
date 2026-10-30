@@ -1,4 +1,7 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { arabicSearch, cleanQuery, findSpelled } from "@/lib/search/arabic";
+import { rankedSearch } from "@/server/search/ranked";
 import { NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { canRead, loadConversationFacts, loadOrgFacts, type OrgFacts } from "@/server/policy/conversation";
 import type { MessageHitDto, TopicHitDto } from "@/server/chat/dto";
@@ -19,16 +22,15 @@ export function searchText(q: string): string {
 export function snippetOf(body: string, q: string, width = 120): string {
   const flat = body.replace(/\s+/g, " ").trim();
   if (flat.length <= width) return flat;
-  const at = flat.toLowerCase().indexOf(q.toLowerCase());
+  // found the way the search found it: «احمد» centres on «أحمد», with or without marks
+  const at = findSpelled(flat, q);
   const start = Math.max(0, Math.min(at < 0 ? 0 : at - 40, flat.length - width));
   return `${start > 0 ? "…" : ""}${flat.slice(start, start + width).trim()}${start + width < flat.length ? "…" : ""}`;
 }
 
-const searchable = (q: string) => ({
-  deletedAt: null,
-  kind: { not: "SYSTEM" as const },
-  body: { contains: q, mode: "insensitive" as const },
-});
+/** Never a deleted message or a system line. The words themselves are matched by the pool of ids (`rankedSearch`). */
+const searchable = { deletedAt: null, kind: { not: "SYSTEM" as const } };
+const searchableSql = [Prisma.sql`"deletedAt" IS NULL`, Prisma.sql`"kind" <> 'SYSTEM'`];
 
 /** The messages of ONE conversation that carry the words (newest first). Not readable: «not found». */
 export async function searchConversation(ctx: OrgAccessContext, conversationId: string, raw: string): Promise<MessageHitDto[]> {
@@ -36,12 +38,22 @@ export async function searchConversation(ctx: OrgAccessContext, conversationId: 
   if (!facts || facts.orgId !== ctx.orgId) throw new NotFoundError("chat.e.not_found");
   if (!canRead(facts, await loadOrgFacts(ctx.userId, ctx.orgId))) throw new NotFoundError("chat.e.not_found");
   const q = searchText(raw);
-  if (q.length < 2) return [];
-  const rows = await db.chatMessage.findMany({
-    where: { conversationId, ...searchable(q) },
-    orderBy: { createdAt: "desc" },
+  const search = arabicSearch(q);
+  if (!search || search.text.length < 2) return [];
+  const rows = await rankedSearch({
+    query: {
+      table: "ChatMessage",
+      search,
+      rank: false,
+      where: [Prisma.sql`"conversationId" = ${conversationId}`, ...searchableSql],
+      order: Prisma.sql`"createdAt" DESC`,
+    },
     take: 30,
-    select: { id: true, body: true, createdAt: true, author: { select: { name: true } } },
+    load: (ids) =>
+      db.chatMessage.findMany({
+        where: { conversationId, ...searchable, id: { in: ids } },
+        select: { id: true, body: true, createdAt: true, author: { select: { name: true } } },
+      }),
   });
   return rows.map((m) => ({
     id: m.id,
@@ -75,38 +87,66 @@ export async function searchChat(
   raw: string,
 ): Promise<{ topics: TopicHitDto[]; messages: MessageHitDto[] }> {
   const q = searchText(raw);
-  if (q.length < 2) return { topics: [], messages: [] };
+  const search = arabicSearch(q);
+  if (!search || search.text.length < 2) return { topics: [], messages: [] };
   const org = await loadOrgFacts(ctx.userId, ctx.orgId);
   const reads = readerOf(ctx.userId, org);
   const here = space.isHq
     ? { OR: [{ spaceId: space.id }, { spaceId: null, kind: { not: "TOPIC" } }] }
     : { spaceId: space.id };
 
+  // the conversations of this place, as a coarse pool for the ids (the where below is the rule)
+  const placeSql = space.isHq
+    ? Prisma.sql`("spaceId" = ${space.id} OR ("spaceId" IS NULL AND "kind" <> 'TOPIC'))`
+    : Prisma.sql`"spaceId" = ${space.id}`;
   const [topicRows, messageRows] = await Promise.all([
-    db.conversation.findMany({
-      where: { orgId: ctx.orgId, kind: "TOPIC", spaceId: space.id, archivedAt: null, title: { contains: q, mode: "insensitive" } },
-      orderBy: { position: "asc" },
-      take: 20,
-      select: { id: true, title: true, emoji: true },
-    }),
-    db.chatMessage.findMany({
-      where: { orgId: ctx.orgId, conversation: { orgId: ctx.orgId, ...here }, ...searchable(q) },
-      orderBy: { createdAt: "desc" },
-      take: 60,
-      select: {
-        id: true,
-        body: true,
-        createdAt: true,
-        conversationId: true,
-        author: { select: { name: true } },
-        conversation: {
-          select: {
-            kind: true,
-            title: true,
-            members: { where: { userId: { not: ctx.userId } }, take: 1, select: { user: { select: { name: true } } } },
-          },
-        },
+    // a topic whose title STARTS with the words comes before one that only contains them
+    rankedSearch({
+      query: {
+        table: "Conversation",
+        search,
+        rank: true,
+        where: [Prisma.sql`"orgId" = ${ctx.orgId}`, Prisma.sql`"kind" = 'TOPIC'`, Prisma.sql`"spaceId" = ${space.id}`, Prisma.sql`"archivedAt" IS NULL`],
+        order: Prisma.sql`"position" ASC`,
       },
+      take: 20,
+      load: (ids) =>
+        db.conversation.findMany({
+          where: { orgId: ctx.orgId, kind: "TOPIC", spaceId: space.id, archivedAt: null, id: { in: ids } },
+          select: { id: true, title: true, emoji: true },
+        }),
+    }),
+    rankedSearch({
+      query: {
+        table: "ChatMessage",
+        search,
+        rank: false,
+        where: [
+          Prisma.sql`"orgId" = ${ctx.orgId}`,
+          ...searchableSql,
+          Prisma.sql`"conversationId" IN (SELECT "id" FROM "Conversation" WHERE "orgId" = ${ctx.orgId} AND ${placeSql})`,
+        ],
+        order: Prisma.sql`"createdAt" DESC`,
+      },
+      take: 60,
+      load: (ids) =>
+        db.chatMessage.findMany({
+          where: { orgId: ctx.orgId, conversation: { orgId: ctx.orgId, ...here }, ...searchable, id: { in: ids } },
+          select: {
+            id: true,
+            body: true,
+            createdAt: true,
+            conversationId: true,
+            author: { select: { name: true } },
+            conversation: {
+              select: {
+                kind: true,
+                title: true,
+                members: { where: { userId: { not: ctx.userId } }, take: 1, select: { user: { select: { name: true } } } },
+              },
+            },
+          },
+        }),
     }),
   ]);
 
