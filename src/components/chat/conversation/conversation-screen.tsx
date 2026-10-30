@@ -5,8 +5,9 @@ import { conversationDetailUrl, isAtBottom, onNewest } from "@/lib/chat/conversa
 import { MessageItem, TypingLine } from "@/components/chat/message/message-item";
 import { dayLabelOf, opensDay } from "@/lib/chat/day-separator";
 import { ChatComposer } from "@/components/chat/composer/chat-composer";
-import { MENTION_ALL_NAME } from "@/lib/chat/conversation/mentions";
+import { isMentioned, MENTION_ALL_NAME } from "@/lib/chat/conversation/mentions";
 import { runFlags } from "@/lib/chat/group";
+import { playChatSound, soundOfArrival } from "@/lib/chat/sounds";
 import { useRealtime, useTyping } from "@/lib/realtime/use-realtime";
 import { announceChatRead } from "@/lib/chat/use-chat-unread";
 import { Button } from "@/components/ui/button";
@@ -63,7 +64,7 @@ if(!response.ok)throw new Error(ct("chatc.load_failed"));const data=await respon
  const logRef=React.useRef<HTMLDivElement>(null); const atBottomRef=React.useRef(true); const openingRef=React.useRef(true); const newestRef=React.useRef<string|null>(null); const [below,setBelow]=React.useState(0); const [awayFromBottom,setAwayFromBottom]=React.useState(false);
  React.useEffect(()=>{openingRef.current=true;newestRef.current=null;atBottomRef.current=true;setBelow(0);setAwayFromBottom(false);},[conversationId]);
  const toBottom=React.useCallback((smooth=false)=>{const el=logRef.current;if(!el)return;el.scrollTo({top:el.scrollHeight,behavior:smooth?"smooth":"auto"});atBottomRef.current=true;setBelow(0);setAwayFromBottom(false);/* pictures and voice notes grow after they load: follow them down once more */requestAnimationFrame(()=>{if(atBottomRef.current&&logRef.current)logRef.current.scrollTop=logRef.current.scrollHeight;});},[]);
- React.useLayoutEffect(()=>{if(loading)return;const newest=messages.at(-1);if(!newest||newest.id===newestRef.current)return;const first=newestRef.current===null;newestRef.current=newest.id;const where=onNewest({opening:openingRef.current&&first,mine:Boolean(newest.mine),atBottom:atBottomRef.current,aroundHit:Boolean(anchor)});openingRef.current=false;if(where==="bottom")toBottom();else if(where==="badge")setBelow(n=>n+1);},[messages,loading,anchor,toBottom]);
+ React.useLayoutEffect(()=>{if(loading)return;const newest=messages.at(-1);if(!newest||newest.id===newestRef.current)return;const first=newestRef.current===null;newestRef.current=newest.id;const arrival=soundOfArrival({mine:Boolean(newest.mine),opening:openingRef.current&&first,mentionsMe:Boolean(detail?.me.id)&&isMentioned(newest.mentions,detail?.me.id??""),kind:newest.kind});if(arrival)playChatSound(arrival);const where=onNewest({opening:openingRef.current&&first,mine:Boolean(newest.mine),atBottom:atBottomRef.current,aroundHit:Boolean(anchor)});openingRef.current=false;if(where==="bottom")toBottom();else if(where==="badge")setBelow(n=>n+1);},[messages,loading,anchor,toBottom,detail?.me.id]);
  const onLogScroll=React.useCallback(()=>{const el=logRef.current;if(!el)return;const at=isAtBottom(el);atBottomRef.current=at;setAwayFromBottom(!at);if(at)setBelow(0);},[]);
  // Live: any event of THIS conversation (or a synthetic one with no conversation: the polling fallback,
  // a reconnect `reload`) refetches it quietly; a burst of events is folded into one refetch.
