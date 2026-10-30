@@ -26,9 +26,9 @@ Status per phase. Baseline: Phase 0 audit done (empty repo → greenfield build)
 
 ## Phase 3 — Advanced work management
 
-- Timeline; dependencies UI — **done 2026-10-30** (`src/server/services/task-links.ts`, the «التبعيات»
-  card on the task page, switch `taskLinks`)
-- Milestones UI (model ready)
+- Timeline ✅ · dependencies UI ✅ (`TaskDependency`, behind the `taskLinks` switch: `GET|POST /api/tasks/[id]/links`)
+- Milestones UI ✅ (`GET|POST /api/projects/[id]/milestones`, `PATCH|DELETE /api/milestones/[id]`, the card on the
+  project page and the task's picker; behind the `milestones` switch. «متأخر» is read, never stored)
 - Recurring tasks (idempotent generator in worker)
 - Bulk operations, custom fields (CustomFieldDefinition/Value tables)
 - Team workload view

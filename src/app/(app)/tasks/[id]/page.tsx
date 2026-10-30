@@ -23,6 +23,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       assignee: { select: { id: true, name: true } },
       creator: { select: { id: true, name: true } },
       organization: { select: { keyPrefix: true } },
+      milestone: { select: { id: true, name: true } },
       column: {
         select: { name: true, board: { select: { id: true, name: true } } },
       },
@@ -57,6 +58,17 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   // «التبعيات»: the switch decides whether the card exists at all, and the picker offers the other
   // tasks of the SAME space that this person may see (the team rule, not the whole company)
   const linksOn = await actorFeatureOn(actor, "taskLinks");
+  // «المعالم»: the picker on the task is drawn only while the company's switch is on, and only when the
+  // task's project actually has milestones to point at
+  const milestonesOn = await actorFeatureOn(actor, "milestones");
+  const projectMilestones = milestonesOn
+    ? await db.milestone.findMany({
+        where: { projectId: task.projectId },
+        orderBy: [{ targetDate: "asc" }, { createdAt: "asc" }],
+        select: { id: true, name: true },
+      })
+    : [];
+
   const [members, labels, linkCandidates] = await Promise.all([
     // the people who can be assigned: the space's members who are still ACTIVE in the company (a
     // suspended person keeps their space row so that reactivating them restores everything, but
@@ -107,6 +119,8 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
         creatorName: task.creator.name,
         assigneeId: task.assigneeId,
         assigneeName: task.assignee?.name ?? null,
+        milestoneId: task.milestoneId,
+        milestoneName: task.milestone?.name ?? null,
         labelIds: task.labels.map((l) => l.label.id),
         comments: task.comments.map((c) => ({
           id: c.id,
@@ -131,6 +145,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
             }
           : null
       }
+      milestones={milestonesOn ? projectMilestones : null}
     />
   );
 }

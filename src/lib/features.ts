@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -47,6 +47,9 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // «التبعيات» on a task (src/server/services/task-links.ts): off, the card is not drawn and its routes answer
   // «not found»; the links already stored stay, and come back with the switch
   taskLinks: true,
+  // «المعالم» on a project (src/server/services/milestones.ts): off, the card is not drawn, the task's picker is not
+  // offered and the routes answer «not found»; the milestones already made stay where they are
+  milestones: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

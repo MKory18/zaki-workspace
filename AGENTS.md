@@ -15,8 +15,9 @@ claim more than the code does: do not rely on them.
 
 ## The owner's rules (mandatory in every session)
 
-- **Answer the owner in Jordanian Arabic** — the result, directly, without walking through
-  internal steps. He is not a programmer. (Code, commits and this file stay in English.)
+- **Answer the owner in Levantine Arabic** (Jordanian as he writes it) — the result, directly,
+  without walking through internal steps, and with **no English word at all** in the answer. He
+  is not a programmer. (Code, commits and this file stay in English.)
 - **A risk, or anything automated, is shown as ⚠️ with the fix under it as 🔧.** We do not
   remove the feature, we mark it. In the UI the warning and its fix are visible together;
   in documents use ⚠️ and 🔧.
@@ -67,7 +68,7 @@ model · money logic changed without the owner · a feature removed instead of m
 
 | System | Repository | Role |
 |---|---|---|
-| **Zaki Workspace** (this repo) | `MKory18/zaki-workspace` | **source of truth** for the work OS — branches and PRs happen here. Next 14 · Prisma 5 · Node 22 |
+| **Zaki Workspace** (this repo) | `iahmed30004000-wq/zaki-workspace` | **source of truth** for the work OS — branches and PRs happen here. Next 14 · Prisma 5 · Node 22 |
 | OMS / CRM (salesflow) | `MKory18/Zaki-ai-CRM` | **the only source of truth for the OMS** (orders, inventory, wallets). Next 16 · Prisma 6 · Node 24. Work happens there, never from this repo |
 | OMS mirrors | `MKory18/zaki-ai-OSM-1` · `iahmed30004000-wq/zaki-ai-OSM` | ⚠️ identical copies of the OMS. 🔧 Fast-forwarded **by the owner only**, after a merge; nobody commits on them |
 | System 7 — replies and sales | `MKory18/AIresponse` | consumes OMS order events; will consume this repo's `/api/v1` door (ideas, tasks) once it is built |
@@ -262,6 +263,9 @@ other way is a bug.
 - **The image is built on GitHub, not on the production server** (`.github/workflows/image.yml`):
   it builds the Dockerfile, proves the image starts, migrates and is healthy, then publishes
   `ghcr.io/<owner>/zaki-workspace`. Building on the server starved the live apps before.
+  ⚠️ Publishing an image changes nothing by itself: until Coolify is pointed at that image (or
+  its webhook is enabled), production keeps deploying the way it did — check Coolify → Git
+  Source before assuming which one is live. 🔧 The switch is the owner's, not a merge's.
 - The container runs `prisma migrate deploy` when it starts, then serves on port 3000.
 - Required environment: `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`. Optional: `ENCRYPTION_KEY`,
   `UPLOAD_DIR` (the image sets it to `/app/storage/uploads`, which must be a persistent

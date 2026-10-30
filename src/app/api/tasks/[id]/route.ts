@@ -62,6 +62,8 @@ const patchSchema = z.object({
   assigneeId: z.string().min(1).nullable().optional(),
   dueDate: z.string().datetime({ offset: true }).or(z.string().date()).nullable().optional(),
   startDate: z.string().datetime({ offset: true }).or(z.string().date()).nullable().optional(),
+  /** A milestone of THIS task's project, or null to detach it (`updateTask` refuses another project's). */
+  milestoneId: z.string().min(1).nullable().optional(),
   archived: z.boolean().optional(),
   labelIds: z.array(z.string().min(1)).max(15).optional(),
 });
@@ -90,6 +92,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       assigneeId: input.assigneeId === null ? null : input.assigneeId,
       dueDate: await dueFromInput(ctx.orgId, input.dueDate),
       startDate: await dueFromInput(ctx.orgId, input.startDate),
+      milestoneId: input.milestoneId === null ? null : input.milestoneId,
       archived: input.archived,
       labelIds: input.labelIds,
     });

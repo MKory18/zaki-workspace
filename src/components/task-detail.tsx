@@ -33,6 +33,9 @@ export interface TaskDetailData {
   creatorName: string;
   assigneeId: string | null;
   assigneeName: string | null;
+  /** «المعلم» the task points at, if any (null when the feature is off or the task has none). */
+  milestoneId?: string | null;
+  milestoneName?: string | null;
   labelIds: string[];
   comments: { id: string; author: string; authorId: string; body: string; createdAt: string }[];
 }
@@ -44,6 +47,7 @@ export function TaskDetail({
   members,
   labels,
   links = null,
+  milestones = null,
 }: {
   task: TaskDetailData;
   /** Whether the API would let this person change the task (see canWriteInWorkspace). */
@@ -53,6 +57,8 @@ export function TaskDetail({
   labels: { id: string; name: string; color: string }[];
   /** «التبعيات»: null when the company switched it off (the card is not drawn at all). */
   links?: { candidates: LinkCandidate[] } | null;
+  /** The milestones of this task's project, or `null` when the company's «المعالم» switch is off. */
+  milestones?: { id: string; name: string }[] | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -62,6 +68,7 @@ export function TaskDetail({
   const [priority, setPriority] = useState(task.priority);
   const [dueDate, setDueDate] = useState(task.dueDate?.slice(0, 10) ?? "");
   const [assigneeId, setAssigneeId] = useState(task.assigneeId ?? "");
+  const [milestoneId, setMilestoneId] = useState(task.milestoneId ?? "");
   const [selectedLabels, setSelectedLabels] = useState<string[]>(task.labelIds);
   const [commentBody, setCommentBody] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +131,7 @@ export function TaskDetail({
     if (priority !== task.priority) patch.priority = priority;
     if (dueDate !== (task.dueDate?.slice(0, 10) ?? "")) patch.dueDate = dueDate || null;
     if (assigneeId !== (task.assigneeId ?? "")) patch.assigneeId = assigneeId || null;
+    if (milestoneId !== (task.milestoneId ?? "")) patch.milestoneId = milestoneId || null;
     if (JSON.stringify(selectedLabels) !== JSON.stringify(task.labelIds))
       patch.labelIds = selectedLabels;
     if (Object.keys(patch).length) save.mutate(patch);
@@ -217,6 +225,32 @@ export function TaskDetail({
                 <p className="text-sm text-fg">{task.dueDate ? fmtDMY(task.dueDate) : "—"}</p>
               )}
             </div>
+            {milestones && milestones.length > 0 ? (
+              <div>
+                <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
+                  <Flag className="h-3 w-3" /> {t("task.milestone")}
+                </span>
+                {canEdit ? (
+                  <Select
+                    value={milestoneId}
+                    onChange={(e) => {
+                      setMilestoneId(e.target.value);
+                      save.mutate({ milestoneId: e.target.value || null });
+                    }}
+                    className="h-8"
+                  >
+                    <option value="">{t("task.noMilestone")}</option>
+                    {milestones.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <p className="text-sm text-fg">{task.milestoneName ?? t("task.noMilestone")}</p>
+                )}
+              </div>
+            ) : null}
             <div>
               <span className="mb-1 block text-xs text-fg-muted">{t("task.labels")}</span>
               {canEdit ? (
