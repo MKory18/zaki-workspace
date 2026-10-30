@@ -240,6 +240,25 @@ html {
   }
 }
 
+/* «ترتيب»: the row under the finger lifts a little (the shell's reorder mode, src/components/shell/nav-sort.tsx). */
+.zk-lift {
+  animation: zk-lift 150ms ease-out both;
+}
+@keyframes zk-lift {
+  from {
+    scale: 1;
+  }
+  to {
+    scale: 1.03;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zk-lift {
+    animation: none !important;
+    scale: 1;
+  }
+}
+
 /* «تمّت المهمّة!»: the band that plays once over the mission card when it is finished. */
 .zk-passed {
   animation: zk-passed 1.8s ease forwards;

@@ -28,6 +28,7 @@ import taskLinks from "./ar.task-links.json";
 import milestones from "./ar.milestones.json";
 import profileCard from "./ar.profile-card.json";
 import cards from "./ar.cards.json";
+import navOrder from "./ar.nav-order.json";
 import taskRequests from "./ar.task-requests.json";
 
 /**
@@ -68,5 +69,6 @@ export const AR: Record<string, string> = {
   ...milestones,
   ...profileCard,
   ...cards,
+  ...navOrder,
   ...taskRequests,
 };

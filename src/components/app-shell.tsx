@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n";
 import type { Audience } from "@/lib/guide/audience";
 import { browserStore } from "@/lib/guide/storage";
 import { locate, type NavModel, type NavRole } from "@/lib/nav/places";
+import { applyNavOrder, hasOrder, withPlaceOrder, withTabOrder, type NavOrder } from "@/lib/nav/order";
+import { useOptionalToast } from "@/components/ui/toast";
 import type { NewActionKey } from "@/lib/nav/new-actions";
 import type { AvatarUser } from "@/components/shell/avatar-menu";
 import { ZakiMark } from "@/components/logo";
@@ -21,8 +23,10 @@ import { parseSidebarCookie, writeSidebarCookie } from "@/components/shell/sideb
 
 export interface AppShellProps {
   user: AvatarUser;
-  /** The person's map, computed on the server from their rank and switches (src/lib/nav/places.ts). */
+  /** The person's map, computed on the server from their rank and switches (src/lib/nav/places.ts), in the code's order. */
   nav: NavModel;
+  /** The person's own saved order of it («ترتيبي», src/lib/nav/order.ts): the server read it, so the first paint has it. */
+  navOrder?: NavOrder | null;
   /** The rank in the active organization, shown in Arabic in the avatar menu. */
   rank: NavRole;
   /** The guide level («؟» picks the read-only line for an external partner). */
@@ -58,8 +62,41 @@ export interface AppShellProps {
  * (`buildNav` in the (app) layout): the frame only draws it, and the server still decides every request.
  * Theme tokens only, logical CSS only; the decoration is in the side menu's header and nowhere else.
  */
-export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCollapsed = false, newActions = [], orgName, space: initialSpace = null, canOverview = false, peopleDock = true, children }: AppShellProps) {
+export function AppShell({ user, nav: defaultNav, navOrder = null, rank, audience, isGuest = false, defaultCollapsed = false, newActions = [], orgName, space: initialSpace = null, canOverview = false, peopleDock = true, children }: AppShellProps) {
   const { t } = useI18n();
+  const toast = useOptionalToast();
+  // «ترتيبي»: the person's own order, drawn over the map they may see (never adds or hides anything)
+  const [order, setOrder] = useState<NavOrder | null>(navOrder);
+  const orderRef = useRef<NavOrder | null>(navOrder);
+  const [editing, setEditing] = useState(false);
+  const nav = useMemo(() => applyNavOrder(defaultNav, order), [defaultNav, order]);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  // saves go one after the other, so the last drop is the one that stays; a refused save puts the screen back
+  const save = (next: NavOrder | null) => {
+    const before = orderRef.current;
+    orderRef.current = next;
+    setOrder(next);
+    queue.current = queue.current.then(async () => {
+      try {
+        const res = await fetch("/api/me/nav-order", {
+          method: next ? "PUT" : "DELETE",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          ...(next ? { body: JSON.stringify(next) } : {}),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+      } catch {
+        if (orderRef.current === next) {
+          orderRef.current = before;
+          setOrder(before);
+        }
+        toast?.toast(t("navorder.save_failed"), "error");
+      }
+    });
+  };
+  const reorderPlaces = (keys: string[]) => save(withPlaceOrder(orderRef.current, defaultNav, keys));
+  const reorderTabs = (placeKey: string, keys: string[]) => save(withTabOrder(orderRef.current, defaultNav, placeKey, keys));
+  const resetOrder = () => save(null);
   // the space the person is in (the layout's answer, then the server's after each navigation)
   const space = useCurrentSpace(initialSpace);
   const pathname = usePathname() ?? "/";
@@ -114,6 +151,12 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
         onToggle={toggleSidebar}
         animated={animated}
         badges={badges}
+        editing={editing}
+        onEditStart={() => setEditing(true)}
+        onEditDone={() => setEditing(false)}
+        onReorder={reorderPlaces}
+        onReset={resetOrder}
+        canReset={hasOrder(order)}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -131,6 +174,8 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
           place={place}
           tab={tab}
           pathname={pathname}
+          editing={editing}
+          onReorder={reorderTabs}
           end={
             place?.key === "work" ? (
               <div className="shrink-0 border-s border-border px-1 md:hidden">
@@ -149,7 +194,18 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
         </div>
       </div>
 
-      <BottomNav places={nav.places} current={place?.key ?? null} pathname={pathname} badges={badges} />
+      <BottomNav
+        places={nav.places}
+        current={place?.key ?? null}
+        pathname={pathname}
+        badges={badges}
+        editing={editing}
+        onEditStart={() => setEditing(true)}
+        onEditDone={() => setEditing(false)}
+        onReorder={reorderPlaces}
+        onReset={resetOrder}
+        canReset={hasOrder(order)}
+      />
     </div>
   );
 }
