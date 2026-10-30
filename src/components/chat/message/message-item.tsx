@@ -32,15 +32,22 @@ export interface MessageItemProps { message: MessageDto; canModerate: boolean; o
   meId?: string;
   /** the company switched «شكل الرسائل الحديث» off: draw the older bubble */
   classic?: boolean;
+  /** the first / last message of a run by one person (the name sits on the first, the picture and the tail on the last); absent: a lone message */
+  groupStart?: boolean;
+  groupEnd?: boolean;
   /** a «صارت مهمة/تذكرة» chip was tapped */
   onOpenWork?: (kind: "task" | "ticket", id: string) => void }
 const safeMediaUrl = (url: string) => url.startsWith("/api/chat/attachments/") ? url : undefined;
 const MAX_READER_AVATARS = 5;
 /** DM ticks on my own message: ✓ sent, ✓✓ delivered (both muted), ✓✓ read in the info colour; the word is for screen readers. */
 export function MessageTicks({status}:{status:NonNullable<MessageDto["status"]>}){const label=AR[`chatc.tick.${status}`]??"";return <span data-ticks={status} className={`inline-flex items-center text-xs ${status==="read"?"text-info":"text-fg-muted"}`}><span aria-hidden="true">{status==="sent"?"✓":"✓✓"}</span><span className="sr-only">{label}</span></span>;}
-/** The small row of people whose newest read message is this one (topics and groups), five at most and «+n». */
-export function ReaderRow({readers}:{readers:ReaderDto[]}){if(!readers.length)return null;const shown=readers.slice(0,MAX_READER_AVATARS);const more=readers.length-shown.length;const names=shown.map(r=>r.name).join(ct("chatc.list_sep"))+(more>0?` ${interpolate(AR["chatc.readers_more"]??"",{count:more})}`:"");return <div data-readers className="mt-1 flex justify-end gap-0.5" role="img" aria-label={interpolate(AR["chatc.readers"]??"",{names})}>{shown.map(r=><Avatar key={r.userId} name={r.name} src={r.avatarUrl} className="h-6 w-6"/>)}{more>0&&<span aria-hidden="true" className="self-center text-xs text-fg-muted">+{more}</span>}</div>;}
-export function MessageItem({message,canModerate,oversight=false,readers=[],conversationKind="TOPIC",canPost=true,canMakeWork=false,canMakeTask,canMakeTicket,classic=false,mentionNames=[],meId,onReact,onAction,onOpenWork}: MessageItemProps) {
+/** Who read, and when: every reader (no cap) with the time of their own read mark. */
+export function ReaderList({readers}:{readers:ReaderDto[]}){return <ul data-reader-list aria-label={ct("chatc.readers_title")} className="mt-1 max-h-48 w-56 max-w-full overflow-y-auto rounded-xl border border-border bg-surface p-1 text-sm shadow-lg">{readers.map(r=><li key={r.userId} className="flex items-center gap-2 px-2 py-1"><Avatar name={r.name} src={r.avatarUrl} className="size-6 text-xs"/><span className="min-w-0 flex-1 truncate">{r.name}</span>{r.readAt&&<time dateTime={r.readAt} dir="ltr" className="text-xs tabular-nums text-fg-muted">{fmtTime(r.readAt)}</time>}</li>)}</ul>;}
+/** «فلان يكتب…» above the composer: nothing for nobody. */
+export function TypingLine({names}:{names:string[]}){if(!names.length)return null;const text=names.length===1?ct("chatc.typing.one",{name:names[0]??""}):names.length===2?ct("chatc.typing.two",{a:names[0]??"",b:names[1]??""}):ct("chatc.typing.many",{names:names.join(ct("chatc.list_sep"))});return <p role="status" aria-live="polite" data-typing className="px-3 pb-1 text-xs text-fg-muted">{text}</p>;}
+/** The small row of people whose newest read message is this one (topics and groups), five at most and «+n»; a tap opens who read and when. */
+export function ReaderRow({readers}:{readers:ReaderDto[]}){const [open,setOpen]=React.useState(false);if(!readers.length)return null;const shown=readers.slice(0,MAX_READER_AVATARS);const more=readers.length-shown.length;const names=shown.map(r=>r.name).join(ct("chatc.list_sep"))+(more>0?` ${interpolate(AR["chatc.readers_more"]??"",{count:more})}`:"");return <div data-readers className="mt-1 flex flex-col items-end"><button type="button" aria-expanded={open} aria-label={interpolate(AR["chatc.readers"]??"",{names})} onClick={()=>setOpen(v=>!v)} className="flex min-h-6 justify-end gap-0.5">{shown.map(r=><Avatar key={r.userId} name={r.name} src={r.avatarUrl} className="h-6 w-6"/>)}{more>0&&<span aria-hidden="true" className="self-center text-xs text-fg-muted">+{more}</span>}</button>{open&&<ReaderList readers={readers}/>}</div>;}
+export function MessageItem({message,canModerate,oversight=false,readers=[],conversationKind="TOPIC",canPost=true,canMakeWork=false,canMakeTask,canMakeTicket,classic=false,mentionNames=[],meId,groupStart=true,groupEnd=true,onReact,onAction,onOpenWork}: MessageItemProps) {
  const [sheetOpen,setSheetOpen]=React.useState(false);
  const press=React.useRef<{timer:ReturnType<typeof setTimeout>;x:number;y:number}|null>(null);
  const canAct=!oversight&&!message.deleted&&message.kind!=="SYSTEM";
@@ -54,7 +61,8 @@ export function MessageItem({message,canModerate,oversight=false,readers=[],conv
  const time=fmtTime(message.createdAt);
  // the bubble: mine in the accent, the others' on the surface; the corner nearest its author stays tight
  const mentionsMe=!message.mine&&!message.deleted&&Boolean(meId)&&isMentioned(message.mentions,meId as string);
- const bubble=`max-w-[85%] min-w-0 break-words rounded-2xl border px-3 py-2 [@media(hover:none)]:select-none sm:max-w-[75%] ${message.mine?"border-accent/30 bg-accent/10 rounded-ee-md":mentionsMe?"border-warn/50 bg-warn/10 rounded-es-md":"border-border bg-surface rounded-es-md"}`;
+ const bubble=`max-w-[85%] min-w-0 break-words rounded-2xl border px-3 py-2 [@media(hover:none)]:select-none sm:max-w-[75%] ${message.mine?`border-accent/30 bg-accent/10 ${groupEnd?"rounded-ee-md":""}`:mentionsMe?`border-warn/50 bg-warn/10 ${groupEnd?"rounded-es-md":""}`:`border-border bg-surface ${groupEnd?"rounded-es-md":""}`}`;
+ const run=groupStart&&groupEnd?"single":groupStart?"start":groupEnd?"end":"middle";
  const timeLine=<span className="mt-1 flex items-center justify-end gap-1.5 text-xs text-fg-muted">{message.edited&&<span>{ct("chatc.edited")}</span>}{message.pinned&&<span>{ct("chatc.pinned")}</span>}<time dateTime={message.createdAt} dir="ltr" className="tabular-nums">{time}</time>{message.mine&&message.status&&!message.deleted&&<MessageTicks status={message.status}/>}</span>;
  const menu=canAct?<MessageMenu context={context} onAction={id=>onAction(message,id)} onReact={emoji=>onReact(message,emoji)} sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}/>:null;
  // what a message SAYS: the same in both shapes (only where it sits and what surrounds it differ)
@@ -70,17 +78,17 @@ export function MessageItem({message,canModerate,oversight=false,readers=[],conv
  if(classic) return <div className="group mb-3" data-message-row={message.mine?"mine":"other"}>
  <div className={`flex items-end gap-1 ${message.mine?"flex-row-reverse":"flex-row"}`}>
  <article dir="rtl" data-message-id={message.id} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endPress} onPointerCancel={endPress} onContextMenu={e=>{if(sheetOpen||press.current)e.preventDefault();}} className={`max-w-[85%] min-w-0 break-words rounded-2xl border px-3 py-2 [@media(hover:none)]:select-none ${message.mine?"border-accent/30 bg-accent/10":"border-border bg-surface"}`}>
- <p className="mb-1 text-xs text-fg-muted">{message.authorName}</p>
+ {groupStart&&<p className="mb-1 text-xs text-fg-muted">{message.authorName}</p>}
  {content}
  </article>
  {menu}
  </div>
  <ReaderRow readers={readers}/></div>;
- return <div className="group mb-2.5" data-message-row={message.mine?"mine":"other"}>{/* In RTL the first child sits at the right: «mine» reverses the row so the bubble starts at the left, the others keep the row so it starts at the right. */}
+ return <div className={`group ${groupEnd?"mb-2.5":"mb-0.5"}`} data-message-row={message.mine?"mine":"other"} data-run={run}>{/* In RTL the first child sits at the right: «mine» reverses the row so the bubble starts at the left, the others keep the row so it starts at the right. */}
  <div className={`flex items-end gap-1.5 ${message.mine?"flex-row-reverse":"flex-row"}`}>
- {!message.mine&&<Avatar name={message.authorName} src={message.authorAvatar} className="mb-1 size-7 text-xs"/>}
+ {!message.mine&&(groupEnd?<Avatar name={message.authorName} src={message.authorAvatar} className="mb-1 size-7 text-xs"/>:<span aria-hidden="true" className="size-7 shrink-0"/>)}
  <div className={`flex min-w-0 flex-col ${message.mine?"items-end":"items-start"}`}>
- {!message.mine&&<p className="mb-0.5 px-1 text-xs font-semibold text-fg-muted">{message.authorName}</p>}
+ {!message.mine&&groupStart&&<p className="mb-0.5 px-1 text-xs font-semibold text-fg-muted">{message.authorName}</p>}
  <div className="flex min-w-0 max-w-full items-end gap-1">
  <article dir="rtl" data-message-id={message.id} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endPress} onPointerCancel={endPress} onContextMenu={e=>{if(sheetOpen||press.current)e.preventDefault();}} className={bubble}>
   {content}
