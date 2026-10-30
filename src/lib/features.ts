@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "quickChat"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -50,6 +50,9 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // «المعالم» on a project (src/server/services/milestones.ts): off, the card is not drawn, the task's picker is not
   // offered and the routes answer «not found»; the milestones already made stay where they are
   milestones: true,
+  // the floating quick chat in the corner of the shell (src/components/shell/quick-chat.tsx): off, the button is not
+  // drawn; the chat itself and every message already sent are untouched
+  quickChat: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {
