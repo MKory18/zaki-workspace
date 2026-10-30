@@ -6,6 +6,7 @@ import { SectionOffNotice } from "@/app/(app)/_access";
 import { keepInSpace } from "@/server/services/current-space";
 import { loadWorkScope, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace } from "@/server/workspace-role";
+import { actorFeatureOn } from "@/server/services/features";
 import { TaskDetail } from "@/components/task-detail";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
@@ -22,6 +23,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       assignee: { select: { id: true, name: true } },
       creator: { select: { id: true, name: true } },
       organization: { select: { keyPrefix: true } },
+      milestone: { select: { id: true, name: true } },
       column: {
         select: { name: true, board: { select: { id: true, name: true } } },
       },
@@ -52,6 +54,17 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   });
   // the space's rule, and the tasks row's «يضيف ويعدّل» box of the section grid
   const canEdit = membership ? canWriteInWorkspace(membership.role, spaceRow?.role) && actorCanWork(actor, "tasks.edit") : false;
+
+  // «المعالم»: the picker on the task is drawn only while the company's switch is on, and only when the
+  // task's project actually has milestones to point at
+  const milestonesOn = await actorFeatureOn(actor, "milestones");
+  const projectMilestones = milestonesOn
+    ? await db.milestone.findMany({
+        where: { projectId: task.projectId },
+        orderBy: [{ targetDate: "asc" }, { createdAt: "asc" }],
+        select: { id: true, name: true },
+      })
+    : [];
 
   const [members, labels] = await Promise.all([
     // the people who can be assigned: the space's members who are still ACTIVE in the company (a
@@ -89,6 +102,8 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
         creatorName: task.creator.name,
         assigneeId: task.assigneeId,
         assigneeName: task.assignee?.name ?? null,
+        milestoneId: task.milestoneId,
+        milestoneName: task.milestone?.name ?? null,
         labelIds: task.labels.map((l) => l.label.id),
         comments: task.comments.map((c) => ({
           id: c.id,
@@ -102,6 +117,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       currentUserId={user.id}
       members={members.map((m) => ({ id: m.user.id, name: m.user.name }))}
       labels={labels}
+      milestones={milestonesOn ? projectMilestones : null}
     />
   );
 }

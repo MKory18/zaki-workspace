@@ -6,13 +6,17 @@ import { actorCanWork, requireActor } from "@/server/policy/actor";
 import { SectionOffNotice } from "@/app/(app)/_access";
 import { keepInSpace } from "@/server/services/current-space";
 import { loadWorkScope, projectVisibleWhere } from "@/server/services/team-scope";
+import { canWriteInWorkspace } from "@/server/workspace-role";
 import { Card, CardBody, CardHeader, Badge } from "@/components/ui/card";
 import { BoardCreateButton } from "@/components/board-create-button";
+import { MilestonesCard } from "@/components/milestones-card";
 import { fmtDMY } from "@/lib/format";
 import { enumLabel } from "@/lib/i18n/enums";
 import { getServerT } from "@/lib/i18n/server";
 import { TimelineBadgeButton } from "@/components/timeline-badge-button";
 import { ProjectTeamPicker } from "@/components/project-team-picker";
+import { actorFeatureOn } from "@/server/services/features";
+import { listMilestones } from "@/server/services/milestones";
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
   const { t } = getServerT();
@@ -24,9 +28,8 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     where: { id: params.id, AND: [projectVisibleWhere(scope)] },
     include: {
       boards: { where: { archived: false }, select: { id: true, name: true, _count: { select: { tasks: true } } } },
-      milestones: { select: { id: true, name: true, status: true, targetDate: true } },
       _count: { select: { tasks: { where: { archived: false } } } },
-      workspace: { select: { id: true } },
+      workspace: { select: { id: true, organizationId: true } },
     },
   });
   if (!project) notFound();
@@ -35,6 +38,25 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   // the projects row of the person's grid
   if (!actorCanWork(actor, "projects.view")) return <SectionOffNotice />;
   await keepInSpace(actor, project.workspace.id, `/projects/${project.id}`);
+
+  // «المعالم»: drawn only while the company's switch is on (off: nothing of it is offered, nothing is lost)
+  const milestonesOn = await actorFeatureOn(actor, "milestones");
+  // the same write rule the API applies: the real rank in the space, plus the projects row's «يضيف ويعدّل» box
+  const membership = await db.organizationMember.findFirst({
+    where: { userId: user.id, organizationId: project.workspace.organizationId, status: "ACTIVE" },
+    select: { role: true },
+  });
+  const spaceRow = await db.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: project.workspace.id, userId: user.id } },
+    select: { role: true },
+  });
+  const canEditMilestones =
+    milestonesOn &&
+    membership != null &&
+    canWriteInWorkspace(membership.role, spaceRow?.role) &&
+    actorCanWork(actor, "projects.edit");
+  const milestones = milestonesOn ? await listMilestones(project.id, actor.orgId) : [];
+
   const doneColumnIds = await db.boardColumn.findMany({
     where: { board: { projectId: project.id }, done: true },
     select: { id: true },
@@ -90,25 +112,20 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         )}
       </section>
 
-      {project.milestones.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <p className="text-sm font-semibold text-fg">{t("proj.milestones")}</p>
-          </CardHeader>
-          <CardBody>
-            <ul className="divide-y divide-border">
-              {project.milestones.map((m) => (
-                <li key={m.id} className="flex items-center justify-between py-2 text-sm">
-                  <span className="text-fg">{m.name}</span>
-                  <span className="text-xs text-muted">
-                    {enumLabel("MilestoneStatus", m.status)}
-                    {m.targetDate ? ` · ${fmtDMY(m.targetDate)}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
+      {milestonesOn ? (
+        <MilestonesCard
+          projectId={project.id}
+          canEdit={canEditMilestones}
+          milestones={milestones.map((m) => ({
+            id: m.id,
+            name: m.name,
+            description: m.description,
+            status: m.status,
+            targetDate: m.targetDate ? m.targetDate.toISOString() : null,
+            overdue: m.overdue,
+            openTasks: m.openTasks,
+          }))}
+        />
       ) : null}
     </div>
   );
