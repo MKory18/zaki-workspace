@@ -288,6 +288,9 @@ export interface ViewTask {
   projectName: string;
   assigneeId: string | null;
   assigneeName: string | null;
+  /** Every person the task is for («لمين» with more than one): the primary first, then the others. */
+  assigneeIds: string[];
+  assigneeNames: string[];
   creatorId: string;
   labelIds: string[];
   updatedAt: Date;
@@ -299,7 +302,7 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
     orgId: q.orgId,
     archived: false,
   };
-  if (q.assigneeId) where.assigneeId = q.assigneeId;
+  if (q.assigneeId) where.OR = [ { assigneeId: q.assigneeId }, { coAssignees: { some: { userId: q.assigneeId } } } ];
   if (q.creatorId) where.creatorId = q.creatorId;
   if (q.projectId) where.projectId = q.projectId;
   if (q.workspaceIds !== undefined) {
@@ -340,23 +343,29 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
     },
   });
 
-  return rows.map((t): ViewTask => ({
-    id: t.id,
-    key: `${t.organization.keyPrefix}-${t.number}`,
-    title: t.title,
-    priority: t.priority,
-    dueDate: t.dueDate,
-    completedAt: t.completedAt,
-    columnId: t.column.id,
-    columnName: t.column.name,
-    columnDone: t.column.done,
-    workspaceId: t.workspaceId,
-    projectId: t.project.id,
-    projectName: t.project.name,
-    assigneeId: t.assigneeId,
-    assigneeName: t.assignee?.name ?? null,
-    creatorId: t.creatorId,
-    labelIds: t.labels.map((l) => l.label.id),
-    updatedAt: t.updatedAt,
-  }));
+  return rows.map((t): ViewTask => {
+    // «لمين» with more than one person: the primary first, then the people beside them
+    const co = t.coAssignees.map((r) => r.user);
+    return {
+      id: t.id,
+      key: `${t.organization.keyPrefix}-${t.number}`,
+      title: t.title,
+      priority: t.priority,
+      dueDate: t.dueDate,
+      completedAt: t.completedAt,
+      columnId: t.column.id,
+      columnName: t.column.name,
+      columnDone: t.column.done,
+      workspaceId: t.workspaceId,
+      projectId: t.project.id,
+      projectName: t.project.name,
+      assigneeId: t.assigneeId,
+      assigneeName: t.assignee?.name ?? null,
+      assigneeIds: [...(t.assignee ? [t.assignee.id] : []), ...co.map((u) => u.id)],
+      assigneeNames: [...(t.assignee ? [t.assignee.name] : []), ...co.map((u) => u.name)],
+      creatorId: t.creatorId,
+      labelIds: t.labels.map((l) => l.label.id),
+      updatedAt: t.updatedAt,
+    };
+  });
 }

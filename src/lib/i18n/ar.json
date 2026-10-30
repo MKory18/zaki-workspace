@@ -47,6 +47,9 @@
   "task.title": "عنوان المهمة",
   "task.due": "تاريخ الاستحقاق",
   "task.assignee": "المسؤول",
+  "task.assigneesHint": "تختار أكثر من شخص: أول اسم بيصير المسؤول الأساسي، والباقي معه على نفس المهمة.",
+  "common.and": "و",
+
   "task.priority": "الأولوية",
   "task.save": "حفظ",
   "task.cancel": "إلغاء",

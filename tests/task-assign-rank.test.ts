@@ -124,7 +124,7 @@ describe("one judge for every way a task gets an assignee", () => {
   });
 
   it("the task PATCH route sends «أُسندت إليك» only when the task really went to them", () => {
-    expect(read("src/app/api/tasks/[id]/route.ts")).toContain("task.assigneeId === input.assigneeId");
+    expect(read("src/app/api/tasks/[id]/route.ts")).toContain("task.assigneeId === id");
   });
 
   it("the two answer routes exist and go through the service", () => {

@@ -24,6 +24,7 @@ import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/card";
+import { peopleLine } from "@/components/ui/people-multi";
 import { PRIORITY_STYLES, fmtDMY, fmtRelative, isOverdue } from "@/lib/format";
 import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 import { useToast } from "@/components/ui/toast";
@@ -45,6 +46,8 @@ export interface TaskCardData {
   dueDate: string | null;
   labels: { id: string; name: string; color: string }[];
   assignee: { id: string; name: string } | null;
+  /** Every person the task is for («لمين» with more than one), the primary first; absent means one. */
+  assigneeNames?: string[];
   commentCount: number;
   completed: boolean;
 }
@@ -407,7 +410,11 @@ function TaskCardContent({ task }: { task: TaskCardData }) {
         />
       </div>
       <div className="mt-2 flex items-center gap-2 text-xs text-muted">
-        <span className="truncate">{task.assignee?.name ?? t("list.unassigned")}</span>
+        <span className="truncate">
+          {task.assigneeNames?.length
+            ? peopleLine(task.assigneeNames, t("common.and"))
+            : task.assignee?.name ?? t("list.unassigned")}
+        </span>
         {task.dueDate ? (
           <span
             title={fmtDMY(task.dueDate)}

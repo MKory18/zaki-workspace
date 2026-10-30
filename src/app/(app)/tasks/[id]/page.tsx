@@ -8,8 +8,9 @@ import { keepInSpace } from "@/server/services/current-space";
 import { loadWorkScope, taskVisibleWhere } from "@/server/services/team-scope";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { TaskDetail } from "@/components/task-detail";
+import type { RequestBannerMode } from "@/components/task-assign-request-banner";
 import { isRequestTo } from "@/server/policy/assign-rank";
-import { pendingRequestOf } from "@/server/services/task-assign";
+import { pendingRequestsOf } from "@/server/services/task-assign";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
   const user = await pageUser();
@@ -23,6 +24,8 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
     include: {
       labels: { select: { label: true } },
       assignee: { select: { id: true, name: true } },
+      // «لمين» with more than one person: the others, in the order they were picked
+      coAssignees: { select: { userId: true }, orderBy: { createdAt: "asc" } },
       creator: { select: { id: true, name: true } },
       organization: { select: { keyPrefix: true } },
       milestone: { select: { id: true, name: true } },
@@ -72,16 +75,12 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
     : [];
 
   // a request to give this task to somebody of a higher rank, and what the viewer may do with it
-  const pending = await pendingRequestOf(task.id);
-  const requestMode = !pending
-    ? null
-    : pending.toUserId === user.id
-      ? "addressee"
-      : membership?.role === "OWNER"
-        ? "owner"
-        : pending.fromUserId === user.id
-          ? "waiting"
-          : null;
+  // (a task may hold several: the main one and one per higher person beside the first; each is read for the viewer)
+  const pending = await pendingRequestsOf(task.id);
+  const requestBanners = pending.flatMap((r) => {
+    const mode: RequestBannerMode | null = r.toUserId === user.id ? "addressee" : membership?.role === "OWNER" ? "owner" : r.fromUserId === user.id ? "waiting" : null;
+    return mode ? [{ id: r.id, mode, fromName: r.fromName, toName: r.toName }] : [];
+  });
 
   const [members, labels, linkCandidates] = await Promise.all([
     // the people who can be assigned: the space's members who are still ACTIVE in the company (a
@@ -140,6 +139,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
         creatorName: task.creator.name,
         assigneeId: task.assigneeId,
         assigneeName: task.assignee?.name ?? null,
+        assigneeIds: [...(task.assigneeId ? [task.assigneeId] : []), ...task.coAssignees.map((r) => r.userId)],
         milestoneId: task.milestoneId,
         milestoneName: task.milestone?.name ?? null,
         labelIds: task.labels.map((l) => l.label.id),
@@ -157,7 +157,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
         const role = roleOf.get(m.user.id);
         return { id: m.user.id, name: m.user.name, request: !!membership && m.user.id !== user.id && role !== undefined && isRequestTo(membership.role, role) };
       })}
-      assignRequest={pending && requestMode ? { mode: requestMode, fromName: pending.fromName, toName: pending.toName } : null}
+      assignRequests={requestBanners}
       labels={labels}
       links={
         linksOn

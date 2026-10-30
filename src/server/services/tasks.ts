@@ -8,8 +8,10 @@ import { AR } from "@/lib/i18n/dict";
 import {
   assertNoPendingRequest,
   judgeAssignment,
+  judgeCoAssignees,
   notifyAssignRequest,
   storeAssignRequest,
+  storeCoRequests,
   type AssignRequestInfo,
 } from "./task-assign";
 
@@ -28,6 +30,8 @@ export interface CreateTaskInput {
   priority?: Task["priority"];
   type?: Task["type"];
   assigneeId?: string | null;
+  /** «لمين» with more than one person: the people beside `assigneeId` (which stays the first of them). */
+  coAssigneeIds?: string[];
   dueDate?: Date | null;
   startDate?: Date | null;
   labelIds?: string[];
@@ -42,6 +46,11 @@ export interface MoveTaskInput {
 export const TASK_INCLUDE = {
   labels: { select: { label: { select: { id: true, name: true, color: true } } } },
   assignee: { select: { id: true, name: true } },
+  // «لمين» with more than one person: the rows beside the primary, oldest first (the order they were picked)
+  coAssignees: {
+    select: { userId: true, user: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "asc" },
+  },
   _count: { select: { comments: true } },
 } satisfies Prisma.TaskInclude;
 
@@ -51,9 +60,22 @@ export type TaskDTO = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;
  * What `createTask` / `updateTask` hand back: the task, plus the request that was made when the person asked for was of a
  * HIGHER rank (the task then has NO such assignee: see task-assign.ts). `null` when nothing was asked.
  */
-export type TaskWithRequest = TaskDTO & { assignRequest: AssignRequestInfo | null };
+export type TaskWithRequest = TaskDTO & {
+  assignRequest: AssignRequestInfo | null;
+  /** «لمين» with more than one person: the requests made for the people BESIDE the first who are of a higher rank. */
+  coRequests: AssignRequestInfo[];
+};
 
 export type Tx = Prisma.TransactionClient;
+
+/**
+ * «مهمة لأكثر من شخص»: the tasks whose people include this one — the primary column (`assigneeId`)
+ * plus the extra names (`TaskCoAssignee`). Every read that means «الشغل المطلوب من هذا الشخص» uses it,
+ * so a second assignee sees the task in «مهامي» and «اليوم» exactly like the first one.
+ */
+export function assignedTo(userId: string): Prisma.TaskWhereInput {
+  return { OR: [{ assigneeId: userId }, { coAssignees: { some: { userId } } }] };
+}
 
 export interface DefaultBoardColumn {
   name: string;
@@ -189,18 +211,33 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
 
     // P1: never allow assigning a task to a user outside the actor's org, nor to one who is no
     // longer active in it (suspended or offboarded keep their row, but they do not count). By RANK: a person
-    // of a higher rank is asked, not assigned (task-assign.ts): the task is born without them and a request waits
-    let assigneeId = input.assigneeId ?? null;
+    // of a higher rank is asked, not assigned (task-assign.ts): the task is born without them and a request waits.
+    // «لمين» with more than one person: the first named is the task's own assignee, and every other person goes
+    // through the SAME judge on their own (`judgeCoAssignees`): a higher one is asked, the rest are added.
+    const extras = [...new Set(input.coAssigneeIds ?? [])];
+    let assigneeId = input.assigneeId ?? extras.shift() ?? null;
     let requestTo: string | null = null;
+    // a team's task goes to somebody who sees that team's work (its members and the space's managers)
+    const assertInTeam = async (userId: string): Promise<void> => {
+      if (chain.teamId && !(await userSeesProject(userId, chain))) throw new ForbiddenError("assignee.not_in_team");
+    };
     if (assigneeId) {
       const verdict = await judgeAssignment(tx, actor, assigneeId, input.workspaceId);
-      // a team's task goes to somebody who sees that team's work (its members and the space's managers)
-      if (chain.teamId && !(await userSeesProject(assigneeId, chain))) throw new ForbiddenError("assignee.not_in_team");
+      await assertInTeam(assigneeId);
       if (verdict === "request") {
         requestTo = assigneeId;
         assigneeId = null;
       }
     }
+    const first = requestTo ?? assigneeId;
+    const others = await judgeCoAssignees(
+      tx,
+      actor,
+      extras.filter((id) => id !== first),
+      input.workspaceId,
+    );
+    for (const userId of [...others.direct, ...others.request]) await assertInTeam(userId);
+    const coIds = others.direct;
 
     const number = await nextTaskNumber(actor.orgId, tx);
     const task = await tx.task.create({
@@ -222,6 +259,9 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
         position: await positionAt(column.id, undefined, tx),
         // born in a done column is finished: the same rule as `moveTask`, or no counter would see it
         completedAt: column.done ? new Date() : null,
+        coAssignees: coIds.length
+          ? { create: coIds.map((userId) => ({ userId })) }
+          : undefined,
         labels: input.labelIds?.length
           ? { create: [...new Set(input.labelIds)].map((labelId) => ({ labelId })) }
           : undefined,
@@ -239,10 +279,12 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
     const assignRequest = requestTo
       ? await storeAssignRequest(tx, { orgId: actor.orgId, taskId: task.id, fromUserId: actor.userId, toUserId: requestTo })
       : null;
-    return { ...task, assignRequest };
+    const coRequests = await storeCoRequests(tx, { orgId: actor.orgId, taskId: task.id, fromUserId: actor.userId, toUserIds: others.request });
+    return { ...task, assignRequest, coRequests };
   });
-  // after the commit: the higher person hears about it (a failed bell never undoes the task)
+  // after the commit: the higher people hear about it (a failed bell never undoes the task)
   if (made.assignRequest) await notifyAssignRequest(made.id, actor.userId, made.assignRequest.toUserId);
+  for (const r of made.coRequests) await notifyAssignRequest(made.id, actor.userId, r.toUserId);
   return made;
 }
 
@@ -292,6 +334,8 @@ export interface TaskUpdateData {
   priority?: Task["priority"];
   type?: Task["type"];
   assigneeId?: string | null;
+  /** Replaces the people beside the primary (`assigneeId`) when provided. */
+  coAssigneeIds?: string[];
   dueDate?: Date | null;
   startDate?: Date | null;
   milestoneId?: string | null;
@@ -310,6 +354,8 @@ export async function updateTask(
     const before = await assertTaskScope(taskId, actor.orgId, tx);
     let requestTo: string | null = null;
     const updateData: Prisma.TaskUpdateInput = {};
+    let coSetChanged = false;
+    let coRequestTo: string[] = [];
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined) updateData.description = data.description;
     if (data.priority !== undefined) updateData.priority = data.priority;
@@ -318,7 +364,10 @@ export async function updateTask(
       // never assign to a user outside the actor's org, or to one who is not active in it (the same
       // rule as on create); re-sending the current assignee changes nothing, so it is not re-checked:
       // work somebody already holds stays editable around them until it is moved
-      if (data.assigneeId !== null && data.assigneeId !== before.assigneeId) {
+      // (somebody already BESIDE the first, made the first by re-ordering the list, holds the task as well: not re-judged)
+      const alreadyBeside =
+        data.assigneeId !== null && !!(await tx.taskCoAssignee.findUnique({ where: { taskId_userId: { taskId, userId: data.assigneeId } }, select: { userId: true } }));
+      if (data.assigneeId !== null && data.assigneeId !== before.assigneeId && !alreadyBeside) {
         // by RANK (task-assign.ts): a higher person is asked, and the task keeps the assignee it has
         if ((await judgeAssignment(tx, actor, data.assigneeId, before.workspaceId)) === "request") {
           await assertNoPendingRequest(tx, taskId);
@@ -331,6 +380,24 @@ export async function updateTask(
             ? { disconnect: true }
             : { connect: { id: data.assigneeId } };
       }
+    }
+    if (data.coAssigneeIds !== undefined) {
+      // «لمين» with more than one person: the full new set of the people BESIDE the first. Somebody already on the task
+      // (first or beside) is not re-judged (the same rule as the first above); a NEW person goes through the same judge
+      // as the first: a lower or equal rank is added, a higher one is asked (a request of their own) and left out.
+      const first = requestTo ? before.assigneeId : data.assigneeId === undefined ? before.assigneeId : data.assigneeId;
+      const wanted = [...new Set(data.coAssigneeIds)].filter((id) => id !== first && id !== requestTo);
+      const held = await tx.taskCoAssignee.findMany({ where: { taskId }, select: { userId: true } });
+      const heldIds = new Set(held.map((r) => r.userId));
+      const onTask = new Set([...heldIds, ...(before.assigneeId ? [before.assigneeId] : [])]);
+      const fresh = await judgeCoAssignees(tx, actor, wanted.filter((id) => !onTask.has(id)), before.workspaceId);
+      coRequestTo = fresh.request;
+      const finalIds = wanted.filter((id) => onTask.has(id) || fresh.direct.includes(id));
+      updateData.coAssignees = {
+        deleteMany: {},
+        create: finalIds.map((userId) => ({ userId })),
+      };
+      coSetChanged = finalIds.length !== heldIds.size || finalIds.some((id) => !heldIds.has(id));
     }
     if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
     if (data.startDate !== undefined) updateData.startDate = data.startDate;
@@ -370,6 +437,7 @@ export async function updateTask(
     if (data.priority !== undefined && data.priority !== before.priority) changed.push("priority");
     if (data.type !== undefined && data.type !== before.type) changed.push("type");
     if (data.assigneeId !== undefined && data.assigneeId !== before.assigneeId && !requestTo) changed.push("assignee");
+    if (coSetChanged) changed.push("assignees");
     if (data.labelIds) changed.push("labels");
     const dueBefore = before.dueDate?.getTime() ?? null;
     const dueAfter = data.dueDate === undefined ? dueBefore : (data.dueDate?.getTime() ?? null);
@@ -387,9 +455,13 @@ export async function updateTask(
     const assignRequest = requestTo
       ? await storeAssignRequest(tx, { orgId: actor.orgId, taskId, fromUserId: actor.userId, toUserId: requestTo })
       : null;
-    return { ...updated, assignRequest };
+    const coRequests = coRequestTo.length
+      ? await storeCoRequests(tx, { orgId: actor.orgId, taskId, fromUserId: actor.userId, toUserIds: coRequestTo })
+      : [];
+    return { ...updated, assignRequest, coRequests };
   });
   if (saved.assignRequest) await notifyAssignRequest(taskId, actor.userId, saved.assignRequest.toUserId);
+  for (const r of saved.coRequests) await notifyAssignRequest(taskId, actor.userId, r.toUserId);
   return saved;
 }
 
@@ -468,7 +540,8 @@ export async function listTasks(actor: ActorContext, filters: ListFilters): Prom
     archived: false,
     projectId: filters.projectId,
     boardId: filters.boardId,
-    assigneeId: filters.assigneeId,
+    // «assigned to»: the primary column and the extra people, or a second assignee would not find their work
+    ...(filters.assigneeId ? assignedTo(filters.assigneeId) : {}),
   };
   if (filters.overdue) {
     // the same line as My Work, Today and the reports: due strictly before the START of the company's today,
