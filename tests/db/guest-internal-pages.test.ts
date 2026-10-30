@@ -38,6 +38,7 @@ import SettingsPage from "@/app/(app)/settings/page";
 import ArchivePage from "@/app/(app)/archive/page";
 import OwnerBoardPage from "@/app/(app)/owner/page";
 import OwnerAssistantPage from "@/app/(app)/owner/assistant/page";
+import CheckinsPage from "@/app/(app)/checkins/page";
 import CurrentSpacePage from "@/app/(app)/spaces/current/page";
 import WatchPage from "@/app/(app)/watch/page";
 import * as goalsRoute from "@/app/api/goals/route";
@@ -398,6 +399,7 @@ const TAB_PAGES: Record<TabKey, PageCall> = {
   archive: () => ArchivePage(),
   board: () => OwnerBoardPage({ searchParams: {} }),
   assistant: () => OwnerAssistantPage({ searchParams: {} }),
+  checkins: () => CheckinsPage(),
 };
 
 /** The places that are one page and have no tabs (Today, the chat). */

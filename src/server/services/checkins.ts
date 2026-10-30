@@ -318,7 +318,7 @@ function answerDto(row: AnswerRow, names: Map<string, string>, chips: Map<string
 export async function myOpenTasks(userId: string, workspaceId: string): Promise<TaskChip[]> {
   const scope = narrowScope(await loadWorkScope(userId), workspaceId);
   return db.task.findMany({
-    where: { workspaceId, archived: false, completedAt: null, OR: [{ assigneeId: userId }, { coAssignees: { some: { userId } } }], ...taskVisibleWhere(scope) },
+    where: { workspaceId, archived: false, completedAt: null, AND: [{ OR: [{ assigneeId: userId }, { coAssignees: { some: { userId } } }] }, taskVisibleWhere(scope)] },
     select: { id: true, title: true },
     orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
     take: 50,

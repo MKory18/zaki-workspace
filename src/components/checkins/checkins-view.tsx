@@ -47,9 +47,13 @@ export function TodayPanel({
   const round = view.round;
   if (!round) {
     const days = view.schedule ? weekdaysLabel(view.schedule.weekdays) : "";
+    // the company's today, as a day of the week (0 = الأحد): the day key is already the company's date
+    const [y, m, d] = view.day.split("-").map(Number);
+    const weekday = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay();
+    const working = view.schedule?.weekdays.includes(weekday) ?? true;
     return (
       <p data-checkins-waiting className="rounded-card border border-dashed border-border p-4 text-sm text-fg-muted">
-        {view.schedule ? ck("checkins.waiting", { time: view.schedule.timeOfDay, days }) : ck("checkins.off.title")}
+        {!view.schedule ? ck("checkins.off.title") : working ? ck("checkins.waiting", { time: view.schedule.timeOfDay, days }) : ck("checkins.waiting.today", { days })}
       </p>
     );
   }
