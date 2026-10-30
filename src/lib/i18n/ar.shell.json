@@ -40,6 +40,8 @@
   "shell.new.space": "مساحة",
   "shell.new.person": "عضو",
   "shell.dock.title": "الموجودون",
+  "shell.dock.chat_with": "راسل {name}",
+  "shell.dock.chat_failed": "ما زبطت تفتح المحادثة. المحادثة الخاصة بتنفتح مع ناس مساحتك الحالية.",
   "shell.dock.online.one": "واحد متصل",
   "shell.dock.online.two": "اثنان متصلان",
   "shell.dock.online.few": "{n} متصلين",

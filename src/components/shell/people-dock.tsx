@@ -1,9 +1,12 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Users } from "lucide-react";
-import { apiGet } from "@/lib/api-client";
+import { apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { arabicPlural } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -20,6 +23,8 @@ export interface PresencePersonDto {
 }
 
 export interface PresenceRosterDto {
+  /** who is looking: their own row is a link to their profile, never a chat with themselves */
+  meId?: string;
   people: PresencePersonDto[];
   onlineCount: number;
   total: number;
@@ -40,7 +45,10 @@ export interface PresenceRosterDto {
  */
 export function PeopleDock({ enabled = true, defaultOpen = false }: { enabled?: boolean; defaultOpen?: boolean }) {
   const { t } = useI18n();
+  const router = useRouter();
   const [open, setOpen] = useState(defaultOpen);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [chatError, setChatError] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
@@ -72,6 +80,23 @@ export function PeopleDock({ enabled = true, defaultOpen = false }: { enabled?: 
     };
   }, [open]);
 
+  // choosing somebody opens the private chat with them, in the space I am in (the server decides who may)
+  async function openChat(userId: string) {
+    setOpening(userId);
+    setChatError("");
+    try {
+      const made = await apiPost<{ id: string }>("/api/chat/dm", { userId });
+      setOpen(false);
+      router.push(`/chat/${made.id}`);
+    } catch (err) {
+      const key = err instanceof ApiError && err.messageKey ? err.messageKey : "";
+      setChatError(key && t(key) !== key ? t(key) : t("shell.dock.chat_failed"));
+    } finally {
+      setOpening(null);
+    }
+  }
+
+  const meId = enabled ? query.data?.meId : undefined;
   const people = enabled ? (query.data?.people ?? []) : [];
   const online = people.filter((p) => p.online);
   // nothing to show (a refusal, an empty company, a guest): the dock takes no room at all
@@ -97,7 +122,14 @@ export function PeopleDock({ enabled = true, defaultOpen = false }: { enabled?: 
           </div>
           <ul className="max-h-[min(22rem,60dvh)] overflow-y-auto overscroll-contain">
             {people.map((p) => (
-              <li key={p.userId} className="flex items-center gap-3 border-b border-border px-3 py-2 last:border-0">
+              <li key={p.userId} className="border-b border-border last:border-0">
+                <Row
+                  mine={p.userId === meId}
+                  person={p}
+                  busy={opening === p.userId}
+                  chatLabel={t("shell.dock.chat_with", { name: p.name })}
+                  onChat={() => void openChat(p.userId)}
+                >
                 <span className="relative shrink-0">
                   <Avatar name={p.name} src={p.avatarUrl} className={cn("size-9", !p.online && "opacity-60")} />
                   {p.online ? (
@@ -111,9 +143,15 @@ export function PeopleDock({ enabled = true, defaultOpen = false }: { enabled?: 
                 <span className={cn("shrink-0 text-xs", p.online ? "font-semibold text-ok" : "text-fg-muted")}>
                   {p.online ? t("shell.dock.online_now") : t("shell.dock.offline")}
                 </span>
+                </Row>
               </li>
             ))}
           </ul>
+          {chatError ? (
+            <p role="alert" className="border-t border-border px-3 py-2 text-xs text-danger">
+              {chatError}
+            </p>
+          ) : null}
         </section>
       ) : null}
 
@@ -148,5 +186,23 @@ export function PeopleDock({ enabled = true, defaultOpen = false }: { enabled?: 
         <span className="truncate pe-1">{online.length > 0 ? onlineText : t("shell.dock.title")}</span>
       </button>
     </div>
+  );
+}
+
+const rowClass = "flex w-full items-center gap-3 px-3 py-2 text-start";
+
+/** One person of the roster: me, a link to my profile; anybody else, a button that opens a private chat with them. */
+function Row({ mine, person, busy, chatLabel, onChat, children }: { mine: boolean; person: PresencePersonDto; busy: boolean; chatLabel: string; onChat: () => void; children: React.ReactNode }) {
+  if (mine) {
+    return (
+      <Link href={`/u/${encodeURIComponent(person.userId)}`} className={cn(rowClass, "hover:bg-surface-2")}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" data-dock-chat={person.userId} aria-label={chatLabel} disabled={busy} onClick={onChat} className={cn(rowClass, "min-h-11 hover:bg-surface-2 disabled:opacity-60")}>
+      {children}
+    </button>
   );
 }
