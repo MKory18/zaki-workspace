@@ -5,6 +5,13 @@ import { orgDayStart } from "./org-day";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
 import { AR } from "@/lib/i18n/dict";
+import {
+  assertNoPendingRequest,
+  judgeAssignment,
+  notifyAssignRequest,
+  storeAssignRequest,
+  type AssignRequestInfo,
+} from "./task-assign";
 
 export interface ActorContext {
   userId: string;
@@ -39,6 +46,12 @@ export const TASK_INCLUDE = {
 } satisfies Prisma.TaskInclude;
 
 export type TaskDTO = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;
+
+/**
+ * What `createTask` / `updateTask` hand back: the task, plus the request that was made when the person asked for was of a
+ * HIGHER rank (the task then has NO such assignee: see task-assign.ts). `null` when nothing was asked.
+ */
+export type TaskWithRequest = TaskDTO & { assignRequest: AssignRequestInfo | null };
 
 export type Tx = Prisma.TransactionClient;
 
@@ -104,6 +117,7 @@ async function positionAt(
 
 interface ScopedTask {
   id: string;
+  workspaceId: string;
   projectId: string;
   boardId: string;
   columnId: string;
@@ -122,6 +136,7 @@ async function assertTaskScope(taskId: string, orgId: string, tx: Tx): Promise<S
     where: { id: taskId, orgId },
     select: {
       id: true,
+      workspaceId: true,
       projectId: true,
       boardId: true,
       columnId: true,
@@ -139,10 +154,10 @@ async function assertTaskScope(taskId: string, orgId: string, tx: Tx): Promise<S
   return task;
 }
 
-export async function createTask(actor: ActorContext, input: CreateTaskInput): Promise<TaskDTO> {
+export async function createTask(actor: ActorContext, input: CreateTaskInput): Promise<TaskWithRequest> {
   // the tasks row of the person's grid (every way a task is born comes here: the board, a message, an idea)
   await assertMemberCan(actor, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
-  return db.$transaction(async (tx) => {
+  const made = await db.$transaction(async (tx) => {
     // integrity: ids must chain to the actor's organization
     const chain = await tx.project.findFirst({
       where: {
@@ -173,16 +188,18 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
     }
 
     // P1: never allow assigning a task to a user outside the actor's org, nor to one who is no
-    // longer active in it (suspended or offboarded keep their row, but they do not count)
-    if (input.assigneeId) {
-      const member = await tx.organizationMember.findFirst({
-        where: { organizationId: actor.orgId, userId: input.assigneeId },
-        select: { status: true },
-      });
-      if (!member) throw new ForbiddenError("assignee.not_member");
-      if (member.status !== "ACTIVE") throw new ForbiddenError("assignee.not_active");
+    // longer active in it (suspended or offboarded keep their row, but they do not count). By RANK: a person
+    // of a higher rank is asked, not assigned (task-assign.ts): the task is born without them and a request waits
+    let assigneeId = input.assigneeId ?? null;
+    let requestTo: string | null = null;
+    if (assigneeId) {
+      const verdict = await judgeAssignment(tx, actor, assigneeId, input.workspaceId);
       // a team's task goes to somebody who sees that team's work (its members and the space's managers)
-      if (chain.teamId && !(await userSeesProject(input.assigneeId, chain))) throw new ForbiddenError("assignee.not_in_team");
+      if (chain.teamId && !(await userSeesProject(assigneeId, chain))) throw new ForbiddenError("assignee.not_in_team");
+      if (verdict === "request") {
+        requestTo = assigneeId;
+        assigneeId = null;
+      }
     }
 
     const number = await nextTaskNumber(actor.orgId, tx);
@@ -198,7 +215,7 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
         description: input.description ?? null,
         priority: input.priority ?? "NORMAL",
         type: input.type ?? "TASK",
-        assigneeId: input.assigneeId ?? null,
+        assigneeId,
         dueDate: input.dueDate ?? null,
         startDate: input.startDate ?? null,
         creatorId: actor.userId,
@@ -219,8 +236,14 @@ export async function createTask(actor: ActorContext, input: CreateTaskInput): P
         meta: { columnId: column.id },
       },
     });
-    return task;
+    const assignRequest = requestTo
+      ? await storeAssignRequest(tx, { orgId: actor.orgId, taskId: task.id, fromUserId: actor.userId, toUserId: requestTo })
+      : null;
+    return { ...task, assignRequest };
   });
+  // after the commit: the higher person hears about it (a failed bell never undoes the task)
+  if (made.assignRequest) await notifyAssignRequest(made.id, actor.userId, made.assignRequest.toUserId);
+  return made;
 }
 
 export async function moveTask(
@@ -281,10 +304,11 @@ export async function updateTask(
   actor: ActorContext,
   taskId: string,
   data: TaskUpdateData,
-): Promise<TaskDTO> {
+): Promise<TaskWithRequest> {
   await assertMemberCan(actor, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
-  return db.$transaction(async (tx) => {
+  const saved = await db.$transaction(async (tx) => {
     const before = await assertTaskScope(taskId, actor.orgId, tx);
+    let requestTo: string | null = null;
     const updateData: Prisma.TaskUpdateInput = {};
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined) updateData.description = data.description;
@@ -295,17 +319,18 @@ export async function updateTask(
       // rule as on create); re-sending the current assignee changes nothing, so it is not re-checked:
       // work somebody already holds stays editable around them until it is moved
       if (data.assigneeId !== null && data.assigneeId !== before.assigneeId) {
-        const member = await tx.organizationMember.findFirst({
-          where: { organizationId: actor.orgId, userId: data.assigneeId },
-          select: { status: true },
-        });
-        if (!member) throw new ForbiddenError("assignee.not_member");
-        if (member.status !== "ACTIVE") throw new ForbiddenError("assignee.not_active");
+        // by RANK (task-assign.ts): a higher person is asked, and the task keeps the assignee it has
+        if ((await judgeAssignment(tx, actor, data.assigneeId, before.workspaceId)) === "request") {
+          await assertNoPendingRequest(tx, taskId);
+          requestTo = data.assigneeId;
+        }
       }
-      updateData.assignee =
-        data.assigneeId === null
-          ? { disconnect: true }
-          : { connect: { id: data.assigneeId } };
+      if (!requestTo) {
+        updateData.assignee =
+          data.assigneeId === null
+            ? { disconnect: true }
+            : { connect: { id: data.assigneeId } };
+      }
     }
     if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
     if (data.startDate !== undefined) updateData.startDate = data.startDate;
@@ -344,7 +369,7 @@ export async function updateTask(
     if (data.description !== undefined && data.description !== before.description) changed.push("description");
     if (data.priority !== undefined && data.priority !== before.priority) changed.push("priority");
     if (data.type !== undefined && data.type !== before.type) changed.push("type");
-    if (data.assigneeId !== undefined && data.assigneeId !== before.assigneeId) changed.push("assignee");
+    if (data.assigneeId !== undefined && data.assigneeId !== before.assigneeId && !requestTo) changed.push("assignee");
     if (data.labelIds) changed.push("labels");
     const dueBefore = before.dueDate?.getTime() ?? null;
     const dueAfter = data.dueDate === undefined ? dueBefore : (data.dueDate?.getTime() ?? null);
@@ -359,8 +384,13 @@ export async function updateTask(
         },
       });
     }
-    return updated;
+    const assignRequest = requestTo
+      ? await storeAssignRequest(tx, { orgId: actor.orgId, taskId, fromUserId: actor.userId, toUserId: requestTo })
+      : null;
+    return { ...updated, assignRequest };
   });
+  if (saved.assignRequest) await notifyAssignRequest(taskId, actor.userId, saved.assignRequest.toUserId);
+  return saved;
 }
 
 export async function deleteTask(actor: ActorContext, taskId: string): Promise<void> {

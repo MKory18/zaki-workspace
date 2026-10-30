@@ -97,7 +97,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       labelIds: input.labelIds,
     });
     await audit("task.updated", { actorId: ctx.userId, orgId: ctx.orgId, target: params.id });
-    if (input.assigneeId && input.assigneeId !== prevAssignee?.assigneeId) {
+    // only when the task really went to them: a person of a higher rank was asked instead (task-assign.ts)
+    if (input.assigneeId && input.assigneeId !== prevAssignee?.assigneeId && task.assigneeId === input.assigneeId) {
       await notifyAssignment({
         assigneeId: input.assigneeId,
         taskNumber: prevAssignee?.number ?? 0,

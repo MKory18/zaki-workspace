@@ -37,6 +37,8 @@ model User {
   avatarUrl    String?
   jobTitle     String? // وظيفي: professional title shown on profile (e.g. "Project Manager")
   bio          String?
+  // «ترتيبي»: the person's own order of the menu's places and of the tabs inside each place — { places: string[], tabs: Record<placeKey, string[]> }, null = the code's order (src/lib/nav/order.ts)
+  navOrder     Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -56,6 +58,7 @@ model User {
   chatDeletions   ChatMessage[]        @relation("ChatDeleter")
   chatReactions   ChatReaction[]
   pollVotes       PollVote[]
+  chatOrders      UserChatOrder[]
   messageRevisions MessageRevision[]   @relation("RevisionEditor")
   messageNotes    MessageNote[]        @relation("NoteAuthor")
   uploadedFiles   StoredFile[]         @relation("FileUploader")
@@ -518,6 +521,24 @@ model PollVote {
   @@index([optionId])
 }
 
+// A person's OWN order of the chat list (drag and drop, «ترتيب»). One row per person per list: `scope` is
+// `space:<spaceId>` (the topics of that space) or `dm` / `dm:<spaceId>` (their private chats). `order` is an
+// array of conversation ids (at most 500). Nobody else ever reads it: the moderator's pin and the space's own
+// order are untouched, and an id the person may no longer read is simply ignored when the list is built.
+model UserChatOrder {
+  id        String   @id @default(cuid())
+  userId    String
+  orgId     String
+  scope     String
+  order     Json
+  updatedAt DateTime @updatedAt
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId, scope])
+}
+
 // The text a message had BEFORE an edit. One row per edit; only the owner reads them.
 model MessageRevision {
   id        String   @id @default(cuid())
@@ -730,6 +751,7 @@ model Organization {
   conversations    Conversation[]
   IntegrationEvent IntegrationEvent[]
   ChatMessage      ChatMessage[]
+  chatOrders       UserChatOrder[]
   files            StoredFile[]
   departments      Department[]
   tickets          Ticket[]
@@ -1064,6 +1086,7 @@ model Task {
   activities   TaskActivity[]
   dependencies TaskDependency[] @relation("Task")
   blocksTask   TaskDependency[] @relation("BlockedTask")
+  assignRequests TaskAssignRequest[]
   // Made from a chat message («اعمل منها مهمة»): the message it came from.
   sourceMessageId String?
   sourceMessage   ChatMessage? @relation("MessageTasks", fields: [sourceMessageId], references: [id], onDelete: SetNull)
@@ -1076,6 +1099,33 @@ model Task {
   @@index([assigneeId])
   @@index([creatorId])
   @@index([dueDate])
+}
+
+/// Giving a task to somebody of a HIGHER rank is a request, not an assignment (the owner's rule, 2026-10-30): the task
+/// stays as it was, this row waits for the addressed person, who accepts (the task is then theirs) or returns it with
+/// a written reason. No foreign key to the people on purpose (the same as `Notification`): the row is history and
+/// outlives a person's row; it dies with its task.
+enum TaskAssignRequestStatus {
+  PENDING
+  ACCEPTED
+  RETURNED
+}
+
+model TaskAssignRequest {
+  id         String                  @id @default(cuid())
+  orgId      String
+  taskId     String
+  fromUserId String
+  toUserId   String
+  status     TaskAssignRequestStatus @default(PENDING)
+  reason     String?
+  createdAt  DateTime                @default(now())
+  answeredAt DateTime?
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, status])
+  @@index([toUserId, status])
 }
 
 model TaskLabel {
