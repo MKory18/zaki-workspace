@@ -399,7 +399,7 @@ export async function conversationDetail(
       })
     ).map((m) => ({ id: m.id, authorName: m.author.name, preview: previewOf(m.body, m.deletedAt) })),
     members,
-    mentionables: await mentionablesOf(ctx.orgId, facts, conv.spaceId ?? null, members, online),
+    mentionables: org!.role === "GUEST" ? members : await mentionablesOf(ctx.orgId, facts, conv.spaceId ?? null, members, online),
     messages: messages.reverse(), // oldest first in the payload
     // topics and groups: each person's avatar sits under the last message they read (DMs have ticks)
     readers:
@@ -453,6 +453,7 @@ export async function guardTopic(ctx: OrgAccessContext, conversationId: string) 
  * The people the composer offers for «@»: whoever the topic reaches. An open topic reaches its whole space, and
  * a space member who never opened the topic has no row in it, so the rows alone would leave them out of the list.
  * A restricted topic, a DM and a group reach their own rows. The OWNER is offered only when he is one of them.
+ * A GUEST is never given the space's people (no staff directory, no pictures): the caller passes them the rows only.
  */
 async function mentionablesOf(
   orgId: string,

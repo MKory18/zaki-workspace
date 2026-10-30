@@ -113,3 +113,13 @@ describe("the people the composer offers to mention", () => {
     expect((res.json as { me: { canMentionAll?: boolean } }).me.canMentionAll).toBe(false);
   });
 });
+
+describe("what a guest is given", () => {
+  it("never the space's people, so no names and no pictures beyond the topic's own rows", async () => {
+    await loginAs(guest.id);
+    const res = await call(conversationRoute.GET, { params: { id: topicId } });
+    const detail = res.json as { mentionables?: { id: string }[] };
+    const ids = (detail.mentionables ?? []).map((m) => m.id);
+    expect(ids).not.toContain(noRow.id);
+  });
+});
