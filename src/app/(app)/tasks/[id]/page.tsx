@@ -12,6 +12,7 @@ import type { RequestBannerMode } from "@/components/task-assign-request-banner"
 import { isRequestTo } from "@/server/policy/assign-rank";
 import { pendingRequestsOf } from "@/server/services/task-assign";
 import { stepsOfTask } from "@/server/services/task-steps";
+import { buildTaskTimeCard } from "@/server/services/time-tracking";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
   const user = await pageUser();
@@ -80,6 +81,15 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   const stepsOn = await actorFeatureOn(actor, "taskSteps");
   const steps = stepsOn ? await stepsOfTask(task.id) : null;
   const remindOn = await actorFeatureOn(actor, "reminders");
+  // «الوقت»: the card exists only while the switch is on, and never for an external partner (an org guest, or a guest row of
+  // the space); the owner reading a space he is not in sees it without the buttons
+  const timeOn = (await actorFeatureOn(actor, "timeTracking")) && !actor.isExternal && spaceRow?.role !== "GUEST";
+  const timeCard = timeOn
+    ? await buildTaskTimeCard(
+        { userId: user.id, orgId: task.orgId, orgRole: membership?.role ?? actor.role, spaceRole: spaceRow?.role, workspaceId: task.workspaceId, archived: task.archived },
+        task.id,
+      )
+    : null;
 
   // a request to give this task to somebody of a higher rank, and what the viewer may do with it
   // (a task may hold several: the main one and one per higher person beside the first; each is read for the viewer)
@@ -180,6 +190,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       milestones={milestonesOn ? projectMilestones : null}
       steps={steps ? { initial: steps.steps, canEdit: canEdit && !(membership?.role === "OWNER" && !spaceRow) } : null}
       remind={remindOn}
+      time={timeCard}
     />
   );
 }

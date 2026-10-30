@@ -25,6 +25,7 @@ import WatchPage from "@/app/(app)/watch/page";
 import WatchSessionPage from "@/app/(app)/watch/[id]/page";
 import ArchivePage from "@/app/(app)/archive/page";
 import MyWorkPage from "@/app/(app)/my-work/page";
+import TimeReportPage from "@/app/(app)/time/page";
 import ProjectsPage from "@/app/(app)/projects/page";
 import ProjectPage from "@/app/(app)/projects/[id]/page";
 import TimelinePage from "@/app/(app)/projects/[id]/timeline/page";
@@ -97,9 +98,9 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * and admins' look over every space (`/spaces`, «كل المساحات»), «التذاكر» and «الحملات» as pages of their own
  * under «الشغل» (`/tickets`, `/campaigns`), one call (`/calls/[id]`: a conversation's call or a meeting's link) and a
  * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25, and «نتفرّج سوا» (`/watch`, `/watch/[id]`, the owner's
- * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30), and `/cards` («اللوحات») with the page inside a card (`/cards/[id]`).
+ * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30), and `/cards` («اللوحات») with the page inside a card (`/cards/[id]`), and `/time` («تقرير الوقت», 2026-10-30: owned by «الشغل», linked from a task and from «وقتي اليوم»).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]", "/time"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -153,6 +154,7 @@ const PAGES: Record<string, PageCall> = {
   "/watch/[id]": (args) => WatchSessionPage({ params: idOf(args) }),
   "/archive": () => ArchivePage(),
   "/my-work": ({ searchParams }) => MyWorkPage({ searchParams }),
+  "/time": ({ searchParams }) => TimeReportPage({ searchParams }),
   "/projects": ({ searchParams }) => ProjectsPage({ searchParams }),
   "/projects/[id]": (args) => ProjectPage({ params: idOf(args) }),
   "/projects/[id]/timeline": (args) => TimelinePage({ params: idOf(args) }),

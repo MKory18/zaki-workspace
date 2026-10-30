@@ -16,6 +16,7 @@ import { missionOf } from "@/lib/today";
 import { opensOnCards } from "@/lib/cards/shared";
 import { actorFeatureOn } from "@/server/services/features";
 import { MyRemindersCard } from "@/components/reminders/my-reminders-card";
+import { MyTimeToday } from "@/components/time/my-time-today";
 
 /** The browser tab says «اليوم» (the root layout adds the app name). */
 export const metadata = { title: getServerT().t("today.title") };
@@ -52,6 +53,8 @@ export default async function TodayPage() {
 
   // «تذكيراتي»: a compact card of the person's own reminders, only while the company's «ذكّرني» switch is on
   const remindersOn = await actorFeatureOn(actor, "reminders");
+  // «وقتي اليوم»: a compact line of the person's own time, only while the company's «حساب الوقت» switch is on and never for a partner
+  const timeOn = !actor.isExternal && (await actorFeatureOn(actor, "timeTracking"));
 
   const name = data.greeting.firstName;
   const greeting = data.greeting.period === "morning" ? t("today.greeting.morning", { name }) : t("today.greeting.evening", { name });
@@ -69,6 +72,7 @@ export default async function TodayPage() {
         <div className="flex min-w-0 flex-col gap-4 lg:w-80 lg:shrink-0">
           <GuideCard />
           {remindersOn ? <MyRemindersCard /> : null}
+          {timeOn ? <MyTimeToday /> : null}
           {data.pulse ? <TeamPulse pulse={data.pulse} /> : null}
           <ActiveProjects projects={data.projects} isExternal={data.isExternal} />
         </div>
