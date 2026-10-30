@@ -5,7 +5,9 @@ import { assertMemberCan } from "@/server/policy/actor";
 import { join } from "node:path";
 import { z } from "zod";
 import { db } from "@/server/db";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { arabicSearch } from "@/lib/search/arabic";
+import { rankedSearch } from "@/server/search/ranked";
 import { ForbiddenError, NotFoundError, type OrgAccessContext } from "@/server/auth";
 import { logEvent } from "@/server/services/integrations";
 import { canReadConversation } from "@/server/policy/conversation";
@@ -66,21 +68,40 @@ async function assertOfMySpaces(userId: string, workspaceId: string | null): Pro
 
 /* ---------------- reads ---------------- */
 
-/** The library files of the place whose name carries the words (the search box; newest first). */
+/**
+ * The library files of the place whose name carries the words, spelled as people spell them (the search box):
+ * names that START with the words first, then the ones that contain them, newest first inside each.
+ */
 export async function searchLibrary(orgId: string, place: FilePlace, q: string): Promise<Array<{ id: string; name: string }>> {
-  return db.storedFile.findMany({
-    where: {
-      orgId,
-      isLatest: true,
-      deletedAt: null,
-      purpose: "LIBRARY",
-      ...STORED,
-      AND: [filePlaceWhere(place)],
-      name: { contains: q, mode: "insensitive" },
+  const search = arabicSearch(q);
+  if (!search) return [];
+  return rankedSearch({
+    query: {
+      table: "StoredFile",
+      search,
+      rank: true,
+      where: [
+        Prisma.sql`"orgId" = ${orgId}`,
+        Prisma.sql`"isLatest" = TRUE`,
+        Prisma.sql`"deletedAt" IS NULL`,
+        Prisma.sql`"purpose" = 'LIBRARY'`,
+        Prisma.sql`"path" <> ${PENDING_PATH}`,
+        // a library has one place: a space's own, and inside «الشركة» the files from before spaces had libraries
+        place.spaceId
+          ? place.isHq
+            ? Prisma.sql`("workspaceId" = ${place.spaceId} OR "workspaceId" IS NULL)`
+            : Prisma.sql`"workspaceId" = ${place.spaceId}`
+          : Prisma.sql`FALSE`,
+      ],
+      order: Prisma.sql`"createdAt" DESC`,
     },
-    orderBy: { createdAt: "desc" },
     take: 6,
-    select: { id: true, name: true },
+    // the real rule, as ever: the same where as `listFiles`, narrowed to the pool
+    load: (ids) =>
+      db.storedFile.findMany({
+        where: { orgId, isLatest: true, deletedAt: null, purpose: "LIBRARY", ...STORED, AND: [filePlaceWhere(place)], id: { in: ids } },
+        select: { id: true, name: true },
+      }),
   });
 }
 

@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "ownerBoard"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "ownerBoard"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -63,6 +63,10 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // «ذكّرني» (src/server/services/reminders.ts): off, no «ذكّرني» button, no «تذكيراتي» card, the routes answer «not found»
   // and the job runner fires nothing; the reminders already set wait and are due again when the switch is back on
   reminders: true,
+  // «اشتراك التقويم» (src/server/services/calendar-feed.ts): off, the card on the calendar page is not drawn, the routes
+  // under /api/me/calendar-feed and every private feed link answer «not found»; the links already made stay and work again
+  // with the switch
+  calendarFeed: true,
   // «لوحة المالك» (src/server/services/owner-board.ts): off, the tab is not drawn, the pages /owner and the routes of
   // /api/owner-board answer «not found» for everybody, the owner included; nothing is stored by the board, so nothing is lost
   ownerBoard: true,

@@ -14,6 +14,7 @@ import { useNewIntent } from "@/lib/nav/use-new-intent";
 import { fmtDateTime } from "@/lib/format";
 import { parseWatchLink, watchThumbUrl } from "@/lib/watch/source";
 import { cn } from "@/lib/utils";
+import { foldedIncludes } from "@/lib/search/arabic";
 
 export interface WatchCard {
   id: string;
@@ -64,7 +65,7 @@ export function WatchHome({
   const source = useMemo(() => parseWatchLink(link), [link]);
   const shown = useMemo(() => {
     const q = query.trim();
-    return q ? candidates.filter((p) => p.name.includes(q)) : candidates;
+    return q ? candidates.filter((p) => foldedIncludes(p.name, q)) : candidates;
   }, [candidates, query]);
   const hasPeople = everyone || picked.size > 0;
   const live = initial.filter((s) => s.live);
