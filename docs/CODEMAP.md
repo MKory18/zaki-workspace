@@ -271,8 +271,8 @@ high count is a wide surface: changing its signature reaches all of them.
 | `features` | 48 | 26 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
 | `team-scope` | 149 | 16 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
 | `tasks` | 459 | 14 | no header comment — exports `TASK_INCLUDE`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, `moveTask`, … |
+| `access` | 76 | 9 | Workspace-level isolation — the company's master switch. |
 | `n8n` | 294 | 9 | Events we allow orgs to forward to n8n — the UI shows exactly this list. |
-| `access` | 76 | 8 | Workspace-level isolation — the company's master switch. |
 | `files` | 505 | 8 | no header comment — exports `fileLibrary`, `PENDING_PATH`, `PREVIEWABLE`, `INLINE_TEXT`, `logFile`, … |
 | `google` | 355 | 8 | Only the files the app itself creates (the library's): a non-sensitive scope, so Google asks for no review and the owner's published app keeps its connection. |
 | `space-place` | 30 | 8 | WHERE A SPACE'S OWN THINGS ARE READ (the owner's decision, 2026-10-25: each space is like a separate site) — for the goals, the daily routines, the customers and the opportuniti… |
@@ -287,9 +287,9 @@ high count is a wide surface: changing its signature reaches all of them.
 | `production` | 262 | 5 | Daily production. |
 | `teams` | 223 | 5 | TEAMS INSIDE A SPACE — who is in which team, and which project belongs to which (the reading rule is in team-scope.ts). |
 | `telegram` | 299 | 5 | Validates a bot token by calling getMe. |
+| `users` | 308 | 5 | no header comment — exports `updateProfile`, `getProfileForViewer`, `getPublicProfile`, `memberDirectory` |
 | `crm` | 228 | 4 | no header comment — exports `OPPORTUNITY_STAGES`, `createCustomerSchema`, `updateCustomerSchema`, `createOpportunitySchema`, `updateOpportunitySchema`, … |
 | `departments` | 240 | 4 | The departments area is the company's staff directory (who works where, with which job title), so org GUESTs get 403 on every function here, read or write. |
-| `users` | 296 | 4 | no header comment — exports `updateProfile`, `getProfileForViewer`, `getPublicProfile`, `memberDirectory` |
 | `views` | 363 | 4 | Zones already warned about, per organization, so a bad stored zone is logged once and not on every request. |
 | `milestones` | 173 | 3 | «المعالم» — the milestones of a project (the owner, 2026-10-30: the table, the project page's list and the timeline's diamonds all existed and nothing in the repository ever cre… |
 | `registration` | 145 | 3 | Opening a company is open to anyone (owner's decision 23/10), behind three guards: The address is checked. |
