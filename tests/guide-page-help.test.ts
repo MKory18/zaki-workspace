@@ -27,6 +27,7 @@ const PAGES: [string, string][] = [
   ["/calendar", "calendar"],
   ["/goals", "goals"],
   ["/ideas", "ideas"],
+  ["/cards", "cards"],
   ["/production", "production"],
   ["/departments", "departments"],
   ["/tickets", "tickets"],
