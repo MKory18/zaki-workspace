@@ -37,6 +37,8 @@ model User {
   avatarUrl    String?
   jobTitle     String? // وظيفي: professional title shown on profile (e.g. "Project Manager")
   bio          String?
+  // «ترتيبي»: the person's own order of the menu's places and of the tabs inside each place — { places: string[], tabs: Record<placeKey, string[]> }, null = the code's order (src/lib/nav/order.ts)
+  navOrder     Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
