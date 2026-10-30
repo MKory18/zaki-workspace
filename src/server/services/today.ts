@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { actorCan, actorCanWork, type Actor } from "@/server/policy/actor";
 import { loadWorkScope, narrowScope, projectVisibleWhere, scopeSpaceIds, taskVisibleWhere } from "@/server/services/team-scope";
+import { assignedTo } from "@/server/services/tasks";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { fmtLongDate, fmtRelative } from "@/lib/format";
 import { enumLabel } from "@/lib/i18n/enums";
@@ -139,7 +140,12 @@ export async function getToday(actor: Actor, opts: { now?: Date; spaceId?: strin
     completedAt: null,
     AND: [taskVisibleWhere(scope)],
   } satisfies Prisma.TaskWhereInput;
-  const mine = { ...open, assigneeId: actor.userId } satisfies Prisma.TaskWhereInput;
+  // «لمين» with more than one person: a task handed to a second person is theirs too, so `assignedTo` is the
+  // whole rule (the primary column and the extra names), never a bare `assigneeId` comparison.
+  const mine = {
+    ...open,
+    AND: [taskVisibleWhere(scope), assignedTo(actor.userId)],
+  } satisfies Prisma.TaskWhereInput;
   const overdueWhere = { ...mine, dueDate: { lt: todayStart } } satisfies Prisma.TaskWhereInput;
   const todayWhere = { ...mine, dueDate: { gte: todayStart, lt: tomorrowStart } } satisfies Prisma.TaskWhereInput;
   const laterWhere = { ...mine, OR: [{ dueDate: null }, { dueDate: { gte: tomorrowStart } }] } satisfies Prisma.TaskWhereInput;
@@ -168,8 +174,11 @@ export async function getToday(actor: Actor, opts: { now?: Date; spaceId?: strin
   // ---------- the active projects ----------
 
   async function loadProjects(): Promise<TodayProject[]> {
-    // a partner's own tasks are the only thing of a project that is theirs to see counted
-    const counted = actor.isExternal ? { archived: false, completedAt: null, assigneeId: actor.userId } : { archived: false, completedAt: null };
+    // a partner's own tasks are the only thing of a project that is theirs to see counted (the primary
+    // person and the ones beside them, the same rule as `mine`)
+    const counted = actor.isExternal
+      ? { archived: false, completedAt: null, ...assignedTo(actor.userId) }
+      : { archived: false, completedAt: null };
     const found = await db.project.findMany({
       where: {
         workspaceId: { in: projectSpaces },

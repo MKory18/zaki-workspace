@@ -9,6 +9,7 @@ import { dayOfInstant } from "@/lib/due-day";
 import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
+import { peopleLine } from "@/components/ui/people-multi";
 import { cn } from "@/lib/utils";
 
 import Link from "next/link";
@@ -21,6 +22,10 @@ export interface RowTask {
   completedAt: Date | string | null;
   assigneeId: string | null;
   assigneeName: string | null;
+  /** Every person the task is for, in order (the first is `assigneeId`); absent means one person. */
+  assigneeIds?: string[];
+  /** The same people by name, the primary first — what the row shows when there is more than one. */
+  assigneeNames?: string[];
   projectName?: string;
   columnName?: string;
   /** The due day as the company reads it (`YYYY-MM-DD`) — what the date box shows; without it the row derives it in the company's zone. */
@@ -97,7 +102,10 @@ export function TaskRow({
     if (busy) return;
     setBusy(true);
     try {
-      await apiPatch(`/api/tasks/${task.id}`, { assigneeId: value === "" ? null : value });
+      // «لمين» with more than one person: the box picks the primary, and the people already beside them
+      // stay on the task — the whole ordered list is sent, never a bare `assigneeId` that would drop them.
+      const others = (task.assigneeIds ?? []).filter((id) => id !== (task.assigneeId ?? ""));
+      await apiPatch(`/api/tasks/${task.id}`, { assigneeIds: value === "" ? others : [value, ...others.filter((id) => id !== value)] });
       toast(t("task.updated"), "success");
       router.refresh();
     } catch (err) {
@@ -187,8 +195,11 @@ export function TaskRow({
           ))}
         </select>
       ) : (
-        <span className="w-20 shrink-0 truncate text-xs text-muted" title={task.assigneeName ?? ""}>
-          {task.assigneeName ?? ""}
+        <span
+          className="w-20 shrink-0 truncate text-xs text-muted"
+          title={task.assigneeNames?.length ? task.assigneeNames.join("، ") : (task.assigneeName ?? "")}
+        >
+          {task.assigneeNames?.length ? peopleLine(task.assigneeNames, t("common.and")) : task.assigneeName ?? ""}
         </span>
       )}
     </li>

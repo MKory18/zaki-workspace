@@ -64,7 +64,10 @@ async function instantBoard(workspaceId: string): Promise<{ projectId: string; b
 
 export interface InstantTaskInput {
   title: string;
-  assigneeId: string;
+  /** «لمين» — one or more people of the space; the first is the task's own assignee, the rest ride beside them. */
+  assigneeIds?: string[];
+  /** The one person (the form before «لمين» took several): the same as `assigneeIds: [assigneeId]`. */
+  assigneeId?: string;
   priority: TaskPriority;
   dueDate: Date | null;
   description?: string | null;
@@ -74,11 +77,19 @@ export interface InstantTaskInput {
 export async function createInstantTask(ctx: OrgAccessContext, workspaceId: string, input: InstantTaskInput): Promise<{ id: string; number: number; requested: boolean }> {
   await assertFeatureOn(ctx.orgId, "instantWork");
   assertNotGuest(ctx);
-  const [inSpace, owner] = await Promise.all([
-    db.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId: input.assigneeId } }, select: { id: true } }),
-    db.organizationMember.findFirst({ where: { organizationId: ctx.orgId, userId: input.assigneeId, role: "OWNER", status: "ACTIVE" }, select: { id: true } }),
-  ]);
-  if (!inSpace && !owner) throw new ForbiddenError("instant.not_in_space");
+  const people = [...new Set((input.assigneeIds ?? (input.assigneeId ? [input.assigneeId] : [])).filter(Boolean))];
+  if (people.length === 0) throw new ForbiddenError("instant.pick_person");
+  // every person named must be in this space (or be the company's owner), or they would hold a task they cannot open
+  const allowed = await Promise.all(
+    people.map(async (userId) => {
+      const [inSpace, owner] = await Promise.all([
+        db.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } }, select: { id: true } }),
+        db.organizationMember.findFirst({ where: { organizationId: ctx.orgId, userId, role: "OWNER", status: "ACTIVE" }, select: { id: true } }),
+      ]);
+      return Boolean(inSpace || owner);
+    }),
+  );
+  if (allowed.some((ok) => !ok)) throw new ForbiddenError("instant.not_in_space");
   const where = await instantBoard(workspaceId);
   const task = await createTask(ctx, {
     workspaceId,
@@ -86,20 +97,30 @@ export async function createInstantTask(ctx: OrgAccessContext, workspaceId: stri
     title: input.title,
     description: input.description ?? null,
     priority: input.priority,
-    assigneeId: input.assigneeId,
+    assigneeId: people[0]!,
+    coAssigneeIds: people.slice(1),
     dueDate: input.dueDate,
   });
-  // by RANK (task-assign.ts): somebody of a higher rank was asked, not assigned: they were told by the request instead
-  if (task.assigneeId && task.assigneeId !== ctx.userId) {
+  // by RANK (task-assign.ts): somebody of a HIGHER rank was asked, not assigned: they were told by the request instead.
+  // Only the people the task really went to (its assignee and the people beside them) are told «أُسندت إليك».
+  const held = [
+    ...(task.assigneeId && task.assigneeId !== ctx.userId ? [task.assigneeId] : []),
+    ...task.coAssignees.map((r) => r.userId).filter((id) => id !== ctx.userId),
+  ];
+  if (held.length) {
     const org = await db.organization.findUnique({ where: { id: ctx.orgId }, select: { keyPrefix: true } });
-    await notifyAssignment({
-      assigneeId: input.assigneeId,
-      taskNumber: task.number,
-      orgPrefix: org?.keyPrefix ?? "ZK",
-      taskId: task.id,
-      title: task.title,
-      workspaceId,
-    });
+    await Promise.all(
+      held.map((assigneeId) =>
+        notifyAssignment({
+          assigneeId,
+          taskNumber: task.number,
+          orgPrefix: org?.keyPrefix ?? "ZK",
+          taskId: task.id,
+          title: task.title,
+          workspaceId,
+        }),
+      ),
+    );
   }
-  return { id: task.id, number: task.number, requested: task.assignRequest !== null };
+  return { id: task.id, number: task.number, requested: task.assignRequest !== null || task.coRequests.length > 0 };
 }

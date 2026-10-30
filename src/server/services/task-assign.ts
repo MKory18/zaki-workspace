@@ -69,20 +69,58 @@ export async function judgeAssignment(
   return "request";
 }
 
-/** One request at a time per task: a second one waits for the answer to the first. */
+/** One request at a time per task for the MAIN assignee: a second one waits for the answer to the first. */
 export async function assertNoPendingRequest(client: Db, taskId: string): Promise<void> {
-  if (await client.taskAssignRequest.findFirst({ where: { taskId, status: "PENDING" }, select: { id: true } })) {
+  if (await client.taskAssignRequest.findFirst({ where: { taskId, status: "PENDING", asCo: false }, select: { id: true } })) {
     throw new ForbiddenError("taskreq.already_pending");
   }
+}
+
+/**
+ * «لمين» with more than one person: each person BESIDE the first goes through the same judge as the first
+ * (`judgeAssignment`). Somebody of the same or a lower rank is added directly; somebody of a HIGHER rank is not added
+ * but asked (a request of their own), and the others are still added: one higher person never refuses the whole list.
+ * A person the judge refuses outright (not in the company, not active, a partner outside the space, a partner asking
+ * upward) still throws, exactly as it does for the first person.
+ */
+export async function judgeCoAssignees(
+  client: Db,
+  actor: { userId: string; orgId: string },
+  ids: string[],
+  workspaceId: string,
+): Promise<{ direct: string[]; request: string[] }> {
+  const direct: string[] = [];
+  const request: string[] = [];
+  for (const userId of ids) {
+    ((await judgeAssignment(client, actor, userId, workspaceId)) === "request" ? request : direct).push(userId);
+  }
+  return { direct, request };
+}
+
+/**
+ * Stores one request per higher person beside the first (`asCo`). A person who already has a pending request on this
+ * task is not asked twice (the same pick sent again changes nothing). Returns the requests that were really made.
+ */
+export async function storeCoRequests(
+  client: Db,
+  input: { orgId: string; taskId: string; fromUserId: string; toUserIds: string[] },
+): Promise<AssignRequestInfo[]> {
+  const made: AssignRequestInfo[] = [];
+  for (const toUserId of new Set(input.toUserIds)) {
+    const waiting = await client.taskAssignRequest.findFirst({ where: { taskId: input.taskId, toUserId, status: "PENDING" }, select: { id: true } });
+    if (waiting) continue;
+    made.push(await storeAssignRequest(client, { orgId: input.orgId, taskId: input.taskId, fromUserId: input.fromUserId, toUserId, asCo: true }));
+  }
+  return made;
 }
 
 /** Stores the request and its line in the task's history. Call inside the transaction that holds the task. */
 export async function storeAssignRequest(
   client: Db,
-  input: { orgId: string; taskId: string; fromUserId: string; toUserId: string },
+  input: { orgId: string; taskId: string; fromUserId: string; toUserId: string; asCo?: boolean },
 ): Promise<AssignRequestInfo> {
   const row = await client.taskAssignRequest.create({
-    data: { orgId: input.orgId, taskId: input.taskId, fromUserId: input.fromUserId, toUserId: input.toUserId },
+    data: { orgId: input.orgId, taskId: input.taskId, fromUserId: input.fromUserId, toUserId: input.toUserId, asCo: input.asCo ?? false },
     select: { id: true, toUserId: true },
   });
   await client.taskActivity.create({
@@ -125,22 +163,31 @@ export async function answerAssignRequest(
   actor: { userId: string; orgId: string },
   taskId: string,
   answer: AssignAnswer,
+  requestId?: string,
 ): Promise<{ status: "ACCEPTED" | "RETURNED" }> {
   const reason = answer.accept ? null : answer.reason.trim();
   if (!answer.accept && !reason) throw new ForbiddenError("taskreq.reason_required");
 
   const done = await db.$transaction(async (tx) => {
-    const task = await tx.task.findFirst({ where: { id: taskId, orgId: actor.orgId }, select: { id: true } });
+    const task = await tx.task.findFirst({ where: { id: taskId, orgId: actor.orgId }, select: { id: true, assigneeId: true } });
     if (!task) throw new NotFoundError("task.not_found");
-    const latest = await tx.taskAssignRequest.findFirst({ where: { taskId, orgId: actor.orgId }, orderBy: { createdAt: "desc" } });
-    if (!latest) throw new NotFoundError("taskreq.not_found");
-    if (latest.status !== "PENDING") throw new ForbiddenError("taskreq.already_answered");
+    const all = await tx.taskAssignRequest.findMany({ where: { taskId, orgId: actor.orgId }, orderBy: { createdAt: "desc" } });
+    if (all.length === 0) throw new NotFoundError("taskreq.not_found");
+    const open = all.filter((r) => r.status === "PENDING");
+    if (open.length === 0) throw new ForbiddenError("taskreq.already_answered");
 
     const me = await tx.organizationMember.findFirst({
       where: { organizationId: actor.orgId, userId: actor.userId, status: "ACTIVE" },
       select: { role: true },
     });
-    if (!me || (latest.toUserId !== actor.userId && me.role !== "OWNER")) throw new ForbiddenError("taskreq.not_addressee");
+    if (!me) throw new ForbiddenError("taskreq.not_addressee");
+    // a task may hold several pending requests: the person answers the one addressed to them; the owner, who may answer
+    // for anybody, answers the one named by `requestId`, else the main one
+    const named = requestId ? open.find((r) => r.id === requestId) : undefined;
+    if (requestId && !named) throw new ForbiddenError("taskreq.already_answered");
+    const latest =
+      named ?? open.find((r) => r.toUserId === actor.userId) ?? (me.role === "OWNER" ? (open.find((r) => !r.asCo) ?? open[0]) : undefined);
+    if (!latest || (latest.toUserId !== actor.userId && me.role !== "OWNER")) throw new ForbiddenError("taskreq.not_addressee");
 
     if (answer.accept) {
       const target = await tx.organizationMember.findFirst({
@@ -158,8 +205,21 @@ export async function answerAssignRequest(
     if (claimed.count !== 1) throw new ForbiddenError("taskreq.already_answered");
 
     if (answer.accept) {
-      await tx.task.update({ where: { id: taskId }, data: { assigneeId: latest.toUserId } });
-      await tx.taskActivity.create({ data: { taskId, actorId: actor.userId, event: "task.updated", meta: { fields: ["assignee"], viaRequest: latest.id } } });
+      if (latest.asCo && task.assigneeId && task.assigneeId !== latest.toUserId) {
+        // beside the first person: one row per person, whatever the order of two answers
+        await tx.taskCoAssignee.upsert({
+          where: { taskId_userId: { taskId, userId: latest.toUserId } },
+          create: { taskId, userId: latest.toUserId },
+          update: {},
+        });
+      } else if (!latest.asCo || !task.assigneeId) {
+        // the main kind, or a co request on a task nobody holds yet: the person becomes its assignee (and leaves the extras)
+        await tx.taskCoAssignee.deleteMany({ where: { taskId, userId: latest.toUserId } });
+        await tx.task.update({ where: { id: taskId }, data: { assigneeId: latest.toUserId } });
+      }
+      await tx.taskActivity.create({
+        data: { taskId, actorId: actor.userId, event: "task.updated", meta: { fields: [latest.asCo ? "assignees" : "assignee"], viaRequest: latest.id } },
+      });
     } else {
       await tx.taskActivity.create({ data: { taskId, actorId: actor.userId, event: "task.assign_returned", meta: { requestId: latest.id } } });
     }
@@ -182,11 +242,23 @@ export async function answerAssignRequest(
   return { status: answer.accept ? "ACCEPTED" : "RETURNED" };
 }
 
-/** What the task page needs to draw the banner: the pending request, with the two names (null when none). */
-export async function pendingRequestOf(taskId: string): Promise<{ id: string; fromUserId: string; toUserId: string; fromName: string; toName: string } | null> {
-  const row = await db.taskAssignRequest.findFirst({ where: { taskId, status: "PENDING" }, orderBy: { createdAt: "desc" } });
-  if (!row) return null;
-  const people = await db.user.findMany({ where: { id: { in: [row.fromUserId, row.toUserId] } }, select: { id: true, name: true } });
+export interface PendingRequestInfo {
+  id: string;
+  fromUserId: string;
+  toUserId: string;
+  fromName: string;
+  toName: string;
+  asCo: boolean;
+}
+
+/** What the task page needs to draw the banners: every pending request with the two names, the main one first (empty when none). */
+export async function pendingRequestsOf(taskId: string): Promise<PendingRequestInfo[]> {
+  const rows = await db.taskAssignRequest.findMany({ where: { taskId, status: "PENDING" }, orderBy: { createdAt: "asc" } });
+  if (rows.length === 0) return [];
+  const ids = [...new Set(rows.flatMap((r) => [r.fromUserId, r.toUserId]))];
+  const people = await db.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
   const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? "";
-  return { id: row.id, fromUserId: row.fromUserId, toUserId: row.toUserId, fromName: nameOf(row.fromUserId), toName: nameOf(row.toUserId) };
+  return rows
+    .map((r) => ({ id: r.id, fromUserId: r.fromUserId, toUserId: r.toUserId, fromName: nameOf(r.fromUserId), toName: nameOf(r.toUserId), asCo: r.asCo }))
+    .sort((a, b) => Number(a.asCo) - Number(b.asCo));
 }

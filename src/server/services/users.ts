@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { spacePeopleWhere } from "@/server/chat/space-people";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
+import { assignedTo } from "@/server/services/tasks";
 import { can } from "@/server/policy/capabilities";
 import { RANK } from "@/server/policy/rank";
 import { accessibleWorkspaceIds } from "@/server/services/access";
@@ -136,8 +137,8 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
   const stats = await Promise.all([
     db.idea.count({ where: { creatorId: targetId, ...ideaScope } }),
     db.ideaVote.count({ where: { idea: { creatorId: targetId, ...ideaScope } } }),
-    db.task.count({ where: { assigneeId: targetId, ...taskScope, completedAt: null, archived: false } }),
-    db.task.count({ where: { assigneeId: targetId, ...taskScope, completedAt: { not: null }, archived: false } }),
+    db.task.count({ where: { ...assignedTo(targetId), ...taskScope, completedAt: null, archived: false } }),
+    db.task.count({ where: { ...assignedTo(targetId), ...taskScope, completedAt: { not: null }, archived: false } }),
   ]);
   const targetSpaces = await db.workspaceMember.findMany({
     where: { userId: targetId, workspaceId: { in: viewerSpaces }, workspace: { organizationId: { in: staffOrgIds } } },

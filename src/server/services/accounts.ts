@@ -16,6 +16,7 @@ import { CREATABLE_ROLES } from "@/server/policy/rank";
 import { canManageWorkspaceMembers } from "@/server/services/access";
 import { canManageDepartments } from "@/server/services/departments";
 import { activeMember } from "@/server/services/active-people";
+import { assignedTo } from "@/server/services/tasks";
 import { pushNotification } from "@/server/notify";
 import { getServerT } from "@/lib/i18n/server";
 import { addPersonToHq, removePersonAudit, removePersonFromHq } from "@/server/chat/hq";
@@ -603,10 +604,14 @@ async function checkedTransferee(orgId: string, leaverId: string, transferToUser
 
 /** The person's open work in this organization (definitions shared with the roster's count). */
 async function openWorkOf(client: Prisma.TransactionClient, orgId: string, userId: string) {
-  const tasks = await client.task.findMany({ where: { ...openTaskWhere(orgId), assigneeId: userId }, select: { id: true, workspaceId: true } });
+  // «لمين» with more than one person: a task the person holds beside its primary is their work too
+  const tasks = await client.task.findMany({
+    where: { ...openTaskWhere(orgId), ...assignedTo(userId) },
+    select: { id: true, workspaceId: true, assigneeId: true },
+  });
   const tickets = await client.ticket.findMany({ where: { ...openTicketWhere(orgId), assigneeId: userId }, select: { id: true } });
   const routines = await client.routine.findMany({ where: { ...activeRoutineWhere(orgId), assigneeId: userId }, select: { id: true } });
-  return { tasks, tickets, routines, total: tasks.length + tickets.length + routines.length };
+  return { tasks, tickets, routines, total: tasks.length + tickets.length + routines.length, userId };
 }
 
 /**
@@ -713,7 +718,12 @@ async function transferWork(
       }
     }
     const ids = work.tasks.map((t) => t.id);
-    await tx.task.updateMany({ where: { id: { in: ids } }, data: { assigneeId: to } });
+    // «لمين» with more than one person: the receiver takes over only the tasks whose PRIMARY was the leaver
+    // (a task somebody else leads keeps its lead), and the leaver is removed from the ones they merely shared.
+    // A task that lost its primary and has nobody else becomes the receiver's, so no open work is left behind.
+    await tx.taskCoAssignee.deleteMany({ where: { taskId: { in: ids }, userId: work.userId } });
+    const handed = work.tasks.filter((t) => t.assigneeId === work.userId || t.assigneeId === null).map((t) => t.id);
+    await tx.task.updateMany({ where: { id: { in: handed } }, data: { assigneeId: to } });
     await tx.taskActivity.createMany({
       data: ids.map((taskId) => ({ taskId, actorId: actor.userId, event: "task.updated", meta: { fields: ["assignee"], reason: "offboarding" } })),
     });
