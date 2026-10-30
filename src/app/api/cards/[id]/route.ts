@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/server/api";
+import { withCardApi } from "@/server/card-api";
 import { requireActor } from "@/server/policy/actor";
 import { parseJson } from "@/server/validation";
 import { archiveCard, readCard, updateCard, updateCardSchema } from "@/server/services/cards";
@@ -13,9 +14,9 @@ export async function GET(_req: Request, { params }: Ctx) {
   });
 }
 
-/** Edit: title, text, data, colour, category, tags, pin. */
+/** Edit: title, text, data, colour, category, tags, pin. `version`: the one the editor started from (409 when the card moved on). */
 export async function PATCH(req: Request, { params }: Ctx) {
-  return withApi(async () => {
+  return withCardApi(async () => {
     const actor = await requireActor();
     const input = await parseJson(updateCardSchema, req);
     return NextResponse.json({ card: await updateCard(actor, params.id, input) });

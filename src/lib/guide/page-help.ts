@@ -189,6 +189,13 @@ export const PAGE_HELP: readonly PageHelp[] = [
     tour: "shell",
   },
   {
+    id: "card",
+    pattern: "/cards/:id",
+    whatKey: "guide.page.card.what",
+    nextKey: "guide.page.card.next",
+    guestNextKey: "guide.page.card.next_guest",
+  },
+  {
     id: "ideas",
     pattern: "/ideas",
     whatKey: "guide.page.ideas.what",

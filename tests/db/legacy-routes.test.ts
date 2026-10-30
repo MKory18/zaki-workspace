@@ -35,6 +35,7 @@ import CalendarPage from "@/app/(app)/calendar/page";
 import GoalsPage from "@/app/(app)/goals/page";
 import IdeasPage from "@/app/(app)/ideas/page";
 import CardsPage from "@/app/(app)/cards/page";
+import CardPageRoute from "@/app/(app)/cards/[id]/page";
 import ProductionPage from "@/app/(app)/production/page";
 import DepartmentsPage from "@/app/(app)/departments/page";
 import TeamsPage from "@/app/(app)/teams/page";
@@ -96,9 +97,9 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * and admins' look over every space (`/spaces`, «كل المساحات»), «التذاكر» and «الحملات» as pages of their own
  * under «الشغل» (`/tickets`, `/campaigns`), one call (`/calls/[id]`: a conversation's call or a meeting's link) and a
  * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25, and «نتفرّج سوا» (`/watch`, `/watch/[id]`, the owner's
- * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30), and `/cards` («اللوحات»).
+ * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30), and `/cards` («اللوحات») with the page inside a card (`/cards/[id]`).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -162,6 +163,7 @@ const PAGES: Record<string, PageCall> = {
   "/goals": () => GoalsPage(),
   "/ideas": () => IdeasPage(),
   "/cards": () => CardsPage(),
+  "/cards/[id]": (args) => CardPageRoute({ params: idOf(args) }),
   "/production": () => ProductionPage(),
   "/departments": () => DepartmentsPage(),
   "/teams": () => TeamsPage(),
@@ -310,7 +312,8 @@ async function linkWorld() {
       assigneeId,
       title: `${name} task`,
     });
-    return { space, project: work.project, board: work.board, task };
+    const card = await db.card.create({ data: { orgId, workspaceId: space.id, createdById: team.owner.id, kind: "NOTE", title: `${name} card`, body: "text" } });
+    return { space, project: work.project, board: work.board, task, card };
   }
 
   const teamSpace = await spaceWithWork([team.admin, lead, team.member].map((person) => ({ userId: person.id })), "Team", team.member.id);
@@ -354,6 +357,9 @@ function addressesOf(route: string, w: World): string[] {
       return [w.topicCall.id, w.closedMeeting.id, GONE].map((id) => `/calls/${id}`);
     case "/watch/[id]":
       return [w.watch.id, GONE].map((id) => `/watch/${id}`);
+    case "/cards/[id]":
+      // a card of the team's space, one of the space shared with the partner, one of the space nobody is in, and one that is gone
+      return [...spaces.map((s) => s.card.id), GONE].map((id) => `/cards/${id}`);
     case "/u/[id]":
       return [w.owner.id, w.admin.id, w.lead.id, w.member.id, w.guest.id, GONE].map((id) => `/u/${id}`);
     case "/guide/[slug]":
