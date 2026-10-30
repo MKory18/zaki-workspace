@@ -10,6 +10,7 @@ import { canWriteInWorkspace } from "@/server/workspace-role";
 import { BoardView, type TaskCardData } from "@/components/board-view";
 import { actorFeatureOn } from "@/server/services/features";
 import { stepProgressFor } from "@/server/services/task-steps";
+import { recurringTaskIds } from "@/server/services/task-recurrence";
 
 /**
  * A board opens for whoever may open its space (`accessibleWorkspaceIds`: a row in the space, or the owner) and is
@@ -72,6 +73,9 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
   // «٣ من ٥» on the cards: one grouped read for the whole board, and only while the company's switch is on
   const progress = (await actorFeatureOn(actor, "taskSteps")) ? await stepProgressFor(tasks.map((t) => t.id)) : new Map();
 
+  // «🔁 متكررة» on the cards: one read for the whole board, and only while the company's switch is on
+  const recurring = (await actorFeatureOn(actor, "recurringTasks")) ? await recurringTaskIds(tasks.map((t) => t.id)) : new Set<string>();
+
   const taskData: TaskCardData[] = tasks.map((t) => ({
     id: t.id,
     key: `${org?.keyPrefix ?? "ZW"}-${t.number}`,
@@ -85,6 +89,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     commentCount: t._count.comments,
     completed: t.completedAt != null,
     steps: progress.get(t.id),
+    recurring: recurring.has(t.id),
   }));
 
   return (
