@@ -28,5 +28,5 @@
   "chat.topic_archived": "الموضوع مؤرشف. رجّعه من الأرشيف أول.",
   "chat.work_not_from_this": "هالرسالة ما بتصير مهمة ولا تذكرة.",
   "chat.e.owner_only": "هذا الإجراء لمالك الشركة فقط.",
-  "chat.e.mention_all_denied": "«@الكل» ما بتنفع للزائر."
+  "chat.e.mention_all_denied": "لا يستطيع الزائر استخدام «@الكل»."
 }
