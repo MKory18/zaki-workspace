@@ -12,6 +12,7 @@ import type { RequestBannerMode } from "@/components/task-assign-request-banner"
 import { isRequestTo } from "@/server/policy/assign-rank";
 import { pendingRequestsOf } from "@/server/services/task-assign";
 import { stepsOfTask } from "@/server/services/task-steps";
+import { recurrenceOfTask } from "@/server/services/task-recurrence";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
   const user = await pageUser();
@@ -80,6 +81,10 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   const stepsOn = await actorFeatureOn(actor, "taskSteps");
   const steps = stepsOn ? await stepsOfTask(task.id) : null;
   const remindOn = await actorFeatureOn(actor, "reminders");
+  // «تكرار»: drawn only while the switch is on; who may change it is who may edit the task, except that the owner reading a
+  // space he is not in does not (a series acts as the person who set it: silent reading leaves no trace)
+  const recurrenceOn = await actorFeatureOn(actor, "recurringTasks");
+  const recurrence = recurrenceOn ? await recurrenceOfTask(task.id, task.orgId) : null;
 
   // a request to give this task to somebody of a higher rank, and what the viewer may do with it
   // (a task may hold several: the main one and one per higher person beside the first; each is read for the viewer)
@@ -180,6 +185,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       milestones={milestonesOn ? projectMilestones : null}
       steps={steps ? { initial: steps.steps, canEdit: canEdit && !(membership?.role === "OWNER" && !spaceRow) } : null}
       remind={remindOn}
+      recurrence={recurrence ? { initial: recurrence.recurrence, timeZone: recurrence.timeZone, canEdit: canEdit && !(membership?.role === "OWNER" && !spaceRow) } : null}
     />
   );
 }

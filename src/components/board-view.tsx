@@ -29,6 +29,7 @@ import { PRIORITY_STYLES, fmtDMY, fmtRelative, isOverdue } from "@/lib/format";
 import { columnLabel, enumLabel } from "@/lib/i18n/enums";
 import { useToast } from "@/components/ui/toast";
 import { StepProgressChip } from "@/components/task-steps/step-progress";
+import { RecurringBadge } from "@/components/recurrence/recurring-badge";
 import type { StepProgress } from "@/lib/task-steps";
 
 export interface ColumnData {
@@ -54,6 +55,8 @@ export interface TaskCardData {
   completed: boolean;
   /** «٣ من ٥»: the task's checklist progress; absent when it has no steps or the company's «الخطوات» switch is off. */
   steps?: StepProgress;
+  /** «🔁 متكررة»: the task belongs to a running series; absent when it does not or the company's «مهمة متكررة» switch is off. */
+  recurring?: boolean;
 }
 
 interface BoardViewProps {
@@ -439,6 +442,7 @@ function TaskCardContent({ task }: { task: TaskCardData }) {
           </span>
         ) : null}
         <StepProgressChip progress={task.steps} />
+        <RecurringBadge recurring={task.recurring} />
       </div>
     </div>
   );
