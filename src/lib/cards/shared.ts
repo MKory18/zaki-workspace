@@ -4,6 +4,8 @@
  * the rule that a link is https only, and the sentence a card becomes when it is sent into a chat topic.
  */
 
+import type { CardStatus } from "./status";
+
 export const CARD_KINDS = ["NOTE", "PROMPT", "LIST", "LINK", "FILE", "TABLE"] as const;
 export type CardKind = (typeof CARD_KINDS)[number];
 
@@ -46,6 +48,10 @@ export const LIMITS = {
   tableCell: 300,
   url: 2000,
   cards: 1000,
+  /** The page inside a card. */
+  note: 4000,
+  caption: 200,
+  attachments: 30,
 } as const;
 
 export interface ListItem {
@@ -83,6 +89,10 @@ export interface CardItem {
   updatedAt: string;
   createdById: string;
   createdByName: string;
+  /** The page inside a card (always set by the server; optional so a card built by hand stays valid). */
+  status?: CardStatus;
+  version?: number;
+  coverFileId?: string | null;
 }
 
 // ---------- links ----------

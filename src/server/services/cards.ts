@@ -10,7 +10,8 @@ import { PENDING_PATH } from "@/server/services/files";
 import { createTask } from "@/server/services/tasks";
 import { canPostInConversation } from "@/server/policy/conversation";
 import { sendMessage } from "@/server/chat/messages";
-import { canWriteInWorkspace } from "@/server/workspace-role";
+import { canWriteInWorkspace, isSpaceManager } from "@/server/workspace-role";
+import { recordCard } from "@/server/services/card-audit";
 import { AR } from "@/lib/i18n/dict";
 import {
   CARD_COLORS,
@@ -28,6 +29,8 @@ import {
   type CardKind,
 } from "@/lib/cards/shared";
 import { POSITION_STEP, positionBetween, positionOnTop } from "@/lib/cards/order";
+import { statusOf } from "@/lib/cards/status";
+import { SNAPSHOT_FIELDS, changedFields, decideSave, type CardSnapshot, type SnapshotField } from "@/lib/cards/versions";
 
 /**
  * «اللوحات» — the cards of a space. ONE place decides who may do what with them:
@@ -52,6 +55,10 @@ export interface CardScope {
   owner: boolean;
   /** Reads FILE cards (not a guest; holds the library's «يشوف»). */
   seesFiles: boolean;
+  /** Has a row in the space (the owner reading silently has none): only these leave stars and notes. */
+  member: boolean;
+  /** Moderates the space: its ADMIN, an org ADMIN who is in it, the OWNER. */
+  manager: boolean;
 }
 
 /** The space's cards are the caller's to open, or they do not exist (404). */
@@ -70,17 +77,19 @@ export async function cardScope(actor: Actor, spaceId: string): Promise<CardScop
     canWrite: canWriteInWorkspace(actor.role, row?.role),
     owner: actor.isOwner,
     seesFiles: !actor.isExternal && actorCan(actor, "files.view"),
+    member: !!row && !actor.isExternal && row.role !== "GUEST",
+    manager: isSpaceManager(actor.role, row?.role),
   };
 }
 
-function assertWrite(scope: CardScope): void {
+export function assertWrite(scope: CardScope): void {
   assertCanWrite({ orgRole: scope.actor.role });
   if (!scope.canWrite) throw new ForbiddenError("cards.readonly");
 }
 
 // ---------- shapes ----------
 
-const CARD_SELECT = {
+export const CARD_SELECT = {
   id: true,
   orgId: true,
   workspaceId: true,
@@ -95,6 +104,9 @@ const CARD_SELECT = {
   position: true,
   fileId: true,
   archivedAt: true,
+  status: true,
+  version: true,
+  coverFileId: true,
   createdAt: true,
   updatedAt: true,
   createdById: true,
@@ -102,9 +114,9 @@ const CARD_SELECT = {
   file: { select: { name: true, mimeType: true, size: true, deletedAt: true } },
 } satisfies Prisma.CardSelect;
 
-type CardRow = Prisma.CardGetPayload<{ select: typeof CARD_SELECT }>;
+export type CardRow = Prisma.CardGetPayload<{ select: typeof CARD_SELECT }>;
 
-function toItem(row: CardRow): CardItem {
+export function toItem(row: CardRow): CardItem {
   const kind = isCardKind(row.kind) ? row.kind : "NOTE";
   const live = row.file && !row.file.deletedAt ? { name: row.file.name, mimeType: row.file.mimeType, size: row.file.size } : null;
   return {
@@ -126,17 +138,20 @@ function toItem(row: CardRow): CardItem {
     updatedAt: row.updatedAt.toISOString(),
     createdById: row.createdById,
     createdByName: row.createdBy.name,
+    status: statusOf(row.status),
+    version: row.version,
+    coverFileId: row.coverFileId,
   };
 }
 
-function dataOf(kind: CardKind, raw: unknown): CardData {
+export function dataOf(kind: CardKind, raw: unknown): CardData {
   const cleaned = cleanCardData(kind, raw);
   if (cleaned.ok) return cleaned.value;
   // a damaged row shows as an empty one of its kind (a link with a bad address shows no link at all)
   return kind === "LIST" ? { items: [] } : kind === "TABLE" ? { columns: [""], rows: [] } : null;
 }
 
-const jsonOf = (data: CardData): Prisma.InputJsonValue | typeof Prisma.DbNull =>
+export const jsonOf = (data: CardData): Prisma.InputJsonValue | typeof Prisma.DbNull =>
   data === null ? Prisma.DbNull : (data as unknown as Prisma.InputJsonValue);
 
 // ---------- what a request may carry ----------
@@ -159,6 +174,8 @@ export type CreateCardInput = z.infer<typeof createCardSchema>;
 
 export const updateCardSchema = z
   .object({
+    /** The version the editor started from: a card that moved on answers 409 with the current card. */
+    version: z.number().int().min(1),
     title: z.string().trim().min(1, "cards.e.title").max(LIMITS.title),
     body: text(LIMITS.body).nullable(),
     data: z.unknown(),
@@ -197,7 +214,7 @@ function dataOrRefuse(kind: CardKind, raw: unknown): CardData {
 }
 
 /** A file a FILE card points at: a library file of THIS space, finished, current, not deleted. */
-async function assertCardFile(scope: CardScope, fileId: string): Promise<void> {
+export async function assertCardFile(scope: CardScope, fileId: string): Promise<void> {
   if (!scope.seesFiles) throw new ForbiddenError("section.view_denied");
   const file = await db.storedFile.findFirst({
     where: {
@@ -241,7 +258,7 @@ export async function listCards(actor: Actor, spaceId: string, opts: { archived?
 }
 
 /** A card the caller may touch: its space is theirs, its kind is one they see, and an archived one is the owner's. */
-async function loadCard(actor: Actor, cardId: string): Promise<{ scope: CardScope; row: CardRow }> {
+export async function loadCard(actor: Actor, cardId: string): Promise<{ scope: CardScope; row: CardRow }> {
   const row = await db.card.findFirst({ where: { id: cardId, orgId: actor.orgId }, select: CARD_SELECT });
   if (!row) throw new NotFoundError("cards.not_found");
   const scope = await cardScope(actor, row.workspaceId);
@@ -293,7 +310,92 @@ export async function createCard(actor: Actor, input: CreateCardInput): Promise<
     },
     select: CARD_SELECT,
   });
+  await recordCard(actor, row, "created", { kind });
   return toItem(row);
+}
+
+/** The card moved on since the editor started: the answer is 409, carrying the card as it is now. */
+export class CardConflictError extends Error {
+  constructor(readonly card: CardItem) {
+    super("cards.conflict");
+    this.name = "CardConflictError";
+  }
+}
+
+function snapshotOf(row: Pick<CardRow, "kind" | "title" | "body" | "data" | "color" | "category" | "tags" | "fileId">): CardSnapshot {
+  return {
+    title: row.title,
+    body: row.body,
+    data: dataOf(row.kind as CardKind, row.data),
+    color: row.color,
+    category: row.category,
+    tags: row.tags,
+    fileId: row.fileId,
+  };
+}
+
+export interface SavedEdit {
+  card: CardItem;
+  /** A new version was written (false: nothing changed, or only the pin). */
+  applied: boolean;
+  changed: SnapshotField[];
+  pinChanged: boolean;
+}
+
+/**
+ * ONE place writes a card's content, so every save is versioned the same way: the card row is locked, the editor's
+ * starting version is compared with the card's (409 if the card moved on), the snapshot BEFORE the edit is appended to
+ * `CardRevision`, and the card moves to the next version, all in one transaction. A save that changes nothing writes
+ * nothing; the pin is not content and never makes a version.
+ */
+export async function saveCardEdit(
+  actor: Actor,
+  cardId: string,
+  patch: Partial<CardSnapshot>,
+  opts: { baseVersion?: number | null; pinned?: boolean } = {},
+): Promise<SavedEdit> {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Card" WHERE "id" = ${cardId} AND "orgId" = ${actor.orgId} FOR UPDATE`;
+    const fresh = await tx.card.findFirst({ where: { id: cardId, orgId: actor.orgId }, select: CARD_SELECT });
+    if (!fresh || fresh.archivedAt) throw new NotFoundError("cards.not_found");
+    const changed = changedFields(snapshotOf(fresh), patch);
+    const decision = decideSave({ baseVersion: opts.baseVersion, currentVersion: fresh.version, changed });
+    if (decision.kind === "conflict") throw new CardConflictError(toItem(fresh));
+
+    const data: Prisma.CardUpdateInput = {};
+    const pinChanged = opts.pinned !== undefined && opts.pinned !== fresh.pinned;
+    if (pinChanged) data.pinned = opts.pinned;
+    if (decision.kind === "apply") {
+      const before = snapshotOf(fresh);
+      await tx.cardRevision.create({
+        data: {
+          cardId,
+          version: fresh.version,
+          title: before.title,
+          body: before.body,
+          data: jsonOf(before.data as CardData),
+          color: before.color,
+          category: before.category,
+          tags: before.tags,
+          fileId: before.fileId,
+          editorId: actor.userId,
+        },
+      });
+      for (const field of changed) {
+        if (field === "title") data.title = patch.title as string;
+        else if (field === "body") data.body = patch.body ?? null;
+        else if (field === "data") data.data = jsonOf(patch.data as CardData);
+        else if (field === "color") data.color = patch.color as string;
+        else if (field === "category") data.category = patch.category ?? null;
+        else if (field === "tags") data.tags = patch.tags as string[];
+        else if (field === "fileId") data.file = patch.fileId ? { connect: { id: patch.fileId } } : { disconnect: true };
+      }
+      data.version = { increment: 1 };
+    }
+    if (Object.keys(data).length === 0) return { card: toItem(fresh), applied: false, changed, pinChanged };
+    const updated = await tx.card.update({ where: { id: cardId }, data, select: CARD_SELECT });
+    return { card: toItem(updated), applied: decision.kind === "apply", changed, pinChanged };
+  });
 }
 
 export async function updateCard(actor: Actor, cardId: string, input: UpdateCardInput): Promise<CardItem> {
@@ -302,25 +404,28 @@ export async function updateCard(actor: Actor, cardId: string, input: UpdateCard
   // an archived card is the owner's to read; changing it goes through «استرجاع» first
   if (row.archivedAt) throw new NotFoundError("cards.not_found");
   const kind = row.kind as CardKind;
-  const data: Prisma.CardUpdateInput = {};
-  if (input.title !== undefined) data.title = input.title;
+  const patch: Partial<CardSnapshot> = {};
+  if (input.title !== undefined) patch.title = input.title;
   if (input.body !== undefined) {
     const body = cleanBody(input.body);
     if (kind === "PROMPT" && !body) throw new ValidationError([{ path: "body", message: "cards.e.prompt" }]);
-    data.body = body;
+    patch.body = body;
   }
-  if (input.data !== undefined) data.data = jsonOf(dataOrRefuse(kind, input.data));
-  if (input.color !== undefined) data.color = input.color;
-  if (input.category !== undefined) data.category = cleanCategory(input.category);
-  if (input.tags !== undefined) data.tags = cleanTags(input.tags);
-  if (input.pinned !== undefined) data.pinned = input.pinned;
-  if (input.fileId !== undefined) {
+  if (input.data !== undefined) patch.data = dataOrRefuse(kind, input.data);
+  if (input.color !== undefined) patch.color = input.color;
+  if (input.category !== undefined) patch.category = cleanCategory(input.category);
+  if (input.tags !== undefined) patch.tags = cleanTags(input.tags);
+  // only a FILE card has a file: for any other kind a null `fileId` (what the editor always sends) means «none», and is ignored
+  if (input.fileId !== undefined && !(kind !== "FILE" && input.fileId === null)) {
     if (kind !== "FILE" || !input.fileId) throw new ValidationError([{ path: "fileId", message: "cards.e.file" }]);
-    await assertCardFile(scope, input.fileId);
-    data.file = { connect: { id: input.fileId } };
+    // the file the card already points at stays valid; a different one must be a library file of this space
+    if (input.fileId !== row.fileId) await assertCardFile(scope, input.fileId);
+    patch.fileId = input.fileId;
   }
-  const updated = await db.card.update({ where: { id: cardId }, data, select: CARD_SELECT });
-  return toItem(updated);
+  const saved = await saveCardEdit(actor, cardId, patch, { baseVersion: input.version, pinned: input.pinned });
+  if (saved.applied) await recordCard(actor, row, "edited", { version: saved.card.version ?? 0, fields: saved.changed });
+  if (saved.pinChanged) await recordCard(actor, row, "pinned", { pinned: saved.card.pinned });
+  return saved.card;
 }
 
 /** «حذف»: the card goes out of sight; the OWNER still reads it under «المحذوفات». Nothing is removed. */
@@ -329,6 +434,7 @@ export async function archiveCard(actor: Actor, cardId: string): Promise<void> {
   assertWrite(scope);
   if (row.archivedAt) return;
   await db.card.update({ where: { id: cardId }, data: { archivedAt: new Date() } });
+  await recordCard(actor, row, "archived");
 }
 
 /** «استرجاع»: the OWNER brings an archived card back (to the top of the manual order). */
@@ -346,6 +452,7 @@ export async function restoreCard(actor: Actor, cardId: string): Promise<CardIte
     data: { archivedAt: null, position: positionOnTop(first?.position) },
     select: CARD_SELECT,
   });
+  await recordCard(actor, row, "unarchived");
   return toItem(updated);
 }
 
@@ -404,6 +511,7 @@ export async function duplicateCard(actor: Actor, cardId: string): Promise<CardI
       select: CARD_SELECT,
     });
   });
+  await recordCard(actor, created, "created", { copyOf: row.id });
   return toItem(created);
 }
 
@@ -476,6 +584,8 @@ export async function sendCard(actor: Actor, cardId: string, conversationId: str
   if (!topic) throw new NotFoundError("cards.topic_not_found");
   const ctx: OrgAccessContext = { orgId: actor.orgId, orgRole: actor.role, userId: actor.userId };
   const message = await sendMessage(ctx, topic.id, { body: cardMessageText(toItem(row)) });
+  // remembered, so the card's page can link to where it went (and only show the link to people who may read that topic)
+  await recordCard(actor, row, "sent", { conversationId: topic.id, messageId: message.id });
   return { messageId: message.id };
 }
 
@@ -498,5 +608,6 @@ export async function cardToTask(actor: Actor, cardId: string, target: z.infer<t
       description: cardTaskDescription(item),
     },
   );
+  await recordCard(actor, row, "task", { taskId: task.id });
   return { taskId: task.id };
 }
