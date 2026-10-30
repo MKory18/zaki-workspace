@@ -32,10 +32,12 @@ export function searchKey(text: string): string {
   return text
     .normalize("NFKC")
     .toLowerCase()
-    .replace(/[ً-ٰٟـ]/g, "")
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
     .replace(/[أإآٱ]/g, "ا")
     .replace(/ى/g, "ي")
-    .replace(/ة/g, "ه");
+    .replace(/ة/g, "ه")
+    // Arabic-Indic and Persian digits are the Western ones: «١٢٣» finds «123»
+    .replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (d) => String((d.codePointAt(0) as number) & 0xf));
 }
 
 /** The words of a card the search reads: its title and its text (the note, the list items, the table cells). */
