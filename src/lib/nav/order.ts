@@ -16,7 +16,7 @@
  */
 
 import { z } from "zod";
-import { PLACES, type NavModel, type NavPlace } from "./places";
+import { CARDS_PLACE, PLACES, type NavModel, type NavPlace } from "./places";
 
 export interface NavOrder {
   /** Place keys, in the person's order. */
@@ -25,8 +25,8 @@ export interface NavOrder {
   tabs: Record<string, string[]>;
 }
 
-/** Every place the code knows, and every tab of each place that has tabs. */
-export const PLACE_KEYS: readonly string[] = PLACES.map((place) => place.key);
+/** Every place the code knows («اللوحات» of a cards space included), and every tab of each place that has tabs. */
+export const PLACE_KEYS: readonly string[] = [...PLACES, CARDS_PLACE].map((place) => place.key);
 export const TAB_KEYS_OF: Readonly<Record<string, readonly string[]>> = Object.fromEntries(
   PLACES.filter((place) => place.tabs.length > 0).map((place) => [place.key, place.tabs.map((tab) => tab.key)]),
 );

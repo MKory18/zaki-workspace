@@ -5,6 +5,7 @@ import type { Actor } from "@/server/policy/actor";
 import { featuresOff } from "@/lib/features";
 import { buildNav, type NavModel, type NavSubject } from "@/lib/nav/places";
 import { firstUnseen, readNavOrder, type NavOrder } from "@/lib/nav/order";
+import type { SpaceLayout } from "@/lib/cards/shared";
 import { currentSpace } from "./current-space";
 
 /**
@@ -19,8 +20,15 @@ import { currentSpace } from "./current-space";
  * Who the map is drawn for — the one place that turns an actor into a `NavSubject`, shared by the (app) layout and by
  * the save below, so «what the person may see» is decided the same way in both.
  */
-export function navSubjectOf(actor: Pick<Actor, "role" | "caps" | "isExternal">, orgSettings: unknown, space: { manager: boolean } | null): NavSubject {
-  return { role: actor.role, caps: [...actor.caps], off: featuresOff(orgSettings), spaceManager: !actor.isExternal && space?.manager === true };
+export function navSubjectOf(actor: Pick<Actor, "role" | "caps" | "isExternal">, orgSettings: unknown, space: { manager: boolean; layout?: SpaceLayout } | null): NavSubject {
+  return {
+    role: actor.role,
+    caps: [...actor.caps],
+    off: featuresOff(orgSettings),
+    spaceManager: !actor.isExternal && space?.manager === true,
+    // a space of «لوحات» or «تصنيع» offers «اللوحات» and «الإدارة» only (the pure map decides: src/lib/nav/places.ts)
+    ...(space?.layout ? { spaceLayout: space.layout } : {}),
+  };
 }
 
 /** The map this person is offered right now (read from the database, the cookie decides nothing). */

@@ -30,6 +30,7 @@
  */
 
 import type { FeatureKey } from "../features";
+import { opensOnCards, type SpaceLayout } from "../cards/shared";
 
 /** The ranks, as the policy names them (src/server/policy/rank.ts keeps the order; a test compares). */
 export const NAV_ROLES = ["OWNER", "ADMIN", "LEAD", "MEMBER", "GUEST"] as const;
@@ -52,9 +53,15 @@ export interface NavSubject {
   spaceManager?: boolean;
   /** The company's switched-off features (src/lib/features.ts): their places are not drawn. */
   off?: readonly FeatureKey[];
+  /**
+   * The layout of the space the person is in (`currentSpace(actor).layout`, read on the server by the layout). A space of
+   * «لوحات» or «تصنيع» is «فقط لوحات» (the owner's ask, 2026-10-30): its menu offers «اللوحات» and «الإدارة» and nothing
+   * else (`CARDS_SPACE_PLACES`). Left out, or STANDARD: the map is the usual one, untouched.
+   */
+  spaceLayout?: SpaceLayout;
 }
 
-export type PlaceKey = "today" | "chat" | "work" | "library" | "admin" | "watch";
+export type PlaceKey = "today" | "chat" | "work" | "library" | "admin" | "watch" | "cards";
 
 export type TabKey =
   | "my-work"
@@ -78,7 +85,7 @@ export type TabKey =
   | "archive";
 
 /** An icon by NAME: the shell maps it to a drawing (src/components/shell/nav-icons.tsx). Data only, so it crosses from server to browser. */
-export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings" | "watch";
+export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings" | "watch" | "cards";
 
 /**
  * Who may see a place or a tab:
@@ -207,6 +214,28 @@ export const PLACES: readonly PlaceDef[] = [
 ];
 
 /**
+ * «اللوحات» — the one place of a space of cards (the owner's ask, 2026-10-30). It is NOT in `PLACES`: a general space never
+ * draws it and its map, its order and the tests that pin them stay as they were. `buildNav` puts it FIRST when the space
+ * the person is in is a cards space (see `CARDS_SPACE_PLACES`). It is one page (/cards, and /cards/[id] belongs to it),
+ * offered to everybody the space lets in: the cards service decides again, on the server, what each person reads.
+ */
+export const CARDS_PLACE: PlaceDef = { key: "cards", href: "/cards", labelKey: "nav.place.cards", icon: "cards", requires: "everyone", tabs: [] };
+
+/**
+ * What a cards space offers, after «اللوحات»: «الإدارة» only, with its own rules (a plain member sees «الفريق», a manager
+ * the whole place). «اليوم» · «الدردشة» · «الشغل» · «المكتبة» · «نتفرّج سوا» are not offered THERE (still offered in every
+ * other space). ⚠️ Only the menu changes: their pages and routes still answer (a link someone kept, a notification, a topic
+ * opened from «أرسل»). 🔧 Nothing is removed or refused here.
+ */
+export const CARDS_SPACE_PLACES: readonly PlaceKey[] = ["admin"];
+
+/** The place definitions the map is drawn from for a space of this layout: the code's `PLACES`, or «اللوحات» then «الإدارة». */
+function placesFor(layout: SpaceLayout | undefined): readonly PlaceDef[] {
+  if (!opensOnCards(layout)) return PLACES;
+  return [CARDS_PLACE, ...PLACES.filter((def) => CARDS_SPACE_PLACES.includes(def.key))];
+}
+
+/**
  * Every address the app had before Phase 2. Each one is still a page (`src/app/(app)/<route>/page.tsx`,
  * `[id]` being the dynamic folder) and each one still has a place or, for the profile, deliberately none.
  */
@@ -328,7 +357,7 @@ export interface NavModel {
  */
 export function buildNav(subject: NavSubject): NavModel {
   const places: NavPlace[] = [];
-  for (const def of PLACES) {
+  for (const def of placesFor(subject.spaceLayout)) {
     if (!meets(def.requires, subject)) continue;
     if (def.feature && subject.off?.includes(def.feature)) continue;
     const allowed = def.tabs.filter((tab) => meets(tab.requires, subject));
@@ -358,7 +387,7 @@ interface Prefix {
 }
 
 /** Every address prefix the map knows, with the place (and the tab) it belongs to. */
-const PREFIXES: readonly Prefix[] = PLACES.flatMap((def) => [
+const PREFIXES: readonly Prefix[] = [...PLACES, CARDS_PLACE].flatMap((def) => [
   ...(def.tabs.length === 0 && def.href ? [{ path: def.href, place: def.key, tab: null }] : []),
   ...(def.owns ?? []).map((path) => ({ path, place: def.key, tab: null })),
   ...def.tabs.flatMap((tab) => [tab.href, ...(tab.also ?? [])].map((path) => ({ path, place: def.key, tab: tab.key }))),

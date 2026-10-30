@@ -49,10 +49,12 @@ export function TopBar({
   newActions?: readonly NewActionKey[];
 }) {
   const { t } = useI18n();
+  // the mark goes home: «اليوم», or «اللوحات» (else the first place) when «اليوم» is not offered (a space of «لوحات»: its home is «اللوحات»)
+  const home = nav.places.some((place) => place.key === "today") ? null : (nav.places.find((place) => place.key === "cards") ?? nav.places[0]);
   return (
     <header className="zk-safe-x shrink-0 border-b border-border bg-surface pt-[env(safe-area-inset-top)]">
       <div className="flex flex-wrap items-center gap-x-1 gap-y-1 px-1.5 py-1.5 md:h-16 md:flex-nowrap md:gap-x-2.5 md:px-5 md:py-0">
-        <Link href="/" aria-label={t("nav.place.today")} className="grid size-11 shrink-0 place-items-center rounded-xl md:hidden">
+        <Link href={home?.href ?? "/"} aria-label={t(home?.labelKey ?? "nav.place.today")} className="grid size-11 shrink-0 place-items-center rounded-xl md:hidden">
           <span aria-hidden="true">
             <ZakiMark className="size-8" />
           </span>
