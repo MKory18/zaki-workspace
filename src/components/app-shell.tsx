@@ -39,6 +39,8 @@ export interface AppShellProps {
   space?: ShellSpace | null;
   /** The owner and the admins: «كل المساحات» in the space menu. */
   canOverview?: boolean;
+  /** The company's «شريط الموجودين» switch (`src/lib/features.ts`): off, the row is not drawn. */
+  peopleDock?: boolean;
   children: ReactNode;
 }
 
@@ -56,7 +58,7 @@ export interface AppShellProps {
  * (`buildNav` in the (app) layout): the frame only draws it, and the server still decides every request.
  * Theme tokens only, logical CSS only; the decoration is in the side menu's header and nowhere else.
  */
-export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCollapsed = false, newActions = [], orgName, space: initialSpace = null, canOverview = false, children }: AppShellProps) {
+export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCollapsed = false, newActions = [], orgName, space: initialSpace = null, canOverview = false, peopleDock = true, children }: AppShellProps) {
   const { t } = useI18n();
   // the space the person is in (the layout's answer, then the server's after each navigation)
   const space = useCurrentSpace(initialSpace);
@@ -143,7 +145,7 @@ export function AppShell({ user, nav, rank, audience, isGuest = false, defaultCo
             {children}
           </main>
           {/* who is here and who is at their screen: its own 40px row above the phone's bar, so it covers no page (never for a guest) */}
-          <PeopleDock enabled={!isGuest} />
+          <PeopleDock enabled={!isGuest && peopleDock} />
         </div>
       </div>
 

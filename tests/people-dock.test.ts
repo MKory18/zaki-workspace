@@ -107,8 +107,8 @@ describe("the people dock", () => {
     const column = /<div className="flex min-h-0 flex-1 flex-col pb-\[calc\(3\.5rem\+1px\+env\(safe-area-inset-bottom\)\)\] md:pb-0">([\s\S]*?)<\/div>/.exec(shell);
     expect(column, "the padded column is gone: the dock would land under the phone's bar").not.toBeNull();
     const inside = column![1]!;
-    // the page scrolls first, the dock is its own row under it
-    expect(inside).toMatch(/<main[\s\S]*<\/main>[\s\S]*<PeopleDock enabled=\{!isGuest\} \/>/);
+    // the page scrolls first, the dock is its own row under it (and the company's switch can leave it out)
+    expect(inside).toMatch(/<main[\s\S]*<\/main>[\s\S]*<PeopleDock enabled=\{!isGuest && peopleDock\} \/>/);
     // and it is never a floating layer over the content
     const dock = readFileSync(path.resolve(__dirname, "..", "src/components/shell/people-dock.tsx"), "utf8");
     expect(dock).not.toMatch(/className="[^"]*\bfixed\b/);

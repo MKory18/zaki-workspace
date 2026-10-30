@@ -179,7 +179,7 @@ Doors in use: `activeOrgCtx` 71 · `requireActor` 20 · `requireTeamWork` 11 · 
 | POST | `/api/integrations/telegram/sync` | activeOrgCtx | `integrations`: activeOrgCtx<br>`guest-guard`: assertNotGuest<br>`telegram`: syncUpdates |
 | GET, POST | `/api/labels` | requireWorkspace ‡ | — |
 | GET, PATCH | `/api/me` | requireUser | `users`: updateProfile |
-| POST, DELETE | `/api/me/avatar` | requireActor | `avatars`: clearAvatar, setAvatar, AVATAR_MAX_BYTES |
+| POST, DELETE | `/api/me/avatar` | requireActor | `avatars`: clearAvatar, setAvatar, AVATAR_MAX_BYTES<br>`features`: assertFeatureOn |
 | POST | `/api/me/digits` | requireUser ‡ | — |
 | POST | `/api/me/password` | requireUser | `onboarding`: changeOwnPassword |
 | POST | `/api/me/theme` | requireUser ‡ | — |
@@ -194,7 +194,7 @@ Doors in use: `activeOrgCtx` 71 · `requireActor` 20 · `requireTeamWork` 11 · 
 | POST | `/api/organizations/[id]/members/[userId]/logout` | requireAccountsActor | `accounts`: logoutEverywhere, requireAccountsActor |
 | POST | `/api/organizations/[id]/members/[userId]/password` | requireAccountsActor | `accounts`: requireAccountsActor, resetAccountPassword |
 | POST | `/api/organizations/[id]/members/[userId]/status` | requireAccountsActor | `accounts`: accountStatusSchema, requireAccountsActor, setAccountStatus |
-| GET | `/api/presence` | requireActor | `guest-guard`: assertNotGuest<br>`presence-roster`: presenceRoster |
+| GET | `/api/presence` | requireActor | `guest-guard`: assertNotGuest<br>`features`: assertFeatureOn<br>`presence-roster`: presenceRoster |
 | GET | `/api/production` | requireActor | `production`: dayChecklist, dayIso<br>`guest-guard`: assertNotGuest<br>`space-place`: placeOf |
 | POST | `/api/production/checklist` | requireActor | `production`: setRoutineDone |
 | GET, POST | `/api/production/routines` | requireActor | `production`: createRoutine, listRoutines, routineSchema<br>`guest-guard`: assertNotGuest<br>`space-place`: placeOf |
@@ -264,8 +264,8 @@ high count is a wide surface: changing its signature reaches all of them.
 | `integrations` | 180 | 79 | Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. |
 | `current-space` | 123 | 41 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
 | `guest-guard` | 30 | 37 | Org GUESTs are external partners (for example the factory): they see only what is shared with them, never write business data, and never see prices or the staff directory. |
+| `features` | 48 | 19 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
 | `team-scope` | 149 | 16 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
-| `features` | 48 | 15 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
 | `tasks` | 454 | 14 | no header comment — exports `TASK_INCLUDE`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, `moveTask`, … |
 | `n8n` | 294 | 9 | Events we allow orgs to forward to n8n — the UI shows exactly this list. |
 | `access` | 76 | 8 | Workspace-level isolation — the company's master switch. |
@@ -386,6 +386,9 @@ before it. A switch is only honest if something reads it, so this is the list of
 | `chatRowMenu` | 2 — `server/chat/home.ts`, `server/chat/purge.ts` |
 | `callNoiseFilter` | 1 — `server/calls/calls.ts` |
 | `instantWork` | 4 — `app/api/instant/route.ts`, `app/api/instant/ticket/route.ts`, `components/instant-work.tsx`, `server/services/instant-work.ts` |
+| `avatars` | 18 — `app/(app)/profile/page.tsx`, `app/api/avatars/[id]/route.ts`, `app/api/me/avatar/route.ts`, `components/calls/call-media.tsx`, `components/calls/call-room.tsx`, `components/members/staff-directory.tsx`, `components/profile-form.tsx`, `components/shell/avatar-menu.tsx`, `components/ui/avatar.tsx`, `lib/members-ui.ts`, `server/chat/dto.ts`, `server/chat/messages.ts`, `server/chat/topics.ts`, `server/realtime/hub.ts`, `server/services/avatars.ts`, `server/services/org-members.ts`, `server/services/presence-roster.ts`, `server/services/users.ts` |
+| `peopleDock` | 3 — `app/(app)/layout.tsx`, `app/api/presence/route.ts`, `components/app-shell.tsx` |
+| `chatBubbles` | 3 — `components/chat/conversation/conversation-screen.tsx`, `server/chat/dto.ts`, `server/chat/topics.ts` |
 
 ## 9. What this map noticed
 

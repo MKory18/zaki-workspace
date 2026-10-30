@@ -3,6 +3,7 @@ import { withApi } from "@/server/api";
 import { ForbiddenError } from "@/server/auth";
 import { requireActor } from "@/server/policy/actor";
 import { clearAvatar, setAvatar, AVATAR_MAX_BYTES } from "@/server/services/avatars";
+import { assertFeatureOn } from "@/server/services/features";
 import { parseMultipartUpload } from "@/server/files/multipart";
 import { uploadTempDir, UploadStreamError } from "@/server/files/upload-stream";
 
@@ -18,6 +19,7 @@ import { uploadTempDir, UploadStreamError } from "@/server/files/upload-stream";
 export async function POST(req: Request) {
   return withApi(async () => {
     const actor = await requireActor();
+    await assertFeatureOn(actor.orgId, "avatars");
     let received: Awaited<ReturnType<typeof parseMultipartUpload>>["upload"] | undefined;
     try {
       ({ upload: received } = await parseMultipartUpload(req, {
@@ -47,6 +49,7 @@ export async function POST(req: Request) {
 export async function DELETE() {
   return withApi(async () => {
     const actor = await requireActor();
+    await assertFeatureOn(actor.orgId, "avatars");
     if (actor.role === "GUEST") throw new ForbiddenError("guest.no_access");
     await clearAvatar({ orgId: actor.orgId, userId: actor.userId });
     return NextResponse.json({ ok: true });

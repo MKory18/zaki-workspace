@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -35,6 +35,15 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // «مهمة فورية» and «تذكرة فورية» (src/server/services/instant-work.ts): off, neither is offered and their routes
   // answer «not found»; the ones already made stay where they are
   instantWork: true,
+  // a person's own picture (src/server/services/avatars.ts): off, nobody uploads or removes one and the profile page
+  // does not offer it; the pictures already uploaded keep showing (they are data, like a file already on Drive)
+  avatars: true,
+  // the staff strip along the bottom of the shell (src/components/shell/people-dock.tsx): off, the row is not drawn
+  // and `/api/presence` answers «not found»; the presence itself is untouched
+  peopleDock: true,
+  // the modern message layout with the sender outside the bubble and a day separator (message-item.tsx,
+  // lib/chat/day-separator.ts): off, the log goes back to the previous bubble and has no day lines
+  chatBubbles: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

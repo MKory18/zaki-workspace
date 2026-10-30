@@ -32,7 +32,7 @@ describe("«الميزات»: the owner's switches", () => {
   });
 
   it("lists every switch with its default filled in, and the ones that are off", () => {
-    expect(featuresOf({ features: { watch: false, unknown: true } })).toEqual({ watch: false, sectionPermissions: true, libraryDrive: true, pushEverything: true, chatRowMenu: true, callNoiseFilter: true, instantWork: true });
+    expect(featuresOf({ features: { watch: false, unknown: true } })).toEqual({ watch: false, sectionPermissions: true, libraryDrive: true, pushEverything: true, chatRowMenu: true, callNoiseFilter: true, instantWork: true, avatars: true, peopleDock: true, chatBubbles: true });
     expect(featuresOff({ features: { watch: false } })).toEqual(["watch"]);
     expect(featuresOff({})).toEqual([]);
   });
