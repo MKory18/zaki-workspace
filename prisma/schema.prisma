@@ -1230,6 +1230,25 @@ model Reminder {
   @@index([messageId])
 }
 
+/// «اشتراك التقويم»: the private link a person adds ONCE to Google / Apple / Outlook calendar. The link carries a random
+/// token that IS the credential; only its SHA-256 is stored here, the token itself is shown once, on creation. No foreign
+/// keys on purpose (the same as `Reminder`): nothing is ever deleted, and the feed re-checks the person on every request.
+/// `sessionVersion` is the person's `User.tokenVersion` at creation: a suspend, reset or "log out everywhere" bumps it and
+/// the link stops working at once.
+model CalendarFeedToken {
+  id             String    @id @default(cuid())
+  orgId          String
+  userId         String
+  tokenHash      String    @unique
+  label          String
+  sessionVersion Int       @default(0)
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+
+  @@index([userId, revokedAt])
+}
+
 /// Giving a task to somebody of a HIGHER rank is a request, not an assignment (the owner's rule, 2026-10-30): the task
 /// stays as it was, this row waits for the addressed person, who accepts (the task is then theirs) or returns it with
 /// a written reason. No foreign key to the people on purpose (the same as `Notification`): the row is history and

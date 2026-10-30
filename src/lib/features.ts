@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "recurringTasks"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -67,6 +67,10 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // routes answer «not found» and neither the job runner nor a completion makes a new occurrence; the series already set
   // wait, and are due again when the switch is back on
   recurringTasks: true,
+  // «اشتراك التقويم» (src/server/services/calendar-feed.ts): off, the card on the calendar page is not drawn, the routes
+  // under /api/me/calendar-feed and every private feed link answer «not found»; the links already made stay and work again
+  // with the switch
+  calendarFeed: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {
