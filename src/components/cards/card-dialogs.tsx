@@ -13,7 +13,7 @@ import type { CardItem } from "@/lib/cards/shared";
 import { cardErrorKey } from "./errors";
 
 /** «أرسل»: pick a topic of THIS space; the card's words go there as a message (never a file). */
-export function SendCardDialog({ card, spaceId, onClose }: { card: CardItem | null; spaceId: string; onClose: () => void }) {
+export function SendCardDialog({ card, spaceId, onClose, onDone }: { card: CardItem | null; spaceId: string; onClose: () => void; onDone?: () => void }) {
   const { t } = useI18n();
   const { toast } = useToast();
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -29,6 +29,7 @@ export function SendCardDialog({ card, spaceId, onClose }: { card: CardItem | nu
     try {
       await apiPost(`/api/cards/${card.id}/send`, { conversationId });
       toast(t("cards.sent"), "success");
+      onDone?.();
       onClose();
     } catch (err) {
       toast(t(cardErrorKey(err)), "error");
@@ -66,7 +67,7 @@ interface ProjectRow {
 }
 
 /** «حوّلها لمهمة»: a project and a board of THIS space; the task service makes the task. */
-export function CardToTaskDialog({ card, spaceId, onClose }: { card: CardItem | null; spaceId: string; onClose: () => void }) {
+export function CardToTaskDialog({ card, spaceId, onClose, onDone }: { card: CardItem | null; spaceId: string; onClose: () => void; onDone?: () => void }) {
   const { t } = useI18n();
   const { toast } = useToast();
   const [projectId, setProjectId] = React.useState("");
@@ -90,6 +91,7 @@ export function CardToTaskDialog({ card, spaceId, onClose }: { card: CardItem | 
     try {
       await apiPost(`/api/cards/${card.id}/task`, { projectId, boardId });
       toast(t("cards.task_made"), "success");
+      onDone?.();
       onClose();
     } catch (err) {
       toast(t(cardErrorKey(err)), "error");

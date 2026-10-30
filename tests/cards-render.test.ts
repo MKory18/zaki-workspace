@@ -113,7 +113,8 @@ describe("a tile per kind", () => {
     expect(html).toContain('rel="noopener noreferrer nofollow"');
     const broken = tile(bad);
     expect(broken).not.toContain("javascript:");
-    expect(broken).not.toContain("<a ");
+    // no anchor to anywhere but the card's own page (its title opens it)
+    expect(broken).not.toMatch(/<a [^>]*href="(?!\/cards\/)/);
     expect(broken).toContain(AR["cards.link_invalid"]!);
   });
 
