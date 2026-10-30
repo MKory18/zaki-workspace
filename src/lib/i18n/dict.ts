@@ -35,6 +35,7 @@ import quickChat from "./ar.quick-chat.json";
 import reminders from "./ar.reminders.json";
 import taskSteps from "./ar.task-steps.json";
 import cardsNav from "./ar.cards-nav.json";
+import calendarFeed from "./ar.calendar-feed.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
@@ -81,4 +82,5 @@ export const AR: Record<string, string> = {
   ...reminders,
   ...taskSteps,
   ...cardsNav,
+  ...calendarFeed,
 };
