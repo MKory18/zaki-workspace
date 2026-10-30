@@ -8,6 +8,7 @@ import { buildChatMessagePayload, createChatUploadFormData, createVoiceUploadFor
 import { filterMentionChoices, findMentionQuery, insertMention, MENTION_ALL_NAME, mentionsAll, selectedMentionIds } from "@/lib/chat/conversation/mentions";
 import { Avatar } from "@/components/ui/avatar";
 import { useTyping } from "@/lib/realtime/use-realtime";
+import { playChatSound } from "@/lib/chat/sounds";
 import { uploadWithProgress } from "@/lib/chat/upload-with-progress";
 import { VoiceRecorder, type VoiceTake } from "@/lib/chat/voice-recorder";
 import { barsFor, formatDuration } from "@/lib/chat/waveform";
@@ -97,6 +98,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
   });
   if (!response.ok) throw new Error(t("chatc.message_failed"));
   onMessage(await response.json() as MessageDto);
+  playChatSound("sent");
  }
 
  async function saveEdit() {

@@ -11,6 +11,7 @@
   "chatc.mention": "اختر عضوًا للإشارة إليه",
   "chatc.mention_all_hint": "ينبّه كل اللي بالموضوع",
   "chatc.mention_me": "ذكروك بهالرسالة",
+  "chatc.sounds": "أصوات الدردشة",
   "chatc.reply_to": "رد على {name}: {body}",
   "chatc.cancel_reply": "إلغاء الرد",
   "chatc.editing": "تعديل الرسالة",
