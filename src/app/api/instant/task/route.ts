@@ -8,6 +8,7 @@ import { currentSpace } from "@/server/services/current-space";
 import { createInstantTask } from "@/server/services/instant-work";
 import { orgTimeZone } from "@/server/services/org-day";
 import { dueInstantForDay, parseDayText } from "@/lib/due-day";
+import { rewardBodySchema, toRewardRequest } from "@/server/services/reward-input";
 
 const schema = z
   .object({
@@ -19,6 +20,8 @@ const schema = z
     priority: z.enum(["URGENT", "HIGH", "NORMAL", "LOW"]).default("NORMAL"),
     // a day ("2026-11-05") or a full instant: a day is noon in the COMPANY's zone, never the browser's (review B5)
     dueDate: z.string().datetime({ offset: true }).or(z.string().date()).nullable().optional(),
+    /** «مهمة بمكافأة»: the OWNER's alone, with a due date (403 `reward.owner_only` otherwise). */
+    reward: rewardBodySchema.optional(),
   })
   .refine((v) => (v.assigneeIds?.length ?? 0) > 0 || Boolean(v.assigneeId), {
     message: "instant.pick_person",
@@ -44,6 +47,7 @@ export async function POST(req: Request) {
       assigneeIds: input.assigneeIds?.length ? input.assigneeIds : [input.assigneeId!],
       priority: input.priority,
       dueDate,
+      reward: input.reward ? toRewardRequest(input.reward) : undefined,
     });
     return NextResponse.json({ task }, { status: 201 });
   });

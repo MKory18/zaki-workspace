@@ -8,6 +8,9 @@ import { createTask, listTasks } from "@/server/services/tasks";
 import { orgTimeZone } from "@/server/services/org-day";
 import { dueInstantForDay, parseDayText } from "@/lib/due-day";
 import { dispatchEvent } from "@/server/services/n8n";
+import { rewardsVisibleTo } from "@/server/services/rewards";
+import { rewardBodySchema, toRewardRequest } from "@/server/services/reward-input";
+import { withoutReward } from "@/server/policy/reward";
 
 const createSchema = z.object({
   workspaceId: z.string().min(1),
@@ -21,6 +24,8 @@ const createSchema = z.object({
   assigneeId: z.string().min(1).optional().nullable(),
   dueDate: z.string().datetime({ offset: true }).or(z.string().date()).optional().nullable(),
   labels: z.array(z.string().min(1)).max(10).optional(),
+  /** «مهمة بمكافأة»: the OWNER's alone; needs `dueDate` (src/server/services/rewards.ts). */
+  reward: rewardBodySchema.optional(),
 });
 
 export interface ListFilters {
@@ -59,7 +64,9 @@ export async function GET(req: Request) {
       limit: filters.limit,
       cursor: filters.cursor,
     });
-    return NextResponse.json({ tasks, hasMore: tasks.length === filters.limit });
+    // «مهمة بمكافأة»: an external partner (or a switch that is off) is handed rows with no reward field at all
+    const shown = (await rewardsVisibleTo(ctx, filters.workspaceId)) ? tasks : tasks.map((t) => withoutReward(t));
+    return NextResponse.json({ tasks: shown, hasMore: tasks.length === filters.limit });
   });
 }
 
@@ -85,6 +92,7 @@ export async function POST(req: Request) {
       assigneeId: input.assigneeId ?? null,
       dueDate,
       labelIds: reqLabels(input),
+      reward: input.reward ? toRewardRequest(input.reward) : undefined,
     });
     await audit("task.created", {
       actorId: ctx.userId,

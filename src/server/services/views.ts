@@ -6,6 +6,7 @@ import { canWriteInWorkspace, workspaceRoleOf } from "@/server/workspace-role";
 import { orgDayStart } from "@/server/services/org-day";
 import { arabicSearch } from "@/lib/search/arabic";
 import { rankedSearch, sqlIn } from "@/server/search/ranked";
+import { listBadgeStatus } from "@/lib/rewards";
 
 // ---------- workspace access resolution for RSC pages ----------
 
@@ -273,6 +274,20 @@ export interface ViewQuery {
   completedOnly?: boolean;
   search?: string;
   limit?: number;
+  /** «تثبيت»: pinned tasks first (the newest pin first), and `pinnedAt` filled in. Off: the view keeps its own order. */
+  pinnedFirst?: boolean;
+  /**
+   * «مهمة بمكافأة»: fill `reward` (status, amount, currency). Only a caller that has checked the viewer is not a partner and
+   * the company's switch is on passes it (`rewardLensFor`): without it a row carries no reward field at all.
+   */
+  rewards?: boolean;
+}
+
+/** What a list row shows of a reward: the badge's three facts. Absent from every row a partner (or an off switch) is handed. */
+export interface ViewReward {
+  status: string;
+  amountMinor: number;
+  currency: string;
 }
 
 export interface ViewTask {
@@ -296,6 +311,16 @@ export interface ViewTask {
   creatorId: string;
   labelIds: string[];
   updatedAt: Date;
+  /** «تثبيت»: when it was pinned (only when the query asked for pins). */
+  pinnedAt?: Date | null;
+  /** «مهمة بمكافأة»: only when the query asked for rewards and the task has a real one. */
+  reward?: ViewReward | null;
+}
+
+/** «تثبيت»: the pinned rows first (the newest pin first), every other row in the order it already had. Stable. */
+export function sortPinnedFirst<T extends { pinnedAt?: Date | null }>(rows: T[]): T[] {
+  const pinned = rows.filter((r) => r.pinnedAt).sort((a, b) => b.pinnedAt!.getTime() - a.pinnedAt!.getTime());
+  return [...pinned, ...rows.filter((r) => !r.pinnedAt)];
 }
 
 /** Single query core for every task view; always org-scoped. */
@@ -330,7 +355,11 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
   if (q.openOnly) where.completedAt = null;
   if (q.completedOnly) where.completedAt = { not: null };
   const take = Math.min(q.limit ?? 200, 500);
-  const orderBy: Prisma.TaskOrderByWithRelationInput[] = [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }];
+  const orderBy: Prisma.TaskOrderByWithRelationInput[] = [
+    ...(q.pinnedFirst ? [{ pinnedAt: { sort: "desc" as const, nulls: "last" as const } }] : []),
+    { dueDate: { sort: "asc", nulls: "last" } },
+    { updatedAt: "desc" },
+  ];
   const include = {
     ...TASK_INCLUDE,
     project: { select: { id: true, name: true } },
@@ -387,6 +416,15 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
       creatorId: t.creatorId,
       labelIds: t.labels.map((l) => l.label.id),
       updatedAt: t.updatedAt,
+      ...(q.pinnedFirst ? { pinnedAt: t.pinnedAt } : {}),
+      ...(q.rewards
+        ? {
+            reward:
+              listBadgeStatus(t.rewardStatus) && t.rewardAmountMinor != null && t.rewardCurrency
+                ? { status: t.rewardStatus as string, amountMinor: t.rewardAmountMinor, currency: t.rewardCurrency }
+                : null,
+          }
+        : {}),
     };
   });
 }

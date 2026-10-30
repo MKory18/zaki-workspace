@@ -5,11 +5,13 @@ import {
   queryTasksForView,
   sortByCompleted,
   sortByDue,
+  sortPinnedFirst,
   type ViewQuery,
   type ViewTask,
 } from "@/server/services/views";
 import { resolveTimeZone } from "@/lib/zoned-time";
 import { canWriteInWorkspace } from "@/server/workspace-role";
+import { featureOn } from "@/lib/features";
 
 /**
  * The company's zone as the person's My Work page reads it: the first company they are an ACTIVE member
@@ -37,6 +39,13 @@ export async function myWorkTimeZone(userId: string): Promise<string> {
  *    List/Calendar pages (workspace-role.ts): an org GUEST is read-only everywhere, whatever
  *    their workspace row says, and a workspace GUEST row is read-only too
  */
+/** The row as a partner is handed it: without the `reward` key (not even a null). */
+function withoutViewReward(task: ViewTask): ViewTask {
+  const { reward: _reward, ...rest } = task;
+  void _reward;
+  return rest;
+}
+
 export const MY_WORK_TABS = ["today", "upcoming", "overdue", "completed", "mine", "created"] as const;
 export type MyWorkTab = (typeof MY_WORK_TABS)[number];
 
@@ -67,7 +76,8 @@ function tabFilters(userId: string, timeZone: string, now: Date): Record<MyWorkT
 function sortRows(rows: MyWorkRow[], by: "due" | "completed"): MyWorkRow[] {
   const editableById = new Map(rows.map((r) => [r.task.id, r.editable] as const));
   const tasks = rows.map((r) => r.task);
-  const sorted = by === "completed" ? sortByCompleted(tasks) : sortByDue(tasks);
+  // «تثبيت»: a pinned task is first in its tab (only rows the query filled `pinnedAt` for: the switch is on)
+  const sorted = sortPinnedFirst(by === "completed" ? sortByCompleted(tasks) : sortByDue(tasks));
   return sorted.map((task) => ({ task, editable: editableById.get(task.id) ?? false }));
 }
 
@@ -110,8 +120,9 @@ export async function getMyWork(userId: string, now: Date = new Date(), opts: { 
 
   const clocks = await db.organization.findMany({
     where: { id: { in: memberships.map((m) => m.organizationId) } },
-    select: { id: true, timezone: true },
+    select: { id: true, timezone: true, settings: true },
   });
+  const settingsByOrg = new Map(clocks.map((o) => [o.id, o.settings] as const));
   const zoneByOrg = new Map(clocks.map((o) => [o.id, resolveTimeZone(o.timezone)] as const));
   // one batch of tab queries per org, run in parallel but merged in membership order
   const perOrg = await Promise.all(
@@ -119,6 +130,8 @@ export async function getMyWork(userId: string, now: Date = new Date(), opts: { 
       const workspaceIds = idsByOrg.get(m.organizationId);
       if (!workspaceIds || workspaceIds.length === 0) return [];
       const filters = tabFilters(userId, zoneByOrg.get(m.organizationId) ?? resolveTimeZone(null), now);
+      // «مهمة بمكافأة» / «تثبيت»: while the company's switch is on; a partner is never given a reward
+      const lensOn = featureOn(settingsByOrg.get(m.organizationId), "taskRewards") && m.role !== "GUEST";
       return Promise.all(
         MY_WORK_TABS.map(async (tab) => {
           const found = await queryTasksForView({
@@ -126,11 +139,17 @@ export async function getMyWork(userId: string, now: Date = new Date(), opts: { 
             orgId: m.organizationId,
             workspaceIds,
             visible,
+            pinnedFirst: lensOn,
+            rewards: lensOn,
           });
           return {
             tab,
             rows: found.map(
-              (task): MyWorkRow => ({ task, editable: canWriteInWorkspace(m.role, wsRoleById.get(task.workspaceId)) }),
+              (task): MyWorkRow => ({
+                // a row of a space where their own row says GUEST is a partner's row there: no reward field on it at all
+                task: wsRoleById.get(task.workspaceId) === "GUEST" ? withoutViewReward(task) : task,
+                editable: canWriteInWorkspace(m.role, wsRoleById.get(task.workspaceId)),
+              }),
             ),
           };
         }),
