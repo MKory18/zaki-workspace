@@ -37,8 +37,10 @@ describe("«الميزات»: the owner's switches", () => {
     // editing this test, and a key that exists in one place and not the other fails
     expect(Object.keys(all).sort()).toEqual([...FEATURES].sort());
     for (const key of FEATURES) expect(all[key], key).toBe(key === "watch" ? false : FEATURE_DEFAULTS[key]);
-    expect(featuresOff({ features: { watch: false } })).toEqual(["watch"]);
-    expect(featuresOff({})).toEqual([]);
+    // «إخفاء المالك من متصل» is OFF until the owner turns it on, so it is always in the list of the ones that are off
+    expect(featuresOff({ features: { watch: false } })).toEqual(["watch", "ownerHiddenOnline"]);
+    expect(featuresOff({})).toEqual(["ownerHiddenOnline"]);
+    expect(featuresOff({ features: { ownerHiddenOnline: true } })).toEqual([]);
   });
 
   it("setting one switch keeps every other key of the company's settings", () => {

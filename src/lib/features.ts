@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -50,6 +50,10 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // «المعالم» on a project (src/server/services/milestones.ts): off, the card is not drawn, the task's picker is not
   // offered and the routes answer «not found»; the milestones already made stay where they are
   milestones: true,
+  // «إخفاء المالك من متصل» (the owner, 2026-10-30: «ميزة اقدر افعلها والغيها»): ON, everybody else sees the owner as not
+  // at his screen (the people dock, the member pills of a conversation); he still sees himself. OFF (the default): as
+  // before. Only what is DRAWN changes: whether he receives a notification still follows his real presence.
+  ownerHiddenOnline: false,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

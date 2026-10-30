@@ -324,6 +324,7 @@ export async function conversationDetail(
 
   const canModerateHere = canModerate(facts, org!);
   const viewer: Viewer = { userId: ctx.userId, role: org!.role, canModerateHere, isMember: facts.viewerIsMember };
+  const hideOwnerOnline = await isFeatureOn(ctx.orgId, "ownerHiddenOnline");
 
   // the OWNER's reading is silent: his read mark never shows, in ticks or reader avatars
   const ownerIds = new Set(
@@ -334,6 +335,8 @@ export async function conversationDetail(
       })
     ).map((o) => o.userId),
   );
+  // «إخفاء المالك من متصل»: the owner does not light up for anybody but himself
+  if (hideOwnerOnline) for (const id of ownerIds) if (id !== ctx.userId) online.delete(id);
 
   // DM ticks: the OTHER person's marks decide my own messages' status
   let otherMember: { lastDeliveredAt: Date | null; lastReadAt: Date | null } | null = null;
