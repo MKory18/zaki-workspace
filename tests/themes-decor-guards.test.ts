@@ -137,7 +137,7 @@ describe("text over a picture is always on a panel — the door's three screens 
       expect(code, `${f} still imports the old wordmark`).not.toMatch(/import \{[^}]*\bLogo\b[^}]*\} from "@\/components\/logo"/);
       expect(code, `${f}: old name`).not.toMatch(/Zakai|Intelligent Systems/);
     }
-    expect(stripComments(text("components/theme/door-shell.tsx"))).toMatch(/DolphinMark/);
+    expect(stripComments(text("components/theme/door-shell.tsx"))).toMatch(/ZakiMark/);
     expect(stripComments(text("components/theme/door-shell.tsx"))).toContain('t("app.name")');
   });
 

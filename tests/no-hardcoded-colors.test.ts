@@ -28,7 +28,7 @@ const PALETTE_CLASS =
 /** Where a colour is DATA or brand art, not a styling decision. */
 const HEX_ALLOWED = [
   "lib/themes/", // the palettes themselves
-  "components/logo.tsx", // the dolphin mark (brand art)
+  "components/logo.tsx", // the «Z» mark (brand art)
   "server/services/tasks.ts", // the colour a new board column is created with (stored in the database)
   "app/api/labels/route.ts", // the colour a new label is created with (stored in the database)
   "app/api/boards/[id]/columns/route.ts", // the colour a new column is created with (stored in the database)

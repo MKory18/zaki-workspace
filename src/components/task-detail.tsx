@@ -15,6 +15,9 @@ import { fmtDMY, fmtDateTime } from "@/lib/format";
 import { columnLabel, enumLabel, enumOptions } from "@/lib/i18n/enums";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
+import { TaskLinks, type LinkCandidate } from "@/components/task-links";
+import { TaskAssignRequestBanner, type RequestBannerMode } from "@/components/task-assign-request-banner";
+import { errText } from "@/components/department-tickets";
 
 export interface TaskDetailData {
   id: string;
@@ -32,6 +35,9 @@ export interface TaskDetailData {
   creatorName: string;
   assigneeId: string | null;
   assigneeName: string | null;
+  /** «المعلم» the task points at, if any (null when the feature is off or the task has none). */
+  milestoneId?: string | null;
+  milestoneName?: string | null;
   labelIds: string[];
   comments: { id: string; author: string; authorId: string; body: string; createdAt: string }[];
 }
@@ -42,13 +48,23 @@ export function TaskDetail({
   currentUserId,
   members,
   labels,
+  links = null,
+  milestones = null,
+  assignRequest = null,
 }: {
   task: TaskDetailData;
   /** Whether the API would let this person change the task (see canWriteInWorkspace). */
   canEdit: boolean;
   currentUserId: string;
-  members: { id: string; name: string }[];
+  /** `request`: somebody of a HIGHER rank than the viewer — a pick only ASKS them (src/server/services/task-assign.ts). */
+  members: { id: string; name: string; request?: boolean }[];
   labels: { id: string; name: string; color: string }[];
+  /** «التبعيات»: null when the company switched it off (the card is not drawn at all). */
+  links?: { candidates: LinkCandidate[] } | null;
+  /** The milestones of this task's project, or `null` when the company's «المعالم» switch is off. */
+  milestones?: { id: string; name: string }[] | null;
+  /** The pending request to give this task to somebody of a higher rank, as the viewer reads it (null: none for them). */
+  assignRequest?: { mode: RequestBannerMode; fromName: string; toName: string } | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -58,16 +74,23 @@ export function TaskDetail({
   const [priority, setPriority] = useState(task.priority);
   const [dueDate, setDueDate] = useState(task.dueDate?.slice(0, 10) ?? "");
   const [assigneeId, setAssigneeId] = useState(task.assigneeId ?? "");
+  const [milestoneId, setMilestoneId] = useState(task.milestoneId ?? "");
   const [selectedLabels, setSelectedLabels] = useState<string[]>(task.labelIds);
   const [commentBody, setCommentBody] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      apiPatch<{ task: unknown }>(`/api/tasks/${task.id}`, data),
-    onSuccess: () => {
+      apiPatch<{ task: { assignRequest?: { toUserId: string } | null } }>(`/api/tasks/${task.id}`, data),
+    onSuccess: (res) => {
       setError(null);
-      toast(t("task.updated"), "success");
+      if (res.task.assignRequest) {
+        // somebody of a higher rank was ASKED: the task keeps the person it had until they answer
+        setAssigneeId(task.assigneeId ?? "");
+        toast(t("taskreq.created"), "success");
+      } else {
+        toast(t("task.updated"), "success");
+      }
       router.refresh();
     },
     onError: () => {
@@ -110,6 +133,18 @@ export function TaskDetail({
     onError: () => toast(t("common.error"), "error"),
   });
 
+  const answer = useMutation({
+    mutationFn: (body: { accept: true } | { accept: false; reason: string }) =>
+      body.accept
+        ? apiPost(`/api/tasks/${task.id}/request/accept`, {})
+        : apiPost(`/api/tasks/${task.id}/request/return`, { reason: body.reason }),
+    onSuccess: (_res, body) => {
+      toast(t(body.accept ? "taskreq.accepted" : "taskreq.returned"), "success");
+      router.refresh();
+    },
+    onError: (err) => toast(errText(err, t), "error"),
+  });
+
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
 
@@ -120,6 +155,7 @@ export function TaskDetail({
     if (priority !== task.priority) patch.priority = priority;
     if (dueDate !== (task.dueDate?.slice(0, 10) ?? "")) patch.dueDate = dueDate || null;
     if (assigneeId !== (task.assigneeId ?? "")) patch.assigneeId = assigneeId || null;
+    if (milestoneId !== (task.milestoneId ?? "")) patch.milestoneId = milestoneId || null;
     if (JSON.stringify(selectedLabels) !== JSON.stringify(task.labelIds))
       patch.labelIds = selectedLabels;
     if (Object.keys(patch).length) save.mutate(patch);
@@ -133,6 +169,17 @@ export function TaskDetail({
         <span className="text-xs text-fg-muted">{t("task.inBoard", { name: task.boardName })}</span>
         {canEdit ? null : <span className="ms-auto text-xs text-muted">{t("task.readOnly")}</span>}
       </header>
+
+      {assignRequest ? (
+        <TaskAssignRequestBanner
+          mode={assignRequest.mode}
+          fromName={assignRequest.fromName}
+          toName={assignRequest.toName}
+          busy={answer.isPending}
+          onAccept={() => answer.mutate({ accept: true })}
+          onReturn={(reason) => answer.mutate({ accept: false, reason })}
+        />
+      ) : null}
 
       <Card>
         <CardBody className="space-y-4">
@@ -166,13 +213,16 @@ export function TaskDetail({
                   <option value="">{t("list.unassigned")}</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name}
+                      {m.request ? `${m.name} · ${t("taskreq.tag")}` : m.name}
                     </option>
                   ))}
                 </Select>
               ) : (
                 <p className="text-sm text-fg">{task.assigneeName ?? t("list.unassigned")}</p>
               )}
+              {canEdit && members.some((m) => m.request) ? (
+                <p className="mt-1 text-xs text-fg-muted">{`${t("taskreq.tag")}: ${t("taskreq.hint")}`}</p>
+              ) : null}
             </div>
             <div>
               <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
@@ -213,6 +263,32 @@ export function TaskDetail({
                 <p className="text-sm text-fg">{task.dueDate ? fmtDMY(task.dueDate) : "—"}</p>
               )}
             </div>
+            {milestones && milestones.length > 0 ? (
+              <div>
+                <span className="mb-1 flex items-center gap-1 text-xs text-fg-muted">
+                  <Flag className="h-3 w-3" /> {t("task.milestone")}
+                </span>
+                {canEdit ? (
+                  <Select
+                    value={milestoneId}
+                    onChange={(e) => {
+                      setMilestoneId(e.target.value);
+                      save.mutate({ milestoneId: e.target.value || null });
+                    }}
+                    className="h-8"
+                  >
+                    <option value="">{t("task.noMilestone")}</option>
+                    {milestones.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <p className="text-sm text-fg">{task.milestoneName ?? t("task.noMilestone")}</p>
+                )}
+              </div>
+            ) : null}
             <div>
               <span className="mb-1 block text-xs text-fg-muted">{t("task.labels")}</span>
               {canEdit ? (
@@ -285,6 +361,8 @@ export function TaskDetail({
           {save.isPending ? <p className="text-xs text-muted">{t("common.saving")}</p> : null}
         </CardBody>
       </Card>
+
+      {links ? <TaskLinks taskId={task.id} canEdit={canEdit} candidates={links.candidates} /> : null}
 
       <Card>
         <CardHeader>

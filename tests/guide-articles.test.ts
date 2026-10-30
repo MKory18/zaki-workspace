@@ -421,8 +421,10 @@ describe("«الاعتمادات والرخص»: the in-app credits every licenc
     expect(text.length).toBeGreaterThan(100);
   });
 
-  it("credits the photograph as CC BY asks: the work, the author, the source, the licence, and that it was changed", () => {
-    for (const part of ["أفق عمّان", "إبراهيم نبيل صالح", "ويكيميديا كومنز", "المشاع الإبداعي", "نَسب المُصنَّف", "التعديل"]) expect(text, part).toContain(part);
+  it("says the picture of «المهمّة الجاية» is the project's own drawing, with no third party's work in it", () => {
+    for (const part of ["مشهد غروب", "رسم أصلي", "بدون صور أو مواد من طرف تالت"]) expect(text, part).toContain(part);
+    // the photograph of Amman was replaced: nobody is credited for a picture that is no longer there
+    expect(text).not.toContain("إبراهيم نبيل صالح");
   });
 
   it("names every font the app ships, each under the open font licence, and the renamed digits", () => {
@@ -432,7 +434,7 @@ describe("«الاعتمادات والرخص»: the in-app credits every licenc
 
   it("and every file CREDITS.md credits to a third party has its line here", () => {
     const md = readFileSync(path.join(__dirname, "..", "public", "brand", "CREDITS.md"), "utf8");
-    expect(md).toContain("Ibrahim Nabeel Salah");
+    expect(md).not.toContain("Ibrahim Nabeel Salah");
     expect(md).toContain("zaki-digits");
     expect(md).toContain("Lalezar");
   });

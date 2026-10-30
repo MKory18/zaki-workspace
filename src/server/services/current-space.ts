@@ -1,11 +1,12 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { OrgRole, WorkspaceKind, WorkspaceRole } from "@prisma/client";
+import type { OrgRole, Prisma, WorkspaceKind, WorkspaceRole } from "@prisma/client";
 import { db } from "@/server/db";
 import { HQ_SYSTEM_KEY } from "@/server/chat/hq";
 import { isSpaceManager } from "@/server/workspace-role";
 
 import { goHref } from "@/lib/space-link";
+import { layoutOf, type SpaceLayout } from "@/lib/cards/shared";
 
 export { goHref, safeNext } from "@/lib/space-link";
 
@@ -27,6 +28,8 @@ export interface SpaceEntry {
   name: string;
   emoji: string | null;
   kind: WorkspaceKind;
+  /** STANDARD, CARDS or MANUFACTURING (the last two are made of «لوحات» only: their home is /cards). */
+  layout: SpaceLayout;
   /** The person's own row in the space (none for a space the OWNER sees without being put in it). */
   role: WorkspaceRole | null;
 }
@@ -36,6 +39,7 @@ export interface CurrentSpace {
   name: string;
   emoji: string | null;
   kind: WorkspaceKind;
+  layout: SpaceLayout;
   /** OWNER, the space's ADMIN, an org ADMIN in it: sees every «مقطع» and manages the space. */
   manager: boolean;
 }
@@ -55,7 +59,7 @@ export async function spacesOf(who: SpaceSubject): Promise<SpaceEntry[]> {
         who.role === "OWNER"
           ? { organizationId: who.orgId, archivedAt: null }
           : { organizationId: who.orgId, archivedAt: null, members: { some: { userId: who.userId } } },
-      select: { id: true, name: true, emoji: true, kind: true, systemKey: true },
+      select: { id: true, name: true, emoji: true, kind: true, layout: true, systemKey: true },
       // the order the owner put them in by dragging, then by name
       orderBy: [{ position: "asc" }, { name: "asc" }, { id: "asc" }],
     }),
@@ -66,7 +70,7 @@ export async function spacesOf(who: SpaceSubject): Promise<SpaceEntry[]> {
   ]);
   const roleOf = new Map(rows.map((r) => [r.workspaceId, r.role] as const));
   const hqFirst = [...spaces.filter((s) => s.systemKey === HQ_SYSTEM_KEY), ...spaces.filter((s) => s.systemKey !== HQ_SYSTEM_KEY)];
-  return hqFirst.map((s) => ({ id: s.id, name: s.name, emoji: s.emoji, kind: s.kind, role: roleOf.get(s.id) ?? null }));
+  return hqFirst.map((s) => ({ id: s.id, name: s.name, emoji: s.emoji, kind: s.kind, layout: layoutOf(s.layout), role: roleOf.get(s.id) ?? null }));
 }
 
 /** The space the person is in: the wanted one when it is theirs, else «الشركة», else the first; null with none. */
@@ -79,6 +83,7 @@ export async function resolveCurrentSpace(who: SpaceSubject, wanted: string | nu
     name: chosen.name,
     emoji: chosen.emoji,
     kind: chosen.kind,
+    layout: chosen.layout,
     manager: isSpaceManager(who.role, chosen.role),
   };
 }
@@ -102,9 +107,21 @@ export async function keepInSpace(who: SpaceSubject, spaceId: string, path: stri
 }
 
 /**
- * The notifications the bell shows inside a space: that space's, and the personal ones (no space: a welcome, a
- * changed rank, everything from before spaces had them). With no space at all: everything.
+ * The notifications the bell shows inside a space: that space's, and the personal ones OF THE SAME COMPANY
+ * (no space: a welcome, a changed rank, a ticket with no space). A person may work in two companies, so a
+ * personal notice of one must never ring in the other's bell (review B7); a row from before notices carried a
+ * company (`organizationId: null`) is still shown, so nothing disappears. With no space at all: everything.
  */
-export function bellWhere(userId: string, spaceId: string | null | undefined) {
-  return spaceId ? { userId, OR: [{ workspaceId: spaceId }, { workspaceId: null }] } : { userId };
+export function bellWhere(userId: string, spaceId: string | null | undefined, organizationId?: string | null) {
+  // without a company (a caller that has none): what the bell always showed
+  if (!organizationId) return spaceId ? { userId, OR: [{ workspaceId: spaceId }, { workspaceId: null }] } : { userId };
+  const personal: Prisma.NotificationWhereInput = {
+    workspaceId: null,
+    // a notice from before the column existed belongs to no company: shown once, in the bell of the company
+    // open at the moment the switch happened. The backfill gives the rest of them their one company.
+    OR: [{ organizationId }, { organizationId: null }],
+  };
+  // inside a space: that space's, and the personal ones of this company; with no space open: the same, minus
+  // another company's spaces (a space row of another company is found by its id, never here)
+  return spaceId ? { userId, OR: [{ workspaceId: spaceId }, personal] } : { userId, AND: [personal] };
 }

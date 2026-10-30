@@ -24,6 +24,7 @@ export async function GET() {
         bio: true,
         locale: true,
         theme: true,
+        avatarUrl: true,
         createdAt: true,
       },
     });

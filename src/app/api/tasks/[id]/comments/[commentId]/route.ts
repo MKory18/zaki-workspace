@@ -5,6 +5,7 @@ import { ForbiddenError, NotFoundError, requireTeamWork } from "@/server/auth";
 import { withApi } from "@/server/api";
 import { db } from "@/server/db";
 import { parseJson } from "@/server/validation";
+import { activity } from "@/server/activity";
 
 const editSchema = z.object({
   body: z.string().trim().min(1, "comment.required").max(10_000),
@@ -37,6 +38,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string; co
       data: { body: input.body },
       include: { author: { select: { id: true, name: true } } },
     });
+    // an edited comment is a change in the task's story, like every other one (Phase E)
+    await activity(db, { taskId: task.id, actorId: ctx.userId, event: "task.comment_edited", meta: { commentId: comment.id } });
     return NextResponse.json({ comment: updated });
   });
 }
@@ -49,6 +52,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string; 
     await assertMemberCan(ctx, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
     if (comment.authorId !== ctx.userId) throw new ForbiddenError("comment.not_yours");
     await db.taskComment.delete({ where: { id: comment.id } });
+    await activity(db, { taskId: task.id, actorId: ctx.userId, event: "task.comment_deleted", meta: { commentId: comment.id } });
     return NextResponse.json({ ok: true });
   });
 }

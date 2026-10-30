@@ -185,12 +185,12 @@ function SpaceCardView({ card, here }: { card: BoardCard; here: boolean }) {
     <a href={goHref(card.id)} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
       <Card className="h-full transition-colors hover:border-accent/40">
         <CardBody className="space-y-3">
-          <div className="flex items-center gap-2 pe-24">
+          {/* pe-40: room for the three buttons (menu, delete, grip) that sit on the card's end, each 44px wide */}
+          <div className="flex items-center gap-2 pe-40">
             <span aria-hidden="true" className="text-xl leading-none">{card.emoji ?? "🗂️"}</span>
             <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
               <bdi>{card.name}</bdi>
             </h2>
-            {here ? <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">{t("spaces.overview.here")}</span> : null}
           </div>
           <dl className="grid grid-cols-4 gap-2 text-center">
             <Stat label={t("spaces.overview.open")} value={card.open} />
@@ -198,7 +198,10 @@ function SpaceCardView({ card, here }: { card: BoardCard; here: boolean }) {
             <Stat label={t("spaces.overview.unread")} value={card.unread} tone={card.unread > 0 ? "accent" : undefined} />
             <Stat label={t("spaces.overview.members")} value={card.members} />
           </dl>
-          <p className="text-xs font-semibold text-accent">{t("spaces.overview.enter")}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-accent">{t("spaces.overview.enter")}</p>
+            {here ? <span data-here className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">{t("spaces.overview.here")}</span> : null}
+          </div>
         </CardBody>
       </Card>
     </a>

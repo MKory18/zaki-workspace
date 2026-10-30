@@ -8,6 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { callApi, type CallView } from "./call-api";
 import { useOptionalCall } from "./call-provider";
 import { ensurePush } from "./push-client";
+import { startRing } from "@/lib/calls/ring-sound";
 
 /** A ring stops by itself after this long (an unanswered call). */
 export const RING_FOR_MS = 30_000;
@@ -41,7 +42,7 @@ export function CallRing() {
   React.useEffect(() => {
     if (!ringing) return;
     const stop = setTimeout(() => setRinging(null), RING_FOR_MS);
-    const tone = startTone();
+    const tone = startRing();
     return () => {
       clearTimeout(stop);
       tone();
@@ -52,7 +53,7 @@ export function CallRing() {
   const where = ringing.conversationTitle || ringing.title;
   return (
     <div role="alertdialog" aria-live="assertive" aria-label={ct("calls.ring.from", { name: ringing.startedBy.name })} dir="rtl" lang="ar" className="fixed inset-x-3 top-3 z-50 mx-auto flex max-w-sm items-center gap-3 rounded-2xl border border-border bg-surface-1 p-3 shadow-lg">
-      <Avatar name={ringing.startedBy.name} className="h-11 w-11" />
+      <Avatar name={ringing.startedBy.name} src={ringing.startedBy.avatarUrl} className="h-11 w-11" />
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold">{ct("calls.ring.from", { name: ringing.startedBy.name })}</p>
         <p className="truncate text-sm text-fg-muted">
@@ -77,36 +78,4 @@ export function CallRing() {
       </button>
     </div>
   );
-}
-
-/** A soft two-beat ring drawn by the browser itself (no sound file); returns its stop. */
-function startTone(): () => void {
-  const Ctx = typeof window === "undefined" ? undefined : (window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
-  if (!Ctx) return () => undefined;
-  let ctx: AudioContext | null = null;
-  try {
-    ctx = new Ctx();
-  } catch {
-    return () => undefined;
-  }
-  const audio = ctx;
-  const beep = () => {
-    for (const at of [0, 0.4]) {
-      const osc = audio.createOscillator();
-      const gain = audio.createGain();
-      osc.frequency.value = 480;
-      gain.gain.setValueAtTime(0.0001, audio.currentTime + at);
-      gain.gain.exponentialRampToValueAtTime(0.15, audio.currentTime + at + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + at + 0.3);
-      osc.connect(gain).connect(audio.destination);
-      osc.start(audio.currentTime + at);
-      osc.stop(audio.currentTime + at + 0.32);
-    }
-  };
-  beep();
-  const timer = setInterval(beep, 2500);
-  return () => {
-    clearInterval(timer);
-    void audio.close().catch(() => undefined);
-  };
 }

@@ -5,12 +5,14 @@ import Link from "next/link";
 import { Track, type Participant } from "livekit-client";
 import { ct, ctCount } from "@/lib/chat/text";
 import { bestGrid } from "@/lib/calls/layout";
+import { ringbackMsLeft, startRing } from "@/lib/calls/ring-sound";
 import { Avatar } from "@/components/ui/avatar";
 import { useOptionalToast } from "@/components/ui/toast";
 import { callApi, type CallView } from "./call-api";
 import { CallInvite } from "./call-invite";
 import { nameOf, PersonPicture, Quality } from "./call-media";
 import { useOptionalCall, type CallApi } from "./call-provider";
+import { RING_FOR_MS } from "./call-ring";
 
 /**
  * The page of one call, as simple as a phone call (the owner's bar: «السلاسة وعدم التعقيد ولا الخطوات الزائدة»):
@@ -124,6 +126,21 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
   // a tap on somebody's picture makes it the big one; a tap on the big one puts everybody back
   const [pinned, setPinned] = React.useState<string | null>(null);
 
+  // the caller hears the ring until somebody joins (or the 30 s the other side rings are over)
+  const aloneInCall = phase === "in" && call.everyone.length <= 1;
+  const startedAt = view?.startedAt ?? null;
+  React.useEffect(() => {
+    if (!aloneInCall || !startedAt) return;
+    const left = ringbackMsLeft({ alone: true, startedAt, now: Date.now(), forMs: RING_FOR_MS });
+    if (left <= 0) return;
+    const stop = startRing();
+    const timer = setTimeout(stop, left);
+    return () => {
+      clearTimeout(timer);
+      stop();
+    };
+  }, [aloneInCall, startedAt]);
+
   function copyLink() {
     if (!view) return;
     void navigator.clipboard?.writeText(`${window.location.origin}${view.path}`).then(() => say(ct("calls.link_copied")), () => say(ct("calls.action_failed"), "error"));
@@ -166,6 +183,8 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
   const everyone = call.everyone;
   const sharer = everyone.find((p) => p.isScreenShareEnabled && p.getTrackPublication(Track.Source.ScreenShare)?.track);
   const pinnedPerson = pinned ? everyone.find((p) => p.identity === pinned) : undefined;
+  // the face of each person in the room: the calls server knows identities, the call's DTO the pictures
+  const avatars = new Map((view?.people ?? []).map((p) => [p.userId, p.avatarUrl ?? null] as const));
   // the stage: a shared screen first; otherwise the picture somebody chose to enlarge
   const main = sharer ? { p: sharer, source: Track.Source.ScreenShare } : pinnedPerson ? { p: pinnedPerson, source: Track.Source.Camera } : null;
 
@@ -184,9 +203,9 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
       </header>
 
       {main ? (
-        <Stage main={main} everyone={everyone} me={me} away={call.away} onMain={() => setPinned(null)} onPick={(id) => setPinned(id)} />
+        <Stage main={main} everyone={everyone} me={me} away={call.away} avatars={avatars} onMain={() => setPinned(null)} onPick={(id) => setPinned(id)} />
       ) : (
-        <Tiles everyone={everyone} me={me} away={call.away} onPick={(id) => setPinned(id)} />
+        <Tiles everyone={everyone} me={me} away={call.away} avatars={avatars} onPick={(id) => setPinned(id)} />
       )}
 
       {/* the phone stopped the microphone (back from another app, a phone call): one tap starts it again */}
@@ -219,7 +238,7 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
                   const row = view.people.find((x) => x.userId === p.identity);
                   return (
                     <li key={p.identity} className="flex min-h-11 items-center gap-2">
-                      <Avatar name={p.name || p.identity} className="h-8 w-8" />
+                      <Avatar name={p.name || p.identity} src={row?.avatarUrl} className="h-8 w-8" />
                       <span className="min-w-0 flex-1 truncate">{nameOf(p, me)}</span>
                       <Quality quality={p.connectionQuality} />
                       {row?.canMute && p.isMicrophoneEnabled && (
@@ -282,7 +301,7 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
 }
 
 /** Everybody's picture, sharing the room by count and by the shape of the screen. */
-function Tiles({ everyone, me, away, onPick }: { everyone: Participant[]; me: Participant | undefined; away: ReadonlySet<string>; onPick: (identity: string) => void }) {
+function Tiles({ everyone, me, away, avatars, onPick }: { everyone: Participant[]; me: Participant | undefined; away: ReadonlySet<string>; avatars: ReadonlyMap<string, string | null>; onPick: (identity: string) => void }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const size = useSize(ref);
   const grid = bestGrid(everyone.length, size.width, size.height);
@@ -293,7 +312,7 @@ function Tiles({ everyone, me, away, onPick }: { everyone: Participant[]; me: Pa
         style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${grid.rows}, minmax(0, 1fr))` }}
       >
         {everyone.map((p) => (
-          <Tile key={p.identity} p={p} me={me} away={away.has(p.identity)} onPick={everyone.length > 1 ? () => onPick(p.identity) : undefined} />
+          <Tile key={p.identity} p={p} me={me} away={away.has(p.identity)} avatar={avatars.get(p.identity) ?? null} onPick={everyone.length > 1 ? () => onPick(p.identity) : undefined} />
         ))}
       </ul>
     </div>
@@ -304,11 +323,12 @@ function Tiles({ everyone, me, away, onPick }: { everyone: Participant[]; me: Pa
  * The stage: a shared screen, or the picture somebody enlarged; the people sit in a strip beside it (sideways) or under
  * it (upright). A tap on the stage puts everybody back (an enlarged picture); a tap in the strip enlarges that one.
  */
-function Stage({ main, everyone, me, away, onMain, onPick }: {
+function Stage({ main, everyone, me, away, avatars, onMain, onPick }: {
   main: { p: Participant; source: Track.Source };
   everyone: Participant[];
   me: Participant | undefined;
   away: ReadonlySet<string>;
+  avatars: ReadonlyMap<string, string | null>;
   onMain: () => void;
   onPick: (identity: string) => void;
 }) {
@@ -319,7 +339,7 @@ function Stage({ main, everyone, me, away, onMain, onPick }: {
   return (
     <div ref={ref} className={`flex min-h-0 flex-1 gap-2 px-2 ${sideways ? "flex-row" : "flex-col"}`}>
       <figure className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl bg-scrim">
-        <PersonPicture p={main.p} me={me} source={main.source} fit={screen ? "contain" : "cover"} />
+        <PersonPicture p={main.p} me={me} src={avatars.get(main.p.identity) ?? null} source={main.source} fit={screen ? "contain" : "cover"} />
         <figcaption className="absolute bottom-2 start-2 rounded bg-scrim/70 px-2 text-xs text-on-photo">{screen ? ct("calls.screen_of", { name: nameOf(main.p, me) }) : nameOf(main.p, me)}</figcaption>
         {!screen && (
           <button type="button" onClick={onMain} aria-label={ct("calls.unpin")} title={ct("calls.unpin")} className="absolute inset-0 cursor-zoom-out">
@@ -331,7 +351,7 @@ function Stage({ main, everyone, me, away, onMain, onPick }: {
         {everyone.map((p) => (
           <li key={p.identity} className={sideways ? "aspect-video w-full shrink-0" : "aspect-video h-full shrink-0"}>
             <ul className="h-full">
-              <Tile p={p} me={me} small away={away.has(p.identity)} onPick={() => onPick(p.identity)} />
+              <Tile p={p} me={me} small away={away.has(p.identity)} avatar={avatars.get(p.identity) ?? null} onPick={() => onPick(p.identity)} />
             </ul>
           </li>
         ))}
@@ -340,10 +360,10 @@ function Stage({ main, everyone, me, away, onMain, onPick }: {
   );
 }
 
-function Tile({ p, me, small = false, away = false, onPick }: { p: Participant; me: Participant | undefined; small?: boolean; away?: boolean; onPick?: () => void }) {
+function Tile({ p, me, small = false, away = false, avatar = null, onPick }: { p: Participant; me: Participant | undefined; small?: boolean; away?: boolean; avatar?: string | null; onPick?: () => void }) {
   return (
     <li className={`relative h-full min-h-0 overflow-hidden rounded-xl bg-surface-2 ${p.isSpeaking ? "ring-2 ring-ok" : ""}`}>
-      <PersonPicture p={p} me={me} small={small} />
+      <PersonPicture p={p} me={me} src={avatar} small={small} />
       {onPick && (
         <button type="button" onClick={onPick} aria-label={`${ct("calls.pin")}: ${nameOf(p, me)}`} className="absolute inset-0 cursor-zoom-in">
           <span className="sr-only">{ct("calls.pin")}</span>

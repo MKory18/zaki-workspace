@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "quickChat"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -35,6 +35,24 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // «مهمة فورية» and «تذكرة فورية» (src/server/services/instant-work.ts): off, neither is offered and their routes
   // answer «not found»; the ones already made stay where they are
   instantWork: true,
+  // a person's own picture (src/server/services/avatars.ts): off, nobody uploads or removes one and the profile page
+  // does not offer it; the pictures already uploaded keep showing (they are data, like a file already on Drive)
+  avatars: true,
+  // the staff strip along the bottom of the shell (src/components/shell/people-dock.tsx): off, the row is not drawn
+  // and `/api/presence` answers «not found»; the presence itself is untouched
+  peopleDock: true,
+  // the modern message layout with the sender outside the bubble and a day separator (message-item.tsx,
+  // lib/chat/day-separator.ts): off, the log goes back to the previous bubble and has no day lines
+  chatBubbles: true,
+  // «التبعيات» on a task (src/server/services/task-links.ts): off, the card is not drawn and its routes answer
+  // «not found»; the links already stored stay, and come back with the switch
+  taskLinks: true,
+  // «المعالم» on a project (src/server/services/milestones.ts): off, the card is not drawn, the task's picker is not
+  // offered and the routes answer «not found»; the milestones already made stay where they are
+  milestones: true,
+  // the floating quick chat in the corner of the shell (src/components/shell/quick-chat.tsx): off, the button is not
+  // drawn; the chat itself and every message already sent are untouched
+  quickChat: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

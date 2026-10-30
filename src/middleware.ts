@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { originAllowed } from "@/lib/origin-guard";
+import { securityHeaders } from "@/lib/security-headers";
 import { verifySessionTokenWith } from "@/lib/session-token";
 import { safeNextPath } from "@/lib/safe-next";
 
@@ -73,10 +74,11 @@ function isMachinePath(pathname: string): boolean {
  * "abc.png") is a page and goes through the sign-in and onboarding rules below. A dot segment never counts as a
  * public folder. `/sw.js` is the service worker (it shows a ring when the site is closed: src/server/calls/push.ts).
  * `/noise/` is the call noise filter's model and worklet (src/components/calls/noise-filter.ts).
+ * `/sounds/` is the ring of a call (src/lib/calls/ring-sound.ts): it must play on the sign-in page's side of a redirect too.
  */
-const STATIC_DIRS = ["/icons/", "/brand/", "/fonts/", "/noise/"];
+const STATIC_DIRS = ["/icons/", "/brand/", "/fonts/", "/noise/", "/sounds/"];
 const STATIC_ROOT_FILES = new Set(["/icon.svg", "/apple-icon.png", "/manifest.webmanifest", "/favicon.ico", "/robots.txt", "/sw.js"]);
-const STATIC_EXT = /\.(?:svg|png|jpe?g|gif|webp|avif|ico|txt|xml|webmanifest|woff2?|css|js|map|wasm)$/i;
+const STATIC_EXT = /\.(?:svg|png|jpe?g|gif|webp|avif|ico|txt|xml|webmanifest|woff2?|css|js|map|wasm|mp3)$/i;
 function isStaticFile(pathname: string): boolean {
   if (STATIC_ROOT_FILES.has(pathname)) return true;
   if (/(^|\/)\.\.?(\/|$)/.test(pathname)) return false;
@@ -144,6 +146,13 @@ function redirectTo(req: NextRequest, pathname: string): NextResponse {
 }
 
 export async function middleware(req: NextRequest) {
+  const res = await handleRequest(req);
+  const proto = publicBase(req)?.proto ?? req.nextUrl.protocol.replace(":", "");
+  for (const [name, value] of securityHeaders({ https: proto === "https" })) res.headers.set(name, value);
+  return res;
+}
+
+async function handleRequest(req: NextRequest): Promise<NextResponse> {
   const raw = req.nextUrl.pathname;
   const { path: pathname, malformed } = canonicalPath(raw);
   // Next resolves a STATIC route from the decoded path and matches a DYNAMIC route on the raw one

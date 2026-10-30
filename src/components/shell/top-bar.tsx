@@ -5,7 +5,7 @@ import { useI18n } from "@/lib/i18n";
 import type { Audience } from "@/lib/guide/audience";
 import type { NavModel, NavRole } from "@/lib/nav/places";
 import type { NewActionKey } from "@/lib/nav/new-actions";
-import { DolphinMark } from "@/components/logo";
+import { ZakiMark } from "@/components/logo";
 import { CommandPalette } from "@/components/command-palette";
 import { NotificationBell } from "@/components/notification-bell";
 import { PageHelpButton } from "@/components/guide/page-help-button";
@@ -16,7 +16,7 @@ import { NewWheel } from "./new-wheel";
 /**
  * The bar over every page («نجمة وطريق»), under the notch (`env(safe-area-inset-top)`):
  *
- *   phone      the dolphin mark (to Today) · «ليل / نهار» · «؟» · the bell · «جديد» · the avatar, and
+ *   phone      the «Z» mark (to Today) · «ليل / نهار» · «؟» · the bell · «جديد» · the avatar, and
  *              the search «وين بدك تروح؟» on a line of its own under them
  *   computer   the place's name · the search · «ليل / نهار» · «؟» · the bell · the gold «جديد»
  *              (the mark and the avatar live in the side menu)
@@ -51,14 +51,14 @@ export function TopBar({
   const { t } = useI18n();
   return (
     <header className="zk-safe-x shrink-0 border-b border-border bg-surface pt-[env(safe-area-inset-top)]">
-      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2 py-1.5 md:h-16 md:flex-nowrap md:gap-x-2.5 md:px-5 md:py-0">
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-1 px-1.5 py-1.5 md:h-16 md:flex-nowrap md:gap-x-2.5 md:px-5 md:py-0">
         <Link href="/" aria-label={t("nav.place.today")} className="grid size-11 shrink-0 place-items-center rounded-xl md:hidden">
           <span aria-hidden="true">
-            <DolphinMark className="size-8" />
+            <ZakiMark className="size-8" />
           </span>
         </Link>
         {space ? (
-          <p className="min-w-0 max-w-[45vw] truncate text-sm font-semibold text-fg md:hidden">
+          <p className="min-w-0 max-w-[30vw] shrink truncate text-sm font-semibold text-fg max-[379px]:hidden md:hidden">
             {space.emoji ? <span aria-hidden="true">{space.emoji} </span> : null}
             <bdi>{space.name}</bdi>
           </p>
@@ -67,7 +67,7 @@ export function TopBar({
         <div data-tour="search" className="order-last min-w-0 basis-full md:order-none md:max-w-[440px] md:flex-1 md:basis-auto">
           <CommandPalette nav={nav} />
         </div>
-        <div className="ms-auto flex shrink-0 items-center gap-1 md:gap-2">
+        <div className="ms-auto flex shrink-0 items-center gap-0.5 md:gap-2">
           <NightDaySwitch />
           <PageHelpButton pathname={pathname} audience={audience} />
           <NotificationBell />

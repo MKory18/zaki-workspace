@@ -1,0 +1,19 @@
+{
+  "navorder.toggle": "ترتيب",
+  "navorder.toggle_title": "رتّب القائمة والصفحات على كيفك",
+  "navorder.done": "تم",
+  "navorder.reset": "رجّع الترتيب الأصلي",
+  "navorder.grip": "اسحب لتحريك {label}",
+  "navorder.role": "عنصر قابل للترتيب",
+  "navorder.mode": "وضع الترتيب",
+  "navorder.places_label": "ترتيب الأماكن",
+  "navorder.tabs_label": "ترتيب صفحات {place}",
+  "navorder.instructions": "للترتيب: اضغط المسافة لرفع العنصر، ثم حرّكه بالأسهم، ثم اضغط المسافة ليستقر في مكانه. للتراجع اضغط مفتاح الهروب.",
+  "navorder.lift": "رفعت {label}. مكانه الآن {pos} من {total}.",
+  "navorder.move": "{label} صار في المكان {pos} من {total}.",
+  "navorder.drop": "استقر {label} في المكان {pos} من {total}.",
+  "navorder.cancel": "تراجعت عن الحركة، {label} رجع إلى مكانه.",
+  "navorder.save_failed": "ما قدرنا نحفظ الترتيب",
+  "navorder.not_visible": "ما بتقدر ترتّب شي ما بيظهر لك",
+  "navorder.invalid": "الترتيب غير صالح"
+}

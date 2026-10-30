@@ -5,10 +5,14 @@ import { useI18n } from "@/lib/i18n";
 import { classifyFile, exceedsKindLimit, MAX_ATTACHMENTS_PER_MESSAGE, type FileKind } from "@/lib/chat/file-kinds";
 import { compressImage } from "@/lib/chat/compress-image";
 import { buildChatMessagePayload, createChatUploadFormData, createVoiceUploadFormData, enterSends, messageClientId } from "@/lib/chat/conversation/client";
-import { findMentionQuery, insertMention, selectedMentionIds } from "@/lib/chat/conversation/mentions";
+import { filterMentionChoices, findMentionQuery, insertMention, MENTION_ALL_NAME, mentionsAll, selectedMentionIds } from "@/lib/chat/conversation/mentions";
+import { Avatar } from "@/components/ui/avatar";
+import { useTyping } from "@/lib/realtime/use-realtime";
+import { playChatSound } from "@/lib/chat/sounds";
 import { uploadWithProgress } from "@/lib/chat/upload-with-progress";
 import { VoiceRecorder, type VoiceTake } from "@/lib/chat/voice-recorder";
 import { barsFor, formatDuration } from "@/lib/chat/waveform";
+import { PollDialog } from "@/components/chat/composer/poll-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type PendingFile = { file: File; kind: FileKind; preview: string | null };
@@ -25,7 +29,7 @@ const iconButton = "flex h-11 w-11 shrink-0 items-center justify-center rounded-
  * loaded here, «+» and the microphone step aside, and sending saves the edit.
  */
 export function ChatComposer({ conversationId, detail, onMessage, reply, onCancelReply, editing = null, onCancelEdit, onEdited }: { conversationId: string; detail: ConversationDto; onMessage: (message: MessageDto) => void; reply: MessageDto | null; onCancelReply: () => void; editing?: MessageDto | null; onCancelEdit?: () => void; onEdited?: (message: MessageDto) => void }) {
- const { t } = useI18n(); const [body,setBody]=React.useState(""); const [files,setFiles]=React.useState<PendingFile[]>([]); const [mentions,setMentions]=React.useState<Array<{id:string;name:string}>>([]); const [busy,setBusy]=React.useState(false); const [error,setError]=React.useState("");
+ const { t } = useI18n(); const { notifyTyping } = useTyping(conversationId); const [body,setBody]=React.useState(""); const [files,setFiles]=React.useState<PendingFile[]>([]); const [mentions,setMentions]=React.useState<Array<{id:string;name:string}>>([]); const [busy,setBusy]=React.useState(false); const [error,setError]=React.useState("");
  const [progress, setProgress] = React.useState<number[]>([]);
  const [voice, setVoice] = React.useState<VoiceState>({ mode: "idle" });
  const recorder = React.useRef<VoiceRecorder | null>(null);
@@ -33,7 +37,16 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
  const mediaInput = React.useRef<HTMLInputElement | null>(null);
  const fileInput = React.useRef<HTMLInputElement | null>(null);
  const [clientId, setClientId] = React.useState(() => messageClientId());
- const memberOptions=detail.members??[]; const activeMention=findMentionQuery(body); const query=activeMention?.query??""; const choices=activeMention?memberOptions.filter(m=>m.name.toLowerCase().includes(query.toLowerCase())):[];
+ const [pollOpen, setPollOpen] = React.useState(false);
+ // who «@» offers: everybody the conversation reaches (an open topic: its whole space), never myself; «@الكل» first where I may use it
+ const memberOptions=(detail.mentionables??detail.members??[]).filter(m=>m.id!==detail.me.id); const activeMention=findMentionQuery(body); const query=activeMention?.query??"";
+ const canAll=Boolean(detail.me.canMentionAll);
+ const [pick,setPick]=React.useState(0); const [dismissed,setDismissed]=React.useState<string|null>(null);
+ const people=activeMention&&dismissed!==body?filterMentionChoices(memberOptions,query):[];
+ const offerAll=Boolean(activeMention)&&dismissed!==body&&canAll&&filterMentionChoices([{name:MENTION_ALL_NAME}],query).length>0;
+ const choices:Array<{id:string;name:string;online?:boolean;avatarUrl?:string|null;all?:boolean}>=[...(offerAll?[{id:"*",name:MENTION_ALL_NAME,all:true}]:[]),...people];
+ const pickAt=Math.min(pick,Math.max(0,choices.length-1));
+ React.useEffect(()=>{setPick(0);},[query]);
 
  // previews are object URLs: give them back when the file leaves the list, and when the screen goes
  const filesRef = React.useRef(files);
@@ -69,6 +82,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
  function selectMention(id: string, name: string) {
   setClientId(messageClientId());
   setBody(value => insertMention(value, name));
+  if (id === "*") return; // «@الكل» is read from the words of the message at send time, it is no person
   setMentions(current => current.some(member => member.id === id) ? current : [...current, { id, name }]);
  }
  const failText = (e: unknown, fallback: string) => {
@@ -84,6 +98,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
   });
   if (!response.ok) throw new Error(t("chatc.message_failed"));
   onMessage(await response.json() as MessageDto);
+  playChatSound("sent");
  }
 
  async function saveEdit() {
@@ -131,7 +146,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
     if (typeof result["id"] !== "string") throw new Error(t("chatc.upload_failed"));
     attachmentIds.push(result["id"]);
    }
-   await postMessage({ body: body.trim(), attachmentIds, mentions: selectedMentionIds(body, mentions), ...(reply ? { replyToId: reply.id } : {}), clientId });
+   await postMessage({ body: body.trim(), attachmentIds, mentions: selectedMentionIds(body, mentions), ...(canAll && mentionsAll(body) ? { mentionAll: true } : {}), ...(reply ? { replyToId: reply.id } : {}), clientId });
    for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
    setBody("");
    setFiles([]);
@@ -300,17 +315,27 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
     </ul>
    )}
    {choices.length > 0 && (
-    <ul aria-label={t("chatc.mention")} className="rounded-md border border-border">
-     {choices.map(member => (
-      <li key={member.id}>
-       <button type="button" className="min-h-11 w-full px-3 text-start" onClick={() => selectMention(member.id, member.name)}>
-        {member.name}
+    <ul id="chat-mention-list" role="listbox" aria-label={t("chatc.mention")} className="max-h-56 overflow-y-auto rounded-xl border border-border bg-surface shadow-lg">
+     {choices.map((member, index) => (
+      <li key={member.id} id={`chat-mention-${index}`} role="option" aria-selected={index === pickAt}>
+       <button
+        type="button"
+        className={`flex min-h-11 w-full items-center gap-2 px-3 text-start ${index === pickAt ? "bg-accent/10" : ""}`}
+        onMouseEnter={() => setPick(index)}
+        onMouseDown={event => event.preventDefault()}
+        onClick={() => selectMention(member.id, member.name)}
+       >
+        {member.all
+         ? <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-bold text-accent">@</span>
+         : <span className="relative shrink-0"><Avatar name={member.name} src={member.avatarUrl} className="size-8 text-xs" />{member.online && <span aria-hidden="true" className="absolute -bottom-0.5 -end-0.5 size-2.5 rounded-full border-2 border-surface bg-ok" />}</span>}
+        <span className="min-w-0 flex-1 truncate">{member.all ? `@${member.name}` : member.name}</span>
+        {member.all && <span className="text-xs text-fg-muted">{t("chatc.mention_all_hint")}</span>}
        </button>
       </li>
      ))}
     </ul>
    )}
-   <div className="flex items-end gap-2">
+   <div className="flex min-w-0 items-end gap-1.5 sm:gap-2">
     {!editing && <DropdownMenu>
      <DropdownMenuTrigger asChild>
       <button type="button" className={`${iconButton} border border-border text-xl`} aria-label={t("chat.f.attach_menu")} disabled={busy}>
@@ -321,6 +346,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
       <DropdownMenuItem onSelect={() => mediaInput.current?.click()}>{t("chat.f.attach_media")}</DropdownMenuItem>
       <DropdownMenuItem onSelect={() => fileInput.current?.click()}>{t("chat.f.attach_file")}</DropdownMenuItem>
       <DropdownMenuItem onSelect={() => void startRecording(false)}>{t("chat.f.voice_label")}</DropdownMenuItem>
+      {detail.me.canPoll && <DropdownMenuItem onSelect={() => setPollOpen(true)}>{t("chatc.poll.menu")}</DropdownMenuItem>}
      </DropdownMenuContent>
     </DropdownMenu>}
     <input ref={mediaInput} type="file" accept="image/*,video/*" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={event => { addFiles(event.currentTarget.files); event.currentTarget.value = ""; }} />
@@ -330,11 +356,20 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
      id="chat-message"
      rows={1}
      value={body}
-     onChange={event => { setClientId(messageClientId()); setBody(event.currentTarget.value); }}
+     onChange={event => { setClientId(messageClientId()); setBody(event.currentTarget.value); if (!editing && event.currentTarget.value.trim()) notifyTyping(); }}
      // Enter sends (the owner, 2026-10-26), Shift+Enter is a new line; never while an input method is composing a word
-     onKeyDown={event => { if (enterSends({ key: event.key, shiftKey: event.shiftKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (body.trim()) event.currentTarget.form?.requestSubmit(); } }}
+     onKeyDown={event => {
+      // while the list of people is open the keys drive IT: arrows move, Enter or Tab picks, Escape closes it
+      if (choices.length > 0 && !event.nativeEvent.isComposing) {
+       if (event.key === "ArrowDown") { event.preventDefault(); setPick((pickAt + 1) % choices.length); return; }
+       if (event.key === "ArrowUp") { event.preventDefault(); setPick((pickAt - 1 + choices.length) % choices.length); return; }
+       if (event.key === "Enter" || event.key === "Tab") { event.preventDefault(); const chosen = choices[pickAt]; if (chosen) selectMention(chosen.id, chosen.name); return; }
+       if (event.key === "Escape") { event.preventDefault(); setDismissed(body); return; }
+      }
+      if (enterSends({ key: event.key, shiftKey: event.shiftKey, isComposing: event.nativeEvent.isComposing })) { event.preventDefault(); if (body.trim()) event.currentTarget.form?.requestSubmit(); } }}
+     role="combobox" aria-expanded={choices.length > 0} aria-controls="chat-mention-list" aria-autocomplete="list" aria-activedescendant={choices.length > 0 ? `chat-mention-${pickAt}` : undefined}
      enterKeyHint="send"
-     className="max-h-40 min-h-11 flex-1 resize-none rounded-2xl border border-border bg-surface px-3 py-2 text-base"
+     className="max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-2xl border border-border bg-surface px-3 py-2 text-base"
      placeholder={t("chatc.message")}
     />
     {empty ? (
@@ -357,6 +392,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
    </div>
    {busy && files.length === 0 && progress.length > 0 && <p className="text-xs text-fg-muted" role="status">{t("chat.f.uploading")}</p>}
    {error && <p role="alert">{error}</p>}
+   {detail.me.canPoll && <PollDialog open={pollOpen} conversationId={conversationId} onClose={() => setPollOpen(false)} onCreated={message => { setPollOpen(false); onMessage(message); }} />}
   </form>
  );
 }

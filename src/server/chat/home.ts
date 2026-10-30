@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { MENTION_ALL_ID } from "@/lib/chat/conversation/mentions";
 import { isFeatureOn } from "@/server/services/features";
 import type { OrgAccessContext } from "@/server/auth";
 import { loadOrgFacts, isSpaceAdmin } from "@/server/policy/conversation";
@@ -6,6 +7,8 @@ import { listDms } from "@/server/chat/dm";
 import type { DmSummaryDto, HomeDto, SpaceSummaryDto, TopicSummaryDto } from "@/server/chat/dto";
 import { previewOf } from "@/server/chat/redact";
 import { systemSentenceOfBody } from "@/lib/chat/system-sentence";
+import { loadOrders } from "@/server/chat/order";
+import { applySavedOrder, dmScope, spaceScope } from "@/lib/chat/order";
 
 /**
  * The chat home: the spaces the viewer is in (with their topics), the viewer's DMs, and whether
@@ -69,6 +72,10 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
     orderBy: [{ kind: "asc" }, { name: "asc" }],
   });
 
+  // the person's OWN order of each list (their drag and drop): applied last, over the server's default order
+  const myDmScope = dmScope(opts.spaceId ?? null);
+  const savedOrders = await loadOrders(ctx, [...spacesRows.map((s) => spaceScope(s.id)), myDmScope]);
+
   const spaces: SpaceSummaryDto[] = [];
   for (const s of spacesRows) {
     const spaceRole = mySpaceRows.find((r) => r.workspaceId === s.id)?.role ?? null;
@@ -109,7 +116,7 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
             ? db.chatMessage.count({ where: { ...countable, createdAt: { gt: lastRead } } })
             : db.chatMessage.count({ where: countable }),
         lastRead && !archived
-          ? db.chatMessage.count({ where: { ...countable, createdAt: { gt: lastRead }, mentions: { has: ctx.userId } } })
+          ? db.chatMessage.count({ where: { ...countable, createdAt: { gt: lastRead }, mentions: { hasSome: [ctx.userId, MENTION_ALL_ID] } } })
           : 0,
       ]);
 
@@ -148,6 +155,10 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
     // pinned topics on top (the last pinned first), then the space's own order
     const pinnedAt = new Map(s.conversations.map((t) => [t.id, t.pinnedAt?.getTime() ?? 0]));
     topics.sort((a, b) => (pinnedAt.get(b.id) ?? 0) - (pinnedAt.get(a.id) ?? 0));
+    // then the person's own order, inside the pinned group and inside the unpinned one (the pin still floats);
+    // a topic it does not know keeps its default place, one it knows that is gone is ignored
+    const mine = applySavedOrder(topics, savedOrders.get(spaceScope(s.id)), (t) => (t.archived ? "a" : t.pinned ? "p" : "u"));
+    topics.splice(0, topics.length, ...mine);
     // a space where I read nothing is not on my list — except the space I am in: its page is never blank
     if (!topics.length && opts.spaceId === undefined) continue;
 
@@ -166,8 +177,11 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
   }
 
   // DMs: never for a guest, never in the owner's oversight (a DM is not his to read)
-  const dms: DmSummaryDto[] = org?.role === "GUEST" ? [] : await listDms(ctx, opts.spaceId);
+  const defaultDms: DmSummaryDto[] = org?.role === "GUEST" ? [] : await listDms(ctx, opts.spaceId);
+  const dms = applySavedOrder(defaultDms, org?.role === "GUEST" ? null : savedOrders.get(myDmScope));
+  // the lists that have an order of their own now (the screen offers «رجّع الترتيب الأصلي» only for those)
+  const ordered = [...spaces.map((sp) => spaceScope(sp.id)), ...(dms.length ? [myDmScope] : [])].filter((sc) => savedOrders.has(sc));
 
   const rowMenu = await isFeatureOn(ctx.orgId, "chatRowMenu");
-  return { spaces, dms, canOversee: isOwner, rowMenu, canPurge: rowMenu && isOwner };
+  return { spaces, dms, canOversee: isOwner, rowMenu, canPurge: rowMenu && isOwner, ordered, dmScope: myDmScope };
 }

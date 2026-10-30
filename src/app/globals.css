@@ -37,6 +37,9 @@ body {
   h2,
   h3 {
     font-family: var(--font-display);
+    /* Reem Kufi's space is only 0.13em wide, so a title ran its words together («أشياقديمةبلامساحة»): give it a
+       word gap the eye can read. */
+    word-spacing: 0.18em;
   }
 }
 
@@ -156,7 +159,7 @@ html {
 
 /* ── «اليوم» in the shape of «نجمة وطريق» ───────────────────────────────────────────────────────── */
 
-/* «المهمّة الجاية»: Amman at dusk (public/brand/hero, CC BY 4.0 — public/brand/CREDITS.md) behind the
+/* «المهمّة الجاية»: an original dusk scene of the project (public/brand/hero, drawn in code, no third party) behind the
    mission card, on «ليل» and «نهار» only, and never at the «off» level. It is a CSS background, so a
    browser on another theme or with decoration off never even asks for the file. Every word on the card
    sits on a `.zk-scrim` panel in front of it, never on the picture itself. */
@@ -166,7 +169,7 @@ html {
 [data-theme="night"]:not([data-decor="off"]) .zk-hero-photo,
 [data-theme="day"]:not([data-decor="off"]) .zk-hero-photo {
   display: block;
-  background: url("/brand/hero/amman-dusk.webp") center 58% / cover no-repeat;
+  background: url("/brand/hero/workspace-dusk.svg") center 58% / cover no-repeat;
 }
 
 /* The skewed gold ribbon over the card: «المهمّة الجاية». */
@@ -234,6 +237,25 @@ html {
   }
   100% {
     box-shadow: 0 0 0 10px rgb(var(--accent-2) / 0);
+  }
+}
+
+/* «ترتيب»: the row under the finger lifts a little (the shell's reorder mode, src/components/shell/nav-sort.tsx). */
+.zk-lift {
+  animation: zk-lift 150ms ease-out both;
+}
+@keyframes zk-lift {
+  from {
+    scale: 1;
+  }
+  to {
+    scale: 1.03;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zk-lift {
+    animation: none !important;
+    scale: 1;
   }
 }
 

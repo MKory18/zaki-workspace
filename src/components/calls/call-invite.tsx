@@ -7,7 +7,7 @@ import { callApi } from "./call-api";
 
 interface Person {
   userId: string;
-  user: { id: string; name: string; jobTitle?: string | null };
+  user: { id: string; name: string; jobTitle?: string | null; avatarUrl?: string | null };
 }
 
 /**
@@ -45,7 +45,7 @@ export function CallInvite({ callId, inCall, onDone, onError }: { callId: string
           {left.map((p) => (
             <li key={p.userId}>
               <button type="button" disabled={busy === p.userId} onClick={() => void ring(p)} className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-start hover:bg-surface-2 disabled:opacity-60">
-                <Avatar name={p.user.name} className="h-8 w-8" />
+                <Avatar name={p.user.name} src={p.user.avatarUrl} className="h-8 w-8" />
                 <span className="min-w-0 flex-1 truncate">{p.user.name}</span>
                 <span aria-hidden="true">📞</span>
               </button>

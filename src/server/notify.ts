@@ -56,8 +56,10 @@ async function activeRecipients(userIds: readonly string[]): Promise<string[]> {
  * Generic in-app notification writer (bell UI maps type → localized label).
  *
  * `workspaceId`: the space the notification belongs to (a task's, a topic's, a space one was added to). The bell
- * shows the space the person is in (each space is like a separate site); without one it is personal and shows in
- * every space.
+ * shows the space the person is in (each space is like a separate site); without one it is personal.
+ * `organizationId`: the company that wrote it. Without one it is read from the space; a notice that names
+ * neither (a ticket with no space, a changed rank) is shown in the bell of the company open at that moment,
+ * and the backfill gives the old ones their company.
  */
 export async function pushNotification(input: {
   userId: string;
@@ -67,6 +69,7 @@ export async function pushNotification(input: {
   taskId?: string | null;
   linkUrl?: string | null;
   workspaceId?: string | null;
+  organizationId?: string | null;
 }): Promise<void> {
   if ((await activeRecipients([input.userId])).length === 0) return;
   await db.notification.create({
@@ -78,9 +81,17 @@ export async function pushNotification(input: {
       taskId: input.taskId ?? null,
       linkUrl: input.linkUrl ?? null,
       workspaceId: input.workspaceId ?? null,
+      organizationId: input.organizationId ?? (await orgOfSpace(input.workspaceId)),
     },
   });
   pushOut([input.userId], input);
+}
+
+/** The company a space belongs to (null when there is no space). One small read, and the answer is missed nowhere. */
+async function orgOfSpace(workspaceId: string | null | undefined): Promise<string | null> {
+  if (!workspaceId) return null;
+  const space = await db.workspace.findUnique({ where: { id: workspaceId }, select: { organizationId: true } });
+  return space?.organizationId ?? null;
 }
 
 /** Pushes the same notification to many users (dedupes the actor). */
@@ -93,10 +104,12 @@ export async function pushNotificationToMany(
     taskId?: string | null;
     linkUrl?: string | null;
     workspaceId?: string | null;
+    organizationId?: string | null;
   },
 ): Promise<void> {
   const unique = await activeRecipients([...new Set(userIds)]);
   if (unique.length === 0) return;
+  const organizationId = input.organizationId ?? (await orgOfSpace(input.workspaceId));
   await db.notification.createMany({
     data: unique.map((userId) => ({
       userId,
@@ -106,6 +119,7 @@ export async function pushNotificationToMany(
       taskId: input.taskId ?? null,
       linkUrl: input.linkUrl ?? null,
       workspaceId: input.workspaceId ?? null,
+      organizationId,
     })),
   });
   pushOut(unique, input);

@@ -4,6 +4,7 @@ import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError } from "@/server/auth";
 import { can } from "@/server/policy/capabilities";
 import { RANK } from "@/server/policy/rank";
+import { accessibleWorkspaceIds } from "@/server/services/access";
 import { avatarHue } from "@/lib/format";
 
 export interface ProfilePatch {
@@ -35,12 +36,16 @@ export interface PublicProfile {
   organizationId: string;
   organizationName: string;
   organizationRole: string;
+  /** `/api/avatars/<id>` — the picture they uploaded, or null for their initials. */
+  avatarUrl: string | null;
   stats: {
     ideasCreated: number;
     ideasVotesReceived: number;
     openTasksAssigned: number;
     tasksCompleted: number;
   };
+  /** the spaces both people are in (the owner: every space the person is in); never one the viewer may not open */
+  sharedSpaces: { id: string; name: string; emoji: string | null }[];
 }
 
 /**
@@ -80,6 +85,7 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
       jobTitle: true,
       bio: true,
       createdAt: true,
+      avatarUrl: true,
       memberships: {
         // somebody who is no longer ACTIVE in a shared organization is not there to be looked at
         where: { organizationId: { in: visibleOrgIds }, status: "ACTIVE" },
@@ -122,14 +128,22 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
         });
   if (!membership) throw new ForbiddenError("insufficient_role");
 
+  // a space is like a separate site: the numbers count the work of the spaces the VIEWER may open (an idea
+  // from before spaces had them belongs to the company and counts)
+  const viewerSpaces = await accessibleWorkspaceIds(viewerId);
+  const ideaScope = { orgId: { in: staffOrgIds }, OR: [{ workspaceId: { in: viewerSpaces } }, { workspaceId: null }] };
+  const taskScope = { orgId: { in: staffOrgIds }, workspaceId: { in: viewerSpaces } };
   const stats = await Promise.all([
-    db.idea.count({ where: { creatorId: targetId, orgId: { in: staffOrgIds } } }),
-    db.ideaVote.count({
-      where: { idea: { creatorId: targetId, orgId: { in: staffOrgIds } } },
-    }),
-    db.task.count({ where: { assigneeId: targetId, orgId: { in: staffOrgIds }, completedAt: null, archived: false } }),
-    db.task.count({ where: { assigneeId: targetId, orgId: { in: staffOrgIds }, completedAt: { not: null }, archived: false } }),
+    db.idea.count({ where: { creatorId: targetId, ...ideaScope } }),
+    db.ideaVote.count({ where: { idea: { creatorId: targetId, ...ideaScope } } }),
+    db.task.count({ where: { assigneeId: targetId, ...taskScope, completedAt: null, archived: false } }),
+    db.task.count({ where: { assigneeId: targetId, ...taskScope, completedAt: { not: null }, archived: false } }),
   ]);
+  const targetSpaces = await db.workspaceMember.findMany({
+    where: { userId: targetId, workspaceId: { in: viewerSpaces }, workspace: { organizationId: { in: staffOrgIds } } },
+    select: { workspace: { select: { id: true, name: true, emoji: true } } },
+    orderBy: { workspace: { name: "asc" } },
+  });
   const votesReceived = stats[1];
 
   return {
@@ -143,12 +157,16 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
       organizationId: membership.organization.id,
       organizationName: membership.organization.name,
       organizationRole: membership.role,
+      // the picture is the person's, and this branch is only reached by somebody who may see the
+      // staff directory: a GUEST stops at `limited` above and never gets here
+      avatarUrl: target.avatarUrl,
       stats: {
         ideasCreated: stats[0],
         ideasVotesReceived: votesReceived,
         openTasksAssigned: stats[2],
         tasksCompleted: stats[3],
       },
+      sharedSpaces: targetSpaces.map((m) => m.workspace),
     },
   };
 }
@@ -190,7 +208,7 @@ async function guestDirectoryMembers(viewerId: string, orgId: string) {
     if (me) people.set(me.id, me.name);
   }
   return [...people.entries()]
-    .map(([userId, name]) => ({ userId, name, jobTitle: null, role: "", email: null }))
+    .map(([userId, name]) => ({ userId, name, jobTitle: null, role: "", email: null, avatarUrl: null }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -206,6 +224,8 @@ type DirectoryOrg = {
     jobTitle: string | null;
     role: string;
     email: string | null; // e-mail exposed only to people who hold `users.manage` (the owner, admins by default)
+    /** `/api/avatars/<id>` — their picture; null for the names-only list a GUEST gets. */
+    avatarUrl: string | null;
   }[];
 };
 
@@ -256,7 +276,7 @@ export async function memberDirectory(viewerId: string, space?: { orgId: string;
         where: { organizationId: m.organizationId, status: "ACTIVE", ...inSpace },
         select: {
           role: true,
-          user: { select: { id: true, name: true, jobTitle: true, email: true } },
+          user: { select: { id: true, name: true, jobTitle: true, email: true, avatarUrl: true } },
         },
         orderBy: { createdAt: "asc" },
       });
@@ -275,6 +295,7 @@ export async function memberDirectory(viewerId: string, space?: { orgId: string;
           jobTitle: r.user.jobTitle,
           role: r.role,
           email: canManage ? r.user.email : null,
+          avatarUrl: r.user.avatarUrl,
         })),
       };
     }),

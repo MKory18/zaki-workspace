@@ -64,7 +64,7 @@ describe("the layout draws each person's own places", () => {
     const { owner } = await makeTeam();
     await loginAs(owner.id);
     const shell = await frame();
-    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
+    expect(places(shell)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
     expect(tabs(shell, "work")).toEqual(WORK_ALL);
     // Phase 3: «الأرشيف» (archive.view, the owner's alone) joined the admin place
     expect(tabs(shell, "admin")).toEqual(["team", "reports", "automation", "telegram", "settings", "archive"]);
@@ -72,7 +72,7 @@ describe("the layout draws each person's own places", () => {
     expect(shell.props).toMatchObject({ rank: "OWNER", isGuest: false, audience: "managers" });
     // the shell gets the three fields it draws, never the session facts (WP-ARABIC2 (g))
     // WP-ARABIC2 (g): only what the shell draws crosses to the browser — never session facts
-    expect(Object.keys(shell.props.user).sort()).toEqual(["email", "name", "username"]);
+    expect(Object.keys(shell.props.user).sort()).toEqual(["avatarUrl", "email", "name", "username"]);
     expect(shell.props.user.name).toBe(owner.name);
     expect(shell.props.user).not.toHaveProperty("id");
     expect(shell.props.user).not.toHaveProperty("tv");
@@ -83,7 +83,7 @@ describe("the layout draws each person's own places", () => {
     const { admin } = await makeTeam();
     await loginAs(admin.id);
     const shell = await frame();
-    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
+    expect(places(shell)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
     expect(tabs(shell, "admin")).toEqual(["team", "reports", "automation", "telegram", "settings"]);
     expect(shell.props).toMatchObject({ rank: "ADMIN", isGuest: false, audience: "managers" });
   });
@@ -101,7 +101,7 @@ describe("the layout draws each person's own places", () => {
     const { member } = await makeTeam();
     await loginAs(member.id);
     const shell = await frame();
-    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
+    expect(places(shell)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
     expect(tabs(shell, "work")).toEqual(WORK_ALL);
     expect(placeOf(shell, "admin")).toMatchObject({ labelKey: "nav.tab.team", href: "/members", tabs: [{ key: "team" }] });
     expect(shell.props).toMatchObject({ rank: "MEMBER", isGuest: false, audience: "staff" });
@@ -160,7 +160,7 @@ describe("the layout draws each person's own places", () => {
     await loginAs(b.member.id);
     const shell = await frame();
     expect(shell.props.isGuest).toBe(false);
-    expect(places(shell)).toEqual(["today", "chat", "work", "library", "admin", "watch"]);
+    expect(places(shell)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
   });
 
   it("the map reaches the screen: the member's bottom bar and side menu link to their six places", async () => {

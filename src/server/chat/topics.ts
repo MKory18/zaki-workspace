@@ -2,13 +2,14 @@ import { z } from "zod";
 import { memberCan } from "@/server/policy/actor";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, ValidationError, type OrgAccessContext } from "@/server/auth";
-import { canModerate, canPost, canRead, loadConversationFacts, loadOrgFacts } from "@/server/policy/conversation";
+import { canModerate, canPost, canRead, loadConversationFacts, loadOrgFacts, type ConversationFacts } from "@/server/policy/conversation";
 import { emitRealtime } from "@/server/realtime/emit";
 import { isSpaceAdmin } from "@/server/policy/conversation";
 import { writeSystemMessage } from "@/server/chat/system";
 import type { ConversationDto, MemberDto, MessageDto, ReaderDto } from "@/server/chat/dto";
 import { presentMessage, previewOf, type Viewer } from "@/server/chat/redact";
 import { messageInclude, dmStatusFor } from "@/server/chat/messages";
+import { isFeatureOn } from "@/server/services/features";
 import type { Prisma } from "@prisma/client";
 
 /** ---------- create topic ---------- */
@@ -306,7 +307,7 @@ export async function conversationDetail(
           // a suspended or offboarded person is nobody: their leftover row is not shown among the members
           // (nor as a reader) — the same rule the policy applies to reading
           where: { user: { memberships: { some: { organizationId: ctx.orgId, status: "ACTIVE" } } } },
-          include: { user: { select: { id: true, name: true } } },
+          include: { user: { select: { id: true, name: true, avatarUrl: true } } },
           orderBy: { joinedAt: "asc" },
         },
       },
@@ -322,7 +323,7 @@ export async function conversationDetail(
   const online = new Set(await onlineUserIds(ctx.orgId));
 
   const canModerateHere = canModerate(facts, org!);
-  const viewer: Viewer = { userId: ctx.userId, role: org!.role, canModerateHere };
+  const viewer: Viewer = { userId: ctx.userId, role: org!.role, canModerateHere, isMember: facts.viewerIsMember };
 
   // the OWNER's reading is silent: his read mark never shows, in ticks or reader avatars
   const ownerIds = new Set(
@@ -354,6 +355,7 @@ export async function conversationDetail(
     name: m.user.name,
     online: online.has(m.userId),
     role: m.role,
+    avatarUrl: m.user.avatarUrl,
   }));
 
   const title =
@@ -385,6 +387,8 @@ export async function conversationDetail(
       canCall: (await memberCan(ctx, "calls.edit", { spaceGuestsPass: true })) === true,
       canMakeTask: (await memberCan(ctx, "tasks.edit")) === true,
       canMakeTicket: (await memberCan(ctx, "tickets.edit")) === true,
+      canMentionAll: facts.kind === "TOPIC" && org!.role !== "GUEST" && canPost(facts, org!, { ownerJoined: facts.viewerIsMember }),
+      canPoll: facts.kind === "TOPIC" && org!.role !== "GUEST" && canPost(facts, org!, { ownerJoined: facts.viewerIsMember }),
       id: ctx.userId,
     },
     pinnedMessages: (
@@ -396,6 +400,7 @@ export async function conversationDetail(
       })
     ).map((m) => ({ id: m.id, authorName: m.author.name, preview: previewOf(m.body, m.deletedAt) })),
     members,
+    mentionables: org!.role === "GUEST" ? members : await mentionablesOf(ctx.orgId, facts, conv.spaceId ?? null, members, online),
     messages: messages.reverse(), // oldest first in the payload
     // topics and groups: each person's avatar sits under the last message they read (DMs have ticks)
     readers:
@@ -403,9 +408,11 @@ export async function conversationDetail(
         ? []
         : readersOf(
             page,
-            conv.members.filter((m) => m.userId !== ctx.userId && !ownerIds.has(m.userId)).map((m) => ({ userId: m.userId, name: m.user.name, lastReadAt: m.lastReadAt })),
+            conv.members.filter((m) => m.userId !== ctx.userId && !ownerIds.has(m.userId)).map((m) => ({ userId: m.userId, name: m.user.name, avatarUrl: m.user.avatarUrl, lastReadAt: m.lastReadAt })),
           ),
     oldestId: hasOlder ? (messages[0]?.id ?? null) : null,
+    // the company's switch, so the log draws the shape it is set to (the words of a message never change)
+    chatBubbles: await isFeatureOn(ctx.orgId, "chatBubbles"),
   };
 }
 
@@ -416,14 +423,14 @@ export async function conversationDetail(
  */
 export function readersOf(
   page: { id: string; createdAt: Date; kind: string; deletedAt: Date | null }[],
-  people: { userId: string; name: string; lastReadAt: Date }[],
+  people: { userId: string; name: string; avatarUrl?: string | null; lastReadAt: Date }[],
 ): ReaderDto[] {
   const visible = page.filter((m) => m.kind !== "SYSTEM" && !m.deletedAt);
   const out: ReaderDto[] = [];
   for (const p of people) {
     // `page` is newest first: the first one at or before the mark is the newest they read
     const at = visible.find((m) => m.createdAt <= p.lastReadAt);
-    if (at) out.push({ userId: p.userId, name: p.name, messageId: at.id });
+    if (at) out.push({ userId: p.userId, name: p.name, messageId: at.id, readAt: p.lastReadAt.toISOString(), ...(p.avatarUrl ? { avatarUrl: p.avatarUrl } : {}) });
   }
   return out;
 }
@@ -442,3 +449,28 @@ export async function guardTopic(ctx: OrgAccessContext, conversationId: string) 
   return { facts, org };
 }
 
+
+/**
+ * The people the composer offers for «@»: whoever the topic reaches. An open topic reaches its whole space, and
+ * a space member who never opened the topic has no row in it, so the rows alone would leave them out of the list.
+ * A restricted topic, a DM and a group reach their own rows. The OWNER is offered only when he is one of them.
+ * A GUEST is never given the space's people (no staff directory, no pictures): the caller passes them the rows only.
+ */
+async function mentionablesOf(
+  orgId: string,
+  facts: ConversationFacts,
+  spaceId: string | null,
+  rows: MemberDto[],
+  online: Set<string>,
+): Promise<MemberDto[]> {
+  if (facts.kind !== "TOPIC" || facts.restricted || !spaceId) return rows;
+  const spaceRows = await db.workspaceMember.findMany({
+    where: { workspaceId: spaceId, user: { memberships: { some: { organizationId: orgId, status: "ACTIVE" } } } },
+    select: { role: true, user: { select: { id: true, name: true, avatarUrl: true } } },
+  });
+  const seen = new Set(rows.map((m) => m.id));
+  const extra: MemberDto[] = spaceRows
+    .filter((m) => !seen.has(m.user.id))
+    .map((m) => ({ id: m.user.id, name: m.user.name, online: online.has(m.user.id), role: m.role, avatarUrl: m.user.avatarUrl }));
+  return [...rows, ...extra];
+}

@@ -6,6 +6,9 @@ import { assertNotGuest } from "@/server/services/guest-guard";
 import { ingest, listFiles } from "@/server/services/files";
 import { currentSpace } from "@/server/services/current-space";
 import { libraryOnDrive } from "@/server/services/google";
+import { parseMultipartUpload } from "@/server/files/multipart";
+import { uploadTempDir, UploadStreamError } from "@/server/files/upload-stream";
+import { MAX_FILE_BYTES } from "@/server/files/sniff";
 
 /**
  * The file library is closed to org GUESTs on every route (list, details, bytes, versions,
@@ -20,14 +23,23 @@ export async function POST(req: Request) {
   return withApi(async () => {
     const ctx = await activeOrgCtx();
     assertNotGuest(ctx);
-    const form = await req.formData();
-    const entry = form.get("file");
-    if (!(entry instanceof File)) return NextResponse.json({ error: "bad_request", message: "files.empty" }, { status: 400 });
-    const bytes = new Uint8Array(await entry.arrayBuffer());
-    // the library of the space the person is in
-    const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
-    const made = await ingest(ctx, { name: entry.name, bytes }, undefined, "LIBRARY", undefined, { workspaceId: space?.id ?? null });
-    return NextResponse.json(made, { status: 201 });
+    let received;
+    try {
+      ({ upload: received } = await parseMultipartUpload(req, { fieldName: "file", maxBytes: MAX_FILE_BYTES, tempDir: uploadTempDir }));
+      // the library of the space the person is in
+      const space = await currentSpace({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole });
+      const made = await ingest(ctx, { name: received.name, path: received.path, size: received.size, prefix: received.prefix }, undefined, "LIBRARY", undefined, { workspaceId: space?.id ?? null });
+      return NextResponse.json(made, { status: 201 });
+    } catch (err) {
+      if (err instanceof UploadStreamError && (err.kind === "empty" || err.kind === "invalid")) {
+        return NextResponse.json({ error: "bad_request", message: err.message }, { status: 400 });
+      }
+      // a body over the ceiling is answered 413 before its bytes are buffered (security review D2)
+      if (err instanceof UploadStreamError && err.kind === "too_large") return NextResponse.json({ error: "payload_too_large", message: "files.too_large" }, { status: 413 });
+      throw err;
+    } finally {
+      await received?.cleanup();
+    }
   });
 }
 

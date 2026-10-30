@@ -6,7 +6,7 @@
 export type TopicType = "DISCUSSION" | "ANNOUNCEMENTS" | "TASKS" | "IDEAS" | "FOLLOWUP";
 export type PostingPolicy = "ALL" | "ADMINS";
 export type ConversationKind = "DM" | "GROUP" | "TOPIC";
-export type MessageKind = "TEXT" | "VOICE" | "SYSTEM";
+export type MessageKind = "TEXT" | "VOICE" | "SYSTEM" | "POLL";
 
 /** `{k, p}` of a system message — the client composes the Arabic sentence from it. */
 export interface SystemMeta {
@@ -41,6 +41,33 @@ export interface NoteDto {
   createdAt: string;
 }
 
+export interface PollOptionDto {
+  id: string;
+  text: string;
+  count: number;
+  /** of the people who voted (0-100); in a multiple-choice poll the percentages add up to more than 100 */
+  percent: number;
+  mine: boolean;
+  /** who chose it: only on a poll that is not anonymous, and never for a GUEST */
+  voters?: { id: string; name: string }[];
+}
+
+/** «استطلاع»: the poll a POLL message carries, for ONE viewer (src/server/chat/poll-shared.ts). */
+export interface PollDto {
+  id: string;
+  multiple: boolean;
+  anonymous: boolean;
+  closesAt: string | null;
+  closed: boolean;
+  /** how many different people voted */
+  voters: number;
+  options: PollOptionDto[];
+  /** the server decides again: not a guest, not the owner in silent oversight, not closed */
+  canVote: boolean;
+  /** the creator or a moderator, while it is open */
+  canClose: boolean;
+}
+
 export interface MessageDto {
   id: string;
   kind: MessageKind;
@@ -52,6 +79,8 @@ export interface MessageDto {
   mine: boolean;
   authorId: string;
   authorName: string;
+  /** `/api/avatars/<id>` — the sender's picture, or null (the initials are drawn). */
+  authorAvatar?: string | null;
   createdAt: string;
   clientId?: string | null;
   replyTo?: { id: string; preview: string | null; authorName: string; deleted?: boolean } | null;
@@ -68,6 +97,8 @@ export interface MessageDto {
   /** the OWNER only, on an edited message. */
   history?: { body: string; editedAt: string }[];
   system?: SystemMeta | null;
+  /** a POLL message's poll (absent on any other message and on a deleted one). */
+  poll?: PollDto;
   /** the tasks and tickets made from this message («صارت مهمة»). */
   work?: { kind: "task" | "ticket"; id: string }[];
   /** «نتفرّج سوا»: the second of the video it was written at. */
@@ -112,7 +143,7 @@ export interface TopicSummaryDto {
 
 export interface DmSummaryDto {
   id: string;
-  peer: { id: string; name: string };
+  peer: { id: string; name: string; avatarUrl?: string | null };
   unread: number;
   lastMessage: { at: string; preview: string | null; mine: boolean } | null;
 }
@@ -125,6 +156,10 @@ export interface HomeDto {
   rowMenu?: boolean;
   /** «حذف نهائي» of any topic or chat with everything in it: the OWNER's, while the menu is on. */
   canPurge?: boolean;
+  /** The lists (`space:<id>`, the DM list's own scope) that have the person's own saved order. */
+  ordered?: string[];
+  /** The scope the person's private chats are ordered under (`dm` or `dm:<spaceId>`). */
+  dmScope?: string;
 }
 
 export interface MemberDto {
@@ -133,12 +168,16 @@ export interface MemberDto {
   online: boolean;
   role?: string;
   muted?: boolean;
+  avatarUrl?: string | null;
 }
 
 export interface ReaderDto {
   userId: string;
   name: string;
   messageId: string;
+  /** when this person last read (their own read mark): «who and when» */
+  readAt?: string;
+  avatarUrl?: string | null;
 }
 
 export interface ConversationDto {
@@ -169,13 +208,21 @@ export interface ConversationDto {
     /** with `canMakeWork`: the tasks / tickets row's «يضيف ويعدّل» box (absent: yes) */
     canMakeTask?: boolean;
     canMakeTicket?: boolean;
+    /** may write «@الكل» here: a topic, not a guest, and may post */
+    canMentionAll?: boolean;
+    /** may start a poll here: a topic, not a guest, and may post */
+    canPoll?: boolean;
     id?: string;
   };
   /** the pinned messages, newest first (the bar on top of the conversation) */
   pinnedMessages?: { id: string; authorName: string; preview: string | null }[];
   members?: MemberDto[];
+  /** who the composer offers for «@»: the topic's whole audience (an open topic: its space), not only the rows it has */
+  mentionables?: MemberDto[];
   messages: MessageDto[];
   readers: ReaderDto[];
+  /** the company's «شكل الرسائل الحديث» switch, read on the server (`src/lib/features.ts`); absent: on */
+  chatBubbles?: boolean;
   /** pagination: the oldest message id on the page; pass it as `before` for the next page. */
   oldestId?: string | null;
 }
@@ -234,6 +281,7 @@ export interface DirectoryPersonDto {
   role: string;
   name: string;
   jobTitle: string | null;
+  avatarUrl?: string | null;
 }
 
 /** A search hit in the chat (src/server/chat/search.ts). */

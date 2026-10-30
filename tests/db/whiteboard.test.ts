@@ -92,4 +92,18 @@ describe("the whiteboard of a conversation", () => {
     const huge = Array.from({ length: 5001 }, (_, i) => el(`e${i}`, 1));
     expect((await draw(w.topic.id, huge)).status).toBe(422);
   });
+
+  it("a board of few but enormous elements stops growing: the count is not the size", async () => {
+    const w = await world();
+    await loginAs(w.member.id);
+    const fat = (id: string) => el(id, 1, { text: "x".repeat(2 * 1024 * 1024) });
+    // each save is under the 4 MB ceiling of ONE save; together they would pass any element count
+    expect((await draw(w.topic.id, [fat("a")])).status).toBe(200);
+    const refused = await draw(w.topic.id, [fat("b")]);
+    expect(refused.status).toBe(422);
+    expect(refused.text).toContain("whiteboard.e.too_big");
+    const board = (await read(w.topic.id)).json as { elements: { id: string }[]; version: number };
+    expect(board.elements.map((e) => e.id)).toEqual(["a"]);
+    expect(board.version).toBe(1);
+  });
 });

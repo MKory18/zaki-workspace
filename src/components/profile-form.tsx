@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { apiPost, apiPatch, ApiError } from "@/lib/api-client";
+import { Avatar } from "@/components/ui/avatar";
+import { apiPost, apiPatch, apiDelete, apiUpload, ApiError } from "@/lib/api-client";
+import { compressImage } from "@/lib/chat/compress-image";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 
@@ -18,6 +20,8 @@ export interface MeData {
   bio: string | null;
   locale: string;
   hue: number;
+  /** `/api/avatars/<id>`, or null when the person has no picture yet. */
+  avatarUrl?: string | null;
 }
 
 /**
@@ -33,12 +37,51 @@ export function passwordErrorText(err: unknown, t: (key: string) => string): str
   return rule ? t(rule) : t("common.error");
 }
 
-/** Self-service account form: identity + job title + bio + password change. */
-export function ProfileForm({ me }: { me: MeData }) {
+/** Self-service account form: the picture, then identity + job title + bio + password change. */
+export function ProfileForm({ me, withPicture = true }: { me: MeData; withPicture?: boolean }) {
   const { t } = useI18n();
   const router = useRouter();
   const { toast } = useToast();
   const [pending, setPending] = useState(false);
+  // the picture: the file picker, the upload in flight, and what the circle shows now
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(me.avatarUrl ?? null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const picker = useRef<HTMLInputElement | null>(null);
+
+  async function uploadAvatar(file: File) {
+    setAvatarBusy(true);
+    try {
+      // the phone's camera makes 4000×3000 photos: the same client resize the chat uses, so 2 MB is generous
+      const compressed = await compressImage(file, file.name);
+      const body = compressed ? new File([compressed.blob], "avatar.jpg", { type: compressed.mime }) : file;
+      const form = new FormData();
+      form.set("file", body, body.name || "avatar.jpg");
+      const made = await apiUpload<{ avatarUrl: string }>("/api/me/avatar", form);
+      setAvatarUrl(made.avatarUrl);
+      toast(t("profile.photo.saved"), "success");
+      router.refresh();
+    } catch (err) {
+      const key = err instanceof ApiError && err.messageKey ? err.messageKey : "common.error";
+      toast(t(key), "error");
+    } finally {
+      setAvatarBusy(false);
+      if (picker.current) picker.current.value = "";
+    }
+  }
+
+  async function removeAvatar() {
+    setAvatarBusy(true);
+    try {
+      await apiDelete("/api/me/avatar");
+      setAvatarUrl(null);
+      toast(t("profile.photo.removed"), "success");
+      router.refresh();
+    } catch {
+      toast(t("common.error"), "error");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   async function saveProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -82,6 +125,37 @@ export function ProfileForm({ me }: { me: MeData }) {
     <div className="mx-auto max-w-2xl space-y-5 p-4 md:p-6">
       <section>
         <h1 className="mb-3 text-base font-semibold text-fg">{t("profile.title")}</h1>
+        <div className="mb-3 flex flex-wrap items-center gap-4 rounded-xl border border-border bg-surface p-4">
+          <Avatar name={me.name} src={avatarUrl} className="h-16 w-16 text-lg" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-fg">{t("profile.photo")}</p>
+            <p className="mt-0.5 text-xs text-fg-muted">{t("profile.photo.hint")}</p>
+          </div>
+          {withPicture ? (
+            <div className="flex items-center gap-2">
+            <input
+              ref={picker}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              aria-hidden="true"
+              tabIndex={-1}
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) void uploadAvatar(file);
+              }}
+            />
+            <Button type="button" variant="secondary" disabled={avatarBusy} onClick={() => picker.current?.click()}>
+              {avatarBusy ? t("common.loading") : avatarUrl ? t("profile.photo.change") : t("profile.photo.add")}
+            </Button>
+            {avatarUrl ? (
+              <Button type="button" variant="ghost" disabled={avatarBusy} onClick={() => void removeAvatar()}>
+                {t("profile.photo.remove")}
+              </Button>
+            ) : null}
+          </div>
+          ) : null}
+        </div>
         <form onSubmit={saveProfile} className="space-y-3 rounded-xl border border-border bg-surface p-4">
           <div>
             <Label>{t("auth.name")}</Label>

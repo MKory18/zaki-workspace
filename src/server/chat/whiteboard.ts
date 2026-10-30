@@ -17,6 +17,12 @@ import { canPost, canRead, loadConversationFacts, loadOrgFacts } from "@/server/
 
 /** At most this many elements on one board, and in one save. */
 export const MAX_ELEMENTS = 5000;
+/**
+ * …and at most this much on one board (the bytes of its elements as JSON). The count alone is not a
+ * bound: one element may carry any text it likes, so a board could grow by a whole save at a time
+ * until the database held gigabytes of it. Same ceiling as one save.
+ */
+export const MAX_BOARD_BYTES = 4 * 1024 * 1024;
 /** Pictures are not drawn on the board (their bytes would need the files service): those elements are dropped. */
 const REFUSED_TYPES = new Set(["image", "embeddable", "iframe"]);
 
@@ -100,6 +106,10 @@ export async function saveWhiteboard(ctx: OrgAccessContext, conversationId: stri
     const row = await db.whiteboard.findUnique({ where: { conversationId }, select: { elements: true, version: true } });
     const merged = mergeElements((row?.elements as BoardElement[] | undefined) ?? [], incoming);
     if (merged.length > MAX_ELEMENTS) throw new ValidationError([{ path: "elements", message: "whiteboard.e.too_big" }]);
+    // the count is not the size: a board of few but enormous elements is refused too
+    if (Buffer.byteLength(JSON.stringify(merged), "utf8") > MAX_BOARD_BYTES) {
+      throw new ValidationError([{ path: "elements", message: "whiteboard.e.too_big" }]);
+    }
     const elements = merged as unknown as Prisma.InputJsonValue;
     try {
       const version = await db.$transaction(async (tx) => {

@@ -1,8 +1,8 @@
 import { db } from "@/server/db";
 import { ForbiddenError, type OrgAccessContext } from "@/server/auth";
-import { canArchive } from "@/server/policy/conversation";
 import { logChat } from "@/server/chat/moderation";
 import type { OversightConversationDto } from "@/server/chat/dto";
+import { holdsArchiveView } from "./archive-access";
 
 /**
  * The OWNER's silent eye: every conversation of the company — spaces, topics and private DMs (the
@@ -15,14 +15,7 @@ export async function listOversight(
   ctx: OrgAccessContext,
   opts: { spaceId?: string; cursor?: string; limit?: number } = {},
 ): Promise<{ items: OversightConversationDto[]; nextCursor: string | null }> {
-  const role = await db.organizationMember.findUnique({
-    where: {
-      organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId },
-      status: "ACTIVE",
-    },
-    select: { role: true },
-  });
-  if (!canArchive(role?.role)) throw new ForbiddenError("chat.e.oversight_denied");
+  if (!(await holdsArchiveView(ctx))) throw new ForbiddenError("chat.e.oversight_denied");
 
   const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
   const rows = await db.conversation.findMany({
@@ -78,14 +71,7 @@ export async function listOversight(
  * reads everything, silently).
  */
 export async function assertOversightRead(ctx: OrgAccessContext, conversationId: string): Promise<{ kind: string; spaceId: string | null }> {
-  const role = await db.organizationMember.findUnique({
-    where: {
-      organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId },
-      status: "ACTIVE",
-    },
-    select: { role: true },
-  });
-  if (!canArchive(role?.role)) throw new ForbiddenError("chat.e.oversight_denied");
+  if (!(await holdsArchiveView(ctx))) throw new ForbiddenError("chat.e.oversight_denied");
   const conv = await db.conversation.findFirst({
     where: { id: conversationId, orgId: ctx.orgId },
     select: { id: true, kind: true, spaceId: true },

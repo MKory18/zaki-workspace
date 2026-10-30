@@ -2,7 +2,8 @@
  * THE FIVE PLACES — the one map of the navigation.
  *
  * The owner's plan for Phase 2: five places and no more — اليوم · الدردشة · الشغل · المكتبة · الإدارة; and a sixth
- * by his own ask (2026-10-26), after them: نتفرّج سوا.
+ * by his own ask (2026-10-26): نتفرّج سوا. His later ask (2026-10-30) put «الإدارة» LAST, after it: the order is
+ * اليوم · الدردشة · الشغل · المكتبة · نتفرّج سوا · الإدارة, on the computer's menu and the phone's bar alike.
  * A place has tabs, and every tab is a page that already existed: nothing was removed and no old
  * address broke, the pages were only grouped (LEGACY_ROUTES lists them, and a test proves each one
  * is still a page and still has a home here).
@@ -42,6 +43,13 @@ export type NavRole = (typeof NAV_ROLES)[number];
 export interface NavSubject {
   role: NavRole;
   caps: readonly string[];
+  /**
+   * Does this person manage the space they are in (the owner, its ADMIN, an org ADMIN who is in it)? Read from the
+   * database by the layout (`currentSpace(actor).manager`), because a space role is not a capability. An external
+   * partner never does, whatever is passed. It only decides whether «المساحة» is offered: the page and the routes
+   * behind it decide again, on the server.
+   */
+  spaceManager?: boolean;
   /** The company's switched-off features (src/lib/features.ts): their places are not drawn. */
   off?: readonly FeatureKey[];
 }
@@ -62,6 +70,7 @@ export type TabKey =
   | "crm"
   | "files"
   | "team"
+  | "space"
   | "reports"
   | "automation"
   | "telegram"
@@ -78,6 +87,7 @@ export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team
  *   { capability }        holds that switch (a guest never does, whatever was stored)
  *   { rankAtLeast }       that rank or above
  *   { anyOf }             one of these
+ *   { spaceManager }      staff who manage the space they are in (`NavSubject.spaceManager`)
  *   { workCapability }    an external partner (the space's own rules decide for them), or staff holding that box
  */
 export type Requirement =
@@ -86,7 +96,8 @@ export type Requirement =
   | { readonly capability: string }
   | { readonly rankAtLeast: NavRole }
   | { readonly anyOf: readonly Requirement[] }
-  | { readonly workCapability: string };
+  | { readonly workCapability: string }
+  | { readonly spaceManager: true };
 
 export interface TabDef {
   readonly key: TabKey;
@@ -154,6 +165,11 @@ export const PLACES: readonly PlaceDef[] = [
     // /documents was an empty "coming soon" page: it is a redirect to /files now
     tabs: [{ key: "files", href: "/files", labelKey: "nav.files", requires: { capability: "files.view" }, also: ["/documents"] }],
   },
+  // «نتفرّج سوا» (the owner's ask, 2026-10-26: «الشغل، تحتها المكتبة، الإدارة، ثم نتفرّج سوا»; «الإدارة» was moved after it on 2026-10-30): a place of its own,
+  // one page, before «الإدارة». People of a space watch one link together; the sessions are the team's own talk,
+  // so not an external partner's (the page and /api/watch refuse a guest too: `placeOfferedToGuests`).
+  { key: "watch", href: "/watch", labelKey: "nav.place.watch", icon: "watch", requires: { capability: "watch.view" }, tabs: [], feature: "watch" },
+  // «الإدارة» is the LAST place (the owner's ask, 2026-10-30), after «نتفرّج سوا».
   {
     key: "admin",
     labelKey: "nav.place.admin",
@@ -172,6 +188,9 @@ export const PLACES: readonly PlaceDef[] = [
         requires: { anyOf: [{ capability: "directory.view" }, { capability: "users.manage" }] },
         also: ["/teams", "/u"],
       },
+      // «تعديل المساحة» and «أعضاء المساحة», moved here from the projects page (the owner's ask, 2026-10-30): the space
+      // the person is in, for whoever manages it. The flag comes from the layout (a space role is not a capability).
+      { key: "space", href: "/spaces/current", labelKey: "nav.tab.space", icon: "admin", requires: { spaceManager: true } },
       { key: "reports", href: "/analytics", labelKey: "nav.analytics", icon: "reports", requires: { capability: "reports.view" } },
       { key: "automation", href: "/automation", labelKey: "nav.tab.automation", icon: "automation", requires: { capability: "integrations.manage" } },
       { key: "telegram", href: "/telegram", labelKey: "nav.telegram", icon: "telegram", requires: { capability: "integrations.manage" } },
@@ -185,10 +204,6 @@ export const PLACES: readonly PlaceDef[] = [
       { key: "archive", href: "/archive", labelKey: "nav.archive", requires: { capability: "archive.view" } },
     ],
   },
-  // «نتفرّج سوا» (the owner's ask, 2026-10-26: «الشغل، تحتها المكتبة، الإدارة، ثم نتفرّج سوا»): a place of its own,
-  // one page, after «الإدارة». People of a space watch one link together; the sessions are the team's own talk,
-  // so not an external partner's (the page and /api/watch refuse a guest too: `placeOfferedToGuests`).
-  { key: "watch", href: "/watch", labelKey: "nav.place.watch", icon: "watch", requires: { capability: "watch.view" }, tabs: [], feature: "watch" },
 ];
 
 /**
@@ -241,6 +256,7 @@ function meets(req: Requirement, subject: NavSubject): boolean {
   if (req === "staff") return !outsider;
   if ("anyOf" in req) return req.anyOf.some((r) => meets(r, subject));
   // an outsider works in what is shared with them by the space's rules; staff need the box
+  if ("spaceManager" in req) return !outsider && subject.spaceManager === true;
   if ("workCapability" in req) return outsider || subject.caps.includes(req.workCapability);
   if ("capability" in req) return !outsider && subject.caps.includes(req.capability);
   return rankAtLeast(subject.role, req.rankAtLeast);

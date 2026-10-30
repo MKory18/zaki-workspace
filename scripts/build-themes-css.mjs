@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Writes src/app/themes.css from the palettes (src/lib/themes/palettes.ts) — the one stylesheet
  * that carries every theme's tokens. Run it after changing a palette:

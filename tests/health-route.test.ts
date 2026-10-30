@@ -37,10 +37,16 @@ describe("/api/health", () => {
 describe("docker-compose.yml", () => {
   const compose = readFileSync(path.resolve(__dirname, "../docker-compose.yml"), "utf8");
 
-  /** The `ports:` entries of one top-level service. */
+  /**
+   * The `ports:` entries of one top-level service.
+   * ⚠️ A Windows checkout (`core.autocrlf=true`, no `.gitattributes`) gives this file CRLF line endings,
+   *    and a pattern written with `\n` alone then matched nothing - the check passed on Linux and failed here.
+   * 🔧 Every line break is `\r?\n`, so the parse is the same on both checkouts.
+   */
   function ports(service: string): string[] {
-    const block = new RegExp(`\\n  ${service}:\\n([\\s\\S]*?)(?=\\n  [a-z]+:\\n|\\nvolumes:|$)`).exec(compose)?.[1] ?? "";
-    return [...block.matchAll(/ports:\s*\n((?:\s+-\s+"[^"]+"\s*\n?)+)/g)].flatMap((m) =>
+    const block =
+      new RegExp(`\\r?\\n  ${service}:\\r?\\n([\\s\\S]*?)(?=\\r?\\n  [a-z]+:\\r?\\n|\\r?\\nvolumes:|$)`).exec(compose)?.[1] ?? "";
+    return [...block.matchAll(/ports:\s*\r?\n((?:\s+-\s+"[^"]+"\s*\r?\n?)+)/g)].flatMap((m) =>
       [...m[1]!.matchAll(/"([^"]+)"/g)].map((x) => x[1]!),
     );
   }

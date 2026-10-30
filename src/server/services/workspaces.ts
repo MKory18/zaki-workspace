@@ -5,6 +5,7 @@ import { ForbiddenError, NotFoundError, requireUser, type OrgAccessContext } fro
 import { canManageWorkspaceMembers } from "@/server/services/access";
 import { workspaceRoleOf, type WorkspaceRoleName } from "@/server/workspace-role";
 import { emitRealtime } from "@/server/realtime/emit";
+import type { SpaceLayout } from "@/lib/cards/shared";
 import { ensureStarterTopics, SPACE_STARTER_TOPICS, spaceTopicIdOf } from "@/server/chat/space-topics";
 
 /**
@@ -37,6 +38,8 @@ export interface CreateWorkspaceInput {
   description?: string | null;
   /** People to put in it from the start. The creator is always its ADMIN and need not be listed. */
   memberIds?: readonly string[];
+  /** «نوع المساحة»: STANDARD (the default) or CARDS (a space of «لوحات» only). */
+  layout?: SpaceLayout;
 }
 
 /**
@@ -70,6 +73,7 @@ export async function createWorkspace(userId: string, input: CreateWorkspaceInpu
       name: input.name,
       slug,
       description: input.description ?? null,
+      layout: input.layout ?? "STANDARD",
       members: {
         create: [
           { userId, role: "ADMIN" as WorkspaceRole },
@@ -145,6 +149,7 @@ export async function listWorkspaceMembers(workspaceId: string, viewerId?: strin
           id: true,
           name: true,
           email: true,
+          avatarUrl: true,
           memberships: { where: { organizationId: ws.organizationId, status: "ACTIVE" }, select: { role: true } },
         },
       },
@@ -156,6 +161,7 @@ export async function listWorkspaceMembers(workspaceId: string, viewerId?: strin
     id: r.user.id,
     name: r.user.name,
     email: r.user.email,
+    avatarUrl: r.user.avatarUrl,
     role: workspaceRoleOf(r.user.memberships[0]?.role, r.role) as WorkspaceRoleName,
   }));
 }

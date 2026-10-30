@@ -1,15 +1,19 @@
+import { redirect } from "next/navigation";
 import { pageActor } from "@/app/(app)/_access";
 import { FirstStepsCard } from "@/components/guide/first-steps-card";
 import { GuideCard } from "@/components/guide/guide-card";
 import { InstallHint } from "@/components/pwa/install-hint";
 import { ActiveProjects } from "@/components/today/active-projects";
 import { TeamPulse } from "@/components/today/team-pulse";
+import { TodayDashboard } from "@/components/today/today-dashboard";
 import { TodayHero } from "@/components/today/today-hero";
 import { TodayTasksCard } from "@/components/today/today-tasks";
 import { getServerT } from "@/lib/i18n/server";
 import { getToday } from "@/server/services/today";
+import { getTodayDashboard } from "@/server/services/today-dashboard";
 import { currentSpace } from "@/server/services/current-space";
 import { missionOf } from "@/lib/today";
+import { opensOnCards } from "@/lib/cards/shared";
 
 /** The browser tab says «اليوم» (the root layout adds the app name). */
 export const metadata = { title: getServerT().t("today.title") };
@@ -21,7 +25,8 @@ export const metadata = { title: getServerT().t("today.title") };
  * The page decides nothing. WHO the person is comes from `pageActor()` (which also sends somebody who has not
  * finished onboarding, or whose account is no longer active, away before anything is read); WHAT they see comes
  * from one service call, `getToday(actor)`, which scopes everything to the spaces they can open and to their own
- * work. The parts are in src/components/today; the first-steps card and the install hint are the guide's and
+ * work; the smart cards (the week's ring, late, due today, unread chat, the team strip) come from a second,
+ * `getTodayDashboard(actor)`, scoped the same way. The parts are in src/components/today; the first-steps card and the install hint are the guide's and
  * the app shell's and draw nothing when they have nothing to say.
  *
  * «نجمة وطريق»: the mission card first («المهمّة الجاية», the page's one heading), the first steps as a road,
@@ -35,7 +40,13 @@ export default async function TodayPage() {
   const { actor } = await pageActor();
   // the space the person is in: its «اليوم» only (entering a space opens here)
   const space = await currentSpace(actor);
-  const data = await getToday(actor, { spaceId: space?.id ?? null });
+  // a space of «لوحات» opens on its cards (decided here, on the server; the sidebar is not touched)
+  if (opensOnCards(space?.layout)) redirect("/cards");
+  const [data, dashboard] = await Promise.all([
+    getToday(actor, { spaceId: space?.id ?? null }),
+    // the smart cards: numbers over the same space, from their own service call (a guest gets none)
+    getTodayDashboard(actor, { space: space ? { id: space.id, kind: space.kind } : null }),
+  ]);
 
   const name = data.greeting.firstName;
   const greeting = data.greeting.period === "morning" ? t("today.greeting.morning", { name }) : t("today.greeting.evening", { name });
@@ -46,6 +57,7 @@ export default async function TodayPage() {
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <TodayHero greeting={greeting} date={data.dateLabel} mission={missionOf(data.tasks)} />
           <FirstStepsCard actor={actor} />
+          <TodayDashboard data={dashboard} />
           <TodayTasksCard tasks={data.tasks} hasSpaces={data.hasSpaces} canCreateSpaces={data.canCreateSpaces} quickAdd={data.quickAdd} timeZone={data.timeZone} />
           <InstallHint />
         </div>

@@ -399,6 +399,8 @@ export async function createAccount(actor: Actor, input: CreateAccountInput): Pr
     title: t("accounts.welcome_title", { org: org?.name ?? "" }),
     body: t("accounts.welcome_body"),
     linkUrl: "/",
+    // the company that welcomed them — never the other one they may belong to (review B7)
+    organizationId: actor.orgId,
   });
   return { userId, username: input.username, ...(temporaryPassword ? { temporaryPassword } : {}) };
 }
@@ -510,6 +512,7 @@ export async function updateAccount(actor: Actor, userId: string, input: UpdateA
         title: t("accounts.role_changed_title"),
         body: t("accounts.role_changed_body", { role: t(ROLE_KEYS[role] ?? "role.member") }),
         linkUrl: "/",
+        organizationId: actor.orgId,
       });
     }
   }
@@ -678,6 +681,7 @@ async function offboardAccount(actor: Actor, target: Target, transferToUserId: s
       title: t("accounts.work_transferred_title", { name: target.name }),
       body: t("accounts.work_transferred_body", { tasks: moved.tasks, tickets: moved.tickets, routines: moved.routines }),
       linkUrl: "/my-work",
+      organizationId: actor.orgId,
     });
   }
 }

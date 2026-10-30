@@ -322,7 +322,7 @@ export function MemberSheet({
     return (
       <div ref={rootRef} tabIndex={-1} className="space-y-5 outline-none">
         <div className="flex items-start gap-3">
-          <Avatar name={member.name} className="h-14 w-14 text-base" />
+          <Avatar name={member.name} src={member.avatarUrl} className="h-14 w-14 text-base" />
           <div className="min-w-0 flex-1 space-y-1.5">
             {identity ? (
               <p className="break-words text-sm text-fg-muted">

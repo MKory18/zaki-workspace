@@ -5,7 +5,7 @@ import { assertNotGuest } from "@/server/services/guest-guard";
 import { loadWorkScope, projectVisibleWhere, scopeSpaceIds } from "@/server/services/team-scope";
 import { assertCapability } from "@/server/services/active-people";
 import { alignDepartmentSpace, syncDepartmentSpace } from "@/server/services/department-space";
-import { orgDayStart } from "@/server/services/org-day";
+import { resolveTimeZone, zonedDayStart } from "@/lib/zoned-time";
 
 /**
  * The departments area is the company's staff directory (who works where, with
@@ -86,21 +86,28 @@ export async function createDepartment(ctx: OrgAccessContext, input: z.infer<typ
   return dept;
 }
 
+/**
+ * «الأقسام» — each department, its people and how much work is open and late in it.
+ *
+ * "Late" is the COMPANY's day, the same line as My Work, analytics, the Today page and «كل المساحات»:
+ * a task due at 09:00 today is not late at noon. `now` is injected so a test can pin the day.
+ */
 export async function listDepartments(ctx: OrgAccessContext, now: Date = new Date()) {
   assertNotGuest(ctx);
   await assertCapability(ctx, "directory.view");
-  const scope = await loadWorkScope(ctx.userId);
+  const [scope, org] = await Promise.all([
+    loadWorkScope(ctx.userId),
+    db.organization.findUnique({ where: { id: ctx.orgId }, select: { timezone: true } }),
+  ]);
+  const todayStart = zonedDayStart(now, resolveTimeZone(org?.timezone));
   const wsIds = scopeSpaceIds(scope);
-  // «متأخرة» is the company's day, like My Work, Today and the reports: due strictly before the start of
-  // the company's today, never "before this very moment" (a task due today at 09:00 is not late at 15:00)
-  const todayStart = await orgDayStart(ctx.orgId, now);
   const rows = await db.department.findMany({
     where: { orgId: ctx.orgId },
     orderBy: { createdAt: "asc" },
     include: {
       memberships: {
         where: activeRoster(ctx.orgId),
-        select: { user: { select: { id: true, name: true, jobTitle: true } }, role: true },
+        select: { user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } }, role: true },
       },
       projects: {
         where: { workspaceId: { in: wsIds }, AND: [projectVisibleWhere(scope)] },
@@ -119,7 +126,7 @@ export async function listDepartments(ctx: OrgAccessContext, now: Date = new Dat
       emoji: d.emoji,
       color: d.color,
       leadId: d.leadId,
-      members: d.memberships.map((m) => ({ id: m.user.id, name: m.user.name, jobTitle: m.user.jobTitle, role: m.role })),
+      members: d.memberships.map((m) => ({ id: m.user.id, name: m.user.name, jobTitle: m.user.jobTitle, role: m.role, avatarUrl: m.user.avatarUrl })),
       projectsCount: d.projects.length,
       openTasks: open,
       overdueTasks: overdue,
@@ -135,7 +142,7 @@ export async function getDepartment(ctx: OrgAccessContext, id: string) {
   if (!d) throw new NotFoundError("dept.not_found");
   const members = await db.departmentMember.findMany({
     where: { departmentId: d.id, ...activeRoster(ctx.orgId) },
-    include: { user: { select: { id: true, name: true, jobTitle: true } } },
+    include: { user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } } },
   });
   // only the spaces this person can open: a department's projects live in spaces, and a space is
   // visible to the people in it (and the OWNER), not to a rank
@@ -158,7 +165,7 @@ export async function getDepartment(ctx: OrgAccessContext, id: string) {
     emoji: d.emoji,
     color: d.color,
     leadId: d.leadId,
-    members: members.map((m) => ({ id: m.user.id, name: m.user.name, jobTitle: m.user.jobTitle, role: m.role })),
+    members: members.map((m) => ({ id: m.user.id, name: m.user.name, jobTitle: m.user.jobTitle, role: m.role, avatarUrl: m.user.avatarUrl })),
     projects: projects.map((p) => {
       const open = p.tasks.filter((t) => !t.completedAt).length;
       const done = p.tasks.filter((t) => t.completedAt).length;

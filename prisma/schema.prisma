@@ -37,6 +37,8 @@ model User {
   avatarUrl    String?
   jobTitle     String? // وظيفي: professional title shown on profile (e.g. "Project Manager")
   bio          String?
+  // «ترتيبي»: the person's own order of the menu's places and of the tabs inside each place — { places: string[], tabs: Record<placeKey, string[]> }, null = the code's order (src/lib/nav/order.ts)
+  navOrder     Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -51,10 +53,13 @@ model User {
   notifications   Notification[]
   ideas           Idea[]               @relation("IdeaCreator")
   ideaVotes       IdeaVote[]           @relation("IdeaVoter")
+  cards           Card[]               @relation("CardCreator")
   chatMemberships ConversationMember[] @relation("ChatMember")
   chatMessages    ChatMessage[]        @relation("ChatAuthor")
   chatDeletions   ChatMessage[]        @relation("ChatDeleter")
   chatReactions   ChatReaction[]
+  pollVotes       PollVote[]
+  chatOrders      UserChatOrder[]
   messageRevisions MessageRevision[]   @relation("RevisionEditor")
   messageNotes    MessageNote[]        @relation("NoteAuthor")
   uploadedFiles   StoredFile[]         @relation("FileUploader")
@@ -332,6 +337,7 @@ model StoredFile {
   uploader     User                @relation("FileUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
   workspace    Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   chatLinks    MessageAttachment[]
+  cards        Card[]
 
   @@index([orgId, familyId, isLatest])
   @@index([familyId])
@@ -420,7 +426,7 @@ model ChatMessage {
   // Deleting a message KEEPS its text from Phase 3 on (the owner reads the original in the archive);
   // what people see is decided in one place: src/server/chat/redact.ts.
   body            String
-  kind            String    @default("TEXT") // TEXT | VOICE | SYSTEM
+  kind            String    @default("TEXT") // TEXT | VOICE | SYSTEM | POLL
   replyToId       String?
   pinned          Boolean   @default(false)
   editedAt        DateTime?
@@ -443,6 +449,8 @@ model ChatMessage {
   forwardedFrom ChatMessage?        @relation("ChatForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
   forwards      ChatMessage[]       @relation("ChatForwards")
   reactions     ChatReaction[]
+  // «استطلاع»: the poll a POLL message carries (its question is the message body)
+  poll          Poll?
   revisions     MessageRevision[]
   notes         MessageNote[]
   attachments   MessageAttachment[]
@@ -466,6 +474,71 @@ model ChatReaction {
 
   @@unique([messageId, userId, emoji])
   @@index([messageId])
+}
+
+// «استطلاع»: a poll inside a topic. The message (kind POLL) carries the question in its body; the poll,
+// its options and the votes hang off it, so deleting the message hides the poll like any message.
+model Poll {
+  id         String    @id @default(cuid())
+  messageId  String    @unique
+  multiple   Boolean   @default(false)
+  anonymous  Boolean   @default(false)
+  closesAt   DateTime? // the deadline («يُغلق بعد»), at most 7 days from the creation
+  closedAt   DateTime? // closed early by hand
+  closedById String?
+  createdAt  DateTime  @default(now())
+
+  message ChatMessage  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  options PollOption[]
+  votes   PollVote[]
+}
+
+model PollOption {
+  id       String @id @default(cuid())
+  pollId   String
+  text     String
+  position Int
+
+  poll  Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes PollVote[]
+
+  @@index([pollId, position])
+}
+
+// One row per person per chosen option. A single-choice poll keeps at most one row per person (the service
+// replaces it); the owner in silent oversight never has a row (voting makes him join first).
+model PollVote {
+  id        String   @id @default(cuid())
+  pollId    String
+  optionId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, optionId, userId])
+  @@index([pollId, userId])
+  @@index([optionId])
+}
+
+// A person's OWN order of the chat list (drag and drop, «ترتيب»). One row per person per list: `scope` is
+// `space:<spaceId>` (the topics of that space) or `dm` / `dm:<spaceId>` (their private chats). `order` is an
+// array of conversation ids (at most 500). Nobody else ever reads it: the moderator's pin and the space's own
+// order are untouched, and an id the person may no longer read is simply ignored when the list is built.
+model UserChatOrder {
+  id        String   @id @default(cuid())
+  userId    String
+  orgId     String
+  scope     String
+  order     Json
+  updatedAt DateTime @updatedAt
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId, scope])
 }
 
 // The text a message had BEFORE an edit. One row per edit; only the owner reads them.
@@ -676,10 +749,12 @@ model Organization {
   tasks            Task[]
   ideas            Idea[]
   ideaVotes        IdeaVote[]
+  cards            Card[]
   integrations     Integration[]
   conversations    Conversation[]
   IntegrationEvent IntegrationEvent[]
   ChatMessage      ChatMessage[]
+  chatOrders       UserChatOrder[]
   files            StoredFile[]
   departments      Department[]
   tickets          Ticket[]
@@ -753,6 +828,10 @@ model Workspace {
   description    String?
   // STANDARD: made by people | DEPARTMENT: the chat of a department | HQ: the company-wide space (one per company)
   kind           WorkspaceKind @default(STANDARD)
+  // What the space is made of: STANDARD (work, chat, files ...) | CARDS (only «لوحات»: notes, prompts, lists, links, files, tables)
+  // | MANUFACTURING («تصنيع»: the same cards for now, plus the note that stock and cost numbers come from the official ledger).
+  // A plain string, not an enum: `kind` keeps its own meaning (who the space is for).
+  layout         String        @default("STANDARD")
   emoji          String?
   // The role of a system space: "hq". Unique per company, so there is exactly one HQ.
   systemKey      String?
@@ -780,6 +859,7 @@ model Workspace {
   opportunities Opportunity[]
   calls         Call[]
   watchSessions WatchSession[]
+  cards         Card[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, systemKey])
@@ -1014,6 +1094,7 @@ model Task {
   activities   TaskActivity[]
   dependencies TaskDependency[] @relation("Task")
   blocksTask   TaskDependency[] @relation("BlockedTask")
+  assignRequests TaskAssignRequest[]
   // Made from a chat message («اعمل منها مهمة»): the message it came from.
   sourceMessageId String?
   sourceMessage   ChatMessage? @relation("MessageTasks", fields: [sourceMessageId], references: [id], onDelete: SetNull)
@@ -1026,6 +1107,33 @@ model Task {
   @@index([assigneeId])
   @@index([creatorId])
   @@index([dueDate])
+}
+
+/// Giving a task to somebody of a HIGHER rank is a request, not an assignment (the owner's rule, 2026-10-30): the task
+/// stays as it was, this row waits for the addressed person, who accepts (the task is then theirs) or returns it with
+/// a written reason. No foreign key to the people on purpose (the same as `Notification`): the row is history and
+/// outlives a person's row; it dies with its task.
+enum TaskAssignRequestStatus {
+  PENDING
+  ACCEPTED
+  RETURNED
+}
+
+model TaskAssignRequest {
+  id         String                  @id @default(cuid())
+  orgId      String
+  taskId     String
+  fromUserId String
+  toUserId   String
+  status     TaskAssignRequestStatus @default(PENDING)
+  reason     String?
+  createdAt  DateTime                @default(now())
+  answeredAt DateTime?
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, status])
+  @@index([toUserId, status])
 }
 
 model TaskLabel {
@@ -1113,12 +1221,17 @@ model Notification {
   // the space the person is in. None: personal (a welcome, a changed rank), shown in every space — and the
   // notifications from before spaces had them.
   workspaceId String?
+  // The company the notification belongs to. A person may be in two companies: their personal notices (a welcome,
+  // a changed rank, a ticket with no space) must not appear in the other company's bell (review B7). No foreign
+  // key on purpose: a notice outlives the company row it mentions.
+  organizationId String?
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([userId, readAt, createdAt])
   @@index([userId, workspaceId, readAt])
+  @@index([userId, organizationId, readAt])
 }
 
 model AuditLog {
@@ -1351,4 +1464,36 @@ model PendingRegistration {
 
   @@index([email])
   @@index([createdAt])
+}
+
+/// A «لوحة» (card) of a space whose layout is CARDS (it works in any space): a note, a prompt, a list, a link, a file or a
+/// small hand-typed table. Never hard-deleted: «حذف» sets `archivedAt` and only the OWNER reads the archive.
+/// `position` is a fractional rank (one write per move). `data` holds the list items, the table cells or the link url;
+/// a FILE card points at a library file (`StoredFile`), it never stores bytes of its own.
+model Card {
+  id          String    @id @default(cuid())
+  orgId       String
+  workspaceId String
+  createdById String
+  kind        String // NOTE | PROMPT | LIST | LINK | FILE | TABLE
+  title       String
+  body        String?
+  data        Json?
+  color       String    @default("none") // a theme token name from a small fixed set (src/lib/cards/shared.ts)
+  category    String? // «تصنيف»
+  tags        String[]
+  pinned      Boolean   @default(false)
+  position    Float     @default(0)
+  fileId      String?
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("CardCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  file         StoredFile?  @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, archivedAt, pinned, position])
+  @@index([orgId, workspaceId])
 }

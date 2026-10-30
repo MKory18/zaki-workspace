@@ -5,6 +5,29 @@ import Link from "next/link";
 import { ArrowRight, MoreVertical } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ct } from "@/lib/chat/text";
+import { setSoundsEnabled, soundsEnabled } from "@/lib/chat/sounds";
+
+/** «الأصوات»: a switch for the chat's sounds, kept in this browser (src/lib/chat/sounds.ts). */
+function SoundToggle() {
+  const [on, setOn] = React.useState(true);
+  React.useEffect(() => setOn(soundsEnabled()), []);
+  return (
+    <button
+      type="button"
+      data-sound-toggle
+      aria-pressed={on}
+      aria-label={ct("chatc.sounds")}
+      title={ct("chatc.sounds")}
+      onClick={() => {
+        setSoundsEnabled(!on);
+        setOn(!on);
+      }}
+      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-lg hover:bg-surface-2"
+    >
+      <span aria-hidden="true">{on ? "🔔" : "🔕"}</span>
+    </button>
+  );
+}
 
 /**
  * The conversation's head, one tidy row on every screen (the owner, 2026-10-26: «نسخة الهاتف مخربطة ومعجوقة»، «ما في زر
@@ -46,6 +69,7 @@ export function ConversationHeader({
         <h1 className="truncate font-semibold leading-tight">{title}</h1>
         {subtitle ? <p className="truncate text-xs text-fg-muted">{subtitle}</p> : null}
       </div>
+      <SoundToggle />
       <div className="shrink-0">{call}</div>
       <div className="hidden shrink-0 items-center gap-2 md:flex">
         <button type="button" aria-expanded={searching} onClick={onSearch} className={pill}>

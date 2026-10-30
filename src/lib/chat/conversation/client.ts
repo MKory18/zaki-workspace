@@ -22,6 +22,8 @@ export interface ChatMessagePayloadInput {
   clientId: string;
   /** a voice note: its one attachment is the recording (the server makes it a VOICE message) */
   voice?: boolean;
+  /** the body carries «@الكل» and the person may use it (the server checks both again) */
+  mentionAll?: boolean;
 }
 
 export function buildChatMessagePayload(input: ChatMessagePayloadInput) {
@@ -32,6 +34,7 @@ export function buildChatMessagePayload(input: ChatMessagePayloadInput) {
     ...(input.replyToId ? { replyToId: input.replyToId } : {}),
     clientId: input.clientId,
     ...(input.voice ? { voice: true } : {}),
+    ...(input.mentionAll ? { mentionAll: true } : {}),
   };
 }
 

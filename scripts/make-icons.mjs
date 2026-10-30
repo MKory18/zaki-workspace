@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Draws the app icons: the dolphin mark of `src/app/icon.svg` on the default theme's surface colour.
  *

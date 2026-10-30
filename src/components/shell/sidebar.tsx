@@ -1,5 +1,6 @@
 "use client";
 
+import { ZakiMark } from "@/components/logo";
 import Link from "next/link";
 import { BookOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { InstallAppButton } from "@/components/pwa/install-hint";
@@ -12,6 +13,7 @@ import { NavIcon } from "./nav-icons";
 import { AvatarMenu, type AvatarUser } from "./avatar-menu";
 import { SpaceSwitcher, type ShellSpace } from "./space-switcher";
 import { ariaCurrent } from "./current";
+import { Grip, NavOrderControls, NavOrderToggle, SortableItem, SortableList } from "./nav-sort";
 
 /**
  * The computer's side menu (from `md`), on the START side — the right, in Arabic («نجمة وطريق»):
@@ -45,6 +47,12 @@ export function Sidebar({
   /** True after a toggle in this session: then, and only then, the width animates. */
   animated = false,
   badges = {},
+  editing = false,
+  onEditStart,
+  onEditDone,
+  onReorder,
+  onReset,
+  canReset = false,
 }: {
   nav: NavModel;
   current: PlaceKey | null;
@@ -63,6 +71,14 @@ export function Sidebar({
   animated?: boolean;
   /** unread numbers per place (today: «الدردشة» only) */
   badges?: Partial<Record<PlaceKey, number>>;
+  /** «ترتيب»: the reorder mode (src/components/shell/nav-sort.tsx). Left out, the menu cannot be reordered. */
+  editing?: boolean;
+  onEditStart?: () => void;
+  onEditDone?: () => void;
+  /** The new order of the place keys. */
+  onReorder?: (keys: string[]) => void;
+  onReset?: () => void;
+  canReset?: boolean;
 }) {
   const { t } = useI18n();
   // the space you are in, written where «زاكي» was and in its lettering (the owner's ask, 2026-10-25); a long name
@@ -72,7 +88,9 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "zk-side-rule relative hidden shrink-0 flex-col border-e border-border bg-surface-1 md:flex",
+        // `h-full min-h-0`: the menu is exactly as tall as the window, so the list of places in the middle (`min-h-0 flex-1
+        // overflow-y-auto`) is what gives way on a short window and scrolls, while the header and the block below it stay put
+        "zk-side-rule relative hidden h-full min-h-0 shrink-0 flex-col border-e border-border bg-surface-1 md:flex",
         // the fold animates only after the person has toggled it in this visit: the FIRST frame must
         // already be the right width, so a hard load never plays the 256px → 72px shrink
         animated && "transition-[width] duration-150",
@@ -84,16 +102,24 @@ export function Sidebar({
         <Link
           href="/"
           aria-label={brand}
-          className={cn("relative flex min-w-0 flex-col rounded-xl", collapsed && "mx-auto items-center")}
+          className={cn("relative flex min-w-0 items-center gap-2.5 rounded-xl", collapsed && "mx-auto justify-center")}
         >
-          <span aria-hidden="true" className={cn("zk-wordmark block max-w-full truncate py-0.5 leading-tight", brandSize)}>
-            <bdi>{collapsed ? (space?.emoji ?? Array.from(brand)[0] ?? "") : brand}</bdi>
+          {/* the project's mark: the «Z» with the star, drawn in code (components/logo.tsx), beside the lettering */}
+          <span data-brand-mark aria-hidden="true" className="shrink-0">
+            <ZakiMark className={collapsed ? "size-10" : "size-11"} />
           </span>
-          {orgName && !collapsed ? (
-            <span aria-hidden="true" className="mt-1.5 truncate text-xs font-semibold text-fg-muted">
-              <bdi>{orgName}</bdi>
+          {collapsed ? null : (
+            <span className="flex min-w-0 flex-col">
+              <span aria-hidden="true" className={cn("zk-wordmark block max-w-full truncate py-0.5 leading-tight", brandSize)}>
+                <bdi>{brand}</bdi>
+              </span>
+              {orgName ? (
+                <span aria-hidden="true" className="mt-1 truncate text-xs font-semibold text-fg-muted">
+                  <bdi>{orgName}</bdi>
+                </span>
+              ) : null}
             </span>
-          ) : null}
+          )}
         </Link>
       </div>
 
@@ -101,46 +127,80 @@ export function Sidebar({
         <SpaceSwitcher variant={collapsed ? "rail" : "sidebar"} isGuest={isGuest} current={space} canOverview={canOverview} />
       </div>
 
-      <nav aria-label={t("shell.places")} data-tour="places" className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <ul className="space-y-1">
-          {nav.places.map((place) => {
-            const active = place.key === current;
-            const label = t(place.labelKey);
-            return (
-              <li key={place.key}>
-                <Link
-                  href={place.href}
-                  aria-current={ariaCurrent(active, place.href, pathname)}
-                  title={collapsed ? label : undefined}
-                  className={cn(
-                    "flex h-11 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
-                    collapsed && "justify-center px-0",
-                    active ? "bg-accent-2/10 font-semibold text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
-                  )}
-                >
-                  <span className="relative shrink-0">
-                    <NavIcon icon={place.icon} className={cn("size-5 shrink-0", active && "text-accent")} />
-                    {collapsed && <PlaceBadge count={badges[place.key]} className="absolute -end-2 -top-2" />}
-                  </span>
-                  <span className={cn("truncate", collapsed && "sr-only")}>{label}</span>
-                  {!collapsed && <PlaceBadge count={badges[place.key]} className="ms-auto" />}
-                  {active && !collapsed ? (
-                    <span aria-hidden="true" className={cn("zk-star size-3 shrink-0 text-accent-2", !badges[place.key] && "ms-auto")} />
-                  ) : null}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+      <nav aria-label={t("shell.places")} data-tour="places" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+        {editing && onReorder ? (
+          <SortableList
+            id="nav-places-side"
+            axis="vertical"
+            entries={nav.places.map((place) => ({ id: place.key, label: t(place.labelKey) }))}
+            onReorder={onReorder}
+          >
+            <ul aria-label={t("navorder.places_label")} className="space-y-1">
+              {nav.places.map((place) => {
+                const label = t(place.labelKey);
+                return (
+                  <SortableItem key={place.key} id={place.key}>
+                    {({ props }) => (
+                      <div
+                        className={cn(
+                          "flex h-11 items-center gap-1 rounded-xl border border-dashed border-border px-1 text-sm text-fg [@media(max-height:760px)]:h-9",
+                          collapsed && "justify-center px-0",
+                        )}
+                      >
+                        <Grip handle={props} label={label} />
+                        <NavIcon icon={place.icon} className="size-5 shrink-0" />
+                        <span className={cn("truncate", collapsed && "sr-only")}>{label}</span>
+                      </div>
+                    )}
+                  </SortableItem>
+                );
+              })}
+            </ul>
+          </SortableList>
+        ) : (
+          <ul className="space-y-1">
+            {nav.places.map((place) => {
+              const active = place.key === current;
+              const label = t(place.labelKey);
+              return (
+                <li key={place.key}>
+                  <Link
+                    href={place.href}
+                    aria-current={ariaCurrent(active, place.href, pathname)}
+                    title={collapsed ? label : undefined}
+                    className={cn(
+                      // a short window (a zoomed-in screen) takes a tighter row, so the whole list shows before it needs to scroll
+                      "flex h-11 items-center gap-3 rounded-xl px-3 text-sm transition-colors [@media(max-height:760px)]:h-9",
+                      collapsed && "justify-center px-0",
+                      active ? "bg-accent-2/10 font-semibold text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
+                    )}
+                  >
+                    <span className="relative shrink-0">
+                      <NavIcon icon={place.icon} className={cn("size-5 shrink-0", active && "text-accent")} />
+                      {collapsed && <PlaceBadge count={badges[place.key]} className="absolute -end-2 -top-2" />}
+                    </span>
+                    <span className={cn("truncate", collapsed && "sr-only")}>{label}</span>
+                    {!collapsed && <PlaceBadge count={badges[place.key]} className="ms-auto" />}
+                    {active && !collapsed ? (
+                      <span aria-hidden="true" className={cn("zk-star size-3 shrink-0 text-accent-2", !badges[place.key] && "ms-auto")} />
+                    ) : null}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </nav>
 
+      {/* the pinned block: «دليل زاكي», the install button, the fold and the person. It never shrinks and never overlaps the list above it (`data-sidebar="footer"`) */}
+      <div data-sidebar="footer" className="relative z-10 shrink-0 bg-surface-1">
       <div className={cn("shrink-0 px-3 pb-1", collapsed && "px-2")}>
         <Link
           href="/guide"
           aria-current={ariaCurrent(pathname.startsWith("/guide"), "/guide", pathname)}
           title={collapsed ? t("shell.guide") : undefined}
           className={cn(
-            "flex h-11 items-center gap-2.5 rounded-xl border border-dashed border-accent-2 text-sm font-semibold text-fg transition-colors hover:bg-accent-2/10",
+            "flex h-11 items-center gap-2.5 rounded-xl border border-dashed border-accent-2 text-sm font-semibold text-fg transition-colors hover:bg-accent-2/10 [@media(max-height:760px)]:h-9",
             collapsed ? "justify-center px-0" : "px-3",
           )}
         >
@@ -148,6 +208,23 @@ export function Sidebar({
           <span className={cn("truncate", collapsed && "sr-only")}>{t("shell.guide")}</span>
         </Link>
         <InstallAppButton collapsed={collapsed} />
+        {/* «ترتيب»: starts the reorder mode; while it is on, «تم» and «رجّع الترتيب الأصلي» take its place */}
+        {onEditStart && onEditDone && onReset ? (
+          editing && !collapsed ? (
+            <NavOrderControls onDone={onEditDone} onReset={onReset} canReset={canReset} className="py-1" />
+          ) : editing ? (
+            <NavOrderToggle collapsed onClick={onEditDone} />
+          ) : (
+            <NavOrderToggle
+              collapsed={collapsed}
+              onClick={() => {
+                // the rail has no room for grips and a label: open the menu first
+                if (collapsed) onToggle();
+                onEditStart();
+              }}
+            />
+          )
+        ) : null}
         {/* the fold, with its word: an icon alone in the corner was missed (the owner, 2026-10-26: «زر يضب القائمة ع جنب») */}
         <button
           type="button"
@@ -156,7 +233,7 @@ export function Sidebar({
           aria-label={collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")}
           title={collapsed ? t("shell.sidebar.expand") : undefined}
           className={cn(
-            "flex h-11 w-full items-center gap-2.5 rounded-xl text-sm text-muted transition-colors hover:bg-surface-2 hover:text-fg",
+            "flex h-11 w-full items-center gap-2.5 rounded-xl text-sm text-muted transition-colors hover:bg-surface-2 hover:text-fg [@media(max-height:760px)]:h-9",
             collapsed ? "justify-center px-0" : "px-3",
           )}
         >
@@ -169,6 +246,7 @@ export function Sidebar({
         <div className={cn("min-w-0", collapsed ? "flex justify-center" : "flex-1")}>
           <AvatarMenu user={user} rank={rank} variant={collapsed ? "rail" : "sidebar"} />
         </div>
+      </div>
       </div>
     </aside>
   );

@@ -308,9 +308,9 @@ describe("the middleware stays Edge-safe", () => {
 
   it("imports nothing that needs Node or the database", () => {
     expect(importsOf("src/middleware.ts").sort()).toEqual(
-      ["@/lib/origin-guard", "@/lib/safe-next", "@/lib/session-token", "next/server"].sort(),
+      ["@/lib/origin-guard", "@/lib/safe-next", "@/lib/security-headers", "@/lib/session-token", "next/server"].sort(),
     );
-    for (const file of ["src/lib/session-token.ts", "src/lib/safe-next.ts", "src/lib/origin-guard.ts"]) {
+    for (const file of ["src/lib/session-token.ts", "src/lib/safe-next.ts", "src/lib/origin-guard.ts", "src/lib/security-headers.ts"]) {
       for (const spec of importsOf(file)) {
         expect(spec, `${file} imports ${spec}`).not.toMatch(/^(node:|@\/server|@prisma|\.\.?\/)/);
       }

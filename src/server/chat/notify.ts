@@ -18,14 +18,21 @@ export async function notifyMessageToAudience(opts: {
   title: string; // the conversation title (or the DM peer's name)
   preview: string; // the body preview (attachments -> an Arabic «أرسل مرفقًا»)
   messageId: string; // in the link, so an edit or a delete can reach the preview again
+  /** the people named with «@»: they are told even while they look at the app (a mention is addressed to them) */
+  mentionedIds?: string[];
+  /** reached by «@الكل»: told even while online, as «ذكر الجميع» */
+  allIds?: string[];
 }): Promise<void> {
   const targets = new Set(opts.audienceIds);
   // the space the message is in (a DM from before spaces had them is «الشركة»'s): the bell of that space shows it
   const conv = await db.conversation.findUnique({ where: { id: opts.conversationId }, select: { spaceId: true, orgId: true } });
   const workspaceId = conv?.spaceId ?? (conv ? await hqSpaceId(conv.orgId) : null);
+  const named = new Set(opts.mentionedIds ?? []);
+  const everyone = new Set(opts.allIds ?? []);
   for (const userId of targets) {
-    if (await isOnline(userId)) continue;
-    if (opts.kind === "DM") {
+    const addressed = named.has(userId) || everyone.has(userId);
+    if (!addressed && (await isOnline(userId))) continue;
+    if (!addressed && opts.kind === "DM") {
       const unread = await db.notification.findFirst({
         where: { userId, readAt: null, type: "chat_message", linkUrl: { contains: opts.conversationId } },
         select: { id: true },
@@ -35,12 +42,31 @@ export async function notifyMessageToAudience(opts: {
     await pushNotification({
       userId,
       type: "chat_message",
-      title: opts.title,
+      title: named.has(userId) ? `${opts.title} ${MENTION_TITLE}` : everyone.has(userId) ? `${opts.title} ${MENTION_ALL_TITLE}` : opts.title,
       body: opts.preview,
       linkUrl: messageLink(opts.conversationId, opts.messageId),
       workspaceId,
     });
   }
+}
+
+/** What follows the author's name in the bell when the message is addressed to the person. */
+export const MENTION_TITLE = "ذكرك";
+export const MENTION_ALL_TITLE = "ذكر الجميع";
+
+/**
+ * Everybody a topic reaches, for «@الكل»: an open topic reaches its space, a restricted one its own rows. The
+ * OWNER has a place here only through a row of his own, so reading as the owner leaves no trace. The caller
+ * still passes the list through `readersAmong` (the policy decides who may read).
+ */
+export async function topicAudienceIds(facts: ConversationFacts, conversationId: string): Promise<string[]> {
+  const rows = await db.conversationMember.findMany({ where: { conversationId }, select: { userId: true } });
+  const ids = new Set(rows.map((r) => r.userId));
+  if (!facts.restricted && facts.spaceId) {
+    const space = await db.workspaceMember.findMany({ where: { workspaceId: facts.spaceId }, select: { userId: true } });
+    for (const r of space) ids.add(r.userId);
+  }
+  return [...ids];
 }
 
 /** The link a chat notification carries: the conversation, and the message it was about. */

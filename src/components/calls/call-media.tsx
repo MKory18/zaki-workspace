@@ -81,9 +81,11 @@ export function Quality({ quality }: { quality: ConnectionQuality }) {
   );
 }
 
-export function PersonPicture({ p, me, source = Track.Source.Camera, fit = "cover", className, small = false }: {
+export function PersonPicture({ p, me, src, source = Track.Source.Camera, fit = "cover", className, small = false }: {
   p: Participant;
   me: Participant | undefined;
+  /** `/api/avatars/<id>` of this person, when the caller knows it */
+  src?: string | null;
   source?: Track.Source;
   fit?: "cover" | "contain";
   className?: string;
@@ -93,7 +95,7 @@ export function PersonPicture({ p, me, source = Track.Source.Camera, fit = "cove
   if (on) return <TrackView track={p.getTrackPublication(source)?.track} fit={fit} className={className ?? "h-full w-full"} mirror={p === me && source === Track.Source.Camera} />;
   return (
     <div className="flex h-full items-center justify-center">
-      <Avatar name={p.name || p.identity} className={small ? "h-9 w-9" : "h-16 w-16 text-lg"} />
+      <Avatar name={p.name || p.identity} src={src} className={small ? "h-9 w-9" : "h-16 w-16 text-lg"} />
     </div>
   );
 }

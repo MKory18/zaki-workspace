@@ -16,8 +16,9 @@ export async function POST(req: Request) {
   return withApi(async () => {
     const input = await parseJson(readSchema, req);
     const user = await requireUser();
+    const actor = await requireActor();
     const where = input.all === true
-      ? { ...bellWhere(user.id, (await currentSpace(await requireActor()))?.id), readAt: null }
+      ? { ...bellWhere(user.id, (await currentSpace(actor))?.id, actor.orgId), readAt: null }
       : input.ids?.length
         ? { id: { in: input.ids }, userId: user.id }
         : { id: input.id!, userId: user.id };

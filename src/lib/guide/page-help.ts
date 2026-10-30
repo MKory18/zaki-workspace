@@ -87,6 +87,14 @@ export const PAGE_HELP: readonly PageHelp[] = [
     article: "chat",
   },
   {
+    id: "space",
+    pattern: "/spaces/current",
+    whatKey: "guide.page.space.what",
+    nextKey: "guide.page.space.next",
+    guestNextKey: INTERNAL,
+    article: "spaces",
+  },
+  {
     id: "spaces",
     pattern: "/spaces",
     whatKey: "guide.page.spaces.what",
@@ -171,6 +179,14 @@ export const PAGE_HELP: readonly PageHelp[] = [
     nextKey: "guide.page.goals.next",
     tour: "shell",
     article: "ideas-goals",
+  },
+  {
+    id: "cards",
+    pattern: "/cards",
+    whatKey: "guide.page.cards.what",
+    nextKey: "guide.page.cards.next",
+    guestNextKey: "guide.page.cards.next_guest",
+    tour: "shell",
   },
   {
     id: "ideas",
