@@ -34,6 +34,8 @@ export type PrismaEnumName =
   | "TaskType"
   | "TaskDependencyKind"
   | "TaskAssignRequestStatus"
+  | "ReminderRepeat"
+  | "ReminderStatus"
   | "IdeaStatus"
   | "IntegrationType"
   | "OpportunityStage";
@@ -106,6 +108,8 @@ export const ENUM_KEYS: Record<EnumName, Readonly<Record<string, string>>> = {
   ]),
   TaskDependencyKind: own("TaskDependencyKind", ["BLOCKS", "BLOCKED_BY", "DUPLICATES"]),
   TaskAssignRequestStatus: own("TaskAssignRequestStatus", ["PENDING", "ACCEPTED", "RETURNED"]),
+  ReminderRepeat: own("ReminderRepeat", ["NONE", "DAILY", "WEEKLY", "MONTHLY"]),
+  ReminderStatus: own("ReminderStatus", ["PENDING", "FIRED", "DISMISSED"]),
   IdeaStatus: {
     NEW: "ideas.status.NEW",
     UNDER_REVIEW: "ideas.status.UNDER_REVIEW",
