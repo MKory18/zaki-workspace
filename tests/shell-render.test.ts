@@ -181,6 +181,17 @@ describe("the frame for the owner, on a project page", () => {
     expect(aside.split(">")[0]).toContain("zk-side-rule");
   });
 
+  it("the side menu's header wears the «Z» mark beside the lettering (the owner's screenshot, 2026-10-30: «اللوجو مش موجود»)", () => {
+    const aside = sidebar(html);
+    expect(aside).toContain("data-brand-mark");
+    expect(aside).toMatch(/data-brand-mark[^>]*aria-hidden="true"[^>]*><svg[^>]*viewBox="0 0 100 100"/);
+    // the mark sits inside the link home, before the lettering
+    const open = linkTo(aside, "/");
+    const link = aside.slice(aside.indexOf(open), aside.indexOf("</a>", aside.indexOf(open)));
+    expect(link.indexOf("data-brand-mark")).toBeGreaterThan(-1);
+    expect(link.indexOf("data-brand-mark")).toBeLessThan(link.indexOf("zk-wordmark"));
+  });
+
   it("the space you are in is written where «زاكي» was, in the same lettering (the owner's ask, 2026-10-25)", () => {
     const aside = sidebar(shell("OWNER", "/my-work", { id: "w1", name: "العمل", emoji: "🛠️" }));
     expect(aside).toMatch(/<span aria-hidden="true" class="zk-wordmark[^"]*"><bdi>العمل<\/bdi><\/span>/);
