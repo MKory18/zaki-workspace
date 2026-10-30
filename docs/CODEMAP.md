@@ -12,7 +12,7 @@
 2. **Who may call this door, and what does it call?** — all 207 routes, one row each (§4).
 3. **If I change a service, what breaks?** — every service and its callers (§6).
 4. **If I change a table, who writes it?** — every model and the code that writes it (§7).
-5. **If I flip a switch, what disappears?** — the 22 feature switches and every place that reads them (§8).
+5. **If I flip a switch, what disappears?** — the 23 feature switches and every place that reads them (§8).
 
 ## 1. The layers
 
@@ -518,6 +518,7 @@ before it. A switch is only honest if something reads it, so this is the list of
 | `ownerBoard` | 2 — `lib/nav/places.ts`, `server/policy/board.ts` |
 | `taskRewards` | 4 — `app/api/instant/route.ts`, `server/services/my-work.ts`, `server/services/reward-guard.ts`, `server/services/rewards.ts` |
 | `ownerAssistant` | 2 — `lib/nav/places.ts`, `server/services/owner-assistant-access.ts` |
+| `chatOutbox` | 1 — `server/chat/topics.ts` |
 
 ## 9. What this map noticed
 
