@@ -39,12 +39,15 @@ docker-compose.yml   app + worker + db + redis (not used yet) + migrate
 
 1. Start Postgres and create your `.env`:
    ```sh
-   docker compose up db -d          # Postgres 16 on localhost:5433
+   docker compose up db -d          # Postgres 16 on localhost:5433 (see the note below)
    cp .env.example .env
    ```
    In `.env` set `DATABASE_URL` (for the compose database:
    `postgresql://zaki:zaki_local@localhost:5433/zaki_workspace`) and `AUTH_SECRET`
    (a long random string: `openssl rand -hex 32`). `.env` is git-ignored — never commit it.
+   ⚠️ A local `docker-compose.override.yml` may remap the port (on the owner's machine another
+   app already holds 5433). 🔧 Read the port from `docker compose ps` and use that one in
+   `DATABASE_URL`; never guess.
 2. Install, apply the committed migrations, seed:
    ```sh
    npm install
@@ -125,6 +128,10 @@ Production is the Docker image of this repository, run by **Coolify** at
 (`.github/workflows/image.yml`) and pushed to `ghcr.io/<owner>/zaki-workspace`, so the
 production server never compiles anything. Nothing is deployed until Coolify is pointed at
 that image or its webhook is enabled (see the comments in `image.yml`).
+
+⚠️ Merging this repository does not by itself change what production runs. Until Coolify's
+Git Source says otherwise, production builds from the branch it was configured with.
+🔧 Check Coolify → the application → Git Source before saying a change is live.
 
 - The container applies the migrations (`prisma migrate deploy`) when it starts, then serves
   on port 3000. Put your reverse proxy (Traefik, Caddy, Coolify) in front of it.

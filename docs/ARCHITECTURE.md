@@ -45,7 +45,9 @@ Notification, AuditLog
 
 ## Localization
 
-- Dictionaries `src/lib/i18n/{ar,fr,en}.json`, provider sets `dir` + `lang`; Arabic default (RTL).
+- Dictionaries: Arabic only. `src/lib/i18n/ar.json` plus one small fragment per feature
+  (`ar.<feature>.json`, merged by `dict.ts`); the provider sets `dir` + `lang` (RTL). There is no
+  English or French dictionary: the interface is Arabic and every key must exist in Arabic.
 - Dates formatted via `Intl` per locale; layout uses logical CSS (`ms-`, `me-`) so RTL mirrors automatically.
 
 ## Security controls in place
