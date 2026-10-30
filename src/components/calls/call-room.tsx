@@ -5,12 +5,14 @@ import Link from "next/link";
 import { Track, type Participant } from "livekit-client";
 import { ct, ctCount } from "@/lib/chat/text";
 import { bestGrid } from "@/lib/calls/layout";
+import { ringbackMsLeft, startRing } from "@/lib/calls/ring-sound";
 import { Avatar } from "@/components/ui/avatar";
 import { useOptionalToast } from "@/components/ui/toast";
 import { callApi, type CallView } from "./call-api";
 import { CallInvite } from "./call-invite";
 import { nameOf, PersonPicture, Quality } from "./call-media";
 import { useOptionalCall, type CallApi } from "./call-provider";
+import { RING_FOR_MS } from "./call-ring";
 
 /**
  * The page of one call, as simple as a phone call (the owner's bar: «السلاسة وعدم التعقيد ولا الخطوات الزائدة»):
@@ -123,6 +125,21 @@ function CallScreen({ callId, call }: { callId: string; call: CallApi }) {
 
   // a tap on somebody's picture makes it the big one; a tap on the big one puts everybody back
   const [pinned, setPinned] = React.useState<string | null>(null);
+
+  // the caller hears the ring until somebody joins (or the 30 s the other side rings are over)
+  const aloneInCall = phase === "in" && call.everyone.length <= 1;
+  const startedAt = view?.startedAt ?? null;
+  React.useEffect(() => {
+    if (!aloneInCall || !startedAt) return;
+    const left = ringbackMsLeft({ alone: true, startedAt, now: Date.now(), forMs: RING_FOR_MS });
+    if (left <= 0) return;
+    const stop = startRing();
+    const timer = setTimeout(stop, left);
+    return () => {
+      clearTimeout(timer);
+      stop();
+    };
+  }, [aloneInCall, startedAt]);
 
   function copyLink() {
     if (!view) return;
