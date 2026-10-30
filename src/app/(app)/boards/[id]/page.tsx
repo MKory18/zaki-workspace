@@ -8,6 +8,8 @@ import { loadWorkScope, projectVisibleWhere } from "@/server/services/team-scope
 import { TASK_INCLUDE } from "@/server/services/tasks";
 import { canWriteInWorkspace } from "@/server/workspace-role";
 import { BoardView, type TaskCardData } from "@/components/board-view";
+import { actorFeatureOn } from "@/server/services/features";
+import { stepProgressFor } from "@/server/services/task-steps";
 
 /**
  * A board opens for whoever may open its space (`accessibleWorkspaceIds`: a row in the space, or the owner) and is
@@ -67,6 +69,9 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     }),
   ]);
 
+  // «٣ من ٥» on the cards: one grouped read for the whole board, and only while the company's switch is on
+  const progress = (await actorFeatureOn(actor, "taskSteps")) ? await stepProgressFor(tasks.map((t) => t.id)) : new Map();
+
   const taskData: TaskCardData[] = tasks.map((t) => ({
     id: t.id,
     key: `${org?.keyPrefix ?? "ZW"}-${t.number}`,
@@ -79,6 +84,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     assigneeNames: [...(t.assignee ? [t.assignee.name] : []), ...t.coAssignees.map((r) => r.user.name)],
     commentCount: t._count.comments,
     completed: t.completedAt != null,
+    steps: progress.get(t.id),
   }));
 
   return (

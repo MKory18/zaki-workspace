@@ -11,6 +11,8 @@ import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
 import { peopleLine } from "@/components/ui/people-multi";
 import { cn } from "@/lib/utils";
+import { StepProgressChip } from "@/components/task-steps/step-progress";
+import type { StepProgress } from "@/lib/task-steps";
 
 import Link from "next/link";
 export interface RowTask {
@@ -30,6 +32,8 @@ export interface RowTask {
   columnName?: string;
   /** The due day as the company reads it (`YYYY-MM-DD`) — what the date box shows; without it the row derives it in the company's zone. */
   dueDay?: string | null;
+  /** «٣ من ٥»: the checklist progress; absent when the task has no steps or the «الخطوات» switch is off. */
+  steps?: StepProgress;
 }
 
 export interface RowMember {
@@ -151,6 +155,7 @@ export function TaskRow({
             {columnLabel(task.columnName)}
           </span>
         ) : null}
+        <StepProgressChip progress={task.steps} />
       </Link>
 
       <span

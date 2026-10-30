@@ -11,6 +11,7 @@ import { TaskDetail } from "@/components/task-detail";
 import type { RequestBannerMode } from "@/components/task-assign-request-banner";
 import { isRequestTo } from "@/server/policy/assign-rank";
 import { pendingRequestsOf } from "@/server/services/task-assign";
+import { stepsOfTask } from "@/server/services/task-steps";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
   const user = await pageUser();
@@ -73,6 +74,12 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
         select: { id: true, name: true },
       })
     : [];
+
+  // «الخطوات»: the card exists only while the switch is on. Who may tick is who may edit the task, except that the owner
+  // reading a space he is not in does not (a tick carries a name and a time: silent reading leaves no trace)
+  const stepsOn = await actorFeatureOn(actor, "taskSteps");
+  const steps = stepsOn ? await stepsOfTask(task.id) : null;
+  const remindOn = await actorFeatureOn(actor, "reminders");
 
   // a request to give this task to somebody of a higher rank, and what the viewer may do with it
   // (a task may hold several: the main one and one per higher person beside the first; each is read for the viewer)
@@ -171,6 +178,8 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
           : null
       }
       milestones={milestonesOn ? projectMilestones : null}
+      steps={steps ? { initial: steps.steps, canEdit: canEdit && !(membership?.role === "OWNER" && !spaceRow) } : null}
+      remind={remindOn}
     />
   );
 }
