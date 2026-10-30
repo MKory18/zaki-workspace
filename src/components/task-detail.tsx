@@ -16,6 +16,9 @@ import { columnLabel, enumLabel, enumOptions } from "@/lib/i18n/enums";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 import { TaskLinks, type LinkCandidate } from "@/components/task-links";
+import { TaskSteps } from "@/components/task-steps/task-steps";
+import { RemindTaskButton } from "@/components/reminders/remind-dialog";
+import type { StepDto } from "@/lib/task-steps";
 import { TaskAssignRequestBanner, type RequestBannerMode } from "@/components/task-assign-request-banner";
 import { errText } from "@/components/department-tickets";
 import { PeopleMulti, peopleLine } from "@/components/ui/people-multi";
@@ -54,6 +57,8 @@ export function TaskDetail({
   links = null,
   milestones = null,
   assignRequests = [],
+  steps = null,
+  remind = false,
 }: {
   task: TaskDetailData;
   /** Whether the API would let this person change the task (see canWriteInWorkspace). */
@@ -68,6 +73,10 @@ export function TaskDetail({
   milestones?: { id: string; name: string }[] | null;
   /** The pending requests to give this task to somebody of a higher rank, as the viewer reads each (none for them: not listed). */
   assignRequests?: { id: string; mode: RequestBannerMode; fromName: string; toName: string }[];
+  /** «الخطوات»: null when the company switched it off (the card is not drawn); `canEdit` is the steps' own rule (never a guest, never the owner reading silently). */
+  steps?: { initial: StepDto[]; canEdit: boolean } | null;
+  /** «ذكّرني»: the button is drawn only while the company's switch is on. */
+  remind?: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -188,7 +197,12 @@ export function TaskDetail({
         <span dir="ltr" className="font-mono text-xs text-muted">{task.key}</span>
         <Badge>{columnLabel(task.status)}</Badge>
         <span className="text-xs text-fg-muted">{t("task.inBoard", { name: task.boardName })}</span>
-        {canEdit ? null : <span className="ms-auto text-xs text-muted">{t("task.readOnly")}</span>}
+        {remind ? (
+          <span className="ms-auto flex items-center gap-2">
+            <RemindTaskButton taskId={task.id} taskTitle={task.title} />
+          </span>
+        ) : null}
+        {canEdit ? null : <span className={cn("text-xs text-muted", remind ? undefined : "ms-auto")}>{t("task.readOnly")}</span>}
       </header>
 
       {assignRequests.map((r) => (
@@ -382,6 +396,8 @@ export function TaskDetail({
           {save.isPending ? <p className="text-xs text-muted">{t("common.saving")}</p> : null}
         </CardBody>
       </Card>
+
+      {steps ? <TaskSteps taskId={task.id} initial={steps.initial} canEdit={steps.canEdit} /> : null}
 
       {links ? <TaskLinks taskId={task.id} canEdit={canEdit} candidates={links.candidates} /> : null}
 

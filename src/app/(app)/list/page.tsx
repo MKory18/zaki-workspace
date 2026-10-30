@@ -13,6 +13,8 @@ import { getServerT } from "@/lib/i18n/server";
 import { SectionOffNotice, pageActor } from "@/app/(app)/_access";
 import { currentSpace } from "@/server/services/current-space";
 import { columnLabel, enumLabel } from "@/lib/i18n/enums";
+import { actorFeatureOn } from "@/server/services/features";
+import { stepProgressFor } from "@/server/services/task-steps";
 
 import Link from "next/link";
 const GROUPS = ["status", "priority", "project", "assignee"] as const;
@@ -76,6 +78,9 @@ export default async function ListPage({
           limit: 300,
         }),
       ).filter((task) => (assigneeId === "__none__" ? task.assigneeId === null : true));
+
+  // «٣ من ٥» on the rows: one grouped read for the page, and only while the company's «الخطوات» switch is on
+  const progress = (await actorFeatureOn(actor, "taskSteps")) ? await stepProgressFor(tasks.map((t) => t.id)) : new Map();
 
   // grouping still depends on the same rows; no requery
   interface GroupBucket {
@@ -167,7 +172,7 @@ export default async function ListPage({
                   {b.rows.map((task) => (
                     <TaskRow
                       key={task.id}
-                      task={task}
+                      task={{ ...task, steps: progress.get(task.id) }}
                       editable={ctx.editable}
                       members={members}
                       showProject={group !== "project"}

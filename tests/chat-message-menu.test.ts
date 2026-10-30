@@ -131,3 +131,32 @@ describe("«اعمل منها مهمة/تذكرة» in the menu", () => {
     expect(ids({ ...base, canMakeWork: true, deleted: true })).toEqual([]);
   });
 });
+
+describe("«ذكّرني» in the menu", () => {
+  const base: MessageMenuContext = { mine: false, deleted: false, kind: "TEXT", hasText: true, pinned: false, conversationKind: "TOPIC", canPost: true, canModerate: false, oversight: false };
+  const ids = (c: MessageMenuContext): MessageMenuId[] => menuFor(c).map((i) => i.id);
+
+  it("is offered only when the server says the person may (`canRemind`: the switch is on, not silent oversight)", () => {
+    expect(ids(base)).not.toContain("remind");
+    expect(ids({ ...base, canRemind: false })).not.toContain("remind");
+    expect(ids({ ...base, canRemind: true })).toContain("remind");
+    // on somebody else's message and on one's own, on a voice note too (a reminder carries its own words)
+    expect(ids({ ...base, canRemind: true, mine: true })).toContain("remind");
+    expect(ids({ ...base, canRemind: true, kind: "VOICE", hasText: false })).toContain("remind");
+  });
+
+  it("never on a deleted message, a system line, or in silent oversight, like every other entry", () => {
+    expect(ids({ ...base, canRemind: true, deleted: true })).toEqual([]);
+    expect(ids({ ...base, canRemind: true, kind: "SYSTEM" })).toEqual([]);
+    expect(ids({ ...base, canRemind: true, oversight: true })).toEqual([]);
+  });
+
+  it("sits before «حذف» (the dangerous one stays last), with its label in Arabic", async () => {
+    const order = messageMenuItems.map((i) => i.id);
+    expect(order.indexOf("remind")).toBeGreaterThan(-1);
+    expect(order.indexOf("remind")).toBeLessThan(order.indexOf("delete"));
+    expect(order[order.length - 1]).toBe("delete");
+    const { AR } = await import("@/lib/i18n/dict");
+    expect(AR["chatc.menu.remind"]).toMatch(/[؀-ۿ]/);
+  });
+});

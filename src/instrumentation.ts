@@ -56,4 +56,21 @@ export async function register(): Promise<void> {
       );
     }
   }
+
+  // ---- the in-app job runner («ذكّرني» and what follows) ----
+  // A tiny scheduler: every 30 s `runDueJobs(now)` under a Postgres advisory lock (one process works, the others skip).
+  // `startJobRunner` itself refuses during `next build` and in tests; a failure here never takes the boot down.
+  if (process.env.NEXT_PHASE !== "phase-production-build") {
+    try {
+      const { startJobRunner } = await import("./server/jobs/scheduler");
+      if (startJobRunner()) console.log(JSON.stringify({ event: "boot.jobs_started" }));
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          event: "boot.jobs_failed",
+          detail: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  }
 }

@@ -32,6 +32,8 @@ import cardPage from "./ar.card-page.json";
 import navOrder from "./ar.nav-order.json";
 import taskRequests from "./ar.task-requests.json";
 import quickChat from "./ar.quick-chat.json";
+import reminders from "./ar.reminders.json";
+import taskSteps from "./ar.task-steps.json";
 import cardsNav from "./ar.cards-nav.json";
 
 /**
@@ -76,5 +78,7 @@ export const AR: Record<string, string> = {
   ...navOrder,
   ...taskRequests,
   ...quickChat,
+  ...reminders,
+  ...taskSteps,
   ...cardsNav,
 };
