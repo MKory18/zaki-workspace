@@ -1,5 +1,6 @@
 "use client";
 
+import { ZakiMark } from "@/components/logo";
 import Link from "next/link";
 import { BookOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { InstallAppButton } from "@/components/pwa/install-hint";
@@ -72,7 +73,9 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "zk-side-rule relative hidden shrink-0 flex-col border-e border-border bg-surface-1 md:flex",
+        // `h-full min-h-0`: the menu is exactly as tall as the window, so the list of places in the middle (`min-h-0 flex-1
+        // overflow-y-auto`) is what gives way on a short window and scrolls, while the header and the block below it stay put
+        "zk-side-rule relative hidden h-full min-h-0 shrink-0 flex-col border-e border-border bg-surface-1 md:flex",
         // the fold animates only after the person has toggled it in this visit: the FIRST frame must
         // already be the right width, so a hard load never plays the 256px → 72px shrink
         animated && "transition-[width] duration-150",
@@ -84,16 +87,24 @@ export function Sidebar({
         <Link
           href="/"
           aria-label={brand}
-          className={cn("relative flex min-w-0 flex-col rounded-xl", collapsed && "mx-auto items-center")}
+          className={cn("relative flex min-w-0 items-center gap-2.5 rounded-xl", collapsed && "mx-auto justify-center")}
         >
-          <span aria-hidden="true" className={cn("zk-wordmark block max-w-full truncate py-0.5 leading-tight", brandSize)}>
-            <bdi>{collapsed ? (space?.emoji ?? Array.from(brand)[0] ?? "") : brand}</bdi>
+          {/* the project's mark: the «Z» with the star, drawn in code (components/logo.tsx), beside the lettering */}
+          <span data-brand-mark aria-hidden="true" className="shrink-0">
+            <ZakiMark className={collapsed ? "size-10" : "size-11"} />
           </span>
-          {orgName && !collapsed ? (
-            <span aria-hidden="true" className="mt-1.5 truncate text-xs font-semibold text-fg-muted">
-              <bdi>{orgName}</bdi>
+          {collapsed ? null : (
+            <span className="flex min-w-0 flex-col">
+              <span aria-hidden="true" className={cn("zk-wordmark block max-w-full truncate py-0.5 leading-tight", brandSize)}>
+                <bdi>{brand}</bdi>
+              </span>
+              {orgName ? (
+                <span aria-hidden="true" className="mt-1 truncate text-xs font-semibold text-fg-muted">
+                  <bdi>{orgName}</bdi>
+                </span>
+              ) : null}
             </span>
-          ) : null}
+          )}
         </Link>
       </div>
 
@@ -101,7 +112,7 @@ export function Sidebar({
         <SpaceSwitcher variant={collapsed ? "rail" : "sidebar"} isGuest={isGuest} current={space} canOverview={canOverview} />
       </div>
 
-      <nav aria-label={t("shell.places")} data-tour="places" className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <nav aria-label={t("shell.places")} data-tour="places" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
         <ul className="space-y-1">
           {nav.places.map((place) => {
             const active = place.key === current;
@@ -113,7 +124,8 @@ export function Sidebar({
                   aria-current={ariaCurrent(active, place.href, pathname)}
                   title={collapsed ? label : undefined}
                   className={cn(
-                    "flex h-11 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
+                    // a short window (a zoomed-in screen) takes a tighter row, so the whole list shows before it needs to scroll
+                    "flex h-11 items-center gap-3 rounded-xl px-3 text-sm transition-colors [@media(max-height:760px)]:h-9",
                     collapsed && "justify-center px-0",
                     active ? "bg-accent-2/10 font-semibold text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
                   )}
@@ -134,13 +146,15 @@ export function Sidebar({
         </ul>
       </nav>
 
+      {/* the pinned block: «دليل زاكي», the install button, the fold and the person. It never shrinks and never overlaps the list above it (`data-sidebar="footer"`) */}
+      <div data-sidebar="footer" className="relative z-10 shrink-0 bg-surface-1">
       <div className={cn("shrink-0 px-3 pb-1", collapsed && "px-2")}>
         <Link
           href="/guide"
           aria-current={ariaCurrent(pathname.startsWith("/guide"), "/guide", pathname)}
           title={collapsed ? t("shell.guide") : undefined}
           className={cn(
-            "flex h-11 items-center gap-2.5 rounded-xl border border-dashed border-accent-2 text-sm font-semibold text-fg transition-colors hover:bg-accent-2/10",
+            "flex h-11 items-center gap-2.5 rounded-xl border border-dashed border-accent-2 text-sm font-semibold text-fg transition-colors hover:bg-accent-2/10 [@media(max-height:760px)]:h-9",
             collapsed ? "justify-center px-0" : "px-3",
           )}
         >
@@ -156,7 +170,7 @@ export function Sidebar({
           aria-label={collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")}
           title={collapsed ? t("shell.sidebar.expand") : undefined}
           className={cn(
-            "flex h-11 w-full items-center gap-2.5 rounded-xl text-sm text-muted transition-colors hover:bg-surface-2 hover:text-fg",
+            "flex h-11 w-full items-center gap-2.5 rounded-xl text-sm text-muted transition-colors hover:bg-surface-2 hover:text-fg [@media(max-height:760px)]:h-9",
             collapsed ? "justify-center px-0" : "px-3",
           )}
         >
@@ -169,6 +183,7 @@ export function Sidebar({
         <div className={cn("min-w-0", collapsed ? "flex justify-center" : "flex-1")}>
           <AvatarMenu user={user} rank={rank} variant={collapsed ? "rail" : "sidebar"} />
         </div>
+      </div>
       </div>
     </aside>
   );

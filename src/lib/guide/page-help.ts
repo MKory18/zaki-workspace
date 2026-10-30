@@ -87,6 +87,14 @@ export const PAGE_HELP: readonly PageHelp[] = [
     article: "chat",
   },
   {
+    id: "space",
+    pattern: "/spaces/current",
+    whatKey: "guide.page.space.what",
+    nextKey: "guide.page.space.next",
+    guestNextKey: INTERNAL,
+    article: "spaces",
+  },
+  {
     id: "spaces",
     pattern: "/spaces",
     whatKey: "guide.page.spaces.what",

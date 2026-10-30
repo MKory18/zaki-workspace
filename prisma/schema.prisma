@@ -1072,6 +1072,7 @@ model Task {
   activities   TaskActivity[]
   dependencies TaskDependency[] @relation("Task")
   blocksTask   TaskDependency[] @relation("BlockedTask")
+  assignRequests TaskAssignRequest[]
   // Made from a chat message («اعمل منها مهمة»): the message it came from.
   sourceMessageId String?
   sourceMessage   ChatMessage? @relation("MessageTasks", fields: [sourceMessageId], references: [id], onDelete: SetNull)
@@ -1084,6 +1085,33 @@ model Task {
   @@index([assigneeId])
   @@index([creatorId])
   @@index([dueDate])
+}
+
+/// Giving a task to somebody of a HIGHER rank is a request, not an assignment (the owner's rule, 2026-10-30): the task
+/// stays as it was, this row waits for the addressed person, who accepts (the task is then theirs) or returns it with
+/// a written reason. No foreign key to the people on purpose (the same as `Notification`): the row is history and
+/// outlives a person's row; it dies with its task.
+enum TaskAssignRequestStatus {
+  PENDING
+  ACCEPTED
+  RETURNED
+}
+
+model TaskAssignRequest {
+  id         String                  @id @default(cuid())
+  orgId      String
+  taskId     String
+  fromUserId String
+  toUserId   String
+  status     TaskAssignRequestStatus @default(PENDING)
+  reason     String?
+  createdAt  DateTime                @default(now())
+  answeredAt DateTime?
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, status])
+  @@index([toUserId, status])
 }
 
 model TaskLabel {
