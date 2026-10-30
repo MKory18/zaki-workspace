@@ -8,7 +8,7 @@ import { browserStore } from "@/lib/guide/storage";
 import { locate, type NavModel, type NavRole } from "@/lib/nav/places";
 import type { NewActionKey } from "@/lib/nav/new-actions";
 import type { AvatarUser } from "@/components/shell/avatar-menu";
-import { DolphinMark } from "@/components/logo";
+import { ZakiMark } from "@/components/logo";
 import { BottomNav } from "@/components/shell/bottom-nav";
 import { PeopleDock } from "@/components/shell/people-dock";
 import { PlaceTabs } from "@/components/shell/place-tabs";

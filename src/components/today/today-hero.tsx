@@ -18,7 +18,7 @@ const PRIORITY_MARK: Partial<Record<string, string>> = {
  * «خلّصتها» (MissionDone). With nothing due the card greets instead, and the greeting is the heading.
  *
  * What is behind the card is one of the four places decoration may be drawn (src/lib/themes/decor.ts):
- *  - on «ليل» and «نهار» Amman at dusk (`.zk-hero-photo`, a CSS background: no request on another theme or
+ *  - on «ليل» and «نهار» the project's own dusk scene (`.zk-hero-photo`, a CSS background: no request on another theme or
  *    with decoration off) over the field of stars; on the other two themes their ornament, and the owner's
  *    `today-strip` picture once its file exists in public/brand/art.
  *  - 🔧 THE RULE, CHANGED ON PURPOSE (the owner adopted the mock-up, 24/10): the old strip held words only, no

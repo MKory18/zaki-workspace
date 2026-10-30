@@ -251,7 +251,7 @@ describe("the frame for the owner, on a project page", () => {
     expect(html).toMatch(/<main id="zk-main"[^>]*>.*محتوى الصفحة/s);
   });
 
-  it("gives every dolphin mark its own gradient id (the phone bar draws one; the side menu wears the wordmark now)", () => {
+  it("gives every «Z» mark its own gradient id (the phone bar draws one; the side menu wears the wordmark now)", () => {
     const ids = [...html.matchAll(/<linearGradient id="([^"]+)"/g)].map((m) => m[1]!);
     expect(ids.length).toBeGreaterThanOrEqual(1);
     expect(new Set(ids).size).toBe(ids.length);
