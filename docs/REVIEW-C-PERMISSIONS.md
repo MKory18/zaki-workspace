@@ -36,26 +36,25 @@ Each line is a database test that exists and passes today; none of them is a rea
 | Reports | `pages-access-capabilities.test.ts` | `/analytics` checks `reports.view` on the page and loads its data server-side; no route serves the same numbers without the check. |
 | Ideas | `scoping-ideas-tasks.test.ts` (re-read) | The `ideaAccessCtx` door only proves the caller is staff; every downstream read and write re-checks the target's space (`assertIdeaScope` → `accessibleWorkspaceIds`). Not a hole. |
 
-## 3. Found, written down, and NOT changed here
+## 3. Found here, and fixed afterwards
 
-⚠️ **C2 — `prices.view` is a box with nothing behind it.**
-`services/crm.ts:58` says it plainly: opportunity `value` is price data and hiding it from staff is
-`prices.view`'s job, «wired later — not here». Today `listOpportunities` and `getOpportunity`
-answer the amount to anybody holding `crm.view`, so the primary owner can untick «الأسعار» for a
-person and that person still reads every deal's value. External partners are not affected (a GUEST
-never reaches the CRM at all: 403 `guest.no_access`) — this is the staff box.
-🔧 The same shape as C1: a `seesPrices(ctx)` from the member row's `effectiveCapabilities`, then
-`value: null` in the DTO (and a refusal to write one) without it, and «—» on the CRM screens. It
-changes a payload, a screen and its Arabic strings, so it belongs in its own PR rather than this one.
+✅ **C2 — `prices.view` is a box with nothing behind it.** *Fixed: `services/crm.ts` reads
+`seesPrices(ctx)` from the member row's `effectiveCapabilities`, answers `value: null` without it,
+refuses to write an amount (403 `crm.prices_denied`) and the CRM screens show «—» in its place.
+What was wrong: `listOpportunities` and `getOpportunity` answered the amount to anybody holding
+`crm.view`, so unticking «الأسعار» for a person changed nothing. External partners were never
+affected (a GUEST never reaches the CRM at all: 403 `guest.no_access`) — this was the staff box.*
 
-⚠️ **C3 — four capabilities guard nothing in this repository yet.**
+⚠️ **C3 — four capabilities guard nothing in this repository yet.** *Partly fixed: the four are no
+longer silent. `members-ui.ts` (`SOON_CAPABILITIES`) lists them on «الأشخاص» as «قريبًا» instead of
+offering a switch that does nothing, and the list empties by itself as each phase wires one. The four
+still guard nothing — that stays true until the OMS data and the announcements land.*
 `cash.view`, `penalties.view` (the OMS's cash and penalties cards), `announce.send` and
-`escalation.configure` are switches on «الأشخاص» and defaults in the catalogue, and no route, page
-or service asks any of them: there is no cash card, no announcement sender and no thresholds screen
-here. Nobody is exposed by that — it is the opposite: the owner believes he closed a door that has
-no wall yet.
-🔧 When the OMS data lands, each read asks its box before it answers. Until then the honest fix is
-marking the four on the People screen as «قريباً» — a product decision, so it waits for the owner.
+`escalation.configure` are named in the catalogue, and no route, page or service asks any of them:
+there is no cash card, no announcement sender and no thresholds screen here. Nobody is exposed by
+that — it is the opposite: the owner could believe he closed a door that has no wall yet.
+🔧 When the OMS data lands, each read asks its box before it answers, and the switch moves from
+«قريبًا» to a real switch on the same screen.
 
 ✅ **C4 — Checked, and intended: a partner keeps the archive until the primary owner takes it.**
 A partner is an OWNER (his decision, 2026-10-26), so he holds `archive.view` like everything else,
