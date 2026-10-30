@@ -18,6 +18,8 @@ import { useI18n } from "@/lib/i18n";
 import { TaskLinks, type LinkCandidate } from "@/components/task-links";
 import { TaskSteps } from "@/components/task-steps/task-steps";
 import { RemindTaskButton } from "@/components/reminders/remind-dialog";
+import { RecurrenceControl } from "@/components/recurrence/recurrence-control";
+import type { RecurrenceDto } from "@/server/services/task-recurrence";
 import type { StepDto } from "@/lib/task-steps";
 import { TaskAssignRequestBanner, type RequestBannerMode } from "@/components/task-assign-request-banner";
 import { errText } from "@/components/department-tickets";
@@ -62,6 +64,7 @@ export function TaskDetail({
   rewardSlot = null,
   pinSlot = null,
   lockedFields = false,
+  recurrence = null,
 }: {
   task: TaskDetailData;
   /** Whether the API would let this person change the task (see canWriteInWorkspace). */
@@ -86,6 +89,8 @@ export function TaskDetail({
   pinSlot?: ReactNode;
   /** A reward task is the owner's: the title, the description, the day and the rest are read-only for everybody else (the server refuses too). */
   lockedFields?: boolean;
+  /** «تكرار»: null when the company switched «مهمة متكررة» off (nothing is drawn); `canEdit` is the series' own rule (never a guest, never the owner reading silently). */
+  recurrence?: { initial: RecurrenceDto | null; timeZone: string; canEdit: boolean } | null;
 }) {
   // «مهمة بمكافأة»: what the person may still change on a reward task is who holds it and the comments
   const fieldsEdit = canEdit && !lockedFields;
@@ -208,13 +213,14 @@ export function TaskDetail({
         <span dir="ltr" className="font-mono text-xs text-muted">{task.key}</span>
         <Badge>{columnLabel(task.status)}</Badge>
         <span className="text-xs text-fg-muted">{t("task.inBoard", { name: task.boardName })}</span>
-        {remind || pinSlot ? (
-          <span className="ms-auto flex items-center gap-2">
+        {remind || recurrence || pinSlot ? (
+          <span className="ms-auto flex items-start gap-2">
             {pinSlot}
+            {recurrence ? <RecurrenceControl taskId={task.id} initial={recurrence.initial} timeZone={recurrence.timeZone} canEdit={recurrence.canEdit} /> : null}
             {remind ? <RemindTaskButton taskId={task.id} taskTitle={task.title} /> : null}
           </span>
         ) : null}
-        {canEdit ? null : <span className={cn("text-xs text-muted", remind || pinSlot ? undefined : "ms-auto")}>{t("task.readOnly")}</span>}
+        {canEdit ? null : <span className={cn("text-xs text-muted", remind || recurrence || pinSlot ? undefined : "ms-auto")}>{t("task.readOnly")}</span>}
       </header>
 
       {assignRequests.map((r) => (

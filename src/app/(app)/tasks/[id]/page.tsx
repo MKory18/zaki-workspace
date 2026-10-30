@@ -16,6 +16,7 @@ import { defaultCurrencyOf, rewardLensFor } from "@/server/services/rewards";
 import { isRewardTaskStatus } from "@/lib/rewards";
 import { RewardCard, type RewardCardData } from "@/components/rewards/reward-card";
 import { PinButton } from "@/components/rewards/pin-button";
+import { recurrenceOfTask } from "@/server/services/task-recurrence";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
   const user = await pageUser();
@@ -84,6 +85,10 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   const stepsOn = await actorFeatureOn(actor, "taskSteps");
   const steps = stepsOn ? await stepsOfTask(task.id) : null;
   const remindOn = await actorFeatureOn(actor, "reminders");
+  // «تكرار»: drawn only while the switch is on; who may change it is who may edit the task, except that the owner reading a
+  // space he is not in does not (a series acts as the person who set it: silent reading leaves no trace)
+  const recurrenceOn = await actorFeatureOn(actor, "recurringTasks");
+  const recurrence = recurrenceOn ? await recurrenceOfTask(task.id, task.orgId) : null;
 
   // a request to give this task to somebody of a higher rank, and what the viewer may do with it
   // (a task may hold several: the main one and one per higher person beside the first; each is read for the viewer)
@@ -225,6 +230,7 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
         ) : null
       }
       pinSlot={lens.canPin ? <PinButton taskId={task.id} pinned={task.pinnedAt != null} /> : null}
+      recurrence={recurrence ? { initial: recurrence.recurrence, timeZone: recurrence.timeZone, canEdit: canEdit && !(membership?.role === "OWNER" && !spaceRow) } : null}
     />
   );
 }

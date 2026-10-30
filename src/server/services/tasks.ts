@@ -16,6 +16,7 @@ import {
   storeCoRequests,
   type AssignRequestInfo,
 } from "./task-assign";
+import { onTaskCompleted } from "./recurrence-spawn";
 
 export interface ActorContext {
   userId: string;
@@ -162,6 +163,11 @@ interface ScopedTask {
   rewardStatus: string | null;
 }
 
+/** Takes the task's row for the rest of the transaction (`FOR UPDATE`): what is read after this is what the last writer left. */
+async function lockTask(tx: Tx, taskId: string): Promise<void> {
+  await tx.$queryRaw`SELECT 1 FROM "Task" WHERE "id" = ${taskId} FOR UPDATE`;
+}
+
 async function assertTaskScope(taskId: string, orgId: string, tx: Tx): Promise<ScopedTask> {
   const task = await tx.task.findFirst({
     where: { id: taskId, orgId },
@@ -189,128 +195,140 @@ async function assertTaskScope(taskId: string, orgId: string, tx: Tx): Promise<S
 export async function createTask(actor: ActorContext, input: CreateTaskInput): Promise<TaskWithRequest> {
   // the tasks row of the person's grid (every way a task is born comes here: the board, a message, an idea)
   await assertMemberCan(actor, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
-  // «مهمة بمكافأة»: the owner only, with a due date and an amount: refused BEFORE anything is written
-  const rewardData = input.reward ? await prepareReward(actor, input.reward, input.dueDate ?? null) : null;
-  const made = await db.$transaction(async (tx) => {
-    // integrity: ids must chain to the actor's organization
-    const chain = await tx.project.findFirst({
-      where: {
-        id: input.projectId,
-        workspace: { id: input.workspaceId, organizationId: actor.orgId },
-      },
-      select: { id: true, workspaceId: true, teamId: true },
-    });
-    if (!chain) throw new NotFoundError("project.not_found");
-    // a project of a team takes tasks only from that team and the space's managers (the route, an idea
-    // converted to a task, a quick add: every caller comes through here)
-    if (chain.teamId && !(await userSeesProject(actor.userId, chain))) throw new NotFoundError("project.not_found");
+  const made = await db.$transaction((tx) => createTaskInTx(tx, actor, input));
+  await notifyCreatedRequests(made, actor);
+  return made;
+}
 
-    const board = await tx.board.findFirst({
-      where: { id: input.boardId, projectId: input.projectId },
-      include: { columns: { orderBy: { position: "asc" } } },
-    });
-    if (!board) throw new NotFoundError("board.not_found");
-    const column = board.columns.find((c) => c.id === input.columnId) ?? board.columns[0];
-    if (!column) throw new NotFoundError("board.no_columns");
-
-    if (input.labelIds?.length) {
-      const uniqueIds = [...new Set(input.labelIds)];
-      const count = await tx.label.count({
-        where: { orgId: actor.orgId, id: { in: uniqueIds } },
-      });
-      if (count !== uniqueIds.length) throw new ForbiddenError("label.invalid");
-    }
-
-    // P1: never allow assigning a task to a user outside the actor's org, nor to one who is no
-    // longer active in it (suspended or offboarded keep their row, but they do not count). By RANK: a person
-    // of a higher rank is asked, not assigned (task-assign.ts): the task is born without them and a request waits.
-    // «لمين» with more than one person: the first named is the task's own assignee, and every other person goes
-    // through the SAME judge on their own (`judgeCoAssignees`): a higher one is asked, the rest are added.
-    const extras = [...new Set(input.coAssigneeIds ?? [])];
-    let assigneeId = input.assigneeId ?? extras.shift() ?? null;
-    let requestTo: string | null = null;
-    // a team's task goes to somebody who sees that team's work (its members and the space's managers)
-    const assertInTeam = async (userId: string): Promise<void> => {
-      if (chain.teamId && !(await userSeesProject(userId, chain))) throw new ForbiddenError("assignee.not_in_team");
-    };
-    if (assigneeId) {
-      const verdict = await judgeAssignment(tx, actor, assigneeId, input.workspaceId);
-      await assertInTeam(assigneeId);
-      if (verdict === "request") {
-        requestTo = assigneeId;
-        assigneeId = null;
-      }
-    }
-    const first = requestTo ?? assigneeId;
-    const others = await judgeCoAssignees(
-      tx,
-      actor,
-      extras.filter((id) => id !== first),
-      input.workspaceId,
-    );
-    for (const userId of [...others.direct, ...others.request]) await assertInTeam(userId);
-    const coIds = others.direct;
-
-    const number = await nextTaskNumber(actor.orgId, tx);
-    const task = await tx.task.create({
-      data: {
-        number,
-        orgId: actor.orgId,
-        workspaceId: input.workspaceId,
-        projectId: input.projectId,
-        boardId: input.boardId,
-        columnId: column.id,
-        title: input.title,
-        description: input.description ?? null,
-        priority: input.priority ?? "NORMAL",
-        type: input.type ?? "TASK",
-        assigneeId,
-        dueDate: input.dueDate ?? null,
-        startDate: input.startDate ?? null,
-        creatorId: actor.userId,
-        position: await positionAt(column.id, undefined, tx),
-        // born in a done column is finished: the same rule as `moveTask`, or no counter would see it
-        completedAt: column.done ? new Date() : null,
-        ...(rewardData ?? {}),
-        coAssignees: coIds.length
-          ? { create: coIds.map((userId) => ({ userId })) }
-          : undefined,
-        labels: input.labelIds?.length
-          ? { create: [...new Set(input.labelIds)].map((labelId) => ({ labelId })) }
-          : undefined,
-      },
-      include: TASK_INCLUDE,
-    });
-    await tx.taskActivity.create({
-      data: {
-        taskId: task.id,
-        actorId: actor.userId,
-        event: "task.created",
-        meta: { columnId: column.id },
-      },
-    });
-    if (rewardData) {
-      await tx.auditLog.create({
-        data: {
-          action: REWARD_EVENTS.set,
-          actorId: actor.userId,
-          orgId: actor.orgId,
-          target: task.id,
-          workspaceId: input.workspaceId,
-          meta: { after: { status: "OPEN", amountMinor: rewardData.rewardAmountMinor, currency: rewardData.rewardCurrency } },
-        },
-      });
-    }
-    const assignRequest = requestTo
-      ? await storeAssignRequest(tx, { orgId: actor.orgId, taskId: task.id, fromUserId: actor.userId, toUserId: requestTo })
-      : null;
-    const coRequests = await storeCoRequests(tx, { orgId: actor.orgId, taskId: task.id, fromUserId: actor.userId, toUserIds: others.request });
-    return { ...task, assignRequest, coRequests };
-  });
-  // after the commit: the higher people hear about it (a failed bell never undoes the task)
+/** After the commit: the higher people hear about it (a failed bell never undoes the task). */
+export async function notifyCreatedRequests(made: TaskWithRequest, actor: ActorContext): Promise<void> {
   if (made.assignRequest) await notifyAssignRequest(made.id, actor.userId, made.assignRequest.toUserId);
   for (const r of made.coRequests) await notifyAssignRequest(made.id, actor.userId, r.toUserId);
-  return made;
+}
+
+/**
+ * The body of `createTask` on a transaction the CALLER holds, so a task can be born in the same commit as something
+ * else (a repeating task's next occurrence: src/server/services/recurrence-spawn.ts). The caller has already passed
+ * the section grid's `tasks.edit` door and sends the bell for a request AFTER its commit (`notifyCreatedRequests`).
+ * Every rule (the project chain, the team, the labels, the rank judge) is here, once.
+ */
+export async function createTaskInTx(tx: Tx, actor: ActorContext, input: CreateTaskInput): Promise<TaskWithRequest> {
+  // «مهمة بمكافأة»: the owner only, with a due date and an amount: refused BEFORE anything is written
+  const rewardData = input.reward ? await prepareReward(actor, input.reward, input.dueDate ?? null, tx) : null;
+  // integrity: ids must chain to the actor's organization
+  const chain = await tx.project.findFirst({
+    where: {
+      id: input.projectId,
+      workspace: { id: input.workspaceId, organizationId: actor.orgId },
+    },
+    select: { id: true, workspaceId: true, teamId: true },
+  });
+  if (!chain) throw new NotFoundError("project.not_found");
+  // a project of a team takes tasks only from that team and the space's managers (the route, an idea
+  // converted to a task, a quick add: every caller comes through here)
+  if (chain.teamId && !(await userSeesProject(actor.userId, chain))) throw new NotFoundError("project.not_found");
+
+  const board = await tx.board.findFirst({
+    where: { id: input.boardId, projectId: input.projectId },
+    include: { columns: { orderBy: { position: "asc" } } },
+  });
+  if (!board) throw new NotFoundError("board.not_found");
+  const column = board.columns.find((c) => c.id === input.columnId) ?? board.columns[0];
+  if (!column) throw new NotFoundError("board.no_columns");
+
+  if (input.labelIds?.length) {
+    const uniqueIds = [...new Set(input.labelIds)];
+    const count = await tx.label.count({
+      where: { orgId: actor.orgId, id: { in: uniqueIds } },
+    });
+    if (count !== uniqueIds.length) throw new ForbiddenError("label.invalid");
+  }
+
+  // P1: never allow assigning a task to a user outside the actor's org, nor to one who is no
+  // longer active in it (suspended or offboarded keep their row, but they do not count). By RANK: a person
+  // of a higher rank is asked, not assigned (task-assign.ts): the task is born without them and a request waits.
+  // «لمين» with more than one person: the first named is the task's own assignee, and every other person goes
+  // through the SAME judge on their own (`judgeCoAssignees`): a higher one is asked, the rest are added.
+  const extras = [...new Set(input.coAssigneeIds ?? [])];
+  let assigneeId = input.assigneeId ?? extras.shift() ?? null;
+  let requestTo: string | null = null;
+  // a team's task goes to somebody who sees that team's work (its members and the space's managers)
+  const assertInTeam = async (userId: string): Promise<void> => {
+    if (chain.teamId && !(await userSeesProject(userId, chain))) throw new ForbiddenError("assignee.not_in_team");
+  };
+  if (assigneeId) {
+    const verdict = await judgeAssignment(tx, actor, assigneeId, input.workspaceId);
+    await assertInTeam(assigneeId);
+    if (verdict === "request") {
+      requestTo = assigneeId;
+      assigneeId = null;
+    }
+  }
+  const first = requestTo ?? assigneeId;
+  const others = await judgeCoAssignees(
+    tx,
+    actor,
+    extras.filter((id) => id !== first),
+    input.workspaceId,
+  );
+  for (const userId of [...others.direct, ...others.request]) await assertInTeam(userId);
+  const coIds = others.direct;
+
+  const number = await nextTaskNumber(actor.orgId, tx);
+  const task = await tx.task.create({
+    data: {
+      number,
+      orgId: actor.orgId,
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      boardId: input.boardId,
+      columnId: column.id,
+      title: input.title,
+      description: input.description ?? null,
+      priority: input.priority ?? "NORMAL",
+      type: input.type ?? "TASK",
+      assigneeId,
+      dueDate: input.dueDate ?? null,
+      startDate: input.startDate ?? null,
+      creatorId: actor.userId,
+      position: await positionAt(column.id, undefined, tx),
+      // born in a done column is finished: the same rule as `moveTask`, or no counter would see it
+      completedAt: column.done ? new Date() : null,
+      ...(rewardData ?? {}),
+      coAssignees: coIds.length
+        ? { create: coIds.map((userId) => ({ userId })) }
+        : undefined,
+      labels: input.labelIds?.length
+        ? { create: [...new Set(input.labelIds)].map((labelId) => ({ labelId })) }
+        : undefined,
+    },
+    include: TASK_INCLUDE,
+  });
+  await tx.taskActivity.create({
+    data: {
+      taskId: task.id,
+      actorId: actor.userId,
+      event: "task.created",
+      meta: { columnId: column.id },
+    },
+  });
+  if (rewardData) {
+    await tx.auditLog.create({
+      data: {
+        action: REWARD_EVENTS.set,
+        actorId: actor.userId,
+        orgId: actor.orgId,
+        target: task.id,
+        workspaceId: input.workspaceId,
+        meta: { after: { status: "OPEN", amountMinor: rewardData.rewardAmountMinor, currency: rewardData.rewardCurrency } },
+      },
+    });
+  }
+  const assignRequest = requestTo
+    ? await storeAssignRequest(tx, { orgId: actor.orgId, taskId: task.id, fromUserId: actor.userId, toUserId: requestTo })
+    : null;
+  const coRequests = await storeCoRequests(tx, { orgId: actor.orgId, taskId: task.id, fromUserId: actor.userId, toUserIds: others.request });
+  return { ...task, assignRequest, coRequests };
 }
 
 export async function moveTask(
@@ -319,7 +337,10 @@ export async function moveTask(
   input: MoveTaskInput,
 ): Promise<TaskDTO> {
   await assertMemberCan(actor, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
-  return db.$transaction(async (tx) => {
+  let afterCommit: (() => Promise<void>) | null = null;
+  const moved = await db.$transaction(async (tx) => {
+    // one completion at a time per task: a second move into the done column waits here, then finds it already done
+    await lockTask(tx, taskId);
     const task = await assertTaskScope(taskId, actor.orgId, tx);
     const column = await tx.boardColumn.findFirst({
       where: { id: input.columnId, boardId: task.boardId },
@@ -349,8 +370,12 @@ export async function moveTask(
         },
       });
     }
+    // «مهمة متكررة» (عند الإنجاز): finishing an occurrence makes the next one, in this same commit (only on the transition)
+    if (column.done && task.completedAt == null) afterCommit = await onTaskCompleted(tx, { id: taskId, recurrenceId: updated.recurrenceId, dueDate: updated.dueDate });
     return updated;
   });
+  await (afterCommit as (() => Promise<void>) | null)?.();
+  return moved;
 }
 
 export interface TaskUpdateData {
@@ -518,7 +543,10 @@ export async function setTaskCompletion(
   complete: boolean,
 ): Promise<TaskDTO> {
   await assertMemberCan(actor, "tasks.edit", "section.edit_denied", { spaceGuestsPass: true });
-  return db.$transaction(async (tx) => {
+  let afterCommit: (() => Promise<void>) | null = null;
+  const result = await db.$transaction(async (tx) => {
+    // one completion at a time per task: a second click waits here, then finds the task already done and does nothing
+    await lockTask(tx, taskId);
     const task = await assertTaskScope(taskId, actor.orgId, tx);
     const target = await tx.boardColumn.findFirst({
       where: { boardId: task.boardId, done: complete },
@@ -546,8 +574,12 @@ export async function setTaskCompletion(
         meta: { columnId: target.id },
       },
     });
+    // «مهمة متكررة» (عند الإنجاز): finishing an occurrence makes the next one, in this same commit
+    if (complete) afterCommit = await onTaskCompleted(tx, { id: taskId, recurrenceId: updated.recurrenceId, dueDate: updated.dueDate });
     return updated;
   });
+  await (afterCommit as (() => Promise<void>) | null)?.();
+  return result;
 }
 
 // ---------- reads ----------

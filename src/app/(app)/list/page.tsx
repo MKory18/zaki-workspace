@@ -19,6 +19,7 @@ import { stepProgressFor } from "@/server/services/task-steps";
 import { NO_LENS, openRewardTotals, rewardLensFor } from "@/server/services/rewards";
 import { fmtReward } from "@/lib/rewards";
 import { fmtNumber } from "@/lib/format";
+import { recurringTaskIds } from "@/server/services/task-recurrence";
 
 import Link from "next/link";
 const GROUPS = ["status", "priority", "project", "assignee"] as const;
@@ -95,6 +96,9 @@ export default async function ListPage({
 
   // «٣ من ٥» on the rows: one grouped read for the page, and only while the company's «الخطوات» switch is on
   const progress = (await actorFeatureOn(actor, "taskSteps")) ? await stepProgressFor(tasks.map((t) => t.id)) : new Map();
+
+  // «🔁 متكررة» on the rows: one read for the page, and only while the company's «مهمة متكررة» switch is on
+  const recurring = (await actorFeatureOn(actor, "recurringTasks")) ? await recurringTaskIds(tasks.map((t) => t.id)) : new Set<string>();
 
   // grouping still depends on the same rows; no requery
   interface GroupBucket {
@@ -193,7 +197,7 @@ export default async function ListPage({
                   {b.rows.map((task) => (
                     <TaskRow
                       key={task.id}
-                      task={{ ...task, steps: progress.get(task.id), reward: task.reward ?? null, pinnedAt: task.pinnedAt ?? null }}
+                      task={{ ...task, steps: progress.get(task.id), recurring: recurring.has(task.id), reward: task.reward ?? null, pinnedAt: task.pinnedAt ?? null }}
                       editable={ctx.editable}
                       members={members}
                       showProject={group !== "project"}

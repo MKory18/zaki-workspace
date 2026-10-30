@@ -233,6 +233,8 @@ describe("every writer of a task is accounted for", () => {
     "src/server/services/accounts.ts": "offboarding hands the person's open work to somebody else: assignee only, by the owner or users.manage",
     "src/server/services/space-delete.ts": "the OWNER deletes a whole space with its work",
     "src/server/chat/make-work.ts": "links a new task to its message (sourceMessageId)",
+    "src/server/services/recurrence-spawn.ts": "links a task to its series (recurrenceId); an occurrence is a NEW plain task: a reward is never copied into it",
+    "src/server/services/task-recurrence.ts": "links a task to its series (recurrenceId): no locked field is touched",
   };
   it("a `task.update/updateMany/delete/deleteMany` outside the list is a new door: guard it with assertRewardEditable and add it above", () => {
     const found = new Set<string>();

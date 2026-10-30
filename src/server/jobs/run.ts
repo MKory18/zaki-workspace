@@ -1,5 +1,6 @@
 import { log } from "@/server/log";
 import { fireDueReminders, type RemindersRun } from "./reminders";
+import { fireDueRecurrences, type RecurrencesRun } from "./recurrence";
 
 /**
  * Every background job of the app, in one place: `runDueJobs(now)` runs whatever is due at `now`.
@@ -10,17 +11,25 @@ import { fireDueReminders, type RemindersRun } from "./reminders";
  */
 export interface JobsRun {
   reminders: RemindersRun | null;
+  /** «مهمة متكررة» (حسب الجدول): the tasks made for the series whose day has come. */
+  recurrences: RecurrencesRun | null;
   /** The names of the jobs that threw. */
   failed: string[];
 }
 
 export async function runDueJobs(now: Date = new Date()): Promise<JobsRun> {
-  const result: JobsRun = { reminders: null, failed: [] };
+  const result: JobsRun = { reminders: null, recurrences: null, failed: [] };
   try {
     result.reminders = await fireDueReminders(now);
   } catch (err) {
     result.failed.push("reminders");
     log.error("jobs.failed", { job: "reminders", message: err instanceof Error ? err.message : String(err) });
+  }
+  try {
+    result.recurrences = await fireDueRecurrences(now);
+  } catch (err) {
+    result.failed.push("recurrences");
+    log.error("jobs.failed", { job: "recurrences", message: err instanceof Error ? err.message : String(err) });
   }
   return result;
 }

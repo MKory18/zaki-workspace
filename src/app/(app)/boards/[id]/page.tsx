@@ -12,6 +12,7 @@ import { actorFeatureOn } from "@/server/services/features";
 import { stepProgressFor } from "@/server/services/task-steps";
 import { rewardLensFor } from "@/server/services/rewards";
 import { listBadgeStatus } from "@/lib/rewards";
+import { recurringTaskIds } from "@/server/services/task-recurrence";
 
 /**
  * A board opens for whoever may open its space (`accessibleWorkspaceIds`: a row in the space, or the owner) and is
@@ -75,6 +76,9 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
   const progress = (await actorFeatureOn(actor, "taskSteps")) ? await stepProgressFor(tasks.map((t) => t.id)) : new Map();
 
   const lens = await rewardLensFor(actor, board.project.workspace.id);
+  // «🔁 متكررة» on the cards: one read for the whole board, and only while the company's switch is on
+  const recurring = (await actorFeatureOn(actor, "recurringTasks")) ? await recurringTaskIds(tasks.map((t) => t.id)) : new Set<string>();
+
   const taskData: TaskCardData[] = tasks.map((t) => ({
     id: t.id,
     key: `${org?.keyPrefix ?? "ZW"}-${t.number}`,
@@ -93,6 +97,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
       ? { status: t.rewardStatus as string, amountMinor: t.rewardAmountMinor, currency: t.rewardCurrency }
       : null,
     pinned: lens.pins && t.pinnedAt != null,
+    recurring: recurring.has(t.id),
   }));
 
   return (
