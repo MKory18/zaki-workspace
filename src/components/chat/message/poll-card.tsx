@@ -51,7 +51,7 @@ export function PollCard({ messageId, poll: given, onPoll }: { messageId: string
     {poll.options.map(option => <li key={option.id}>
      <button type="button" role={poll.multiple ? "checkbox" : "radio"} aria-checked={option.mine} aria-label={ct("chatc.poll.option_aria", { text: option.text, count: option.count, percent: option.percent })} disabled={!poll.canVote || busy} onClick={() => void vote(choiceAfterTap(poll, option.id))} className={`relative flex min-h-11 w-full items-center gap-2 overflow-hidden rounded-lg border px-2.5 text-start text-sm disabled:cursor-default ${option.mine ? "border-accent" : "border-border"}`}>
       <span aria-hidden="true" data-poll-bar className="absolute inset-y-0 start-0 bg-accent/15" style={{ width: `${option.percent}%` }} />
-      <span aria-hidden="true" className={`relative flex size-4 shrink-0 items-center justify-center border border-border text-[10px] ${poll.multiple ? "rounded" : "rounded-full"} ${option.mine ? "bg-accent text-accent-fg" : ""}`}>{option.mine ? "✓" : ""}</span>
+      <span aria-hidden="true" className={`relative flex size-5 shrink-0 items-center justify-center border border-border text-xs ${poll.multiple ? "rounded" : "rounded-full"} ${option.mine ? "bg-accent text-accent-fg" : ""}`}>{option.mine ? "✓" : ""}</span>
       <span className="relative min-w-0 flex-1 break-words">{option.text}</span>
       <span className="relative shrink-0 text-xs tabular-nums text-fg-muted" dir="ltr">{option.count} · {option.percent}%</span>
      </button>
