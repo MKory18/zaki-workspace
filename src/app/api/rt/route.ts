@@ -38,6 +38,7 @@ const RT_KINDS: ReadonlySet<string> = new Set([
   "message.deleted",
   "message.reacted",
   "message.pinned",
+  "poll.voted",
   "conversation.read",
   "conversation.delivered",
   "conversation.changed",
