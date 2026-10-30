@@ -7,6 +7,7 @@ import { apiGet, apiPost } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { fmtTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { foldedIncludes } from "@/lib/search/arabic";
 import { Avatar } from "@/components/ui/avatar";
 
 /** One row of `GET /api/chat/directory?scope=company` (src/server/chat/directory.ts). */
@@ -195,7 +196,7 @@ export function QuickChat({ enabled = true, defaultOpen = false }: { enabled?: b
 
   const people = peopleQuery.data?.people ?? [];
   const needle = search.trim();
-  const filtered = needle ? people.filter((p) => p.user.name.includes(needle) || (p.user.jobTitle ?? "").includes(needle)) : people;
+  const filtered = needle ? people.filter((p) => foldedIncludes(p.user.name, needle) || foldedIncludes(p.user.jobTitle ?? "", needle)) : people;
   const messages = conversationQuery.data?.messages ?? [];
 
   return (
