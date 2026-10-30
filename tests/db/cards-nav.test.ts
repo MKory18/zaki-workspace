@@ -47,14 +47,15 @@ async function world() {
 beforeEach(() => logout());
 
 describe("the layout draws the map of the space the person is in", () => {
-  it("a space of «لوحات»: «اللوحات» then «الإدارة» (the plain member's «الفريق»), and nothing else", async () => {
+  it("a space of «لوحات»: «اللوحات» then «الإدارة» (the plain member's «الفريق» and «لوحتي»), and nothing else", async () => {
     const w = await world();
     await loginAs(w.member.id);
     enter(w.cardsSpace.id);
     const shell = await frame();
     expect(places(shell)).toEqual(["cards", "admin"]);
     expect(shell.props.nav.places[0]).toMatchObject({ href: "/cards", labelKey: "nav.place.cards", tabs: [] });
-    expect(shell.props.nav.places[1]).toMatchObject({ labelKey: "nav.tab.team", href: "/members" });
+    expect(shell.props.nav.places[1]).toMatchObject({ labelKey: "nav.place.admin", href: "/members" });
+    expect(shell.props.nav.places[1]?.tabs.map((t) => t.key)).toEqual(["team", "board"]);
   });
 
   it("a space of «تصنيع» is the same", async () => {
@@ -71,7 +72,7 @@ describe("the layout draws the map of the space the person is in", () => {
     enter(w.cardsSpace.id);
     const shell = await frame();
     expect(places(shell)).toEqual(["cards", "admin"]);
-    expect(shell.props.nav.places[1]?.tabs.map((t) => t.key)).toEqual(["team", "space", "reports", "automation", "telegram", "settings", "archive"]);
+    expect(shell.props.nav.places[1]?.tabs.map((t) => t.key)).toEqual(["team", "space", "board", "reports", "automation", "telegram", "settings", "archive"]);
   });
 
   it("an external partner in the space sees «اللوحات» alone", async () => {

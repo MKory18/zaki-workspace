@@ -24,6 +24,8 @@ import CallPage from "@/app/(app)/calls/[id]/page";
 import WatchPage from "@/app/(app)/watch/page";
 import WatchSessionPage from "@/app/(app)/watch/[id]/page";
 import ArchivePage from "@/app/(app)/archive/page";
+import OwnerBoardPage from "@/app/(app)/owner/page";
+import OwnerBoardPersonPage from "@/app/(app)/owner/people/[id]/page";
 import MyWorkPage from "@/app/(app)/my-work/page";
 import ProjectsPage from "@/app/(app)/projects/page";
 import ProjectPage from "@/app/(app)/projects/[id]/page";
@@ -99,7 +101,7 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25, and «نتفرّج سوا» (`/watch`, `/watch/[id]`, the owner's
  * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30), and `/cards` («اللوحات») with the page inside a card (`/cards/[id]`).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]", "/owner", "/owner/people/[id]"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -152,6 +154,8 @@ const PAGES: Record<string, PageCall> = {
   "/watch": () => WatchPage(),
   "/watch/[id]": (args) => WatchSessionPage({ params: idOf(args) }),
   "/archive": () => ArchivePage(),
+  "/owner": ({ searchParams }) => OwnerBoardPage({ searchParams }),
+  "/owner/people/[id]": (args) => OwnerBoardPersonPage({ params: idOf(args), searchParams: {} }),
   "/my-work": ({ searchParams }) => MyWorkPage({ searchParams }),
   "/projects": ({ searchParams }) => ProjectsPage({ searchParams }),
   "/projects/[id]": (args) => ProjectPage({ params: idOf(args) }),
@@ -360,6 +364,9 @@ function addressesOf(route: string, w: World): string[] {
     case "/cards/[id]":
       // a card of the team's space, one of the space shared with the partner, one of the space nobody is in, and one that is gone
       return [...spaces.map((s) => s.card.id), GONE].map((id) => `/cards/${id}`);
+    case "/owner/people/[id]":
+      // every staff rank (a guest is not a person of the board: 404 for the owner too), and one that is gone
+      return [w.owner.id, w.admin.id, w.lead.id, w.member.id, GONE].map((id) => `/owner/people/${id}`);
     case "/u/[id]":
       return [w.owner.id, w.admin.id, w.lead.id, w.member.id, w.guest.id, GONE].map((id) => `/u/${id}`);
     case "/guide/[slug]":
