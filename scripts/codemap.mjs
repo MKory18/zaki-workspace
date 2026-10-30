@@ -482,7 +482,7 @@ const directWriters = routes
       url: r.url,
       hits: r.writes,
       audit: /\baudit\s*\(/.test(src),
-      feed: /\btaskActivity\.|\bTaskActivity\b|\blogEvent\s*\(/.test(src),
+      feed: /\btaskActivity\.|\bTaskActivity\b|\blogEvent\s*\(|\bactivity\s*\(/.test(src),
     };
   });
 const appWriters = sources
