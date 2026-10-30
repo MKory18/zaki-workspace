@@ -34,6 +34,7 @@ import ListPage from "@/app/(app)/list/page";
 import CalendarPage from "@/app/(app)/calendar/page";
 import GoalsPage from "@/app/(app)/goals/page";
 import IdeasPage from "@/app/(app)/ideas/page";
+import CardsPage from "@/app/(app)/cards/page";
 import ProductionPage from "@/app/(app)/production/page";
 import DepartmentsPage from "@/app/(app)/departments/page";
 import TeamsPage from "@/app/(app)/teams/page";
@@ -95,9 +96,9 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * and admins' look over every space (`/spaces`, «كل المساحات»), «التذاكر» and «الحملات» as pages of their own
  * under «الشغل» (`/tickets`, `/campaigns`), one call (`/calls/[id]`: a conversation's call or a meeting's link) and a
  * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25, and «نتفرّج سوا» (`/watch`, `/watch/[id]`, the owner's
- * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30).
+ * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30), and `/cards` («اللوحات»).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -160,6 +161,7 @@ const PAGES: Record<string, PageCall> = {
   "/calendar": ({ searchParams }) => CalendarPage({ searchParams }),
   "/goals": () => GoalsPage(),
   "/ideas": () => IdeasPage(),
+  "/cards": () => CardsPage(),
   "/production": () => ProductionPage(),
   "/departments": () => DepartmentsPage(),
   "/teams": () => TeamsPage(),
