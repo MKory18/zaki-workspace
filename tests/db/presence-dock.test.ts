@@ -35,6 +35,8 @@ describe("GET /api/presence — the people dock", () => {
     const res = await call(presenceRoute.GET);
     expect(res.status).toBe(200);
     const people = res.json?.["people"] as { userId: string; name: string; online: boolean }[];
+    // the answer says who is asking, so the screen never offers a chat with oneself
+    expect(res.json?.["meId"]).toBe(team.member.id);
     const names = people.map((p) => p.name);
     expect(names).toContain("Workspace mate");
     expect(names).toContain("Away person");
