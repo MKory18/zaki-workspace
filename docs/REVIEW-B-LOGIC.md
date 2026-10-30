@@ -30,38 +30,42 @@ Proved in `tests/db/`:
 
 All three files failed before the change: 5 failing assertions, the other 4 regressions guards.
 
-## 2. Found, written down, and NOT changed here
+## 2. Found here, and fixed afterwards
 
-Each one is a real inconsistency. None is fixed in this PR: they need either a product decision or a
-migration, and a review PR that quietly changes five behaviours cannot be reviewed.
+Each one was a real inconsistency that this review PR did not touch: they needed either a product
+decision or a migration, and a review PR that quietly changes five behaviours cannot be reviewed.
+**All three below are now closed** — each in its own PR, with its own test — and the text under each
+one is kept as it was written so the next reader can see what was wrong, not just that it is fixed.
 
-⚠️ **B5 — A due date is stored as the noon of the BROWSER's zone.**
-`src/components/task-row.tsx:77` sends `new Date(\`${value}T12:00:00\`).toISOString()`: the day the
+✅ **B5 — A due date was stored as the noon of the BROWSER's zone.** *Fixed: `src/lib/due-day.ts`
+(`dueInstantForDay`, `parseDayText`), read by `api/tasks/route.ts`, `api/tasks/[id]/route.ts` and
+`api/instant/task/route.ts`; the browser now sends `YYYY-MM-DD`.*
+`src/components/task-row.tsx:77` sent `new Date(\`${value}T12:00:00\`).toISOString()`: the day the
 person picked, read at noon *where the browser is*. A person working from another country (or a
-phone whose clock is set elsewhere) stores a day the company does not live in, and the card shows
+phone whose clock is set elsewhere) stored a day the company does not live in, and the card showed
 yesterday or tomorrow.
-🔧 Send the picked day as plain `YYYY-MM-DD` and convert it once on the server with
-`zonedWallTime({…, hour: NOON_HOUR }, timeZone)` — exactly what `src/lib/today.ts:220` already does
+🔧 What it took: send the picked day as plain `YYYY-MM-DD` and convert it once on the server with
+`zonedWallTime({…, hour: NOON_HOUR }, timeZone)` — exactly what `src/lib/today.ts:220` already did
 for a quick add. One converter, one zone, no noon trick in the browser.
 
-⚠️ **B6 — Two overdue filters still compare with the wall clock.**
-`services/tasks.ts:441` (`listTasks`) uses `dueDate: { lt: new Date() }`, and
-`services/views.ts:318` falls back to `new Date()` when a caller passes `overdueOnly` without
-`overdueBefore`. The API accepts `?overdue=true` today, so the first is reachable; no screen sends
-it, so nothing visible is wrong yet. The moment anything does, that list disagrees with My Work.
-🔧 Give both the company's day start (`zonedDayStart(now, org.timezone)`), the same line as B3, and
-drop the `?? new Date()` fallback so a caller that forgets the line fails loudly instead of quietly
-answering a different question.
+✅ **B6 — Two overdue filters compared with the wall clock.** *Fixed: `services/tasks.ts`
+(`listTasks`) and `services/views.ts` both read `orgDayStart` now, and the `?? new Date()` fallback is
+gone — a caller that forgets the line gets the company's own day, never the container's clock.*
+`services/tasks.ts:441` (`listTasks`) used `dueDate: { lt: new Date() }`, and
+`services/views.ts:318` fell back to `new Date()` when a caller passed `overdueOnly` without
+`overdueBefore`. The API accepts `?overdue=true`, so the first was reachable; no screen sent
+it, so nothing visible was wrong yet. The moment anything did, that list disagreed with My Work.
+🔧 What it took: give both the company's day start (`orgDayStart(orgId, now)`), the same line as B3.
 
-⚠️ **B7 — The bell mixes companies for somebody who is in two of them.**
-`services/current-space.ts:108` `bellWhere` filters `{ userId, OR: [{ workspaceId }, { workspaceId: null }] }`.
-`Notification` has no organization column, so the personal rows (`workspaceId: null` — a welcome, a
-changed rank) of every company that person belongs to arrive in the same bell, with their links.
-The recipient is a member of both, so nothing reaches a stranger — but the screen says, in company
+✅ **B7 — The bell mixed companies for somebody who is in two of them.** *Fixed: `Notification.organizationId`
+(nullable, additive migration) plus `bellWhere` filtering on it.*
+`services/current-space.ts:108` `bellWhere` filtered `{ userId, OR: [{ workspaceId }, { workspaceId: null }] }`.
+`Notification` had no organization column, so the personal rows (`workspaceId: null` — a welcome, a
+changed rank) of every company that person belongs to arrived in the same bell, with their links.
+The recipient is a member of both, so nothing reached a stranger — but the screen said, in company
 A, «مرحباً بك في الشركة ب».
-🔧 A nullable `organizationId` on `Notification` in its own additive migration, backfilled from the
-space where there is one, then `bellWhere` filters on it. Until then this is a wording problem, not
-a leak: do not fix it in the same PR as a migration.
+🔧 What it took: a nullable `organizationId` on `Notification` in its own additive migration,
+backfilled from the space where there is one, then `bellWhere` filtering on it.
 
 ✅ **B8 — Checked, and correct: delivery marks and the notification count.**
 `chat/read-state.ts` writes `deliveredAt: new Date()`; that is an instant («when did this phone
