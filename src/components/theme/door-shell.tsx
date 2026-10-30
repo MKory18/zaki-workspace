@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DolphinMark } from "@/components/logo";
+import { ZakiMark } from "@/components/logo";
 import { ArtSlot } from "@/components/theme/art-slot";
 import { ThemeDecor } from "@/components/theme/theme-decor";
 import { useI18n } from "@/lib/i18n";
@@ -35,7 +35,7 @@ export function DoorShell({ children, width = "sm" }: { children?: ReactNode; wi
         <div className="flex flex-col items-center gap-2 text-center">
           {/* The mark says nothing the wordmark does not: hidden from assistive technology, so the name is read once. */}
           <span aria-hidden="true">
-            <DolphinMark className="size-14" />
+            <ZakiMark className="size-14" />
           </span>
           <p lang="en" dir="ltr" className="text-2xl font-bold tracking-tight text-fg">
             {t("app.name")}

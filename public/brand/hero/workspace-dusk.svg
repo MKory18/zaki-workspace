@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#050F1F"/>
+      <stop offset="0.55" stop-color="#0E3B52"/>
+      <stop offset="0.8" stop-color="#1A6382"/>
+      <stop offset="1" stop-color="#E3A64B"/>
+    </linearGradient>
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD23F" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#FFD23F" stop-opacity="0.25"/>
+    </linearGradient>
+    <g id="star8">
+      <rect x="-6" y="-6" width="12" height="12"/>
+      <rect x="-6" y="-6" width="12" height="12" transform="rotate(45)"/>
+    </g>
+  </defs>
+  <rect width="1280" height="640" fill="url(#sky)"/>
+  <g fill="#E6F1F4" opacity="0.8">
+    <use href="#star8" transform="translate(120 80) scale(0.7)"/>
+    <use href="#star8" transform="translate(330 150) scale(0.5)"/>
+    <use href="#star8" transform="translate(560 60) scale(0.9)"/>
+    <use href="#star8" transform="translate(860 120) scale(0.6)"/>
+    <use href="#star8" transform="translate(1090 70) scale(0.8)"/>
+    <use href="#star8" transform="translate(1200 190) scale(0.5)"/>
+    <use href="#star8" transform="translate(70 230) scale(0.4)"/>
+  </g>
+  <g fill="#FFD23F">
+    <use href="#star8" transform="translate(640 300) scale(3.2)"/>
+  </g>
+  <path d="M0 470 C 220 400 380 450 560 410 C 740 370 900 440 1280 380 L1280 640 L0 640 Z" fill="#0A2A40"/>
+  <path d="M0 520 C 260 470 420 520 640 490 C 860 460 1040 520 1280 470 L1280 640 L0 640 Z" fill="#071C2E"/>
+  <path d="M600 640 L640 330 L680 640 Z" fill="url(#road)"/>
+  <g stroke="#E6F1F4" stroke-opacity="0.9" stroke-width="3" fill="none">
+    <rect x="160" y="330" width="150" height="86" rx="10" fill="#0F2438" fill-opacity="0.85"/>
+    <path d="M182 362 h62 M182 384 h96" stroke-linecap="round"/>
+    <rect x="960" y="300" width="150" height="86" rx="10" fill="#0F2438" fill-opacity="0.85"/>
+    <path d="M982 332 h62 M982 354 h96" stroke-linecap="round"/>
+    <rect x="1030" y="410" width="150" height="86" rx="10" fill="#0F2438" fill-opacity="0.85"/>
+    <path d="M1052 442 h62 M1052 464 h96" stroke-linecap="round"/>
+  </g>
+  <g fill="none" stroke="#36B5CC" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M280 346 l10 10 l20 -22" transform="translate(-30 -10) scale(0.8)"/>
+  </g>
+</svg>
