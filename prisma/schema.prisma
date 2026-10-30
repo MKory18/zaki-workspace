@@ -862,6 +862,7 @@ model Workspace {
   teams         Team[]
   files         StoredFile[]
   projects      Project[]
+  taskRecurrences TaskRecurrence[]
   conversations Conversation[]
   goals         Goal[]
   routines      Routine[]
@@ -974,6 +975,7 @@ model Project {
   boards     Board[]
   tasks      Task[]
   milestones Milestone[]
+  taskRecurrences TaskRecurrence[]
 
   @@unique([workspaceId, systemKey])
   @@index([workspaceId])
@@ -1018,6 +1020,7 @@ model Board {
   project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   columns BoardColumn[]
   tasks   Task[]
+  taskRecurrences TaskRecurrence[]
 
   @@index([projectId])
 }
@@ -1110,6 +1113,12 @@ model Task {
   // «خطوات»: the short checklist of the task; «ذكّرني»: the reminders people set on it (both die with the task)
   steps          TaskStep[]
   reminders      Reminder[]
+  // «حساب وقت الشغل»: the time people logged on it. An entry OUTLIVES the task (the foreign key sets taskId to null).
+  timeEntries    TimeEntry[]
+  // «مهمة متكررة»: the series this task belongs to (every occurrence points at it), and the series it is the template of
+  recurrenceId   String?
+  recurrence     TaskRecurrence? @relation("RecurrenceTasks", fields: [recurrenceId], references: [id], onDelete: SetNull)
+  templateOf     TaskRecurrence? @relation("RecurrenceTemplate")
   // Made from a chat message («اعمل منها مهمة»): the message it came from.
   sourceMessageId String?
   sourceMessage   ChatMessage? @relation("MessageTasks", fields: [sourceMessageId], references: [id], onDelete: SetNull)
@@ -1122,6 +1131,44 @@ model Task {
   @@index([assigneeId])
   @@index([creatorId])
   @@index([dueDate])
+  @@index([recurrenceId])
+}
+
+enum RecurrenceMode {
+  ON_COMPLETE
+  SCHEDULE
+}
+
+/// «مهمة متكررة»: one repeating series. The template task is the one the person marked repeating; every occurrence is a
+/// REAL task made by `createTask` on behalf of `createdById` and points back here (`Task.recurrenceId`). `rule` is the
+/// zod-validated shape of src/lib/task-recurrence.ts; `mode`: ON_COMPLETE (the next one is made when the current one is
+/// finished) or SCHEDULE (the job runner makes it at `nextDueAt`, claimed with an UPDATE so it happens once). `endsAt` is
+/// the last instant of the day the series ends; `stoppedReason` says why an automatic stop happened (null: a person stopped it).
+model TaskRecurrence {
+  id             String         @id @default(cuid())
+  orgId          String
+  workspaceId    String
+  projectId      String
+  boardId        String
+  templateTaskId String         @unique
+  createdById    String
+  rule           Json
+  mode           RecurrenceMode
+  nextDueAt      DateTime?
+  endsAt         DateTime?
+  active         Boolean        @default(true)
+  stoppedReason  String?
+  lastCreatedAt  DateTime?
+  createdAt      DateTime       @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  board     Board     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  template  Task      @relation("RecurrenceTemplate", fields: [templateTaskId], references: [id], onDelete: Cascade)
+  tasks     Task[]    @relation("RecurrenceTasks")
+
+  @@index([active, mode, nextDueAt])
+  @@index([orgId])
 }
 
 /// «خطوات»: the short checklist inside a task (the owner, 2026-10-30). One row per step; `position` is fractional like the
@@ -1183,6 +1230,43 @@ model Reminder {
   @@index([userId, status])
   @@index([taskId])
   @@index([messageId])
+}
+
+/// «حساب وقت الشغل» (the owner, 2026-10-30): one row per stretch of work a person logged on a task. A TIMER row is opened
+/// by «ابدأ» (`stoppedAt` null = running) and closed by «وقّف» from the SERVER's clock: `seconds` is whole seconds and never
+/// a float. A MANUAL row is typed in (date, hours, minutes); its `startedAt` is noon of that day in the company's zone and
+/// `stoppedAt = startedAt + seconds`. At most ONE running row per person: the partial unique index
+/// "TimeEntry_one_running_per_user" (hand-written in the migration: Prisma cannot express a WHERE on an index) is the
+/// backstop of the service's per-person lock. The row keeps `taskTitle` (a snapshot) and survives its task: the foreign key
+/// sets `taskId` to null when the task row is hard-deleted; an archived task keeps its rows untouched. No foreign key to
+/// the person, the space or the company on purpose (history, like `Notification`). Every change is kept in `AuditLog`.
+/// A timer left running more than 12 hours is closed at `startedAt + 12h` by the job runner and marked `autoStopped`.
+enum TimeEntrySource {
+  TIMER
+  MANUAL
+}
+
+model TimeEntry {
+  id          String          @id @default(cuid())
+  orgId       String
+  workspaceId String
+  userId      String
+  taskId      String?
+  taskTitle   String
+  startedAt   DateTime
+  stoppedAt   DateTime?
+  seconds     Int             @default(0)
+  note        String          @default("")
+  source      TimeEntrySource
+  autoStopped Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startedAt])
+  @@index([taskId])
+  @@index([workspaceId, startedAt])
 }
 
 /// «اشتراك التقويم»: the private link a person adds ONCE to Google / Apple / Outlook calendar. The link carries a random

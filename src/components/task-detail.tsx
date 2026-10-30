@@ -18,6 +18,10 @@ import { useI18n } from "@/lib/i18n";
 import { TaskLinks, type LinkCandidate } from "@/components/task-links";
 import { TaskSteps } from "@/components/task-steps/task-steps";
 import { RemindTaskButton } from "@/components/reminders/remind-dialog";
+import { TaskTimeCard } from "@/components/time/task-time-card";
+import type { TaskTimeCard as TimeCardData } from "@/server/services/time-tracking";
+import { RecurrenceControl } from "@/components/recurrence/recurrence-control";
+import type { RecurrenceDto } from "@/server/services/task-recurrence";
 import type { StepDto } from "@/lib/task-steps";
 import { TaskAssignRequestBanner, type RequestBannerMode } from "@/components/task-assign-request-banner";
 import { errText } from "@/components/department-tickets";
@@ -59,6 +63,8 @@ export function TaskDetail({
   assignRequests = [],
   steps = null,
   remind = false,
+  time = null,
+  recurrence = null,
 }: {
   task: TaskDetailData;
   /** Whether the API would let this person change the task (see canWriteInWorkspace). */
@@ -77,6 +83,10 @@ export function TaskDetail({
   steps?: { initial: StepDto[]; canEdit: boolean } | null;
   /** «ذكّرني»: the button is drawn only while the company's switch is on. */
   remind?: boolean;
+  /** «الوقت»: null when the company switched it off or the person is an external partner (the card is not drawn). */
+  time?: TimeCardData | null;
+  /** «تكرار»: null when the company switched «مهمة متكررة» off (nothing is drawn); `canEdit` is the series' own rule (never a guest, never the owner reading silently). */
+  recurrence?: { initial: RecurrenceDto | null; timeZone: string; canEdit: boolean } | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -197,12 +207,13 @@ export function TaskDetail({
         <span dir="ltr" className="font-mono text-xs text-muted">{task.key}</span>
         <Badge>{columnLabel(task.status)}</Badge>
         <span className="text-xs text-fg-muted">{t("task.inBoard", { name: task.boardName })}</span>
-        {remind ? (
-          <span className="ms-auto flex items-center gap-2">
-            <RemindTaskButton taskId={task.id} taskTitle={task.title} />
+        {remind || recurrence ? (
+          <span className="ms-auto flex items-start gap-2">
+            {recurrence ? <RecurrenceControl taskId={task.id} initial={recurrence.initial} timeZone={recurrence.timeZone} canEdit={recurrence.canEdit} /> : null}
+            {remind ? <RemindTaskButton taskId={task.id} taskTitle={task.title} /> : null}
           </span>
         ) : null}
-        {canEdit ? null : <span className={cn("text-xs text-muted", remind ? undefined : "ms-auto")}>{t("task.readOnly")}</span>}
+        {canEdit ? null : <span className={cn("text-xs text-muted", remind || recurrence ? undefined : "ms-auto")}>{t("task.readOnly")}</span>}
       </header>
 
       {assignRequests.map((r) => (
@@ -398,6 +409,8 @@ export function TaskDetail({
       </Card>
 
       {steps ? <TaskSteps taskId={task.id} initial={steps.initial} canEdit={steps.canEdit} /> : null}
+
+      {time ? <TaskTimeCard taskId={task.id} initial={time} viewerId={currentUserId} /> : null}
 
       {links ? <TaskLinks taskId={task.id} canEdit={canEdit} candidates={links.candidates} /> : null}
 

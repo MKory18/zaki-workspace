@@ -290,6 +290,15 @@ export const PAGE_HELP: readonly PageHelp[] = [
     article: "company",
   },
   {
+    id: "time",
+    pattern: "/time",
+    whatKey: "guide.page.time.what",
+    nextKey: "guide.page.time.next",
+    guestNextKey: INTERNAL,
+    tour: "shell",
+    article: "places",
+  },
+  {
     id: "analytics",
     pattern: "/analytics",
     whatKey: "guide.page.analytics.what",

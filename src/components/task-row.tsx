@@ -12,6 +12,8 @@ import { useToast } from "@/components/ui/toast";
 import { peopleLine } from "@/components/ui/people-multi";
 import { cn } from "@/lib/utils";
 import { StepProgressChip } from "@/components/task-steps/step-progress";
+import { RunningChip } from "@/components/time/running-chip";
+import { RecurringBadge } from "@/components/recurrence/recurring-badge";
 import type { StepProgress } from "@/lib/task-steps";
 
 import Link from "next/link";
@@ -34,6 +36,10 @@ export interface RowTask {
   dueDay?: string | null;
   /** «٣ من ٥»: the checklist progress; absent when the task has no steps or the «الخطوات» switch is off. */
   steps?: StepProgress;
+  /** «الوقت شغّال»: the viewer's own timer runs on this task (only while the company's «حساب الوقت» switch is on). */
+  running?: boolean;
+  /** «🔁 متكررة»: the task belongs to a running series; absent when it does not or the company's «مهمة متكررة» switch is off. */
+  recurring?: boolean;
 }
 
 export interface RowMember {
@@ -156,6 +162,8 @@ export function TaskRow({
           </span>
         ) : null}
         <StepProgressChip progress={task.steps} />
+        <RunningChip running={task.running} />
+        <RecurringBadge recurring={task.recurring} />
       </Link>
 
       <span

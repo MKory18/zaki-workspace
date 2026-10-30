@@ -149,7 +149,8 @@ export const PLACES: readonly PlaceDef[] = [
     labelKey: "nav.place.work",
     icon: "work",
     requires: "everyone",
-    owns: ["/tasks"],
+    // /time is «تقرير الوقت»: linked from a task and from «وقتي اليوم», not one of the tabs (the menu and its order stay as they were)
+    owns: ["/tasks", "/time"],
     tabs: [
       { key: "my-work", href: "/my-work", labelKey: "nav.tab.myWork", requires: { workCapability: "tasks.view" } },
       { key: "projects", href: "/projects", labelKey: "nav.projects", requires: { workCapability: "projects.view" }, also: ["/boards"] },
