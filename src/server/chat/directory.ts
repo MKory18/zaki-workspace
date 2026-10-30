@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { onlineUserIds } from "@/server/realtime/presence";
 import type { DirectoryPersonDto } from "@/server/chat/dto";
 import { spacePeopleWhere } from "@/server/chat/space-people";
 
@@ -27,5 +28,53 @@ export async function chatDirectory(orgId: string, spaceId?: string | null): Pro
     jobTitle: r.user.jobTitle,
     role: r.role,
     avatarUrl: r.user.avatarUrl,
+  }));
+}
+
+/** A person of the company as the floating quick chat lists them. */
+export interface CompanyPersonDto extends DirectoryPersonDto {
+  /**
+   * One of the people of the space the viewer is in. A private message is opened only with somebody
+   * of the space the person is in (`openDm`, `chat.dm_not_in_space`): a person from another space is
+   * shown, marked, and never a button that does nothing.
+   */
+  inSpace: boolean;
+  /** At their screen right now (the same presence the dock and the chat's member pills read). */
+  online: boolean;
+}
+
+/**
+ * EVERYBODY IN THE COMPANY — the list behind the floating quick chat (the owner's ask, 2026-10-30:
+ * «بس تضغط عليها يظهور الاعضاء»). Unlike `chatDirectory`, which is the picker of the space the
+ * person is in, this one is the whole staff: the dock's roster with the space's own membership on
+ * each row, so the screen can keep the colleagues it cannot write to from the ones it can.
+ *
+ * Guests stay out (a guest is nobody's colleague and has no DMs at all); the viewer is included,
+ * the route drops them.
+ */
+export async function companyDirectory(orgId: string, viewerId: string, spaceId: string | null): Promise<CompanyPersonDto[]> {
+  const [rows, ofSpace, online] = await Promise.all([
+    db.organizationMember.findMany({
+      where: { organizationId: orgId, role: { not: "GUEST" }, status: "ACTIVE" },
+      select: { userId: true, role: true, user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    spaceId
+      // all-statuses: spacePeopleWhere already requires status "ACTIVE"
+      ? db.organizationMember.findMany({ where: spacePeopleWhere(orgId, spaceId), select: { userId: true } })
+      : Promise.resolve([] as { userId: string }[]),
+    onlineUserIds(orgId),
+  ]);
+  const space = new Set(ofSpace.map((r) => r.userId));
+  const atScreen = new Set(online);
+  return rows.map((r) => ({
+    userId: r.userId,
+    name: r.user.name,
+    jobTitle: r.user.jobTitle,
+    role: r.role,
+    avatarUrl: r.user.avatarUrl,
+    // no space at all (a company without spaces): the DM is opened company-wide, so nobody is fenced off
+    inSpace: spaceId ? space.has(r.userId) : true,
+    online: r.userId === viewerId || atScreen.has(r.userId),
   }));
 }
