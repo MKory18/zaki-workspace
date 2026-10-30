@@ -2,7 +2,7 @@ import { z } from "zod";
 import { memberCan } from "@/server/policy/actor";
 import { db } from "@/server/db";
 import { ForbiddenError, NotFoundError, ValidationError, type OrgAccessContext } from "@/server/auth";
-import { canModerate, canPost, canRead, loadConversationFacts, loadOrgFacts } from "@/server/policy/conversation";
+import { canModerate, canPost, canRead, loadConversationFacts, loadOrgFacts, type ConversationFacts } from "@/server/policy/conversation";
 import { emitRealtime } from "@/server/realtime/emit";
 import { isSpaceAdmin } from "@/server/policy/conversation";
 import { writeSystemMessage } from "@/server/chat/system";
@@ -387,6 +387,7 @@ export async function conversationDetail(
       canCall: (await memberCan(ctx, "calls.edit", { spaceGuestsPass: true })) === true,
       canMakeTask: (await memberCan(ctx, "tasks.edit")) === true,
       canMakeTicket: (await memberCan(ctx, "tickets.edit")) === true,
+      canMentionAll: facts.kind === "TOPIC" && org!.role !== "GUEST" && canPost(facts, org!, { ownerJoined: facts.viewerIsMember }),
       id: ctx.userId,
     },
     pinnedMessages: (
@@ -398,6 +399,7 @@ export async function conversationDetail(
       })
     ).map((m) => ({ id: m.id, authorName: m.author.name, preview: previewOf(m.body, m.deletedAt) })),
     members,
+    mentionables: org!.role === "GUEST" ? members : await mentionablesOf(ctx.orgId, facts, conv.spaceId ?? null, members, online),
     messages: messages.reverse(), // oldest first in the payload
     // topics and groups: each person's avatar sits under the last message they read (DMs have ticks)
     readers:
@@ -446,3 +448,28 @@ export async function guardTopic(ctx: OrgAccessContext, conversationId: string) 
   return { facts, org };
 }
 
+
+/**
+ * The people the composer offers for «@»: whoever the topic reaches. An open topic reaches its whole space, and
+ * a space member who never opened the topic has no row in it, so the rows alone would leave them out of the list.
+ * A restricted topic, a DM and a group reach their own rows. The OWNER is offered only when he is one of them.
+ * A GUEST is never given the space's people (no staff directory, no pictures): the caller passes them the rows only.
+ */
+async function mentionablesOf(
+  orgId: string,
+  facts: ConversationFacts,
+  spaceId: string | null,
+  rows: MemberDto[],
+  online: Set<string>,
+): Promise<MemberDto[]> {
+  if (facts.kind !== "TOPIC" || facts.restricted || !spaceId) return rows;
+  const spaceRows = await db.workspaceMember.findMany({
+    where: { workspaceId: spaceId, user: { memberships: { some: { organizationId: orgId, status: "ACTIVE" } } } },
+    select: { role: true, user: { select: { id: true, name: true, avatarUrl: true } } },
+  });
+  const seen = new Set(rows.map((m) => m.id));
+  const extra: MemberDto[] = spaceRows
+    .filter((m) => !seen.has(m.user.id))
+    .map((m) => ({ id: m.user.id, name: m.user.name, online: online.has(m.user.id), role: m.role, avatarUrl: m.user.avatarUrl }));
+  return [...rows, ...extra];
+}

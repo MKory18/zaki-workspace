@@ -9,6 +9,8 @@
   "chatc.message_failed": "تعذّر إرسال الرسالة، حاول مرة أخرى",
   "chatc.upload_failed": "تعذّر رفع الملف، حاول مرة أخرى",
   "chatc.mention": "اختر عضوًا للإشارة إليه",
+  "chatc.mention_all_hint": "ينبّه كل اللي بالموضوع",
+  "chatc.mention_me": "ذكروك بهالرسالة",
   "chatc.reply_to": "رد على {name}: {body}",
   "chatc.cancel_reply": "إلغاء الرد",
   "chatc.editing": "تعديل الرسالة",

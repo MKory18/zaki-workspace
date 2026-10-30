@@ -173,11 +173,15 @@ export interface ConversationDto {
     /** with `canMakeWork`: the tasks / tickets row's «يضيف ويعدّل» box (absent: yes) */
     canMakeTask?: boolean;
     canMakeTicket?: boolean;
+    /** may write «@الكل» here: a topic, not a guest, and may post */
+    canMentionAll?: boolean;
     id?: string;
   };
   /** the pinned messages, newest first (the bar on top of the conversation) */
   pinnedMessages?: { id: string; authorName: string; preview: string | null }[];
   members?: MemberDto[];
+  /** who the composer offers for «@»: the topic's whole audience (an open topic: its space), not only the rows it has */
+  mentionables?: MemberDto[];
   messages: MessageDto[];
   readers: ReaderDto[];
   /** the company's «شكل الرسائل الحديث» switch, read on the server (`src/lib/features.ts`); absent: on */
