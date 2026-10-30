@@ -27,5 +27,6 @@
   "chat.topic_has_messages": "فيه رسائل، فما بينحذف. أرشفه بدال ما تحذفه.",
   "chat.topic_archived": "الموضوع مؤرشف. رجّعه من الأرشيف أول.",
   "chat.work_not_from_this": "هالرسالة ما بتصير مهمة ولا تذكرة.",
-  "chat.e.owner_only": "هذا الإجراء لمالك الشركة فقط."
+  "chat.e.owner_only": "هذا الإجراء لمالك الشركة فقط.",
+  "chat.e.mention_all_denied": "«@الكل» ما بتنفع للزائر."
 }

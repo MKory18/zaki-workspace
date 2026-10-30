@@ -15,7 +15,8 @@ import { emitRealtime } from "@/server/realtime/emit";
 import { writeSystemMessage } from "@/server/chat/system";
 import { claimUploads, MAX_ATTACHMENTS_PER_MESSAGE } from "@/server/chat/attachments";
 import { presentMessage, previewOf, type Viewer } from "@/server/chat/redact";
-import { notifyMessageToAudience, notifyCandidates, readersAmong, rewriteMessagePreviews, DELETED_PREVIEW } from "@/server/chat/notify";
+import { notifyMessageToAudience, notifyCandidates, readersAmong, rewriteMessagePreviews, topicAudienceIds, DELETED_PREVIEW } from "@/server/chat/notify";
+import { MENTION_ALL_ID, mentionsAll } from "@/lib/chat/conversation/mentions";
 import { FixedWindowLimiter, RateLimitedError } from "@/server/rate-limit";
 import type { Prisma } from "@prisma/client";
 import type { MessageDto } from "@/server/chat/dto";
@@ -40,6 +41,8 @@ export const sendSchema = z
     body: z.string().max(MAX_BODY).optional(),
     replyToId: z.string().min(1).max(64).optional(),
     mentions: z.array(z.string().min(1)).max(50).optional(),
+    // «@الكل»: honoured only with the word in the body, in a topic, for somebody who is not a guest
+    mentionAll: z.boolean().optional(),
     attachmentIds: z.array(z.string().min(1)).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
     clientId: z.string().min(1).max(64).optional(),
     // a voice note: exactly one recorded audio attachment (the schema used to drop this flag, so
@@ -120,6 +123,10 @@ export async function sendMessage(
   // mentions must be people who may read the conversation (the policy decides, not a member row:
   // an open topic's audience is its whole space, and a row left behind by a removal counts for nothing)
   const mentionIds = await readersAmong(conversationId, [...new Set(input.mentions ?? [])]);
+  // «@الكل»: everybody the topic reaches (a guest may not, and it means nothing in a DM or a group)
+  const wantsAll = input.mentionAll === true && facts.kind === "TOPIC" && mentionsAll(body);
+  if (wantsAll && org.role === "GUEST") throw new ForbiddenError("chat.e.mention_all_denied");
+  const allIds = wantsAll ? await readersAmong(conversationId, await topicAudienceIds(facts, conversationId)) : [];
 
   // idempotent send: the same clientId of the same author returns the same message
   if (input.clientId) {
@@ -141,7 +148,7 @@ export async function sendMessage(
         body,
         kind,
         replyToId: input.replyToId ?? null,
-        mentions: mentionIds,
+        mentions: wantsAll ? [...mentionIds, MENTION_ALL_ID] : mentionIds,
         ...(input.clientId ? { clientId: input.clientId } : {}),
         ...(videoAtSec !== null ? { videoAtSec } : {}),
       },
@@ -172,7 +179,7 @@ export async function sendMessage(
 
   // my own fresh DM message starts at ✓ (sent): the screen shows it from this answer before any refetch
   const dto = presentMessage(created, withViewer(viewerOf(facts, org), ctx.userId), facts.kind === "DM" ? "sent" : undefined);
-  await notifyAfterSend(ctx, facts, conversationId, mentionIds, input.replyToId ?? null, dto);
+  await notifyAfterSend(ctx, facts, conversationId, mentionIds, allIds, input.replyToId ?? null, dto);
   return dto;
 }
 
@@ -182,11 +189,12 @@ async function notifyAfterSend(
   facts: ConversationFacts,
   conversationId: string,
   mentionIds: string[],
+  allIds: string[],
   replyToId: string | null,
   dto: MessageDto,
 ): Promise<void> {
   const parent = replyToId ? await db.chatMessage.findUnique({ where: { id: replyToId }, select: { authorId: true } }) : null;
-  const audience = await readersAmong(conversationId, notifyCandidates(facts, ctx.userId, mentionIds, parent?.authorId ?? null));
+  const audience = await readersAmong(conversationId, notifyCandidates(facts, ctx.userId, [...mentionIds, ...allIds], parent?.authorId ?? null));
   const isDm = facts.kind === "DM";
   await notifyMessageToAudience({
     conversationId,
@@ -195,6 +203,8 @@ async function notifyAfterSend(
     kind: isDm ? "DM" : "TOPIC",
     title: isDm ? dto.authorName : dto.authorName,
     messageId: dto.id,
+    mentionedIds: mentionIds,
+    allIds: allIds.filter((id) => !mentionIds.includes(id)),
     preview: dto.body ? dto.body.slice(0, 140) : "أرسل مرفقًا",
   });
 }

@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { MENTION_ALL_ID } from "@/lib/chat/conversation/mentions";
 import { isFeatureOn } from "@/server/services/features";
 import type { OrgAccessContext } from "@/server/auth";
 import { loadOrgFacts, isSpaceAdmin } from "@/server/policy/conversation";
@@ -109,7 +110,7 @@ export async function chatHome(ctx: OrgAccessContext, opts: { spaceId?: string |
             ? db.chatMessage.count({ where: { ...countable, createdAt: { gt: lastRead } } })
             : db.chatMessage.count({ where: countable }),
         lastRead && !archived
-          ? db.chatMessage.count({ where: { ...countable, createdAt: { gt: lastRead }, mentions: { has: ctx.userId } } })
+          ? db.chatMessage.count({ where: { ...countable, createdAt: { gt: lastRead }, mentions: { hasSome: [ctx.userId, MENTION_ALL_ID] } } })
           : 0,
       ]);
 

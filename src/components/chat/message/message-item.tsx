@@ -6,6 +6,7 @@ import { interpolate } from "@/lib/i18n/interpolate";
 import { fmtTime } from "@/lib/format";
 import { systemSentence } from "@/lib/chat/system-sentence";
 import { ct } from "@/lib/chat/text";
+import { isMentioned, splitMentions } from "@/lib/chat/conversation/mentions";
 import { VoicePlayer } from "@/components/chat/message/voice-player";
 import { MessageMenu, LONG_PRESS_MS } from "@/components/chat/message/message-menu";
 import type { MessageMenuContext, MessageMenuId } from "@/components/chat/message/message-menu-registry";
@@ -25,6 +26,10 @@ import type { MessageMenuContext, MessageMenuId } from "@/components/chat/messag
  * message-menu-registry.ts, which mirrors the server's rules.
  */
 export interface MessageItemProps { message: MessageDto; canModerate: boolean; oversight?: boolean; readers?: ReaderDto[]; conversationKind?: "DM" | "GROUP" | "TOPIC"; canPost?: boolean; canMakeWork?: boolean; canMakeTask?: boolean; canMakeTicket?: boolean; onReact: (message: MessageDto, emoji: string) => void; onAction: (message: MessageDto, id: MessageMenuId) => void;
+  /** the names «@» can point at here (the people of the conversation and «الكل»): their mentions are drawn highlighted */
+  mentionNames?: string[];
+  /** me: a message that mentions me (by name or «@الكل») is marked for me */
+  meId?: string;
   /** the company switched «شكل الرسائل الحديث» off: draw the older bubble */
   classic?: boolean;
   /** a «صارت مهمة/تذكرة» chip was tapped */
@@ -35,7 +40,7 @@ const MAX_READER_AVATARS = 5;
 export function MessageTicks({status}:{status:NonNullable<MessageDto["status"]>}){const label=AR[`chatc.tick.${status}`]??"";return <span data-ticks={status} className={`inline-flex items-center text-xs ${status==="read"?"text-info":"text-fg-muted"}`}><span aria-hidden="true">{status==="sent"?"✓":"✓✓"}</span><span className="sr-only">{label}</span></span>;}
 /** The small row of people whose newest read message is this one (topics and groups), five at most and «+n». */
 export function ReaderRow({readers}:{readers:ReaderDto[]}){if(!readers.length)return null;const shown=readers.slice(0,MAX_READER_AVATARS);const more=readers.length-shown.length;const names=shown.map(r=>r.name).join(ct("chatc.list_sep"))+(more>0?` ${interpolate(AR["chatc.readers_more"]??"",{count:more})}`:"");return <div data-readers className="mt-1 flex justify-end gap-0.5" role="img" aria-label={interpolate(AR["chatc.readers"]??"",{names})}>{shown.map(r=><Avatar key={r.userId} name={r.name} src={r.avatarUrl} className="h-6 w-6"/>)}{more>0&&<span aria-hidden="true" className="self-center text-xs text-fg-muted">+{more}</span>}</div>;}
-export function MessageItem({message,canModerate,oversight=false,readers=[],conversationKind="TOPIC",canPost=true,canMakeWork=false,canMakeTask,canMakeTicket,classic=false,onReact,onAction,onOpenWork}: MessageItemProps) {
+export function MessageItem({message,canModerate,oversight=false,readers=[],conversationKind="TOPIC",canPost=true,canMakeWork=false,canMakeTask,canMakeTicket,classic=false,mentionNames=[],meId,onReact,onAction,onOpenWork}: MessageItemProps) {
  const [sheetOpen,setSheetOpen]=React.useState(false);
  const press=React.useRef<{timer:ReturnType<typeof setTimeout>;x:number;y:number}|null>(null);
  const canAct=!oversight&&!message.deleted&&message.kind!=="SYSTEM";
@@ -48,13 +53,15 @@ export function MessageItem({message,canModerate,oversight=false,readers=[],conv
  const onPointerMove=(e:React.PointerEvent)=>{const p=press.current;if(p&&Math.hypot(e.clientX-p.x,e.clientY-p.y)>10)endPress();};
  const time=fmtTime(message.createdAt);
  // the bubble: mine in the accent, the others' on the surface; the corner nearest its author stays tight
- const bubble=`max-w-[85%] min-w-0 break-words rounded-2xl border px-3 py-2 [@media(hover:none)]:select-none sm:max-w-[75%] ${message.mine?"border-accent/30 bg-accent/10 rounded-ee-md":"border-border bg-surface rounded-es-md"}`;
+ const mentionsMe=!message.mine&&!message.deleted&&Boolean(meId)&&isMentioned(message.mentions,meId as string);
+ const bubble=`max-w-[85%] min-w-0 break-words rounded-2xl border px-3 py-2 [@media(hover:none)]:select-none sm:max-w-[75%] ${message.mine?"border-accent/30 bg-accent/10 rounded-ee-md":mentionsMe?"border-warn/50 bg-warn/10 rounded-es-md":"border-border bg-surface rounded-es-md"}`;
  const timeLine=<span className="mt-1 flex items-center justify-end gap-1.5 text-xs text-fg-muted">{message.edited&&<span>{ct("chatc.edited")}</span>}{message.pinned&&<span>{ct("chatc.pinned")}</span>}<time dateTime={message.createdAt} dir="ltr" className="tabular-nums">{time}</time>{message.mine&&message.status&&!message.deleted&&<MessageTicks status={message.status}/>}</span>;
  const menu=canAct?<MessageMenu context={context} onAction={id=>onAction(message,id)} onReact={emoji=>onReact(message,emoji)} sheetOpen={sheetOpen} onSheetOpenChange={setSheetOpen}/>:null;
  // what a message SAYS: the same in both shapes (only where it sits and what surrounds it differ)
  const content=<>
   {message.replyTo&&<blockquote className="mb-1.5 border-s-2 border-accent/40 bg-surface-2/60 px-2 py-1 text-xs"><span className="block font-semibold text-fg-muted">{message.replyTo.authorName}</span><span className="line-clamp-2">{message.replyTo.deleted?ct("chatc.deleted"):message.replyTo.preview??ct("chatc.message_fallback")}</span></blockquote>}
-  {message.deleted?<p className="text-sm italic text-fg-muted">{ct("chatc.deleted")}</p>:message.body&&<p className="whitespace-pre-wrap text-sm leading-relaxed">{message.body}</p>}
+  {mentionsMe&&<span data-mentions-me className="mb-1 block text-xs font-semibold text-warn">{ct("chatc.mention_me")}</span>}
+  {message.deleted?<p className="text-sm italic text-fg-muted">{ct("chatc.deleted")}</p>:message.body&&<p className="whitespace-pre-wrap text-sm leading-relaxed">{mentionNames.length?splitMentions(message.body,mentionNames).map((piece,i)=>piece.mention?<span key={i} data-mention className="rounded bg-accent/10 px-0.5 font-semibold text-accent">{piece.text}</span>:<React.Fragment key={i}>{piece.text}</React.Fragment>):message.body}</p>}
   {message.work?.length?<div className="mt-1 flex flex-wrap gap-1">{message.work.map(w=>w.kind==="task"?<a key={w.id} href={`/tasks/${w.id}`} className="inline-flex min-h-8 items-center rounded-full bg-accent/10 px-2 text-xs font-semibold text-accent">{ct("chatc.work.open_task")}</a>:<button key={w.id} type="button" onClick={()=>onOpenWork?.("ticket",w.id)} className="inline-flex min-h-8 items-center rounded-full bg-info/10 px-2 text-xs font-semibold text-info">{ct("chatc.work.open_ticket")}</button>)}</div>:null}
   {message.attachments.map(file=>{const url=safeMediaUrl(file.url); if(!url)return <a key={file.id} href="#" aria-disabled="true">{file.name}</a>; if(message.kind==="VOICE"&&file.mime.startsWith("audio/"))return <VoicePlayer key={file.id} src={url} peaks={file.peaks} durationMs={file.durationMs}/>; return <div key={file.id} className="my-1.5"><a href={url} download={file.name} className="text-xs underline">{ct("chatc.download",{name:file.name})}</a>{file.kind==="IMAGE"&&file.mime.startsWith("image/")&&<img src={url} alt={file.name} loading="lazy" className="mt-1 max-h-80 max-w-full rounded-lg"/>}{file.kind==="VIDEO"&&file.mime.startsWith("video/")&&<video src={url} controls preload="metadata" className="mt-1 max-h-80 max-w-full rounded-lg"/>}{file.kind==="AUDIO"&&file.mime.startsWith("audio/")&&<audio src={url} controls preload="metadata" className="mt-1 w-full"/>}</div>})}
   {message.reactions.length>0&&<div className="mt-1.5 flex flex-wrap gap-1">{message.reactions.map(r=><button key={r.emoji} type="button" disabled={!canAct} aria-pressed={r.mine} aria-label={ct("chatc.reaction",{emoji:r.emoji,count:r.count})} onClick={()=>onReact(message,r.emoji)} className={`min-h-8 rounded-full border px-2 text-sm ${r.mine?"border-accent bg-accent/10":"border-border"}`}>{r.emoji} {r.count}</button>)}</div>}
