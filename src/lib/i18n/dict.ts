@@ -34,6 +34,7 @@ import taskRequests from "./ar.task-requests.json";
 import quickChat from "./ar.quick-chat.json";
 import reminders from "./ar.reminders.json";
 import taskSteps from "./ar.task-steps.json";
+import timeTracking from "./ar.time-tracking.json";
 import recurring from "./ar.recurring.json";
 import cardsNav from "./ar.cards-nav.json";
 import taskRewards from "./ar.task-rewards.json";
@@ -83,6 +84,7 @@ export const AR: Record<string, string> = {
   ...quickChat,
   ...reminders,
   ...taskSteps,
+  ...timeTracking,
   ...recurring,
   ...cardsNav,
   ...taskRewards,

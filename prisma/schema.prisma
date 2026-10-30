@@ -1113,6 +1113,8 @@ model Task {
   // «خطوات»: the short checklist of the task; «ذكّرني»: the reminders people set on it (both die with the task)
   steps          TaskStep[]
   reminders      Reminder[]
+  // «حساب وقت الشغل»: the time people logged on it. An entry OUTLIVES the task (the foreign key sets taskId to null).
+  timeEntries    TimeEntry[]
   // «مهمة متكررة»: the series this task belongs to (every occurrence points at it), and the series it is the template of
   recurrenceId   String?
   recurrence     TaskRecurrence? @relation("RecurrenceTasks", fields: [recurrenceId], references: [id], onDelete: SetNull)
@@ -1246,6 +1248,43 @@ model Reminder {
   @@index([userId, status])
   @@index([taskId])
   @@index([messageId])
+}
+
+/// «حساب وقت الشغل» (the owner, 2026-10-30): one row per stretch of work a person logged on a task. A TIMER row is opened
+/// by «ابدأ» (`stoppedAt` null = running) and closed by «وقّف» from the SERVER's clock: `seconds` is whole seconds and never
+/// a float. A MANUAL row is typed in (date, hours, minutes); its `startedAt` is noon of that day in the company's zone and
+/// `stoppedAt = startedAt + seconds`. At most ONE running row per person: the partial unique index
+/// "TimeEntry_one_running_per_user" (hand-written in the migration: Prisma cannot express a WHERE on an index) is the
+/// backstop of the service's per-person lock. The row keeps `taskTitle` (a snapshot) and survives its task: the foreign key
+/// sets `taskId` to null when the task row is hard-deleted; an archived task keeps its rows untouched. No foreign key to
+/// the person, the space or the company on purpose (history, like `Notification`). Every change is kept in `AuditLog`.
+/// A timer left running more than 12 hours is closed at `startedAt + 12h` by the job runner and marked `autoStopped`.
+enum TimeEntrySource {
+  TIMER
+  MANUAL
+}
+
+model TimeEntry {
+  id          String          @id @default(cuid())
+  orgId       String
+  workspaceId String
+  userId      String
+  taskId      String?
+  taskTitle   String
+  startedAt   DateTime
+  stoppedAt   DateTime?
+  seconds     Int             @default(0)
+  note        String          @default("")
+  source      TimeEntrySource
+  autoStopped Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startedAt])
+  @@index([taskId])
+  @@index([workspaceId, startedAt])
 }
 
 /// «اشتراك التقويم»: the private link a person adds ONCE to Google / Apple / Outlook calendar. The link carries a random

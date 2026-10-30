@@ -18,6 +18,8 @@ import { useI18n } from "@/lib/i18n";
 import { TaskLinks, type LinkCandidate } from "@/components/task-links";
 import { TaskSteps } from "@/components/task-steps/task-steps";
 import { RemindTaskButton } from "@/components/reminders/remind-dialog";
+import { TaskTimeCard } from "@/components/time/task-time-card";
+import type { TaskTimeCard as TimeCardData } from "@/server/services/time-tracking";
 import { RecurrenceControl } from "@/components/recurrence/recurrence-control";
 import type { RecurrenceDto } from "@/server/services/task-recurrence";
 import type { StepDto } from "@/lib/task-steps";
@@ -64,6 +66,7 @@ export function TaskDetail({
   rewardSlot = null,
   pinSlot = null,
   lockedFields = false,
+  time = null,
   recurrence = null,
 }: {
   task: TaskDetailData;
@@ -89,6 +92,8 @@ export function TaskDetail({
   pinSlot?: ReactNode;
   /** A reward task is the owner's: the title, the description, the day and the rest are read-only for everybody else (the server refuses too). */
   lockedFields?: boolean;
+  /** «الوقت»: null when the company switched it off or the person is an external partner (the card is not drawn). */
+  time?: TimeCardData | null;
   /** «تكرار»: null when the company switched «مهمة متكررة» off (nothing is drawn); `canEdit` is the series' own rule (never a guest, never the owner reading silently). */
   recurrence?: { initial: RecurrenceDto | null; timeZone: string; canEdit: boolean } | null;
 }) {
@@ -418,6 +423,8 @@ export function TaskDetail({
       {rewardSlot}
 
       {steps ? <TaskSteps taskId={task.id} initial={steps.initial} canEdit={steps.canEdit} /> : null}
+
+      {time ? <TaskTimeCard taskId={task.id} initial={time} viewerId={currentUserId} /> : null}
 
       {links ? <TaskLinks taskId={task.id} canEdit={canEdit} candidates={links.candidates} /> : null}
 

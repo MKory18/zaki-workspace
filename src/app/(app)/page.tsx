@@ -19,6 +19,7 @@ import { MyRemindersCard } from "@/components/reminders/my-reminders-card";
 import { PinnedStrip } from "@/components/rewards/pinned-strip";
 import { pinnedTasks } from "@/server/services/pinned";
 import { rewardLensFor } from "@/server/services/rewards";
+import { MyTimeToday } from "@/components/time/my-time-today";
 
 /** The browser tab says «اليوم» (the root layout adds the app name). */
 export const metadata = { title: getServerT().t("today.title") };
@@ -55,6 +56,8 @@ export default async function TodayPage() {
 
   // «تذكيراتي»: a compact card of the person's own reminders, only while the company's «ذكّرني» switch is on
   const remindersOn = await actorFeatureOn(actor, "reminders");
+  // «وقتي اليوم»: a compact line of the person's own time, only while the company's «حساب الوقت» switch is on and never for a partner
+  const timeOn = !actor.isExternal && (await actorFeatureOn(actor, "timeTracking"));
 
   // «مثبّتة»: a compact card of the tasks pinned in this space (draws nothing when none, or when the switch is off)
   const pinned = await pinnedTasks(actor, { spaceId: space?.id ?? null }, await rewardLensFor(actor, space?.id ?? null));
@@ -76,6 +79,7 @@ export default async function TodayPage() {
           <GuideCard />
           <PinnedStrip tasks={pinned} variant="card" />
           {remindersOn ? <MyRemindersCard /> : null}
+          {timeOn ? <MyTimeToday /> : null}
           {data.pulse ? <TeamPulse pulse={data.pulse} /> : null}
           <ActiveProjects projects={data.projects} isExternal={data.isExternal} />
         </div>

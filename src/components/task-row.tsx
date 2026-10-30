@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/toast";
 import { peopleLine } from "@/components/ui/people-multi";
 import { cn } from "@/lib/utils";
 import { StepProgressChip } from "@/components/task-steps/step-progress";
+import { RunningChip } from "@/components/time/running-chip";
 import { RecurringBadge } from "@/components/recurrence/recurring-badge";
 import type { StepProgress } from "@/lib/task-steps";
 import { PinMark, RewardBadge, type RewardBadgeData } from "@/components/rewards/reward-badge";
@@ -36,6 +37,8 @@ export interface RowTask {
   dueDay?: string | null;
   /** «٣ من ٥»: the checklist progress; absent when the task has no steps or the «الخطوات» switch is off. */
   steps?: StepProgress;
+  /** «الوقت شغّال»: the viewer's own timer runs on this task (only while the company's «حساب الوقت» switch is on). */
+  running?: boolean;
   /** «🔁 متكررة»: the task belongs to a running series; absent when it does not or the company's «مهمة متكررة» switch is off. */
   recurring?: boolean;
   /** «مهمة بمكافأة»: only for a viewer who may see rewards (a partner's rows carry none). */
@@ -164,6 +167,7 @@ export function TaskRow({
           </span>
         ) : null}
         <StepProgressChip progress={task.steps} />
+        <RunningChip running={task.running} />
         <RecurringBadge recurring={task.recurring} />
         {task.pinnedAt ? <PinMark /> : null}
         <RewardBadge reward={task.reward as RewardBadgeData | null | undefined} />
