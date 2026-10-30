@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ct } from "@/lib/chat/text";
+import { foldedIncludes } from "@/lib/search/arabic";
 import { Avatar } from "@/components/ui/avatar";
 
 type Person = { userId: string; user: { name: string; jobTitle: string | null; avatarUrl?: string | null } };
@@ -41,8 +42,9 @@ export function NewDmDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       setBusy(false);
     }
   }
-  const q = query.trim().toLowerCase();
-  const shown = (people ?? []).filter((p) => !q || p.user.name.toLowerCase().includes(q) || (p.user.jobTitle ?? "").toLowerCase().includes(q));
+  const q = query.trim();
+  // spelling-tolerant: «احمد» finds «أحمد» (src/lib/search/arabic.ts)
+  const shown = (people ?? []).filter((p) => !q || foldedIncludes(p.user.name, q) || foldedIncludes(p.user.jobTitle ?? "", q));
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent size="md">
       <DialogHeader><DialogTitle>{ct("chath.dm.title")}</DialogTitle></DialogHeader>
