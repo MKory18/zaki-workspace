@@ -55,5 +55,19 @@
   "today.quick.inline_placeholder": "أضف مهمّة… اكتب العنوان واضغط إدخال",
   "today.quick.inline_aria": "مهمّة جديدة لليوم",
   "today.quick.more": "المشروع والموعد",
-  "today.quick.inline_added": "انضافت المهمّة"
+  "today.quick.inline_added": "انضافت المهمّة",
+
+  "today.dash.title": "لمحة سريعة عن شغلك",
+  "today.dash.week": "إنجازي هالأسبوع",
+  "today.dash.week_of": "خلصت {done} من {total} مهمة",
+  "today.dash.week_none": "ما في مهام مستحقة هالأسبوع",
+  "today.dash.open": "مهامي المفتوحة",
+  "today.dash.overdue": "مهام متأخرة",
+  "today.dash.due_today": "مستحقة اليوم",
+  "today.dash.unread": "رسائل بانتظارك",
+  "today.dash.team": "الفريق هالأسبوع",
+  "today.dash.team_scope": "أرقام فقط، من المساحات المتاحة لك",
+  "today.dash.team_done": "مهام خلصت",
+  "today.dash.team_today": "مستحقة اليوم",
+  "today.dash.team_late": "أشخاص عندهم مهام متأخرة"
 }

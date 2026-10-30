@@ -36,11 +36,16 @@ const config: Config = {
       },
       keyframes: {
         "fade-in": { from: { opacity: "0", transform: "translateY(2px)" }, to: { opacity: "1", transform: "none" } },
+        // the smart cards of «اليوم»: a card rises into place, and the progress ring fills (its arc has pathLength 100)
+        rise: { from: { opacity: "0", transform: "translateY(8px)" }, to: { opacity: "1", transform: "none" } },
+        "ring-fill": { from: { "stroke-dashoffset": "100" } },
         // «نتفرّج سوا»: a reaction rises over the video and fades
         "float-up": { "0%": { opacity: "0", transform: "translateY(0) scale(0.8)" }, "15%": { opacity: "1" }, "100%": { opacity: "0", transform: "translateY(-160px) scale(1.2)" } },
       },
       animation: {
         "fade-in": "fade-in 150ms ease-out",
+        rise: "rise 450ms ease-out both",
+        "ring-fill": "ring-fill 900ms ease-out both",
         "float-up": "float-up 2.5s ease-out forwards",
       },
     },
