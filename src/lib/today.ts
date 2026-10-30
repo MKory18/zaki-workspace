@@ -172,6 +172,49 @@ export interface TodayData {
   quickAdd: TodayQuickAddData | null;
 }
 
+// ───────────────────────────────────────── the smart cards ─────────────────────────────────────────
+
+/** The person's own numbers (the service counts them over the spaces they can open, in the company's days). */
+export interface DashboardMine {
+  /** Their open tasks. */
+  open: number;
+  /** Open and due before today. */
+  overdue: number;
+  /** Open and due today. */
+  dueToday: number;
+  /** Finished this week (the company's week, starting on the first day of the week, الأحد). */
+  doneWeek: number;
+  /** The week's work: what was finished plus what is still open and due by the end of the week (late ones included). */
+  weekTotal: number;
+  /** `doneWeek` out of `weekTotal` as a whole percent, 0 to 100; null when the week holds no work. */
+  percent: number | null;
+}
+
+/** «الفريق هالأسبوع»: counts only, for the owner and whoever holds users.manage. No name, no customer, no price. */
+export interface DashboardTeam {
+  /** Tasks finished this week over the spaces they can open. */
+  doneWeek: number;
+  /** Open tasks due today. */
+  dueToday: number;
+  /** How many people (still active) hold at least one overdue task. */
+  peopleLate: number;
+}
+
+/** What the smart cards of «اليوم» show. */
+export interface TodayDashboard {
+  /** Null without the tasks «يشوف» box: the cards of work are then not drawn. */
+  mine: DashboardMine | null;
+  /** The messages waiting in the chat of the space the person is in (the same count as the badge on «الدردشة»). */
+  unreadChat: number;
+  team: DashboardTeam | null;
+}
+
+/** The week's progress: `done` of `done + left` as a whole percent (null when there is no work in the week). */
+export function weekProgress(done: number, left: number): { total: number; percent: number | null } {
+  const total = Math.max(0, done) + Math.max(0, left);
+  return { total, percent: total === 0 ? null : Math.min(100, Math.round((Math.max(0, done) / total) * 100)) };
+}
+
 // ───────────────────────────────────────── the quick add's request ─────────────────────────────────────────
 
 export type QuickDue = "today" | "tomorrow" | "none";
