@@ -10,6 +10,8 @@ export const REALTIME_KINDS = [
   "message.deleted",
   "message.reacted",
   "message.pinned",
+  // somebody voted on a poll, withdrew a vote, or a poll was closed (ids only: never WHO voted)
+  "poll.voted",
   "conversation.read",
   "conversation.delivered",
   "conversation.changed",

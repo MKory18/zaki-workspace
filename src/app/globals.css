@@ -37,6 +37,9 @@ body {
   h2,
   h3 {
     font-family: var(--font-display);
+    /* Reem Kufi's space is only 0.13em wide, so a title ran its words together («أشياقديمةبلامساحة»): give it a
+       word gap the eye can read. */
+    word-spacing: 0.18em;
   }
 }
 
