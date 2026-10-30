@@ -88,8 +88,9 @@ describe("the palette's places and tabs come from the person's map", () => {
       expect(AR[c.labelKey], c.labelKey).toBeTruthy();
       if (c.subKey) expect(AR[c.subKey], c.subKey).toBeTruthy();
     }
-    // a place called by its single tab does not repeat its own name underneath
-    const team = paletteCommands(navOf("MEMBER")).find((c) => c.href === "/members");
+    // a place called by its single tab does not repeat its own name underneath («لوحتي» is switched off here, so «الفريق» is alone)
+    const alone = buildNav({ role: "MEMBER", caps: [...who("MEMBER").caps].filter((c) => c !== "board.self") });
+    const team = paletteCommands(alone).find((c) => c.href === "/members");
     expect(team?.subKey).toBeUndefined();
   });
 });

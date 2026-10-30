@@ -121,10 +121,10 @@ describe("a space of «لوحات» or «تصنيع»: «اللوحات» then �
         }
       });
 
-      it("a plain member: «اللوحات» then «الفريق»; an external partner: «اللوحات» alone", () => {
+      it("a plain member: «اللوحات» then «الإدارة» (the team and «لوحتي»); an external partner: «اللوحات» alone", () => {
         const member = shell("MEMBER", layout, "/cards");
         expect(hrefs(bottomBar(member))).toEqual(["/cards", "/members"]);
-        expect(labels(bottomBar(member))).toEqual(["اللوحات", "الفريق"]);
+        expect(labels(bottomBar(member))).toEqual(["اللوحات", "الإدارة"]);
         const guest = shell("GUEST", layout, "/cards");
         expect(hrefs(bottomBar(guest))).toEqual(["/cards"]);
         expect(hrefs(sidebarPlaces(guest))).toEqual(["/cards"]);

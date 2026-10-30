@@ -41,7 +41,8 @@ const tabs = (nav: NavModel, key: PlaceKey) => place(nav, key).tabs.map((t) => t
 const WORK_ALL: TabKey[] = ["my-work", "projects", "list", "calendar", "goals", "ideas", "production", "departments", "tickets", "campaigns", "crm"];
 // goals and ideas are the team's own (docs/PHASE0-AUDIT.md R10): a guest is offered the four tabs about their own work
 const WORK_GUEST: TabKey[] = ["my-work", "projects", "list", "calendar"];
-const ADMIN_ALL: TabKey[] = ["team", "reports", "automation", "telegram", "settings"];
+// «لوحتي» (`board.self`) is on by rank for every staff rank (the owner's ask, 2026-10-30), so each of them has the «board» tab
+const ADMIN_ALL: TabKey[] = ["team", "board", "reports", "automation", "telegram", "settings"];
 const ADMIN_OWNER: TabKey[] = [...ADMIN_ALL, "archive"];
 
 describe("the five places, for each kind of person", () => {
@@ -64,53 +65,59 @@ describe("the five places, for each kind of person", () => {
   it("LEAD: the team and the reports; no integrations, no settings", () => {
     const nav = buildNav(who("LEAD"));
     expect(keys(nav)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
-    expect(tabs(nav, "admin")).toEqual(["team", "reports"]);
+    expect(tabs(nav, "admin")).toEqual(["team", "board", "reports"]);
     expect(place(nav, "admin").labelKey).toBe("nav.place.admin");
   });
 
-  it("MEMBER (rank defaults): the admin place is a single tab, so it is called «الفريق» and opens the directory", () => {
+  it("MEMBER (rank defaults): the team and «لوحتي», under «الإدارة»", () => {
     const nav = buildNav(who("MEMBER"));
     expect(keys(nav)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
     expect(tabs(nav, "work")).toEqual(WORK_ALL);
-    expect(tabs(nav, "admin")).toEqual(["team"]);
-    expect(place(nav, "admin")).toMatchObject({ labelKey: "nav.tab.team", href: "/members", icon: "team" });
-    expect(AR[place(nav, "admin").labelKey]).toBe("الفريق");
+    expect(tabs(nav, "admin")).toEqual(["team", "board"]);
+    expect(place(nav, "admin")).toMatchObject({ labelKey: "nav.place.admin", href: "/members" });
+    expect(place(nav, "admin").tabs.find((t) => t.key === "board")).toEqual({ key: "board", href: "/owner", labelKey: "nav.tab.boardSelf" });
   });
 
   it("MEMBER given users.manage: the team and the settings, under «الإدارة»", () => {
     const nav = buildNav(who("MEMBER", { capabilities: ["users.manage"] }));
-    expect(tabs(nav, "admin")).toEqual(["team", "settings"]);
+    expect(tabs(nav, "admin")).toEqual(["team", "board", "settings"]);
     expect(place(nav, "admin").labelKey).toBe("nav.place.admin");
   });
 
   it("MEMBER given users.manage whose directory.view was switched off: the Team tab stays, because /members is their people manager", () => {
     const nav = buildNav(who("MEMBER", { capabilities: ["users.manage"], revokedCapabilities: ["directory.view"] }));
-    expect(tabs(nav, "admin")).toEqual(["team", "settings"]);
+    expect(tabs(nav, "admin")).toEqual(["team", "board", "settings"]);
     expect(place(nav, "admin")).toMatchObject({ labelKey: "nav.place.admin", href: "/members" });
   });
 
   it("LEAD given users.manage with directory.view switched off: team, reports and settings", () => {
     const nav = buildNav(who("LEAD", { capabilities: ["users.manage"], revokedCapabilities: ["directory.view"] }));
-    expect(tabs(nav, "admin")).toEqual(["team", "reports", "settings"]);
+    expect(tabs(nav, "admin")).toEqual(["team", "board", "reports", "settings"]);
   });
 
   it("ADMIN with both users.manage and directory.view switched off has no Team tab (and no settings): nothing opens it", () => {
     const nav = buildNav(who("ADMIN", { revokedCapabilities: ["users.manage", "directory.view"] }));
-    expect(tabs(nav, "admin")).toEqual(["reports", "automation", "telegram"]);
+    expect(tabs(nav, "admin")).toEqual(["board", "reports", "automation", "telegram"]);
   });
 
   it("MEMBER given integrations.manage: automation and Telegram appear (two tabs)", () => {
     const nav = buildNav(who("MEMBER", { capabilities: ["integrations.manage"] }));
-    expect(tabs(nav, "admin")).toEqual(["team", "automation", "telegram"]);
+    expect(tabs(nav, "admin")).toEqual(["team", "board", "automation", "telegram"]);
   });
 
-  it("MEMBER whose directory.view was switched off: no admin place at all («نتفرّج سوا» stays)", () => {
+  it("MEMBER whose directory.view was switched off: the admin place is «لوحتي» alone (the owner's switch «لوحتي» is on by rank)", () => {
     const nav = buildNav(who("MEMBER", { revokedCapabilities: ["directory.view"] }));
+    expect(keys(nav)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
+    expect(place(nav, "admin")).toMatchObject({ labelKey: "nav.tab.boardSelf", href: "/owner" });
+  });
+
+  it("MEMBER whose directory.view and «لوحتي» were both switched off: no admin place at all («نتفرّج سوا» stays)", () => {
+    const nav = buildNav(who("MEMBER", { revokedCapabilities: ["directory.view", "board.self"] }));
     expect(keys(nav)).toEqual(["today", "chat", "work", "library", "watch"]);
   });
 
   it("LEAD whose directory.view was switched off still has the reports, which then name the place", () => {
-    const nav = buildNav(who("LEAD", { revokedCapabilities: ["directory.view"] }));
+    const nav = buildNav(who("LEAD", { revokedCapabilities: ["directory.view", "board.self"] }));
     expect(tabs(nav, "admin")).toEqual(["reports"]);
     expect(place(nav, "admin")).toMatchObject({ labelKey: "nav.analytics", href: "/analytics", icon: "reports" });
   });
@@ -209,7 +216,7 @@ describe("«الإدارة» is the last place, and «المساحة» is its ta
   });
 
   it("a space manager whose directory switch is off still gets the admin place, called by its one tab", () => {
-    const nav = buildNav({ ...who("MEMBER", { revokedCapabilities: ["directory.view"] }), spaceManager: true });
+    const nav = buildNav({ ...who("MEMBER", { revokedCapabilities: ["directory.view", "board.self"] }), spaceManager: true });
     expect(tabs(nav, "admin")).toEqual(["space"]);
     expect(place(nav, "admin")).toMatchObject({ labelKey: "nav.tab.space", href: "/spaces/current" });
   });
@@ -249,9 +256,9 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
     ["an unknown rank with every capability", { role: "SUPERUSER" as unknown as NavSubject["role"], caps: [...CAPABILITIES] }],
   ];
 
-  it("the tabs are the nineteen of the map, each once", () => {
-    expect(ALL_TABS).toHaveLength(19);
-    expect(new Set(ALL_TABS).size).toBe(19);
+  it("the tabs are the twenty of the map, each once", () => {
+    expect(ALL_TABS).toHaveLength(20);
+    expect(new Set(ALL_TABS).size).toBe(20);
   });
 
   it("agrees with buildNav for every tab and every kind of person: a tab is open exactly when the map draws it", () => {
@@ -274,7 +281,7 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
   it("offeredToGuests: exactly my work, projects, list and calendar", () => {
     expect(ALL_TABS.filter((key) => offeredToGuests(key))).toEqual(WORK_GUEST);
     expect(ALL_TABS.filter((key) => !offeredToGuests(key))).toEqual(
-      ["goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "files", "team", "space", "reports", "automation", "telegram", "settings", "archive"],
+      ["goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "files", "team", "space", "board", "reports", "automation", "telegram", "settings", "archive"],
     );
   });
 
@@ -404,6 +411,7 @@ describe("the words", () => {
       files: "الملفات",
       team: "الفريق",
       space: "المساحة",
+      board: "لوحة المالك",
       reports: "التقارير",
       automation: "الأتمتة والتكاملات",
       telegram: "تيليجرام",

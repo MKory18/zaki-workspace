@@ -87,6 +87,20 @@ export const PAGE_HELP: readonly PageHelp[] = [
     article: "chat",
   },
   {
+    id: "owner-board",
+    pattern: "/owner",
+    whatKey: "guide.page.owner-board.what",
+    nextKey: "guide.page.owner-board.next",
+    guestNextKey: INTERNAL,
+  },
+  {
+    id: "owner-board-person",
+    pattern: "/owner/people/:id",
+    whatKey: "guide.page.owner-board-person.what",
+    nextKey: "guide.page.owner-board-person.next",
+    guestNextKey: INTERNAL,
+  },
+  {
     id: "space",
     pattern: "/spaces/current",
     whatKey: "guide.page.space.what",

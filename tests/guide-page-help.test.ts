@@ -15,6 +15,8 @@ const PAGES: [string, string][] = [
   ["/watch", "watch"],
   ["/watch/x", "watch-session"],
   ["/archive", "archive"],
+  ["/owner", "owner-board"],
+  ["/owner/people/ckabc123", "owner-board-person"],
   ["/spaces", "spaces"],
   ["/spaces/current", "space"],
   ["/my-work", "my-work"],
