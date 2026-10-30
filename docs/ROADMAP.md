@@ -26,7 +26,8 @@ Status per phase. Baseline: Phase 0 audit done (empty repo → greenfield build)
 
 ## Phase 3 — Advanced work management
 
-- Timeline, dependencies UI (model ready via TaskDependency)
+- Timeline; dependencies UI — **done 2026-10-30** (`src/server/services/task-links.ts`, the «التبعيات»
+  card on the task page, switch `taskLinks`)
 - Milestones UI (model ready)
 - Recurring tasks (idempotent generator in worker)
 - Bulk operations, custom fields (CustomFieldDefinition/Value tables)

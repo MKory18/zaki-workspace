@@ -41,17 +41,44 @@ are one piece of JSX shared by both shapes, so switching the layout off cannot l
 switching it back on cannot lose an edit. `tests/db/feature-switches-new.test.ts` (4) fails on all
 four before the change (verified by stashing `src/` and re-running: 4 failed).
 
+## 2b. «التبعيات» — a table that had no writer, built instead of switched off
+
+The owner's order (2026-10-30): «كمل ولا تطفى اي ميزة ضفناها». `TaskDependency` was the one model
+this map named as dead — created by the first migration, never written, still selected by the task
+detail (always an empty list). Switching it off would have been the easy answer; it is built.
+
+| Piece | What it does |
+|---|---|
+| `src/server/services/task-links.ts` | lists a task's links in BOTH directions, adds one, removes one |
+| `GET\|POST /api/tasks/[id]/links`, `DELETE /api/tasks/[id]/links/[linkId]` | the doors, behind the switch `taskLinks` |
+| «التبعيات» on the task page | what this task points at, the tasks that point at it, and a picker of the other tasks of the same space |
+| `task.linked` / `task.unlinked` | the link lands in the task's own story, so «who linked this» has an answer |
+
+Both ends of a link pass the task page's own guard (`requireTaskAccess`: the space, and the
+project's team), so a link can never name a task of another company or of a team the person does not
+see. Three refusals, each its own key: `link.self`, `link.exists`, `link.cycle` (the pair that would
+each block the other); a fourth for a stale id, `link.not_found`.
+
+⚠️ The temptation is to make a link a lock — «this cannot move until that closes». 🔧 It is not:
+a linked task still moves and still closes, and the card only says so. A note one person wrote must
+not become another person's blockage, and the board must keep answering «why can't I move this».
+
+`tests/db/task-links.test.ts` (9) proves the storage, the two directions, the four refusals, the
+guest, the delete rule, and that the switch closes both doors while keeping every stored row.
+7 of the 9 fail on the code before the feature (verified by stashing `src/`: 7 failed, 2 passed —
+the two «not found» guards that already existed).
+
 ## 3. What Phase E looked at and left alone
 
 | Finding | Why it is not a change here |
 |---|---|
 | `/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read` write with no audit row | They are one person's own preference, about nobody else. An audit trail of «he switched to the light theme» is noise, not evidence. |
-| ⚠️ `TaskDependency` has never held a row: nothing writes it, no screen reads it, and the task detail still selects it (always an empty list). | The table was created by the first migration. Removing a select is a change to a published response for a feature the owner may still want; dropping the table is destructive and forbidden. 🔧 **The owner's decision**: build «تعطّل / معطّلة بسبب / مكرّرة» as a real feature, or say the word and the select goes. Nothing breaks either way today. |
+| ~~⚠️ `TaskDependency` has never held a row~~ — **built, not switched off** (2026-10-30). | The owner's decision was to build it: `src/server/services/task-links.ts`, `GET\|POST /api/tasks/[id]/links`, `DELETE …/[linkId]`, the «التبعيات» card on the task page, and `task.linked` / `task.unlinked` in the task's own story. Behind the switch `taskLinks` (on by default), and a link is information, never a lock: a linked task still moves and still closes. Proven by `tests/db/task-links.test.ts` (9; 7 of them fail without the feature). |
 | `activeOrgCtx()` and `requireActor()` are the first call of 91 routes | Correct, not a finding: both re-read the membership and its status from the database on every request, which is exactly the rule in `AGENTS.md`. |
 
 ## 4. Gates
 
 Local, on the branch: `typecheck` · `lint` (2 pre-existing warnings, both older than this phase) ·
-`npm test` 159 files / 2504 tests · `test:db` 159 files / 1813 tests · `node
-scripts/lint-migrations.mjs` (40 migrations, 38 released) · `npm run scan:secrets` (990 files) ·
+`npm test` 159 files / 2504 tests · `test:db` 160 files / 1822 tests · `node
+scripts/lint-migrations.mjs` (40 migrations, 38 released) · `npm run scan:secrets` (998 files) ·
 `npm run build`. CI judges the pull request.
