@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "customFields"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -87,6 +87,10 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // /owner/assistant and /api/owner-assistant answer «not found» for everybody, the owner included; the saved settings and
   // conversations stay and come back with the switch. It reads the board, so it also needs «لوحة المالك» on.
   ownerAssistant: false,
+  // «حقول مخصصة» (src/server/services/custom-fields.ts): the fields a space's ADMIN defines on a project's tasks. Off: no «حقول
+  // مخصصة» card on the task, no «إدارة الحقول» on the project, no chips, filter or sort on the list and the board, the routes answer
+  // «not found» and a required field stops asking at completion; the fields and the values already stored stay and come back with the switch
+  customFields: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

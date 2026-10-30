@@ -8,6 +8,7 @@ import {
 } from "./auth";
 import { log } from "./log";
 import { RateLimitedError } from "./rate-limit";
+import { RequiredFieldsError } from "./custom-fields-error";
 
 export type ApiErrorCode =
   | "auth.required"
@@ -49,6 +50,8 @@ export function withApi(fn: () => Promise<NextResponse>): Promise<NextResponse> 
     if (err instanceof RateLimitedError) {
       return apiError("rate_limited", err.message, undefined, { "retry-after": String(err.retryAfterSec) });
     }
+    // «حقول مخصصة»: finishing a task with required fields left empty names them
+    if (err instanceof RequiredFieldsError) return apiError("validation.failed", "fields.required", { missing: err.missing });
     if (err instanceof UnauthorizedError) return apiError("auth.required", err.message);
     if (err instanceof ForbiddenError) return apiError("forbidden", err.message);
     if (err instanceof NotFoundError) return apiError("not_found", err.message);
