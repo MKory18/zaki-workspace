@@ -1114,7 +1114,25 @@ model Task {
   sourceMessageId String?
   sourceMessage   ChatMessage? @relation("MessageTasks", fields: [sourceMessageId], references: [id], onDelete: SetNull)
 
+  // «مهمة بمكافأة» (the owner, 2026-10-30): only the OWNER rank sets, edits, cancels or deletes. The amount is an integer in
+  // MINOR units (cents, never a float); `rewardStatus` is NONE | OPEN | AWARDED | CANCELLED (null = no reward). No foreign keys on
+  // purpose: the award is history. The app records and approves; it never moves money. A partner (GUEST) never receives these.
+  rewardAmountMinor  Int?
+  rewardCurrency     String?
+  rewardNote         String?
+  rewardStatus       String?
+  rewardAwardedToId  String?
+  rewardAwardedAt    DateTime?
+  rewardApprovedById String?
+  rewardCancelReason String?
+  rewardCancelledAt  DateTime?
+  // «تثبيت»: a pinned task sorts first and shows in the strip at the top of its project; the owner and the space's ADMIN pin.
+  pinnedAt           DateTime?
+  pinnedById         String?
+
   @@unique([orgId, number])
+  @@index([orgId, rewardStatus])
+  @@index([workspaceId, pinnedAt])
   @@index([workspaceId, createdAt])
   @@index([projectId, archived])
   @@index([sourceMessageId])

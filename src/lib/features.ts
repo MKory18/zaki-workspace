@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "taskRewards"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -63,6 +63,10 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // «ذكّرني» (src/server/services/reminders.ts): off, no «ذكّرني» button, no «تذكيراتي» card, the routes answer «not found»
   // and the job runner fires nothing; the reminders already set wait and are due again when the switch is back on
   reminders: true,
+  // «مهمة بمكافأة» and «تثبيت» (src/server/services/rewards.ts): off, no reward toggle, card or badge, no pin button, the
+  // routes answer «not found» and the owner-only lock on reward tasks is lifted (a task is a plain task again); the rewards
+  // and pins already stored stay in the data and come back with the switch
+  taskRewards: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {
