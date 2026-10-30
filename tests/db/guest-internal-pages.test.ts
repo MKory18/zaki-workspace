@@ -36,6 +36,7 @@ import AutomationPage from "@/app/(app)/automation/page";
 import TelegramPage from "@/app/(app)/telegram/page";
 import SettingsPage from "@/app/(app)/settings/page";
 import ArchivePage from "@/app/(app)/archive/page";
+import CurrentSpacePage from "@/app/(app)/spaces/current/page";
 import WatchPage from "@/app/(app)/watch/page";
 import * as goalsRoute from "@/app/api/goals/route";
 import * as goalRoute from "@/app/api/goals/[id]/route";
@@ -386,6 +387,7 @@ const TAB_PAGES: Record<TabKey, PageCall> = {
   crm: () => CrmPage(),
   files: () => FilesPage(),
   team: () => MembersPage(),
+  space: () => CurrentSpacePage(),
   reports: () => AnalyticsPage(),
   automation: () => AutomationPage(),
   telegram: () => TelegramPage(),
@@ -439,7 +441,7 @@ const KNOWN_GAPS: Partial<Record<TabKey, string>> = {};
 const RANKS: readonly NavRole[] = ["OWNER", "ADMIN", "LEAD", "MEMBER", "GUEST"];
 
 /** The notices a page shows instead of an area that is not for this person. */
-const REFUSALS = [t("guest.no_access"), t("orgm.members_only"), t("chat.guest_forbidden"), t("access.section_off")];
+const REFUSALS = [t("guest.no_access"), t("orgm.members_only"), t("chat.guest_forbidden"), t("access.section_off"), t("spaces.manage.not_yours")];
 
 type Outcome = { kind: "rendered"; markup: string; props: string } | { kind: "redirect"; to: string } | { kind: "not-found" };
 

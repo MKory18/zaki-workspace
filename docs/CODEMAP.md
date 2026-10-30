@@ -268,7 +268,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | Service | Lines | Imported by | What it owns |
 |---|---|---|---|
 | `integrations` | 180 | 81 | Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. |
-| `current-space` | 123 | 41 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
+| `current-space` | 123 | 42 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
 | `guest-guard` | 30 | 37 | Org GUESTs are external partners (for example the factory): they see only what is shared with them, never write business data, and never see prices or the staff directory. |
 | `features` | 48 | 26 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
 | `team-scope` | 149 | 17 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
