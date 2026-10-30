@@ -47,11 +47,14 @@ describe("task tenant-scope validations (P1/P2 regression)", () => {
   const tasks = read("src", "server", "services", "tasks.ts");
 
   it("createTask rejects assignees outside the actor's organization", () => {
-    expect(tasks).toContain("assignee.not_member");
-    // the check must live inside createTask, guarded by input.assigneeId
+    // the check lives in the one judge every assignment goes through (services/task-assign.ts, by rank)
+    const judge = read("src", "server", "services", "task-assign.ts");
+    expect(judge).toContain("assignee.not_member");
+    expect(judge).toContain("organizationMember.findFirst");
+    // and createTask asks it, guarded by the assignee being set
     const createBody = tasks.slice(tasks.indexOf("createTask"), tasks.indexOf("moveTask"));
-    expect(createBody).toContain("organizationMember.findFirst");
-    expect(createBody).toContain("assignee.not_member");
+    expect(createBody).toContain("if (assigneeId)");
+    expect(createBody).toContain("judgeAssignment(tx, actor, assigneeId");
   });
 
   it("updateTask validates milestones belong to the task's project", () => {

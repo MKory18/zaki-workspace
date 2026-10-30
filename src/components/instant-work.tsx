@@ -26,7 +26,8 @@ interface InstantInfo {
   task: boolean;
   ticket: boolean;
   space: { id: string; name: string } | null;
-  people: { id: string; name: string }[];
+  /** `request`: somebody of a higher rank than the viewer; a task for them is only a request (task-assign.ts). */
+  people: { id: string; name: string; request?: boolean }[];
 }
 
 /** Today as `yyyy-mm-dd` in the person's own clock (what a date field holds). */
@@ -66,12 +67,15 @@ export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; o
   async function send() {
     setPending(true);
     try {
+      let asked = false;
       if (kind === "task") {
-        await apiPost("/api/instant/task", { title: title.trim(), description: details.trim() || null, assigneeId: person, priority, dueDate: dueOf(day) });
+        const res = await apiPost<{ task: { requested?: boolean } }>("/api/instant/task", { title: title.trim(), description: details.trim() || null, assigneeId: person, priority, dueDate: dueOf(day) });
+        asked = res.task.requested === true;
       } else {
         await apiPost("/api/instant/ticket", { title: title.trim(), description: details.trim() || null, assigneeId: person, priority });
       }
-      toast(t(kind === "task" ? "instant.task.sent" : "instant.ticket.sent"), "success");
+      // a person of a higher rank was ASKED, not assigned (task-assign.ts)
+      toast(t(asked ? "taskreq.created" : kind === "task" ? "instant.task.sent" : "instant.ticket.sent"), "success");
       setOpen(false);
       setTitle("");
       setDetails("");
@@ -123,10 +127,13 @@ export function InstantWorkButton({ kind, onSent }: { kind: "task" | "ticket"; o
                 <option value="">{t("instant.field.pick")}</option>
                 {info.people.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
+                    {kind === "task" && p.request ? `${p.name} · ${t("taskreq.tag")}` : p.name}
                   </option>
                 ))}
               </Select>
+              {kind === "task" && info.people.find((p) => p.id === person)?.request ? (
+                <span className="block text-fg-muted">{t("taskreq.hint")}</span>
+              ) : null}
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className="block space-y-1 text-xs">
