@@ -68,6 +68,26 @@ guest, the delete rule, and that the switch closes both doors while keeping ever
 7 of the 9 fail on the code before the feature (verified by stashing `src/`: 7 failed, 2 passed —
 the two «not found» guards that already existed).
 
+## 2c. «المعالم» — the other table that had a reader and no writer
+
+`Milestone` was the last model in that shape, and it is built the same way (2026-10-30).
+`MilestoneStatus.OVERDUE` is the one value that is never written: «متأخر» is a reading — open, and
+its day has passed in the COMPANY's zone — so the badge follows the date by itself and no job has
+to un-store it.
+
+| Piece | What it does |
+|---|---|
+| `src/server/services/milestones.ts` | lists, creates, updates, deletes; the door is the project's space AND its team, then the «projects.edit» box |
+| `GET\|POST /api/projects/[id]/milestones`, `PATCH\|DELETE /api/milestones/[id]` | the doors, behind the switch `milestones` (on by default) |
+| «المعالم» on the project page | the list, a new-milestone form, mark complete/open, delete |
+| «المعلم» on the task page | the milestones of THAT task's project only; `updateTask` refuses another project's (403 `milestone.invalid`) |
+
+A milestone is a date, not the work: a task attached to one still moves and still closes, and
+deleting a milestone never deletes a task (`onDelete: SetNull`). Deleting one that still has open
+tasks attached is refused (403 `milestone.has_tasks`) — detach them first, or mark it complete.
+`tests/db/milestones.test.ts` (9) proves the company-zone day, the refusals, the «متأخر» reading,
+the delete rule and the switch; 6 of the 9 fail without the feature.
+
 ## 3. What Phase E looked at and left alone
 
 | Finding | Why it is not a change here |
