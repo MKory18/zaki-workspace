@@ -537,7 +537,8 @@ const code = (file: string) => read(file).replace(/\/\*[\s\S]*?\*\//g, "").repla
 
 describe("the gates (pinned in the source where a database test cannot see them)", () => {
   const routes = filesUnder(path.join(ROOT, "src/app/api/owner-board"), (n) => n === "route.ts");
-  const pages = filesUnder(path.join(ROOT, "src/app/(app)/owner"), (n) => n === "page.tsx");
+  // «مساعد المالك» lives under /owner/assistant and has its own gate (tests/owner-assistant*.test.ts)
+  const pages = filesUnder(path.join(ROOT, "src/app/(app)/owner"), (n) => n === "page.tsx").filter((f) => !/owner[\\/]assistant[\\/]/.test(f));
 
   it("there are three routes and two pages, and every one decides access through boardAccess and nothing else", () => {
     expect(routes).toHaveLength(3);

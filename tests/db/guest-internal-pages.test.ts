@@ -37,6 +37,7 @@ import TelegramPage from "@/app/(app)/telegram/page";
 import SettingsPage from "@/app/(app)/settings/page";
 import ArchivePage from "@/app/(app)/archive/page";
 import OwnerBoardPage from "@/app/(app)/owner/page";
+import OwnerAssistantPage from "@/app/(app)/owner/assistant/page";
 import CurrentSpacePage from "@/app/(app)/spaces/current/page";
 import WatchPage from "@/app/(app)/watch/page";
 import * as goalsRoute from "@/app/api/goals/route";
@@ -92,7 +93,8 @@ async function companyWorld() {
   const team = await makeTeam();
   const orgId = team.org.id;
   const orgName = `Company ${uid()}`;
-  await db.organization.update({ where: { id: orgId }, data: { name: orgName } });
+  // «مساعد المالك» is OFF by default; its tab is on the owner's map only while its switch is on, and the loop below opens every offered tab
+  await db.organization.update({ where: { id: orgId }, data: { name: orgName, settings: { features: { ownerAssistant: true } } } });
   const lead = await makeUser({ orgId, role: "LEAD", name: "Lead" });
   const staffer = await makeUser({ orgId, role: "MEMBER", name: `Staffer ${secret}` });
   await db.user.update({ where: { id: staffer.id }, data: { jobTitle: `Title ${secret}` } });
@@ -395,6 +397,7 @@ const TAB_PAGES: Record<TabKey, PageCall> = {
   settings: () => SettingsPage(),
   archive: () => ArchivePage(),
   board: () => OwnerBoardPage({ searchParams: {} }),
+  assistant: () => OwnerAssistantPage({ searchParams: {} }),
 };
 
 /** The places that are one page and have no tabs (Today, the chat). */

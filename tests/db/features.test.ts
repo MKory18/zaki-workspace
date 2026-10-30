@@ -41,12 +41,12 @@ async function as(userId: string, spaceId: string) {
 const flip = (key: string, on: boolean) => call(featuresRoute.PATCH, { method: "PATCH", body: { key, on } });
 
 describe("«الميزات»: who switches", () => {
-  it("every switch is listed for the company's staff at its default (all on, except «إخفاء المالك من متصل»: off until the owner turns it on)", async () => {
+  it("every switch is listed for the company's staff at its default (all on, except «إخفاء المالك من متصل» and «مساعد المالك»: off until the owner turns them on)", async () => {
     const w = await world();
     await as(w.member.id, w.ws.id);
     const res = await call(featuresRoute.GET);
     expect(res.status).toBe(200);
-    expect(res.json?.["features"]).toEqual(FEATURES.map((key) => ({ key, on: key !== "ownerHiddenOnline" })));
+    expect(res.json?.["features"]).toEqual(FEATURES.map((key) => ({ key, on: key !== "ownerHiddenOnline" && key !== "ownerAssistant" })));
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
   });
 
