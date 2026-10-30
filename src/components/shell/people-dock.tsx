@@ -23,6 +23,9 @@ export interface PresencePersonDto {
 }
 
 export interface PresenceRosterDto {
+  /** only the owner may choose between his space and the whole company */
+  canChooseScope?: boolean;
+  scope?: "space" | "company";
   /** who is looking: their own row is a link to their profile, never a chat with themselves */
   meId?: string;
   people: PresencePersonDto[];
@@ -49,14 +52,16 @@ export function PeopleDock({ enabled = true, defaultOpen = false }: { enabled?: 
   const [open, setOpen] = useState(defaultOpen);
   const [opening, setOpening] = useState<string | null>(null);
   const [chatError, setChatError] = useState("");
+  // the owner may look at the whole company; everybody else always sees the people of their space
+  const [scope, setScope] = useState<"space" | "company">("space");
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const headingId = useId();
 
   const query = useQuery({
-    queryKey: ["presence-dock"],
-    queryFn: () => apiGet<PresenceRosterDto>("/api/presence"),
+    queryKey: ["presence-dock", scope],
+    queryFn: () => apiGet<PresenceRosterDto>(scope === "company" ? "/api/presence?scope=company" : "/api/presence"),
     refetchInterval: 30_000,
     staleTime: 10_000,
     enabled,
@@ -120,6 +125,22 @@ export function PeopleDock({ enabled = true, defaultOpen = false }: { enabled?: 
             </h2>
             <span className="text-xs text-fg-muted">{onlineText}</span>
           </div>
+          {query.data?.canChooseScope ? (
+            <div role="group" aria-label={t("shell.dock.scope")} className="flex gap-1 border-b border-border px-3 py-2">
+              {(["space", "company"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  data-dock-scope={value}
+                  aria-pressed={scope === value}
+                  onClick={() => setScope(value)}
+                  className={cn("min-h-9 flex-1 rounded-lg border px-2 text-xs font-semibold", scope === value ? "border-accent bg-accent/10 text-accent" : "border-border text-fg-muted hover:bg-surface-2")}
+                >
+                  {t(value === "space" ? "shell.dock.scope_space" : "shell.dock.scope_company")}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <ul className="max-h-[min(22rem,60dvh)] overflow-y-auto overscroll-contain">
             {people.map((p) => (
               <li key={p.userId} className="border-b border-border last:border-0">

@@ -12,7 +12,7 @@
 2. **Who may call this door, and what does it call?** — all 177 routes, one row each (§4).
 3. **If I change a service, what breaks?** — every service and its callers (§6).
 4. **If I change a table, who writes it?** — every model and the code that writes it (§7).
-5. **If I flip a switch, what disappears?** — the 13 feature switches and every place that reads them (§8).
+5. **If I flip a switch, what disappears?** — the 14 feature switches and every place that reads them (§8).
 
 ## 1. The layers
 
@@ -220,7 +220,7 @@ Doors in use: `activeOrgCtx` 74 · `requireActor` 42 · `requireTeamWork` 13 · 
 | POST | `/api/organizations/[id]/members/[userId]/logout` | requireAccountsActor | `accounts`: logoutEverywhere, requireAccountsActor |
 | POST | `/api/organizations/[id]/members/[userId]/password` | requireAccountsActor | `accounts`: requireAccountsActor, resetAccountPassword |
 | POST | `/api/organizations/[id]/members/[userId]/status` | requireAccountsActor | `accounts`: accountStatusSchema, requireAccountsActor, setAccountStatus |
-| GET | `/api/presence` | requireActor | `guest-guard`: assertNotGuest<br>`features`: assertFeatureOn<br>`presence-roster`: presenceRoster |
+| GET | `/api/presence` | requireActor | `guest-guard`: assertNotGuest<br>`features`: assertFeatureOn<br>`presence-roster`: presenceRoster<br>`current-space`: currentSpace<br>`features`: isFeatureOn |
 | GET | `/api/production` | requireActor | `production`: dayChecklist, dayIso<br>`guest-guard`: assertNotGuest<br>`space-place`: placeOf |
 | POST | `/api/production/checklist` | requireActor | `production`: setRoutineDone |
 | GET, POST | `/api/production/routines` | requireActor | `production`: createRoutine, listRoutines, routineSchema<br>`guest-guard`: assertNotGuest<br>`space-place`: placeOf |
@@ -293,7 +293,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | Service | Lines | Imported by | What it owns |
 |---|---|---|---|
 | `integrations` | 180 | 82 | Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. |
-| `current-space` | 128 | 45 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
+| `current-space` | 128 | 46 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
 | `guest-guard` | 30 | 38 | Org GUESTs are external partners (for example the factory): they see only what is shared with them, never write business data, and never see prices or the staff directory. |
 | `features` | 48 | 26 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
 | `tasks` | 562 | 18 | no header comment — exports `TASK_INCLUDE`, `assignedTo`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, … |
@@ -351,7 +351,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `first-steps` | 100 | 1 | The first-steps card («خطواتك الأولى») computed from REAL data for the signed-in actor: nothing is stored about "progress" - a step is done because the rows say so (a theme chos… |
 | `instant-work` | 127 | 1 | «مهمة فورية» (the owner's ask, 2026-10-27: «+ بالمهام ومهمة فورية لشخص محدد مع أولوية»): a task typed in one go — a title, the person, the priority, a day — with no project to p… |
 | `my-work` | 149 | 1 | The company's zone as the person's My Work page reads it: the first company they are an ACTIVE member of. |
-| `presence-roster` | 61 | 1 | THE PEOPLE DOCK — who works here and who is at their screen right now (the owner's ask, 2026-10-29: «المستخدمين ظاهرين على زاوية الموقع تحت وكل واحد جنبه علامة خضراء أونلاين»). |
+| `presence-roster` | 73 | 1 | THE PEOPLE DOCK — who works here and who is at their screen right now (the owner's ask, 2026-10-29: «المستخدمين ظاهرين على زاوية الموقع تحت وكل واحد جنبه علامة خضراء أونلاين»). |
 | `space-delete` | 93 | 1 | DELETING A SPACE WITH ALL ITS WORK (the owner's decision, 2026-10-26: «كلها مع شغلها»). |
 | `today` | 298 | 1 | «اليوم» — everything the Today page shows, in one call (`getToday(actor)`), so the page decides nothing. |
 | `today-dashboard` | 113 | 1 | The smart cards of «اليوم» — a few numbers, each over what the person may already see. |
@@ -449,6 +449,7 @@ before it. A switch is only honest if something reads it, so this is the list of
 | `chatBubbles` | 1 — `server/chat/topics.ts` |
 | `taskLinks` | 3 — `app/(app)/tasks/[id]/page.tsx`, `app/api/tasks/[id]/links/[linkId]/route.ts`, `app/api/tasks/[id]/links/route.ts` |
 | `milestones` | 5 — `app/(app)/projects/[id]/page.tsx`, `app/(app)/tasks/[id]/page.tsx`, `app/api/milestones/[id]/route.ts`, `app/api/projects/[id]/milestones/route.ts`, `server/services/milestones.ts` |
+| `ownerHiddenOnline` | 2 — `app/api/presence/route.ts`, `server/chat/topics.ts` |
 | `quickChat` | 0 —  |
 
 ## 9. What this map noticed

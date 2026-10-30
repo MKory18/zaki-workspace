@@ -1,5 +1,6 @@
 import { db } from "@/server/db";
 import { onlineUserIds } from "@/server/realtime/presence";
+import { spacePeopleWhere } from "@/server/chat/space-people";
 
 /**
  * THE PEOPLE DOCK — who works here and who is at their screen right now (the owner's ask,
@@ -33,9 +34,20 @@ export interface PresenceRoster {
   total: number;
 }
 
-export async function presenceRoster(orgId: string, viewerId: string): Promise<PresenceRoster> {
+export interface RosterOptions {
+  /** the space the viewer is in: the roster is ITS people (a space is like a separate site) */
+  spaceId?: string | null;
+  /** the whole company: only the OWNER may ask for it (the route decides) */
+  everyone?: boolean;
+  /** «إخفاء المالك من متصل»: the owner shows as not at his screen to everybody but himself */
+  hideOwner?: boolean;
+}
+
+export async function presenceRoster(orgId: string, viewerId: string, opts: RosterOptions = {}): Promise<PresenceRoster> {
+  const scoped = !opts.everyone && opts.spaceId ? spacePeopleWhere(orgId, opts.spaceId) : null;
   const rows = await db.organizationMember.findMany({
     where: {
+      ...(scoped ? { AND: [scoped] } : {}),
       organizationId: orgId,
       role: { not: "GUEST" },
       status: "ACTIVE",
@@ -52,7 +64,7 @@ export async function presenceRoster(orgId: string, viewerId: string): Promise<P
       role: r.role,
       avatarUrl: r.user.avatarUrl,
       // the viewer is looking at this very screen: they are at their screen, whatever the stream says
-      online: r.userId === viewerId || online.has(r.userId),
+      online: r.userId === viewerId || (online.has(r.userId) && !(opts.hideOwner && r.role === "OWNER")),
     }))
     // whoever is at their screen first, then by name: the list is read top-down on a phone
     .sort((a, b) => (a.online === b.online ? a.name.localeCompare(b.name, "ar") : a.online ? -1 : 1));

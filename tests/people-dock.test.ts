@@ -41,7 +41,7 @@ const ROSTER: PresenceRosterDto = {
 
 function html(data: PresenceRosterDto | null, props: { enabled?: boolean; defaultOpen?: boolean } = {}): string {
   const client = new QueryClient();
-  if (data) client.setQueryData(["presence-dock"], data);
+  if (data) client.setQueryData(["presence-dock", "space"], data);
   return renderToStaticMarkup(
     createElement(
       Translations,
@@ -134,5 +134,16 @@ describe("choosing somebody in the dock (the owner, 2026-10-30: «ما بقدر 
   it("without «meId» (an older answer) nobody is offered a chat by mistake of the roster's own owner row", () => {
     const out = html(ROSTER, { defaultOpen: true });
     expect(out).toContain("data-dock-chat=\"u1\"");
+  });
+});
+
+describe("who the dock lists (the owner, 2026-10-30: my space, or for the owner the whole company)", () => {
+  it("the owner is offered a choice between his space and the whole company, and nobody else is", () => {
+    const owner = html({ ...ROSTER, meId: "u2", canChooseScope: true, scope: "space" }, { defaultOpen: true });
+    expect(owner).toContain('data-dock-scope="space"');
+    expect(owner).toContain('data-dock-scope="company"');
+    expect(owner).toContain(AR["shell.dock.scope_company"]!);
+    const member = html({ ...ROSTER, meId: "u1" }, { defaultOpen: true });
+    expect(member).not.toContain("data-dock-scope");
   });
 });
