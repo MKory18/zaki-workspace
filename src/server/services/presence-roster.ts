@@ -25,6 +25,8 @@ export interface PresencePerson {
 }
 
 export interface PresenceRoster {
+  /** the person asking: the screen draws their own row as a link to their profile */
+  meId: string;
   people: PresencePerson[];
   onlineCount: number;
   /** everybody on the roster, online or not */
@@ -54,5 +56,5 @@ export async function presenceRoster(orgId: string, viewerId: string): Promise<P
     }))
     // whoever is at their screen first, then by name: the list is read top-down on a phone
     .sort((a, b) => (a.online === b.online ? a.name.localeCompare(b.name, "ar") : a.online ? -1 : 1));
-  return { people, onlineCount: people.filter((p) => p.online).length, total: people.length };
+  return { meId: viewerId, people, onlineCount: people.filter((p) => p.online).length, total: people.length };
 }
