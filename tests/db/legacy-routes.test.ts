@@ -26,6 +26,8 @@ import WatchSessionPage from "@/app/(app)/watch/[id]/page";
 import ArchivePage from "@/app/(app)/archive/page";
 import OwnerBoardPage from "@/app/(app)/owner/page";
 import OwnerBoardPersonPage from "@/app/(app)/owner/people/[id]/page";
+import OwnerAssistantPage from "@/app/(app)/owner/assistant/page";
+import OwnerAssistantSettingsPage from "@/app/(app)/owner/assistant/settings/page";
 import MyWorkPage from "@/app/(app)/my-work/page";
 import TimeReportPage from "@/app/(app)/time/page";
 import ProjectsPage from "@/app/(app)/projects/page";
@@ -102,7 +104,7 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25, and «نتفرّج سوا» (`/watch`, `/watch/[id]`, the owner's
  * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30), and `/cards` («اللوحات») with the page inside a card (`/cards/[id]`), and `/time` («تقرير الوقت», 2026-10-30: owned by «الشغل», linked from a task and from «وقتي اليوم»).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]", "/time", "/owner", "/owner/people/[id]"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]", "/time", "/owner", "/owner/people/[id]", "/owner/assistant", "/owner/assistant/settings"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -157,6 +159,8 @@ const PAGES: Record<string, PageCall> = {
   "/archive": () => ArchivePage(),
   "/owner": ({ searchParams }) => OwnerBoardPage({ searchParams }),
   "/owner/people/[id]": (args) => OwnerBoardPersonPage({ params: idOf(args), searchParams: {} }),
+  "/owner/assistant": ({ searchParams }) => OwnerAssistantPage({ searchParams }),
+  "/owner/assistant/settings": () => OwnerAssistantSettingsPage(),
   "/my-work": ({ searchParams }) => MyWorkPage({ searchParams }),
   "/time": ({ searchParams }) => TimeReportPage({ searchParams }),
   "/projects": ({ searchParams }) => ProjectsPage({ searchParams }),
@@ -303,6 +307,8 @@ const GONE = `gone${uid()}`;
 async function linkWorld() {
   const team = await makeTeam();
   const orgId = team.org.id;
+  // «مساعد المالك» is OFF by default and its pages are «not found» while it is off; the owner opens every page of the shell below
+  await db.organization.update({ where: { id: orgId }, data: { settings: { features: { ownerAssistant: true } } } });
   const lead = await makeUser({ orgId, role: "LEAD", name: "Lead" });
 
   async function spaceWithWork(members: { userId: string; role?: "ADMIN" | "MEMBER" | "GUEST" }[], name: string, assigneeId: string | null) {

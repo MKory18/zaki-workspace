@@ -43,7 +43,8 @@ const WORK_ALL: TabKey[] = ["my-work", "projects", "list", "calendar", "goals", 
 const WORK_GUEST: TabKey[] = ["my-work", "projects", "list", "calendar"];
 // «لوحتي» (`board.self`) is on by rank for every staff rank (the owner's ask, 2026-10-30), so each of them has the «board» tab
 const ADMIN_ALL: TabKey[] = ["team", "board", "reports", "automation", "telegram", "settings"];
-const ADMIN_OWNER: TabKey[] = [...ADMIN_ALL, "archive"];
+// «مساعد المالك» is the OWNER rank's alone, right after «لوحة المالك» (it is drawn while its switch in «الميزات» is on)
+const ADMIN_OWNER: TabKey[] = ["team", "board", "assistant", "reports", "automation", "telegram", "settings", "archive"];
 
 describe("the five places, for each kind of person", () => {
   it("OWNER: the six places; the work place has its nine tabs and the admin place includes the owner-only archive tab", () => {
@@ -256,9 +257,9 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
     ["an unknown rank with every capability", { role: "SUPERUSER" as unknown as NavSubject["role"], caps: [...CAPABILITIES] }],
   ];
 
-  it("the tabs are the twenty of the map, each once", () => {
-    expect(ALL_TABS).toHaveLength(20);
-    expect(new Set(ALL_TABS).size).toBe(20);
+  it("the tabs are the twenty-one of the map, each once", () => {
+    expect(ALL_TABS).toHaveLength(21);
+    expect(new Set(ALL_TABS).size).toBe(21);
   });
 
   it("agrees with buildNav for every tab and every kind of person: a tab is open exactly when the map draws it", () => {
@@ -281,7 +282,7 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
   it("offeredToGuests: exactly my work, projects, list and calendar", () => {
     expect(ALL_TABS.filter((key) => offeredToGuests(key))).toEqual(WORK_GUEST);
     expect(ALL_TABS.filter((key) => !offeredToGuests(key))).toEqual(
-      ["goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "files", "team", "space", "board", "reports", "automation", "telegram", "settings", "archive"],
+      ["goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "files", "team", "space", "board", "assistant", "reports", "automation", "telegram", "settings", "archive"],
     );
   });
 
@@ -412,6 +413,7 @@ describe("the words", () => {
       team: "الفريق",
       space: "المساحة",
       board: "لوحة المالك",
+      assistant: "المساعد",
       reports: "التقارير",
       automation: "الأتمتة والتكاملات",
       telegram: "تيليجرام",

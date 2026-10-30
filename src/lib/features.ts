@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -82,6 +82,11 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // routes answer «not found» and the owner-only lock on reward tasks is lifted (a task is a plain task again); the rewards
   // and pins already stored stay in the data and come back with the switch
   taskRewards: true,
+  // «مساعد المالك» (src/server/services/owner-assistant*.ts): an analyst for the OWNER alone on top of «لوحة المالك», OFF until the
+  // owner turns it on AND enters his own key (it needs one). Off: the tab is not drawn and the pages and the routes under
+  // /owner/assistant and /api/owner-assistant answer «not found» for everybody, the owner included; the saved settings and
+  // conversations stay and come back with the switch. It reads the board, so it also needs «لوحة المالك» on.
+  ownerAssistant: false,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

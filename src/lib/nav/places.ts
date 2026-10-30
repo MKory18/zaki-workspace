@@ -83,7 +83,8 @@ export type TabKey =
   | "telegram"
   | "settings"
   | "archive"
-  | "board";
+  | "board"
+  | "assistant";
 
 /** An icon by NAME: the shell maps it to a drawing (src/components/shell/nav-icons.tsx). Data only, so it crosses from server to browser. */
 export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings" | "watch" | "cards";
@@ -216,6 +217,9 @@ export const PLACES: readonly PlaceDef[] = [
         feature: "ownerBoard",
         labelFor: (subject) => (subject.role === "OWNER" ? "nav.tab.board" : subject.caps.includes("board.team") ? "nav.tab.boardTeam" : "nav.tab.boardSelf"),
       },
+      // «مساعد المالك» (the owner's ask, 2026-10-30): next to «لوحة المالك», for the OWNER rank alone (the owner and his partners)
+      // and only while its switch in «الميزات» is on. The pages and routes decide again on the server (404 for everybody else).
+      { key: "assistant", href: "/owner/assistant", labelKey: "nav.tab.assistant", icon: "reports", requires: { rankAtLeast: "OWNER" }, feature: "ownerAssistant" },
       { key: "reports", href: "/analytics", labelKey: "nav.analytics", icon: "reports", requires: { capability: "reports.view" } },
       { key: "automation", href: "/automation", labelKey: "nav.tab.automation", icon: "automation", requires: { capability: "integrations.manage" } },
       { key: "telegram", href: "/telegram", labelKey: "nav.telegram", icon: "telegram", requires: { capability: "integrations.manage" } },

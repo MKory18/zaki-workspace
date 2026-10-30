@@ -258,6 +258,16 @@ other way is a bug.
   must skip those.
 - Secrets stored in the database (Telegram, n8n, Google) are encrypted at rest with
   `ENCRYPTION_KEY` (derived from `AUTH_SECRET` while it is unset).
+- **«مساعد المالك» (the owner's AI analyst, `src/server/ai/`)** keeps these rules, pinned by `tests/db/owner-assistant.test.ts`
+  and `tests/owner-assistant-ui.test.ts`: it is the OWNER rank's alone (404 for everybody else) and behind the switch
+  `ownerAssistant` (off by default). The owner's own API key is write-only: encrypted in `AiSettings.keyCipher`, read in ONE
+  function (`readKey`), never returned, logged, audited or put in an error. Everything sent to the model is built by
+  `buildContext` + `redactText` (`src/server/ai/redact.ts`): aggregates only, staff as «موظف n» unless the owner allows names,
+  titles off unless he allows them (then redacted, 80 characters, 50 per request), never a message body, a file name, a comment,
+  a CRM row or a staff e-mail / phone; `verifyContext` refuses the whole request on anything outside its list. The model
+  proposes through ONE tool (`propose_action`) on a five-action whitelist; nothing runs until the owner presses «وافق», once,
+  through the ordinary services (`createTask`, `updateTask`, `setPinned`, `pushNotification`); money tasks are never touched.
+  ⚠️ A customer's name inside a free text has no shape a program can find. 🔧 So titles are off by default and the owner is told.
 
 ## Deployment
 

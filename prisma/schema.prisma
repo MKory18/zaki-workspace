@@ -1800,3 +1800,91 @@ model CardAttachment {
   @@unique([cardId, fileId])
   @@index([cardId, position])
 }
+
+// «مساعد المالك» (the owner, 2026-10-30): an analyst for the OWNER alone, on top of «لوحة المالك». ONE row per company holds the
+// settings; the owner's own API key is stored ENCRYPTED (`keyCipher`, src/server/crypto.ts) and is NEVER returned by any route:
+// only the last four characters (`keyLast4`), computed when the key was saved, are shown. No foreign keys on purpose (the same
+// as the other owner tables): a company's assistant data is not meant to be reachable from any other table.
+model AiSettings {
+  id                 String   @id @default(cuid())
+  orgId              String   @unique
+  keyCipher          String?
+  keyLast4           String?
+  model              String   @default("claude-sonnet-5-5")
+  dailyLimit         Int      @default(50)
+  monthlyTokenBudget Int      @default(2000000)
+  // «اسمح بأسماء الموظفين»: off, the staff are sent as «موظف 1…n» and the answer is shown with real names put back by the server
+  allowNames         Boolean  @default(false)
+  // «اسمح بعناوين المهام بعد التنقية»: off, no task or space title ever leaves the server
+  allowTitles        Boolean  @default(false)
+  updatedAt          DateTime @updatedAt
+}
+
+// Counters only (NO content): one row per company, person and company day. `day` is the company's day as YYYY-MM-DD.
+model AiUsage {
+  id           String @id @default(cuid())
+  orgId        String
+  userId       String
+  day          String
+  inputTokens  Int    @default(0)
+  outputTokens Int    @default(0)
+  requests     Int    @default(0)
+
+  @@unique([orgId, userId, day])
+  @@index([orgId, day])
+}
+
+// A conversation belongs to ONE owner (`userId`) and is shown to nobody else. `refs` is the table the pseudonyms of THIS
+// conversation stand for (U1 → a person id, T3 → a task id ...): a proposal may only name what was in it.
+model AiConversation {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  title     String
+  refs      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  messages  AiMessage[]
+  proposals AiProposal[]
+
+  @@index([orgId, userId, updatedAt])
+}
+
+// `content` is the REDACTED text as it was sent, or the model's reply with the pseudonyms (never the real names).
+// `sentJson` (on an answer): exactly what was sent to the model for it, for «شو انبعت للنموذج».
+model AiMessage {
+  id             String        @id @default(cuid())
+  conversationId String
+  // USER | ASSISTANT (a text, not an enum: the database refuses anything else with a CHECK)
+  role           String
+  content        String
+  sentJson       Json?
+  createdAt      DateTime      @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+// What the model PROPOSED. Nothing here has been done: only the owner's «وافق» runs it, once, through the ordinary services.
+model AiProposal {
+  id             String           @id @default(cuid())
+  orgId          String
+  conversationId String
+  messageId      String
+  type           String
+  paramsJson     Json
+  reasonText     String
+  // PENDING | APPROVED | REJECTED | EXPIRED | FAILED (a text with a CHECK, like the reward statuses)
+  status         String           @default("PENDING")
+  createdAt      DateTime         @default(now())
+  decidedAt      DateTime?
+  decidedById    String?
+  resultJson     Json?
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status, createdAt])
+  @@index([conversationId, createdAt])
+}
