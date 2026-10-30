@@ -81,8 +81,7 @@ describe("the sound file and who owns it", () => {
   it("is served like the other static folders: a request for it is never sent to the sign-in page", () => {
     const middleware = readFileSync(path.join(ROOT, "src/middleware.ts"), "utf8");
     expect(middleware).toMatch(/STATIC_DIRS = \[[^\]]*"\/sounds\/"/);
-    expect(middleware).toMatch(/STATIC_EXT = [^
-]*mp3/);
+    expect(middleware).toMatch(/STATIC_EXT = [^\n]*mp3/);
   });
 
   it("is used by both sides: the incoming card and the caller's room", () => {
