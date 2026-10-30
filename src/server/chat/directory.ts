@@ -2,6 +2,7 @@ import { db } from "@/server/db";
 import { onlineUserIds } from "@/server/realtime/presence";
 import type { DirectoryPersonDto } from "@/server/chat/dto";
 import { spacePeopleWhere } from "@/server/chat/space-people";
+import { isFeatureOn } from "@/server/services/features";
 
 /**
  * The people picker: ACTIVE non-guests of the company, the viewer excluded. It is the staff
@@ -53,6 +54,7 @@ export interface CompanyPersonDto extends DirectoryPersonDto {
  * the route drops them.
  */
 export async function companyDirectory(orgId: string, viewerId: string, spaceId: string | null): Promise<CompanyPersonDto[]> {
+  const hideOwner = await isFeatureOn(orgId, "ownerHiddenOnline");
   const [rows, ofSpace, online] = await Promise.all([
     db.organizationMember.findMany({
       where: { organizationId: orgId, role: { not: "GUEST" }, status: "ACTIVE" },
@@ -75,6 +77,7 @@ export async function companyDirectory(orgId: string, viewerId: string, spaceId:
     avatarUrl: r.user.avatarUrl,
     // no space at all (a company without spaces): the DM is opened company-wide, so nobody is fenced off
     inSpace: spaceId ? space.has(r.userId) : true,
-    online: r.userId === viewerId || atScreen.has(r.userId),
+    // «إخفاء المالك من متصل»: the owner does not light up for anybody but himself
+    online: r.userId === viewerId || (atScreen.has(r.userId) && !(hideOwner && r.role === "OWNER")),
   }));
 }

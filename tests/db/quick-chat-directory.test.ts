@@ -55,3 +55,21 @@ describe("الدردشة السريعة: كل الشركة، وكل واحد م�
     expect(res.json?.["message"]).toBe("chat.guest_forbidden");
   });
 });
+
+describe("الدردشة السريعة تحترم «إخفاء المالك من متصل» (the owner, 2026-10-30)", () => {
+  it("switched on, the owner at his screen is listed as not online to the others; off, as before", async () => {
+    const { db } = await import("./helpers");
+    const { withFeature } = await import("@/lib/features");
+    const { resetPresenceForTests, touchPresence } = await import("@/server/realtime/presence");
+    resetPresenceForTests();
+    const team = await makeTeam();
+    await makeWorkspace(team.org.id, [{ userId: team.member.id }]);
+    touchPresence(team.owner.id);
+    await loginAs(team.member.id);
+    expect((await peopleOf("http://localhost/api/chat/directory?scope=company")).get(team.owner.id)?.online).toBe(true);
+
+    const org = await db.organization.findUniqueOrThrow({ where: { id: team.org.id }, select: { settings: true } });
+    await db.organization.update({ where: { id: team.org.id }, data: { settings: withFeature(org.settings, "ownerHiddenOnline", true) as never } });
+    expect((await peopleOf("http://localhost/api/chat/directory?scope=company")).get(team.owner.id)?.online).toBe(false);
+  });
+});

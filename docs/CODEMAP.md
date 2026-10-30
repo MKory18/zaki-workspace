@@ -295,7 +295,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `integrations` | 180 | 82 | Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. |
 | `current-space` | 128 | 46 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
 | `guest-guard` | 30 | 38 | Org GUESTs are external partners (for example the factory): they see only what is shared with them, never write business data, and never see prices or the staff directory. |
-| `features` | 48 | 26 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
+| `features` | 48 | 27 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
 | `tasks` | 562 | 18 | no header comment — exports `TASK_INCLUDE`, `assignedTo`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, … |
 | `team-scope` | 149 | 18 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
 | `cards` | 614 | 17 | «اللوحات» — the cards of a space. |
@@ -449,7 +449,7 @@ before it. A switch is only honest if something reads it, so this is the list of
 | `chatBubbles` | 1 — `server/chat/topics.ts` |
 | `taskLinks` | 3 — `app/(app)/tasks/[id]/page.tsx`, `app/api/tasks/[id]/links/[linkId]/route.ts`, `app/api/tasks/[id]/links/route.ts` |
 | `milestones` | 5 — `app/(app)/projects/[id]/page.tsx`, `app/(app)/tasks/[id]/page.tsx`, `app/api/milestones/[id]/route.ts`, `app/api/projects/[id]/milestones/route.ts`, `server/services/milestones.ts` |
-| `ownerHiddenOnline` | 2 — `app/api/presence/route.ts`, `server/chat/topics.ts` |
+| `ownerHiddenOnline` | 3 — `app/api/presence/route.ts`, `server/chat/directory.ts`, `server/chat/topics.ts` |
 | `quickChat` | 0 —  |
 
 ## 9. What this map noticed
