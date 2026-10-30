@@ -255,7 +255,9 @@ const switchUse = switchKeys.map((key) => ({
   key,
   usedIn: sources
     .filter((s) => s.file !== "src/lib/features.ts")
-    .filter((s) => new RegExp(`["']${key}["']`).test(s.src) || new RegExp(`\\b${key}\\b`).test(s.src))
+    // the key as a string literal: `assertFeatureOn(orgId, "taskLinks")`. A loose word match counted a
+    // dictionary fragment's import (`import taskLinks from "./ar.task-links.json"`) as a reader.
+    .filter((s) => new RegExp(`["']${key}["']`).test(s.src))
     .map((s) => s.file),
 }));
 
@@ -292,7 +294,7 @@ p("1. **Where does a job live?** — the folder map (§2).");
 p("2. **Who may call this door, and what does it call?** — all " + routes.length + " routes, one row each (§4).");
 p("3. **If I change a service, what breaks?** — every service and its callers (§6).");
 p("4. **If I change a table, who writes it?** — every model and the code that writes it (§7).");
-p("5. **If I flip a switch, what disappears?** — the seven feature switches and every place that reads them (§8).");
+p("5. **If I flip a switch, what disappears?** — the " + switchKeys.length + " feature switches and every place that reads them (§8).");
 p();
 
 p("## 1. The layers");

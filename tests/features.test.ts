@@ -32,7 +32,11 @@ describe("«الميزات»: the owner's switches", () => {
   });
 
   it("lists every switch with its default filled in, and the ones that are off", () => {
-    expect(featuresOf({ features: { watch: false, unknown: true } })).toEqual({ watch: false, sectionPermissions: true, libraryDrive: true, pushEverything: true, chatRowMenu: true, callNoiseFilter: true, instantWork: true, avatars: true, peopleDock: true, chatBubbles: true });
+    const all = featuresOf({ features: { watch: false, unknown: true } });
+    // exactly the keys of `FEATURES`, each at its default — a key added to the list lands here without
+    // editing this test, and a key that exists in one place and not the other fails
+    expect(Object.keys(all).sort()).toEqual([...FEATURES].sort());
+    for (const key of FEATURES) expect(all[key], key).toBe(key === "watch" ? false : FEATURE_DEFAULTS[key]);
     expect(featuresOff({ features: { watch: false } })).toEqual(["watch"]);
     expect(featuresOff({})).toEqual([]);
   });

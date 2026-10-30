@@ -15,6 +15,7 @@ import { fmtDMY, fmtDateTime } from "@/lib/format";
 import { columnLabel, enumLabel, enumOptions } from "@/lib/i18n/enums";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
+import { TaskLinks, type LinkCandidate } from "@/components/task-links";
 
 export interface TaskDetailData {
   id: string;
@@ -42,6 +43,7 @@ export function TaskDetail({
   currentUserId,
   members,
   labels,
+  links = null,
 }: {
   task: TaskDetailData;
   /** Whether the API would let this person change the task (see canWriteInWorkspace). */
@@ -49,6 +51,8 @@ export function TaskDetail({
   currentUserId: string;
   members: { id: string; name: string }[];
   labels: { id: string; name: string; color: string }[];
+  /** «التبعيات»: null when the company switched it off (the card is not drawn at all). */
+  links?: { candidates: LinkCandidate[] } | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -285,6 +289,8 @@ export function TaskDetail({
           {save.isPending ? <p className="text-xs text-muted">{t("common.saving")}</p> : null}
         </CardBody>
       </Card>
+
+      {links ? <TaskLinks taskId={task.id} canEdit={canEdit} candidates={links.candidates} /> : null}
 
       <Card>
         <CardHeader>
