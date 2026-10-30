@@ -36,7 +36,7 @@
   "guide.tour.progress": "{{current}} من {{total}}",
 
   "guide.tour.shell.places.title": "الأماكن",
-  "guide.tour.shell.places.body": "هون أماكن النظام، مثل اليوم والشغل. اضغط على أي مكان لتنتقل له.",
+  "guide.tour.shell.places.body": "هون أماكن النظام. اضغط على أي مكان لتنتقل له.",
   "guide.tour.shell.tabs.title": "التبويبات",
   "guide.tour.shell.tabs.body": "جوّا كل مكان في تبويبات لأقسامه. مثلًا بـ«الشغل»: مهامي، المشاريع، القائمة…",
   "guide.tour.shell.search.title": "البحث",

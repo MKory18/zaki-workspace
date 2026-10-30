@@ -1,4 +1,4 @@
-import { BarChart3, Building2, Circle, Clapperboard, House, Library, ListChecks, MessageCircle, Send, Settings, Users, Workflow, type LucideIcon } from "lucide-react";
+import { BarChart3, Building2, Circle, Clapperboard, House, LayoutDashboard, Library, ListChecks, MessageCircle, Send, Settings, Users, Workflow, type LucideIcon } from "lucide-react";
 import type { NavIconKey } from "@/lib/nav/places";
 
 /**
@@ -18,6 +18,7 @@ const ICONS: Readonly<Record<NavIconKey, LucideIcon>> = {
   telegram: Send,
   settings: Settings,
   watch: Clapperboard,
+  cards: LayoutDashboard,
 };
 
 export function NavIcon({ icon, className }: { icon: NavIconKey; className?: string }) {
