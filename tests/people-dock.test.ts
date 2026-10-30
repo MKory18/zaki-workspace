@@ -114,3 +114,25 @@ describe("the people dock", () => {
     expect(dock).not.toMatch(/className="[^"]*\bfixed\b/);
   });
 });
+
+describe("choosing somebody in the dock (the owner, 2026-10-30: «ما بقدر ادخل ع الدردشة»)", () => {
+  const WITH_ME: PresenceRosterDto = { ...ROSTER, meId: "u2" };
+
+  it("another person is a button that opens the private chat with them", () => {
+    const out = html(WITH_ME, { defaultOpen: true });
+    expect(out).toContain("data-dock-chat=\"u1\"");
+    expect(out).toContain("data-dock-chat=\"u3\"");
+    expect(out).toContain(AR["shell.dock.chat_with"]!.replace("{name}", "سلمى عبيد"));
+  });
+
+  it("I am a link to my own profile, never a button that would open a chat with myself", () => {
+    const out = html(WITH_ME, { defaultOpen: true });
+    expect(out).not.toContain("data-dock-chat=\"u2\"");
+    expect(out).toContain('href="/u/u2"');
+  });
+
+  it("without «meId» (an older answer) nobody is offered a chat by mistake of the roster's own owner row", () => {
+    const out = html(ROSTER, { defaultOpen: true });
+    expect(out).toContain("data-dock-chat=\"u1\"");
+  });
+});

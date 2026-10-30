@@ -1,5 +1,6 @@
 "use client";
 
+import { ZakiMark } from "@/components/logo";
 import Link from "next/link";
 import { BookOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { InstallAppButton } from "@/components/pwa/install-hint";
@@ -86,16 +87,24 @@ export function Sidebar({
         <Link
           href="/"
           aria-label={brand}
-          className={cn("relative flex min-w-0 flex-col rounded-xl", collapsed && "mx-auto items-center")}
+          className={cn("relative flex min-w-0 items-center gap-2.5 rounded-xl", collapsed && "mx-auto justify-center")}
         >
-          <span aria-hidden="true" className={cn("zk-wordmark block max-w-full truncate py-0.5 leading-tight", brandSize)}>
-            <bdi>{collapsed ? (space?.emoji ?? Array.from(brand)[0] ?? "") : brand}</bdi>
+          {/* the project's mark: the «Z» with the star, drawn in code (components/logo.tsx), beside the lettering */}
+          <span data-brand-mark aria-hidden="true" className="shrink-0">
+            <ZakiMark className={collapsed ? "size-10" : "size-11"} />
           </span>
-          {orgName && !collapsed ? (
-            <span aria-hidden="true" className="mt-1.5 truncate text-xs font-semibold text-fg-muted">
-              <bdi>{orgName}</bdi>
+          {collapsed ? null : (
+            <span className="flex min-w-0 flex-col">
+              <span aria-hidden="true" className={cn("zk-wordmark block max-w-full truncate py-0.5 leading-tight", brandSize)}>
+                <bdi>{brand}</bdi>
+              </span>
+              {orgName ? (
+                <span aria-hidden="true" className="mt-1 truncate text-xs font-semibold text-fg-muted">
+                  <bdi>{orgName}</bdi>
+                </span>
+              ) : null}
             </span>
-          ) : null}
+          )}
         </Link>
       </div>
 
