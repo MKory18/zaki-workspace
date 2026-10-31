@@ -9,10 +9,10 @@
 ## What this answers
 
 1. **Where does a job live?** — the folder map (§2).
-2. **Who may call this door, and what does it call?** — all 233 routes, one row each (§4).
+2. **Who may call this door, and what does it call?** — all 243 routes, one row each (§4).
 3. **If I change a service, what breaks?** — every service and its callers (§6).
 4. **If I change a table, who writes it?** — every model and the code that writes it (§7).
-5. **If I flip a switch, what disappears?** — the 26 feature switches and every place that reads them (§8).
+5. **If I flip a switch, what disappears?** — the 27 feature switches and every place that reads them (§8).
 
 ## 1. The layers
 
@@ -45,13 +45,13 @@ Two rules the code keeps, and a reviewer can check by reading the map:
 | Where | Job |
 |---|---|
 | `src/app/(app)/` | the signed-in screens: one folder per place (today, boards, chat, crm, …) |
-| `src/app/api/` | 233 route handlers — the only mutating surface (§4) |
+| `src/app/api/` | 243 route handlers — the only mutating surface (§4) |
 | `src/app/login`, `register`, `onboarding`, `go` | the doors that work without a session |
 | `src/components/` | the interface, grouped by feature; `shell/` is the frame, `ui/` the primitives |
 | `src/lib/` | pure helpers that run on both sides: `i18n/`, `format.ts`, `features.ts`, `nav/`, `themes/` |
 | `src/server/` | everything that may only run on the server |
 | `src/server/policy/` | who may do what: ranks, capabilities, the section grid, conversation and call rules |
-| `src/server/services/` | 93 services — the business rules (§6) |
+| `src/server/services/` | 98 services — the business rules (§6) |
 | `src/server/chat/`, `calls/`, `files/`, `watch/`, `realtime/` | the larger features, split out of `services/` |
 | `prisma/` | the schema and the additive-only migrations |
 | `worker/` | a heartbeat placeholder: no scheduled job runs today |
@@ -87,10 +87,20 @@ writes to the database itself, instead of through a service, is marked with ‡ 
 **Service imports** are the functions the handler imports from `server/services/*` — the door itself
 is often one of them.
 
-Doors in use: `requireActor` 79 · `activeOrgCtx` 74 · `(none)` 20 · `requireTeamWork` 13 · `requireTaskAccess` 10 · `requireUser` 10 · `requireWorkspace` 8 · `requireAccountsActor` 5 · `crmContext` 4 · `ideaAccessCtx` 4 · `directoryContext` 3 · `currentUser` 1 · `ideasCtx` 1 · `requireOrgMember` 1.
+Doors in use: `requireActor` 89 · `activeOrgCtx` 74 · `(none)` 20 · `requireTeamWork` 13 · `requireTaskAccess` 10 · `requireUser` 10 · `requireWorkspace` 8 · `requireAccountsActor` 5 · `crmContext` 4 · `ideaAccessCtx` 4 · `directoryContext` 3 · `currentUser` 1 · `ideasCtx` 1 · `requireOrgMember` 1.
 
 | Method | Path | Door | Service imports |
 |---|---|---|---|
+| GET, POST | `/api/approval-forms` | requireActor † | `approval-access`: approvalsGate<br>`approval-input`: formBodySchema<br>`approval-forms`: createForm, getForm, listForms |
+| GET, PUT | `/api/approval-forms/[id]` | requireActor † | `approval-access`: approvalsGate<br>`approval-input`: formBodySchema<br>`approval-forms`: getForm, updateForm |
+| POST | `/api/approval-forms/[id]/archive` | requireActor † | `approval-access`: approvalsGate<br>`approval-forms`: setFormArchived |
+| POST | `/api/approval-forms/[id]/submit` | requireActor † | `approval-access`: approvalsGate<br>`approval-input`: fillBodySchema<br>`approval-forms`: submitForm<br>`approvals`: getApproval |
+| GET, POST | `/api/approvals` | requireActor † | `approval-access`: approvalsGate<br>`approval-input`: amountOf, createBodySchema<br>`approvals`: createApproval, getApproval, listApprovals |
+| GET | `/api/approvals/[id]` | requireActor † | `approvals`: getApproval |
+| POST | `/api/approvals/[id]/cancel` | requireActor † | `approval-access`: approvalsGate<br>`approvals`: cancelApproval, getApproval |
+| POST | `/api/approvals/[id]/decide` | requireActor † | `approval-access`: approvalsGate<br>`approval-input`: decideBodySchema<br>`approvals`: decideApproval, getApproval |
+| POST | `/api/approvals/[id]/resubmit` | requireActor † | `approval-access`: approvalsGate<br>`approval-input`: amountOf, resubmitBodySchema<br>`approvals`: getApproval, resubmitApproval<br>`approval-forms`: resubmitForm |
+| GET | `/api/approvals/approvers` | requireActor † | `approval-access`: approvalsGate, eligibleApprovers, notFound, spaceViewer |
 | POST | `/api/auth/login` | **none** (public by design) ‡ | — |
 | POST | `/api/auth/logout` | currentUser | — |
 | POST | `/api/auth/register` | **none** (public by design) | `registration`: RegistrationUnavailableError, requestRegistration |
@@ -327,7 +337,7 @@ Doors in use: `requireActor` 79 · `activeOrgCtx` 74 · `(none)` 20 · `requireT
 
 ## 5. Routes with no guard — and why that is correct
 
-Six of 233. Each one is a door that cannot have a session, or one that is closed.
+Six of 243. Each one is a door that cannot have a session, or one that is closed.
 
 | Route | Why it has no guard |
 |---|---|
@@ -349,21 +359,23 @@ high count is a wide surface: changing its signature reaches all of them.
 | Service | Lines | Imported by | What it owns |
 |---|---|---|---|
 | `integrations` | 180 | 82 | Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. |
-| `current-space` | 128 | 47 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
-| `features` | 48 | 46 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
+| `current-space` | 128 | 50 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
+| `features` | 48 | 47 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
 | `guest-guard` | 30 | 38 | Org GUESTs are external partners (for example the factory): they see only what is shared with them, never write business data, and never see prices or the staff directory. |
-| `team-scope` | 149 | 23 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
+| `team-scope` | 149 | 24 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
 | `org-day` | 26 | 21 | The start of the COMPANY's today — `Organization.timezone`, never the server's clock and never the browser's. |
 | `tasks` | 636 | 19 | no header comment — exports `TASK_INCLUDE`, `assignedTo`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, … |
 | `cards` | 614 | 17 | «اللوحات» — the cards of a space. |
 | `rewards` | 351 | 16 | «مهمة بمكافأة» — set, award, cancel; and «تثبيت» — pin. |
 | `time-tracking` | 662 | 16 | «حساب وقت الشغل» — the time people log on tasks (the owner, 2026-10-30: «حساب وقت الشغل: نعم»). |
+| `approval-access` | 144 | 13 | «طلبات الموافقة» — WHO MAY DO WHAT, in one place. |
 | `team-skills` | 302 | 13 | «المهارات» — the company's skills checklist and each person's level in it. |
-| `files` | 526 | 11 | no header comment — exports `fileLibrary`, `PENDING_PATH`, `PREVIEWABLE`, `INLINE_TEXT`, `logFile`, … |
+| `files` | 529 | 12 | no header comment — exports `fileLibrary`, `PENDING_PATH`, `PREVIEWABLE`, `INLINE_TEXT`, `logFile`, … |
 | `access` | 76 | 10 | Workspace-level isolation — the company's master switch. |
 | `n8n` | 294 | 10 | Events we allow orgs to forward to n8n — the UI shows exactly this list. |
 | `owner-assistant-access` | 29 | 10 | «مساعد المالك» — WHO MAY OPEN IT, in one place. |
 | `owner-board` | 781 | 10 | «لوحة المالك» — THE NUMBERS. |
+| `approvals` | 739 | 9 | «طلبات الموافقة» — ask, decide, send back, resubmit, cancel, read. |
 | `team-score` | 258 | 9 | «السكور» — a transparent composite per person per period, read from data that already exists. |
 | `custom-fields` | 542 | 8 | «حقول مخصصة» — the custom fields of a project's tasks. |
 | `google` | 355 | 8 | Only the files the app itself creates (the library's): a non-sensitive scope, so Google asks for no review and the owner's published app keeps its connection. |
@@ -373,6 +385,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `workspaces` | 331 | 8 | Spaces (workspaces): who is in one, who may change it. |
 | `accounts` | 874 | 7 | The account lifecycle: the owner (and, below him, whoever holds `users.manage`) creates, edits, suspends, reactivates and offboards people, resets passwords and ends sessions. |
 | `active-people` | 71 | 7 | "Nobody who was suspended or removed still counts." A suspended or offboarded member keeps their OrganizationMember row (history, authorship), so a query that reads that table w… |
+| `approval-forms` | 263 | 7 | «نموذج» — reusable forms that create approval requests. |
 | `card-audit` | 36 | 7 | Every card entry of the audit log starts with this, then the `LogAction` (`card.edited`). |
 | `card-guards` | 45 | 7 | The questions the page inside a card asks about its viewer, answered in one place. |
 | `ideas` | 395 | 7 | Membership context resolved from the idea's own org (shared by API routes). |
@@ -380,6 +393,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `owner-assistant-settings` | 169 | 7 | «مساعد المالك» — THE SETTINGS, THE KEY AND THE COUNTERS. |
 | `task-recurrence` | 205 | 7 | «مهمة متكررة» — a task marked as repeating, and the one series it belongs to. |
 | `team-criteria` | 109 | 7 | «معايير التقييم» — the criteria a reviewer rates 1-5: the five the owner named (جودة الشغل، الالتزام بالمواعيد، التعاون، المبادرة، التواصل), which the owner may rename, add to (… |
+| `approval-input` | 79 | 6 | What a request body says about an approval: the amount as typed (`amount`: "12.5", in the major unit) or already in minor units (`amountMinor`), the currency, the chain, the thi… |
 | `watch` | 372 | 6 | «نتفرّج سوا» — people of a space watch one link together (the owner's ask, 2026-10-26). |
 | `campaigns` | 235 | 5 | Campaigns live inside a department (marketing calendars). |
 | `card-attachments` | 124 | 5 | «المعرض»: a cover picture and an ordered gallery of pictures and files, with captions. |
@@ -441,6 +455,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `team-score-sections` | 40 | 1 | «السكور» — THE EXTENSION POINT. |
 | `today` | 298 | 1 | «اليوم» — everything the Today page shows, in one call (`getToday(actor)`), so the page decides nothing. |
 | `today-dashboard` | 113 | 1 | The smart cards of «اليوم» — a few numbers, each over what the person may already see. |
+| `approval-notify` | 65 | 0 | The bell of «طلبات الموافقة». |
 
 ## 7. Models → who writes them
 
@@ -502,7 +517,7 @@ to be added to, and the places a bug can leave the row half-written.
 | `TaskComment` | 3 | `app/api/tasks/[id]/comments/[commentId]/route.ts`: 2<br>`app/api/tasks/[id]/comments/route.ts`: 1 |
 | `TaskActivity` | 10 | `server/services/tasks.ts`: 4<br>`server/services/task-assign.ts`: 3<br>`app/api/tasks/[id]/comments/route.ts`: 1<br>`server/activity.ts`: 1<br>+1 more |
 | `Notification` | 8 | `server/notify.ts`: 3<br>`app/api/notifications/[id]/route.ts`: 1<br>`app/api/notifications/read/route.ts`: 1<br>`server/chat/notify.ts`: 1<br>+2 more |
-| `AuditLog` | 25 | `server/services/teams.ts`: 5<br>`server/services/rewards.ts`: 4<br>`server/services/owner-assistant-proposals.ts`: 3<br>`server/services/owner-assistant-settings.ts`: 3<br>+9 more |
+| `AuditLog` | 32 | `server/services/teams.ts`: 5<br>`server/services/approvals.ts`: 4<br>`server/services/rewards.ts`: 4<br>`server/services/approval-forms.ts`: 3<br>+11 more |
 | `Idea` | 7 | `server/services/ideas.ts`: 5<br>`server/services/move-to-space.ts`: 1<br>`server/services/space-delete.ts`: 1 |
 | `IdeaVote` | 2 | `server/services/ideas.ts`: 2 |
 | `Integration` | 4 | `server/services/integrations.ts`: 2<br>`server/services/google.ts`: 1<br>`server/services/telegram.ts`: 1 |
@@ -524,6 +539,10 @@ to be added to, and the places a bug can leave the row half-written.
 | `AiProposal` | 8 | `server/services/owner-assistant-proposals.ts`: 8 |
 | `ProjectField` | 3 | `server/services/custom-fields.ts`: 3 |
 | `TaskFieldValue` | 2 | `server/services/custom-fields.ts`: 2 |
+| `ApprovalRequest` | 4 | `server/services/approvals.ts`: 4 |
+| `ApprovalStep` | 6 | `server/services/approvals.ts`: 6 |
+| `ApprovalAttachment` | 2 | `server/services/approvals.ts`: 2 |
+| `FormTemplate` | 4 | `server/services/approval-forms.ts`: 4 |
 | `Skill` | 2 | `server/services/team-skills.ts`: 2 |
 | `PersonSkill` | 2 | `server/services/team-skills.ts`: 2 |
 | `PersonSkillHistory` | 1 | `server/services/team-skills.ts`: 1 |
@@ -567,14 +586,15 @@ before it. A switch is only honest if something reads it, so this is the list of
 | `chatOutbox` | 1 — `server/chat/topics.ts` |
 | `customFields` | 2 — `app/(app)/projects/[id]/page.tsx`, `server/services/custom-fields.ts` |
 | `lastSeen` | 4 — `app/(app)/profile/page.tsx`, `app/api/me/last-seen/route.ts`, `server/realtime/presence.ts`, `server/services/last-seen.ts` |
+| `approvals` | 6 — `app/(app)/approvals/[id]/page.tsx`, `app/(app)/approvals/forms/page.tsx`, `app/(app)/approvals/page.tsx`, `lib/guide/page-help.ts`, `lib/nav/places.ts`, `server/services/approval-access.ts` |
 | `teamDevelopment` | 4 — `app/(app)/owner/page.tsx`, `lib/nav/places.ts`, `server/policy/team-development.ts`, `server/services/team-score.ts` |
 
 ## 9. What this map noticed
 
 Written down, not fixed: Phase E decides what becomes a PR. Every item was read in the code, not guessed.
 
-- **Every guarded route asks a guard — none compares a role name.** 227 of 233 routes open with a function from §3; the other 6 are the doors listed in §5.
-- **Two doors carry most of the traffic.** `activeOrgCtx()` and `requireActor()` are the first call of 153 routes; both re-read the membership and its status from the database on every request, so a suspension takes effect on the next call, not on the next sign-in.
+- **Every guarded route asks a guard — none compares a role name.** 237 of 243 routes open with a function from §3; the other 6 are the doors listed in §5.
+- **Two doors carry most of the traffic.** `activeOrgCtx()` and `requireActor()` are the first call of 163 routes; both re-read the membership and its status from the database on every request, so a suspension takes effect on the next call, not on the next sign-in.
 - **16 route handlers write to the database themselves instead of calling a service.** 10 of them write their own `audit()` row (`/api/auth/login`, `/api/boards`, `/api/boards/[id]`, `/api/boards/[id]/columns`, `/api/boards/[id]/columns/[columnId]`, `/api/labels`, `/api/organizations/[id]`, `/api/projects`, `/api/projects/[id]`, `/api/workspaces/[id]`); 2 write a task-feed row instead (`/api/tasks/[id]/comments`, `/api/tasks/[id]/comments/[commentId]`); 4 write neither (`/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read`); 4 of those are one person's own preference (`/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read`), which is right. Nothing is silently lost today, but *who may, what is logged and what is notified* lives in the handler, not in one place. No screen file writes directly: every write comes through `/api`.
 - **15 models are written from more than three files** — see §7 for the list. Those are where a new invariant has to be added more than once, and where a half-written row is possible if one caller forgets a field.
 

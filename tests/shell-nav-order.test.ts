@@ -86,7 +86,7 @@ const hrefs = (markup: string) => [...markup.matchAll(/<a\b[^>]*href="([^"]*)"/g
 const grips = (markup: string) => markup.split(`aria-label="${(AR["navorder.grip"] as string).split("{label}")[0]}`).length - 1;
 
 const DEFAULT_PLACE_HREFS = ["/", "/chat", "/my-work", "/files", "/watch", "/members"];
-const DEFAULT_WORK_TABS = ["/my-work", "/projects", "/list", "/calendar", "/goals", "/ideas", "/production", "/departments", "/tickets", "/campaigns", "/crm"];
+const DEFAULT_WORK_TABS = ["/my-work", "/projects", "/list", "/calendar", "/goals", "/ideas", "/production", "/departments", "/tickets", "/campaigns", "/crm", "/approvals"];
 
 describe("no saved order: the code's order, exactly as before", () => {
   const html = shell("OWNER", "/projects");
@@ -109,7 +109,7 @@ describe("no saved order: the code's order, exactly as before", () => {
 describe("a saved order is applied on the first paint, everywhere", () => {
   const order: NavOrder = {
     places: ["library", "chat", "today", "work", "watch", "admin"],
-    tabs: { work: ["crm", "calendar", "my-work", "projects", "list", "goals", "ideas", "production", "departments", "tickets", "campaigns"] },
+    tabs: { work: ["crm", "calendar", "my-work", "projects", "list", "goals", "ideas", "production", "departments", "tickets", "campaigns", "approvals"] },
   };
   const html = shell("OWNER", "/projects", order);
 

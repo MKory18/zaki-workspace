@@ -223,6 +223,9 @@ export async function claimUploads(
   }
   const already = await tx.messageAttachment.findMany({ where: { fileId: { in: ids } }, select: { fileId: true } });
   if (already.length > 0) throw new ForbiddenError("chat.f.already_claimed");
+  // a file an approval request already holds is that request's (src/server/services/approvals.ts), not a message's
+  const heldByApproval = await tx.approvalAttachment.count({ where: { fileId: { in: ids } } });
+  if (heldByApproval > 0) throw new ForbiddenError("chat.f.already_claimed");
   // Read the upload metadata the same way it was written (raw SQL until the client is regenerated).
   const metaById = new Map<string, UploadMeta>();
   for (const id of ids) {
@@ -317,11 +320,14 @@ export async function findUnclaimedUpload(orgId: string, fileId: string, uploade
  */
 export async function purgeOrphanUploads(orgId?: string): Promise<number> {
   const cutoff = new Date(Date.now() - MAX_UPLOAD_AGE_MS);
+  // a file attached to an approval request is not an orphan: nothing ever deletes what a request holds
+  const held = (await db.approvalAttachment.findMany({ select: { fileId: true }, distinct: ["fileId"] })).map((a) => a.fileId);
   const orphans = await db.storedFile.findMany({
     where: {
       purpose: { in: ["CHAT", "VOICE"] },
       createdAt: { lt: cutoff },
       chatLinks: { none: {} },
+      ...(held.length > 0 ? { id: { notIn: held } } : {}),
       deletedAt: null,
       path: { not: PENDING_PATH },
       ...(orgId ? { orgId } : {}),
