@@ -32,6 +32,7 @@ import StructurePage from "@/app/(app)/structure/page";
 import DevelopmentPage from "@/app/(app)/development/page";
 import DevelopmentPersonPage from "@/app/(app)/development/people/[id]/page";
 import DevelopmentSkillsPage from "@/app/(app)/development/skills/page";
+import DevelopmentSettingsPage from "@/app/(app)/development/settings/page";
 import MyWorkPage from "@/app/(app)/my-work/page";
 import TimeReportPage from "@/app/(app)/time/page";
 import ProjectsPage from "@/app/(app)/projects/page";
@@ -108,7 +109,7 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25, and «نتفرّج سوا» (`/watch`, `/watch/[id]`, the owner's
  * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30), and `/cards` («اللوحات») with the page inside a card (`/cards/[id]`), and `/time` («تقرير الوقت», 2026-10-30: owned by «الشغل», linked from a task and from «وقتي اليوم»).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]", "/time", "/owner", "/owner/people/[id]", "/owner/assistant", "/owner/assistant/settings", "/structure", "/development", "/development/skills", "/development/people/[id]"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]", "/time", "/owner", "/owner/people/[id]", "/owner/assistant", "/owner/assistant/settings", "/structure", "/development", "/development/skills", "/development/settings", "/development/people/[id]"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -168,6 +169,7 @@ const PAGES: Record<string, PageCall> = {
   "/structure": () => StructurePage(),
   "/development": ({ searchParams }) => DevelopmentPage({ searchParams }),
   "/development/skills": () => DevelopmentSkillsPage(),
+  "/development/settings": () => DevelopmentSettingsPage(),
   "/development/people/[id]": (args) => DevelopmentPersonPage({ params: idOf(args), searchParams: {} }),
   "/my-work": ({ searchParams }) => MyWorkPage({ searchParams }),
   "/time": ({ searchParams }) => TimeReportPage({ searchParams }),
