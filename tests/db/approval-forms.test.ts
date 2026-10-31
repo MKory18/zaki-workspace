@@ -269,8 +269,8 @@ describe("versions: an edit adds the next version; a request keeps the questions
     expect((second.json?.["form"] as { version: number; name: string }).version).toBe(2);
     const rows = await db.formTemplate.findMany({ where: { familyId: family }, orderBy: { version: "asc" } });
     expect(rows.map((r) => [r.version, r.isLatest, r.name])).toEqual([[1, false, "طلب إجازة"], [2, true, "طلب إجازة 2"]]);
-    // version 1 is not touched
-    expect(await db.formTemplate.findUniqueOrThrow({ where: { id: v1.id } })).toEqual(v1);
+    // version 1 keeps its questions, its name and its chain: only «the latest» moved on
+    expect({ ...(await db.formTemplate.findUniqueOrThrow({ where: { id: v1.id } })), isLatest: true }).toEqual(v1);
     const logged = await db.auditLog.findMany({ where: { action: "form.updated", target: family } });
     expect(logged).toHaveLength(1);
     expect(logged[0]!.meta).toMatchObject({ from: 1, to: 2 });
