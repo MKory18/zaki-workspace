@@ -6,6 +6,7 @@ import { ArrowRight, MessageCircle, Search, Send, X } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { fmtTime } from "@/lib/format";
+import { lastSeenLabel } from "@/lib/last-seen";
 import { cn } from "@/lib/utils";
 import { foldedIncludes } from "@/lib/search/arabic";
 import { Avatar } from "@/components/ui/avatar";
@@ -17,10 +18,14 @@ export interface QuickChatPersonDto {
   /** One of the people of the space the viewer is in: a private message can be opened with them. */
   inSpace: boolean;
   online: boolean;
+  /** «آخر ظهور»: an ISO time, null (unknown or hidden), or absent (the switch is off / a guest): then the old «غير موجود» stays */
+  lastSeenAt?: string | null;
   user: { id: string; name: string; jobTitle: string | null; avatarUrl: string | null };
 }
 
 export interface QuickChatPeopleDto {
+  /** the company's zone, so «اليوم» and «أمس» are the company's days; present only with «آخر ظهور» */
+  timeZone?: string;
   people: QuickChatPersonDto[];
 }
 
@@ -198,6 +203,10 @@ export function QuickChat({ enabled = true, defaultOpen = false }: { enabled?: b
   const needle = search.trim();
   const filtered = needle ? people.filter((p) => foldedIncludes(p.user.name, needle) || foldedIncludes(p.user.jobTitle ?? "", needle)) : people;
   const messages = conversationQuery.data?.messages ?? [];
+  // «آخر ظهور»: null means the answer carries none (switch off, older server): each place keeps its old words
+  const seenOf = (p: QuickChatPersonDto): string | null => lastSeenLabel(p, { timeZone: peopleQuery.data?.timeZone });
+  // the header follows the list's fresh answer, not the snapshot taken when the person was picked
+  const livePeer = peer ? (people.find((p) => p.userId === peer.userId) ?? peer) : null;
 
   return (
     <div
@@ -224,13 +233,15 @@ export function QuickChat({ enabled = true, defaultOpen = false }: { enabled?: b
                 </button>
                 <span className="relative shrink-0">
                   <Avatar name={peer.user.name} src={peer.user.avatarUrl} className="size-8" />
-                  {peer.online ? (
+                  {(livePeer ?? peer).online ? (
                     <span aria-hidden="true" className="absolute -bottom-0.5 -end-0.5 size-2.5 rounded-full border-2 border-surface-1 bg-ok" />
                   ) : null}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold text-fg">{peer.user.name}</span>
-                  <span className="block truncate text-xs text-fg-muted">{peer.online ? t("quickChat.online") : t("quickChat.offline")}</span>
+                  <span className="block truncate text-xs text-fg-muted">
+                    {(livePeer ? seenOf(livePeer) : null) ?? ((livePeer ?? peer).online ? t("quickChat.online") : t("quickChat.offline"))}
+                  </span>
                 </span>
               </>
             ) : (
@@ -367,6 +378,11 @@ export function QuickChat({ enabled = true, defaultOpen = false }: { enabled?: b
                             <span className="block truncate text-sm font-semibold text-fg">{person.user.name}</span>
                             <span className="block truncate text-xs text-fg-muted">{person.user.jobTitle ?? t("shell.dock.no_title")}</span>
                           </span>
+                          {seenOf(person) !== null ? (
+                            <span data-last-seen className={cn("max-w-[7rem] shrink-0 text-end text-xs leading-tight", person.online ? "font-semibold text-ok" : "text-fg-muted")}>
+                              {seenOf(person)}
+                            </span>
+                          ) : null}
                           {person.inSpace ? null : (
                             <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-fg-muted">
                               {t("quickChat.other_space_badge")}

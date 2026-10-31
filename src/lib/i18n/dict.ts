@@ -43,6 +43,7 @@ import ownerBoard from "./ar.owner-board.json";
 import ownerAssistant from "./ar.owner-assistant.json";
 import customFields from "./ar.custom-fields.json";
 import outbox from "./ar.outbox.json";
+import lastSeen from "./ar.last-seen.json";
 import approvals from "./ar.approvals.json";
 
 /**
@@ -98,5 +99,6 @@ export const AR: Record<string, string> = {
   ...ownerAssistant,
   ...customFields,
   ...outbox,
+  ...lastSeen,
   ...approvals,
 };

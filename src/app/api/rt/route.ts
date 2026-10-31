@@ -176,7 +176,7 @@ async function sse(req: NextRequest): Promise<Response> {
           write(`: hb ${Date.now()}\n\n`);
           // an open stream IS presence: without this, everybody counted as offline 30 s after
           // connecting, and every message turned into a notification for them (review A3)
-          touchPresence(actor.userId);
+          touchPresence(actor.userId, undefined, actor.orgId);
           void recheckSession();
         }, HEARTBEAT_MS);
       },

@@ -1,6 +1,7 @@
 import { db } from "@/server/db";
 import { onlineUserIds } from "@/server/realtime/presence";
 import { spacePeopleWhere } from "@/server/chat/space-people";
+import { lastSeenReader } from "@/server/services/last-seen";
 
 /**
  * THE PEOPLE DOCK — who works here and who is at their screen right now (the owner's ask,
@@ -23,6 +24,11 @@ export interface PresencePerson {
   online: boolean;
   /** `/api/avatars/<id>`, or null. */
   avatarUrl?: string | null;
+  /**
+   * «آخر ظهور» (src/server/services/last-seen.ts): an ISO time, or null (unknown or hidden). ABSENT when the company's switch
+   * is off or the viewer may not be told (a guest), so an older client and the old «غير متصل» are untouched.
+   */
+  lastSeenAt?: string | null;
 }
 
 export interface PresenceRoster {
@@ -32,6 +38,8 @@ export interface PresenceRoster {
   onlineCount: number;
   /** everybody on the roster, online or not */
   total: number;
+  /** the company's zone, so the screen says «اليوم» and «أمس» in the company's days; present only with «آخر ظهور» */
+  timeZone?: string;
 }
 
 export interface RosterOptions {
@@ -52,10 +60,18 @@ export async function presenceRoster(orgId: string, viewerId: string, opts: Rost
       role: { not: "GUEST" },
       status: "ACTIVE",
     },
-    select: { userId: true, role: true, user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } } },
+    select: {
+      userId: true,
+      role: true,
+      status: true,
+      lastSeenAt: true,
+      hideLastSeen: true,
+      user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
   const online = new Set(await onlineUserIds(orgId));
+  const seen = await lastSeenReader(orgId, viewerId);
   const people = rows
     .map((r) => ({
       userId: r.userId,
@@ -63,10 +79,17 @@ export async function presenceRoster(orgId: string, viewerId: string, opts: Rost
       jobTitle: r.user.jobTitle,
       role: r.role,
       avatarUrl: r.user.avatarUrl,
+      ...seen.field(r),
       // the viewer is looking at this very screen: they are at their screen, whatever the stream says
       online: r.userId === viewerId || (online.has(r.userId) && !(opts.hideOwner && r.role === "OWNER")),
     }))
     // whoever is at their screen first, then by name: the list is read top-down on a phone
     .sort((a, b) => (a.online === b.online ? a.name.localeCompare(b.name, "ar") : a.online ? -1 : 1));
-  return { meId: viewerId, people, onlineCount: people.filter((p) => p.online).length, total: people.length };
+  return {
+    meId: viewerId,
+    people,
+    onlineCount: people.filter((p) => p.online).length,
+    total: people.length,
+    ...(seen.enabled ? { timeZone: seen.timeZone } : {}),
+  };
 }

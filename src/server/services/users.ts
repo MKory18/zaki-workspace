@@ -7,6 +7,8 @@ import { can } from "@/server/policy/capabilities";
 import { RANK } from "@/server/policy/rank";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { avatarHue } from "@/lib/format";
+import { lastSeenReader } from "@/server/services/last-seen";
+import { isOnline } from "@/server/realtime/presence";
 
 export interface ProfilePatch {
   name?: string;
@@ -47,6 +49,14 @@ export interface PublicProfile {
   };
   /** the spaces both people are in (the owner: every space the person is in); never one the viewer may not open */
   sharedSpaces: { id: string; name: string; emoji: string | null }[];
+  /**
+   * «آخر ظهور» (src/server/services/last-seen.ts), for ANOTHER person's profile: an ISO time, or null (unknown or hidden).
+   * ABSENT on one's own profile, when the company's switch is off, or when the viewer may not be told (a guest never reaches
+   * this view). `online` and `lastSeenTimeZone` come with it, so the card can say «متصل الآن» and «اليوم» / «أمس».
+   */
+  lastSeenAt?: string | null;
+  online?: boolean;
+  lastSeenTimeZone?: string;
 }
 
 /**
@@ -147,6 +157,25 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
   });
   const votesReceived = stats[1];
 
+  // «آخر ظهور»: the person's time in the company whose profile this is, through the one privacy reader
+  let seenFields: Pick<PublicProfile, "lastSeenAt" | "online" | "lastSeenTimeZone"> = {};
+  if (target.id !== viewerId) {
+    const orgId = membership.organization.id;
+    const reader = await lastSeenReader(orgId, viewerId);
+    if (reader.enabled) {
+      const row = await db.organizationMember.findUnique({
+        // all-statuses: the reader answers null for anybody who is not ACTIVE (the target is ACTIVE here anyway)
+        where: { organizationId_userId: { organizationId: orgId, userId: target.id } },
+        select: { userId: true, role: true, status: true, lastSeenAt: true, hideLastSeen: true },
+      });
+      if (row) {
+        // the owner who hides from the company (`ownerHiddenOnline`) does not light up here either
+        const atScreen = (await isOnline(target.id)) && !(row.role === "OWNER" && reader.ownerHidden);
+        seenFields = { lastSeenAt: reader.read(row) ?? null, online: atScreen, lastSeenTimeZone: reader.timeZone };
+      }
+    }
+  }
+
   return {
     kind: "full",
     profile: {
@@ -168,6 +197,7 @@ export async function getProfileForViewer(viewerId: string, targetId: string): P
         tasksCompleted: stats[3],
       },
       sharedSpaces: targetSpaces.map((m) => m.workspace),
+      ...seenFields,
     },
   };
 }

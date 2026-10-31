@@ -94,13 +94,13 @@ export function addClient(client: Omit<RtClient, "cid">): RtClient {
     }
   }
   hub().registry.push({ client: full, cache: new Map() });
-  touchPresence(client.userId);
+  touchPresence(client.userId, undefined, client.orgId);
   return full;
 }
 
 export function removeClient(client: RtClient): void {
   hub().registry = hub().registry.filter((r) => r.client !== client && r.client.cid !== client.cid);
-  if (!hub().registry.some((r) => r.client.userId === client.userId)) dropPresence(client.userId);
+  if (!hub().registry.some((r) => r.client.userId === client.userId)) dropPresence(client.userId, client.orgId);
 }
 
 /** The per-user throttle of POST /api/rt/typing: one emission per 2 s per user+conversation. */
