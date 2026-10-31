@@ -257,9 +257,9 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
     ["an unknown rank with every capability", { role: "SUPERUSER" as unknown as NavSubject["role"], caps: [...CAPABILITIES] }],
   ];
 
-  it("the tabs are the twenty-two of the map, each once", () => {
-    expect(ALL_TABS).toHaveLength(22);
-    expect(new Set(ALL_TABS).size).toBe(22);
+  it("the tabs are the twenty-three of the map, each once", () => {
+    expect(ALL_TABS).toHaveLength(23);
+    expect(new Set(ALL_TABS).size).toBe(23);
   });
 
   it("agrees with buildNav for every tab and every kind of person: a tab is open exactly when the map draws it", () => {
