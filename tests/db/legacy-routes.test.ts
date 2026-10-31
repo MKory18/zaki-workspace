@@ -384,8 +384,8 @@ function addressesOf(route: string, w: World): string[] {
       // every staff rank (a guest is not a person of the board: 404 for the owner too), and one that is gone
       return [w.owner.id, w.admin.id, w.lead.id, w.member.id, GONE].map((id) => `/owner/people/${id}`);
     case "/development/people/[id]":
-      // every staff rank, a guest (not a person of the file: not found) and one that is gone
-      return [w.owner.id, w.admin.id, w.lead.id, w.member.id, w.guest.id, GONE].map((id) => `/development/people/${id}`);
+      // every staff rank (a guest is not a person of the file: not found for the owner too), and one that is gone
+      return [w.owner.id, w.admin.id, w.lead.id, w.member.id, GONE].map((id) => `/development/people/${id}`);
     case "/u/[id]":
       return [w.owner.id, w.admin.id, w.lead.id, w.member.id, w.guest.id, GONE].map((id) => `/u/${id}`);
     case "/guide/[slug]":
