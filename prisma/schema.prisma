@@ -1946,6 +1946,7 @@ model TaskFieldValue {
   @@index([fieldId, valueDate])
   @@index([fieldId, valueText])
   @@index([orgId])
+}
 
 // «طلبات الموافقة ونماذج» (the owner's backlog, 2026-10-31): a person asks for a decision from ONE approver or a chain of up
 // to three in order; a form template is a reusable way to ask. An approval ONLY RECORDS a decision: it never moves money
