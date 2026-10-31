@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox", "lastSeen"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox", "customFields", "lastSeen"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -92,6 +92,10 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // typed and not sent is kept per conversation. Off: sending fails with an error and the text stays in the box, as before; the
   // messages already waiting stay in the browser and are sent when the switch is back on
   chatOutbox: true,
+  // «حقول مخصصة» (src/server/services/custom-fields.ts): the fields a space's ADMIN defines on a project's tasks. Off: no «حقول
+  // مخصصة» card on the task, no «إدارة الحقول» on the project, no chips, filter or sort on the list and the board, the routes answer
+  // «not found» and a required field stops asking at completion; the fields and the values already stored stay and come back with the switch
+  customFields: true,
   // «آخر ظهور» (src/server/services/last-seen.ts): under a person's name, when they were last at their screen («آخر ظهور قبل 10 دقايق»), in the
   // people dock, the quick chat, the header of a private chat and the profile page. Off: those places say «غير متصل» as before, the
   // fields leave every answer, `PATCH /api/me/last-seen` answers «not found» and the presence layer records no new time; the times

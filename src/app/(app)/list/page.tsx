@@ -21,6 +21,10 @@ import { fmtReward } from "@/lib/rewards";
 import { fmtNumber } from "@/lib/format";
 import { myRunningTaskId } from "@/server/services/time-tracking";
 import { recurringTaskIds } from "@/server/services/task-recurrence";
+import { fieldCellsFor, resolveFieldList, sumNumberField } from "@/server/services/custom-fields";
+import { loadWorkScope, projectVisibleWhere } from "@/server/services/team-scope";
+import { FieldListControls } from "@/components/custom-fields/list-controls";
+import { fmtDecimalText } from "@/lib/custom-fields-display";
 
 import Link from "next/link";
 const GROUPS = ["status", "priority", "project", "assignee"] as const;
@@ -30,7 +34,7 @@ const PRIORITY_ORDER = ["URGENT", "HIGH", "NORMAL", "LOW", "NONE"] as const;
 export default async function ListPage({
   searchParams,
 }: {
-  searchParams: { workspace?: string; group?: string; priority?: string; assignee?: string; q?: string; reward?: string };
+  searchParams: { workspace?: string; group?: string; priority?: string; assignee?: string; q?: string; reward?: string; project?: string; ff?: string; fv?: string; fs?: string; fd?: string };
 }) {
   const { t } = getServerT();
   // the space the person is in, never one named in the address (that is entered through the switcher)
@@ -75,21 +79,34 @@ export default async function ListPage({
   const lens = ctx.denied ? NO_LENS : await rewardLensFor(actor, ctx.workspaceId);
   const onlyRewards = lens.rewards && searchParams.reward === "1";
 
-  const found: ViewTask[] = ctx.denied
+  // «حقول مخصصة»: the project and field parameters, checked against the project's own fields (null: switch off or a partner)
+  const fieldList = ctx.denied
+    ? null
+    : await resolveFieldList(
+        { orgId: ctx.orgId, userId: actor.userId, orgRole: ctx.orgRole },
+        ctx.workspaceId,
+        projectVisibleWhere(await loadWorkScope(actor.userId)),
+        { project: searchParams.project, ff: searchParams.ff, fv: searchParams.fv, fs: searchParams.fs, fd: searchParams.fd },
+      );
+
+  const queried: ViewTask[] = ctx.denied
     ? []
-    : sortByDue(
-        await queryTasksForView({
-          orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId,
-          visible: ctx.visible,
-          assigneeId: assigneeId === "__none__" ? undefined : assigneeId,
-          priority: validPriority as ViewTask["priority"] | undefined,
-          search: q || undefined,
-          limit: 300,
-          pinnedFirst: lens.pins,
-          rewards: lens.rewards,
-        }),
-      ).filter((task) => (assigneeId === "__none__" ? task.assigneeId === null : true));
+    : await queryTasksForView({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        visible: ctx.visible,
+        assigneeId: assigneeId === "__none__" ? undefined : assigneeId,
+        priority: validPriority as ViewTask["priority"] | undefined,
+        search: q || undefined,
+        limit: 300,
+        pinnedFirst: lens.pins,
+        rewards: lens.rewards,
+        ...(fieldList?.project ? { projectId: fieldList.project.id } : {}),
+        ...(fieldList?.filter ? { fieldFilter: fieldList.filter } : {}),
+        ...(fieldList?.sort ? { fieldSort: fieldList.sort } : {}),
+      });
+  // a field sort IS the order (the due-date order is the list's own, used when no field sort is asked for)
+  const found: ViewTask[] = (fieldList?.sort ? queried : sortByDue(queried)).filter((task) => (assigneeId === "__none__" ? task.assigneeId === null : true));
   // pinned first (the newest pin first), then the list's own order; and «المهام بمكافأة» narrows to the ones with a reward
   const tasks = (lens.pins ? sortPinnedFirst(found) : found).filter((task) => (onlyRewards ? Boolean(task.reward) : true));
   // «مجموع المكافآت المفتوحة»: the owner's alone, added in SQL per currency
@@ -102,6 +119,13 @@ export default async function ListPage({
 
   // «🔁 متكررة» on the rows: one read for the page, and only while the company's «مهمة متكررة» switch is on
   const recurring = (await actorFeatureOn(actor, "recurringTasks")) ? await recurringTaskIds(tasks.map((t) => t.id)) : new Set<string>();
+
+  // «حقول مخصصة»: the chips of the rows (one read for the page), and the exact total of the sorted number field over the rows shown
+  const fieldCells = fieldList ? await fieldCellsFor({ orgId: ctx.orgId, userId: actor.userId, orgRole: ctx.orgRole }, ctx.workspaceId, tasks.map((t) => ({ id: t.id, projectId: t.projectId }))) : null;
+  const sortedNumber = fieldList?.sort && fieldList.sortFields.find((f) => f.id === fieldList.sort?.fieldId)?.type === "NUMBER" ? fieldList.sort : null;
+  const fieldTotal = sortedNumber
+    ? fmtDecimalText(await sumNumberField(ctx.orgId, sortedNumber.projectId, sortedNumber.fieldId, tasks.map((t) => t.id)))
+    : null;
 
   // grouping still depends on the same rows; no requery
   interface GroupBucket {
@@ -181,7 +205,29 @@ export default async function ListPage({
         members={members}
         labels={labels}
         rewardChip={lens.rewards ? { label: t("reward.filter"), on: onlyRewards } : undefined}
+        extraParams={fieldList?.params}
       />
+
+      {fieldList ? (
+        <FieldListControls
+          params={{
+            workspace: ctx.workspaceId,
+            group,
+            priority,
+            assignee: assigneeId ?? "",
+            q,
+            ...(onlyRewards ? { reward: "1" } : {}),
+            ...fieldList.params,
+          }}
+          projects={fieldList.projects}
+          projectId={fieldList.project?.id ?? ""}
+          filterFields={fieldList.filterFields}
+          sortFields={fieldList.sortFields}
+          people={members}
+          pickerDefs={fieldCells?.defs ?? []}
+          total={fieldTotal !== null && sortedNumber ? { label: t("fields.list.total", { total: fieldTotal }), text: fieldTotal } : null}
+        />
+      ) : null}
 
       <div className="flex-1 px-3 py-3">
         {ctx.denied ? (
@@ -200,7 +246,7 @@ export default async function ListPage({
                   {b.rows.map((task) => (
                     <TaskRow
                       key={task.id}
-                      task={{ ...task, steps: progress.get(task.id), running: task.id === runningTaskId, recurring: recurring.has(task.id), reward: task.reward ?? null, pinnedAt: task.pinnedAt ?? null }}
+                      task={{ ...task, steps: progress.get(task.id), running: task.id === runningTaskId, recurring: recurring.has(task.id), reward: task.reward ?? null, pinnedAt: task.pinnedAt ?? null, ...(fieldCells?.cells[task.id] ? { fields: fieldCells.cells[task.id] } : {}) }}
                       editable={ctx.editable}
                       members={members}
                       showProject={group !== "project"}
