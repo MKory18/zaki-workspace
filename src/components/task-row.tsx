@@ -16,6 +16,10 @@ import { RunningChip } from "@/components/time/running-chip";
 import { RecurringBadge } from "@/components/recurrence/recurring-badge";
 import type { StepProgress } from "@/lib/task-steps";
 import { PinMark, RewardBadge, type RewardBadgeData } from "@/components/rewards/reward-badge";
+import { FieldChips } from "@/components/custom-fields/field-chips";
+import { FIELDS_ANCHOR, requiredFieldsOf } from "@/lib/custom-fields";
+import type { FieldCell } from "@/lib/custom-fields-display";
+import { rt } from "@/lib/reminders/client";
 
 import Link from "next/link";
 export interface RowTask {
@@ -45,6 +49,8 @@ export interface RowTask {
   reward?: { status: string; amountMinor: number; currency: string } | null;
   /** «تثبيت»: when it was pinned (absent: not pinned, or the switch is off). */
   pinnedAt?: Date | string | null;
+  /** «حقول مخصصة»: the task's answers as chips, by field id; absent for a partner or while the switch is off (the person's own choice picks which to draw). */
+  fields?: Record<string, FieldCell>;
 }
 
 export interface RowMember {
@@ -77,6 +83,13 @@ export function TaskRow({
   const priorityColor = PRIORITY_STYLES[task.priority]?.color ?? "rgb(var(--border))";
 
   function fail(err: unknown) {
+    // «حقول مخصصة»: finishing needs the project's required fields: say which and open the task where they are filled
+    const missing = requiredFieldsOf(err);
+    if (missing) {
+      toast(rt("fields.required_toast", { labels: missing.map((m) => m.label).join("، ") }), "error");
+      router.push(`/tasks/${task.id}#${FIELDS_ANCHOR}`);
+      return;
+    }
     const code = err instanceof ApiError ? err.code : "internal";
     toast(code === "forbidden" ? t("forbidden") : t("common.error"), "error");
   }
@@ -171,6 +184,7 @@ export function TaskRow({
         <RecurringBadge recurring={task.recurring} />
         {task.pinnedAt ? <PinMark /> : null}
         <RewardBadge reward={task.reward as RewardBadgeData | null | undefined} />
+        <FieldChips cells={task.fields} />
       </Link>
 
       <span

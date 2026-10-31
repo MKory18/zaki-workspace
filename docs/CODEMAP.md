@@ -9,10 +9,10 @@
 ## What this answers
 
 1. **Where does a job live?** — the folder map (§2).
-2. **Who may call this door, and what does it call?** — all 213 routes, one row each (§4).
+2. **Who may call this door, and what does it call?** — all 217 routes, one row each (§4).
 3. **If I change a service, what breaks?** — every service and its callers (§6).
 4. **If I change a table, who writes it?** — every model and the code that writes it (§7).
-5. **If I flip a switch, what disappears?** — the 24 feature switches and every place that reads them (§8).
+5. **If I flip a switch, what disappears?** — the 25 feature switches and every place that reads them (§8).
 
 ## 1. The layers
 
@@ -45,13 +45,13 @@ Two rules the code keeps, and a reviewer can check by reading the map:
 | Where | Job |
 |---|---|
 | `src/app/(app)/` | the signed-in screens: one folder per place (today, boards, chat, crm, …) |
-| `src/app/api/` | 213 route handlers — the only mutating surface (§4) |
+| `src/app/api/` | 217 route handlers — the only mutating surface (§4) |
 | `src/app/login`, `register`, `onboarding`, `go` | the doors that work without a session |
 | `src/components/` | the interface, grouped by feature; `shell/` is the frame, `ui/` the primitives |
 | `src/lib/` | pure helpers that run on both sides: `i18n/`, `format.ts`, `features.ts`, `nav/`, `themes/` |
 | `src/server/` | everything that may only run on the server |
 | `src/server/policy/` | who may do what: ranks, capabilities, the section grid, conversation and call rules |
-| `src/server/services/` | 84 services — the business rules (§6) |
+| `src/server/services/` | 85 services — the business rules (§6) |
 | `src/server/chat/`, `calls/`, `files/`, `watch/`, `realtime/` | the larger features, split out of `services/` |
 | `prisma/` | the schema and the additive-only migrations |
 | `worker/` | a heartbeat placeholder: no scheduled job runs today |
@@ -87,7 +87,7 @@ writes to the database itself, instead of through a service, is marked with ‡ 
 **Service imports** are the functions the handler imports from `server/services/*` — the door itself
 is often one of them.
 
-Doors in use: `activeOrgCtx` 74 · `requireActor` 57 · `(none)` 22 · `requireTeamWork` 13 · `requireTaskAccess` 10 · `requireUser` 10 · `requireWorkspace` 8 · `requireAccountsActor` 5 · `crmContext` 4 · `ideaAccessCtx` 4 · `directoryContext` 3 · `currentUser` 1 · `ideasCtx` 1 · `requireOrgMember` 1.
+Doors in use: `activeOrgCtx` 74 · `requireActor` 57 · `(none)` 26 · `requireTeamWork` 13 · `requireTaskAccess` 10 · `requireUser` 10 · `requireWorkspace` 8 · `requireAccountsActor` 5 · `crmContext` 4 · `ideaAccessCtx` 4 · `directoryContext` 3 · `currentUser` 1 · `ideasCtx` 1 · `requireOrgMember` 1.
 
 | Method | Path | Door | Service imports |
 |---|---|---|---|
@@ -247,6 +247,8 @@ Doors in use: `activeOrgCtx` 74 · `requireActor` 57 · `(none)` 22 · `requireT
 | GET, POST | `/api/projects` | requireWorkspace ‡ | `team-scope`: teamFilterInSpace<br>`teams`: assertMayCreateInTeam |
 | PATCH | `/api/projects/[id]` | requireTeamWork ‡ | `teams`: moveProjectToTeam |
 | GET | `/api/projects/[id]/boards` | requireTeamWork | — |
+| GET, POST | `/api/projects/[id]/fields` | **none** (public by design) | `custom-fields`: createField, listProjectFields |
+| PATCH | `/api/projects/[id]/fields/[fieldId]` | **none** (public by design) | `custom-fields`: updateField |
 | GET, POST | `/api/projects/[id]/milestones` | requireTeamWork | `features`: assertFeatureOn<br>`org-day`: orgTimeZone<br>`milestones`: createMilestone, listMilestones, milestoneInput |
 | GET | `/api/projects/[id]/timeline` | requireTeamWork | `timeline`: getProjectTimeline |
 | GET | `/api/push/key` | activeOrgCtx | `integrations`: activeOrgCtx |
@@ -265,6 +267,8 @@ Doors in use: `activeOrgCtx` 74 · `requireActor` 57 · `(none)` 22 · `requireT
 | POST, GET | `/api/tasks/[id]/comments` | requireTeamWork ‡ | `n8n`: dispatchEvent |
 | PATCH, DELETE | `/api/tasks/[id]/comments/[commentId]` | requireTeamWork ‡ | — |
 | POST | `/api/tasks/[id]/complete` | requireTeamWork | `tasks`: setTaskCompletion<br>`n8n`: dispatchEvent |
+| GET | `/api/tasks/[id]/fields` | **none** (public by design) | `custom-fields`: readTaskFields |
+| PUT | `/api/tasks/[id]/fields/[fieldId]` | **none** (public by design) | `custom-fields`: setTaskFieldValue |
 | GET, POST | `/api/tasks/[id]/links` | requireTaskAccess | `features`: assertFeatureOn<br>`task-links`: addTaskLink, listTaskLinks |
 | DELETE | `/api/tasks/[id]/links/[linkId]` | requireTaskAccess | `features`: assertFeatureOn<br>`task-links`: removeTaskLink |
 | POST | `/api/tasks/[id]/move` | requireTeamWork | `tasks`: moveTask<br>`n8n`: dispatchEvent |
@@ -307,7 +311,7 @@ Doors in use: `activeOrgCtx` 74 · `requireActor` 57 · `(none)` 22 · `requireT
 
 ## 5. Routes with no guard — and why that is correct
 
-Six of 213. Each one is a door that cannot have a session, or one that is closed.
+Six of 217. Each one is a door that cannot have a session, or one that is closed.
 
 | Route | Why it has no guard |
 |---|---|
@@ -330,10 +334,10 @@ high count is a wide surface: changing its signature reaches all of them.
 |---|---|---|---|
 | `integrations` | 180 | 82 | Connect/disconnect/config changes (org-level assets): the `integrations.manage` capability. |
 | `current-space` | 128 | 49 | THE SPACE YOU ARE IN — the owner's decision (2026-10-25, «العزل شامل… كأني بفتح سايت جديد»): entering a space is like opening a separate site. |
-| `features` | 48 | 43 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
+| `features` | 48 | 44 | «الميزات» on the server: the company's switches (`Organization.settings.features`), read on every request. |
 | `guest-guard` | 30 | 38 | Org GUESTs are external partners (for example the factory): they see only what is shared with them, never write business data, and never see prices or the staff directory. |
-| `team-scope` | 149 | 23 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
-| `tasks` | 631 | 19 | no header comment — exports `TASK_INCLUDE`, `assignedTo`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, … |
+| `team-scope` | 149 | 24 | TEAMS INSIDE A SPACE — the one place that says which projects and tasks a person may see. |
+| `tasks` | 636 | 19 | no header comment — exports `TASK_INCLUDE`, `assignedTo`, `DEFAULT_BOARD_COLUMNS`, `nextTaskNumber`, `createTask`, … |
 | `org-day` | 26 | 18 | The start of the COMPANY's today — `Organization.timezone`, never the server's clock and never the browser's. |
 | `cards` | 614 | 17 | «اللوحات» — the cards of a space. |
 | `rewards` | 351 | 16 | «مهمة بمكافأة» — set, award, cancel; and «تثبيت» — pin. |
@@ -344,6 +348,7 @@ high count is a wide surface: changing its signature reaches all of them.
 | `n8n` | 294 | 10 | Events we allow orgs to forward to n8n — the UI shows exactly this list. |
 | `owner-assistant-access` | 29 | 10 | «مساعد المالك» — WHO MAY OPEN IT, in one place. |
 | `owner-board` | 764 | 9 | «لوحة المالك» — THE NUMBERS. |
+| `custom-fields` | 542 | 8 | «حقول مخصصة» — the custom fields of a project's tasks. |
 | `google` | 355 | 8 | Only the files the app itself creates (the library's): a non-sensitive scope, so Google asks for no review and the owner's published app keeps its connection. |
 | `space-place` | 30 | 8 | WHERE A SPACE'S OWN THINGS ARE READ (the owner's decision, 2026-10-25: each space is like a separate site) — for the goals, the daily routines, the customers and the opportuniti… |
 | `tickets` | 501 | 8 | IT tickets live inside a department. |
@@ -368,14 +373,15 @@ high count is a wide surface: changing its signature reaches all of them.
 | `teams` | 228 | 5 | TEAMS INSIDE A SPACE — who is in which team, and which project belongs to which (the reading rule is in team-scope.ts). |
 | `telegram` | 299 | 5 | Validates a bot token by calling getMe. |
 | `users` | 309 | 5 | no header comment — exports `updateProfile`, `getProfileForViewer`, `getPublicProfile`, `memberDirectory` |
+| `views` | 490 | 5 | Zones already warned about, per organization, so a bad stored zone is logged once and not on every request. |
 | `calendar-feed` | 331 | 4 | «اشتراك التقويم» — a person's private calendar feed. |
 | `crm` | 228 | 4 | no header comment — exports `OPPORTUNITY_STAGES`, `createCustomerSchema`, `updateCustomerSchema`, `createOpportunitySchema`, `updateOpportunitySchema`, … |
 | `departments` | 240 | 4 | The departments area is the company's staff directory (who works where, with which job title), so org GUESTs get 403 on every function here, read or write. |
 | `reward-input` | 30 | 4 | What a request body says about a reward: the amount as the person typed it (`amount`: "12.5", in the major unit) or already in minor units (`amountMinor`), the currency (optiona… |
-| `views` | 431 | 4 | Zones already warned about, per organization, so a bad stored zone is logged once and not on every request. |
 | `milestones` | 173 | 3 | «المعالم» — the milestones of a project (the owner, 2026-10-30: the table, the project page's list and the timeline's diamonds all existed and nothing in the repository ever cre… |
 | `pinned` | 70 | 3 | «مثبّتة» — the pinned tasks a person may be shown, for the strip at the top of a project and the compact card of «اليوم». |
 | `registration` | 145 | 3 | Opening a company is open to anyone (owner's decision 23/10), behind three guards: The address is checked. |
+| `reward-guard` | 39 | 3 | «مهمة بمكافأة» — the guard every writer of a task goes through (tasks.ts `updateTask` / `deleteTask` / `createTask`, the reward routes). |
 | `space-manage` | 61 | 3 | MANAGING THE SPACES FROM «كل المساحات» (the owner's asks, 2026-10-26): put them in order by dragging, archive one (it leaves every list — the switcher, the overview, search by s… |
 | `spaces-overview` | 73 | 3 | «كل المساحات» — the owner's and the admins' one look over every space they can open (the owner's decision, 2026-10-25): each space stays a separate site, and this page only coun… |
 | `task-assign` | 265 | 3 | GIVING A TASK BY RANK (the owner's decision, 2026-10-30; the pure rule is `policy/assign-rank.ts`). |
@@ -392,7 +398,6 @@ high count is a wide surface: changing its signature reaches all of them.
 | `org-members` | 202 | 2 | Organization members: the rank rules of account management and the roster. |
 | `orgs` | 154 | 2 | no header comment — exports `JOIN_CODE_ALPHABET`, `generateJoinCode`, `registrationOpen`, `registerOrganization`, `canManageOrg` |
 | `owner-assistant-names` | 84 | 2 | «مساعد المالك» — PUTTING THE REAL NAMES BACK, for the owner's eyes only. |
-| `reward-guard` | 39 | 2 | «مهمة بمكافأة» — the guard every writer of a task goes through (tasks.ts `updateTask` / `deleteTask` / `createTask`, the reward routes). |
 | `task-links` | 170 | 2 | «التبعيات» — the links between two tasks (the owner, 2026-10-30: the table existed and nothing wrote it). |
 | `timeline` | 76 | 2 | Microsoft-Project-style timeline data for one project: dated tasks become bars, milestones become diamonds, undated tasks are reported separately. |
 | `analytics` | 66 | 1 | Numbers behind the analytics page. |
@@ -493,6 +498,8 @@ to be added to, and the places a bug can leave the row half-written.
 | `AiConversation` | 3 | `server/services/owner-assistant-chat.ts`: 3 |
 | `AiMessage` | 2 | `server/services/owner-assistant-chat.ts`: 2 |
 | `AiProposal` | 8 | `server/services/owner-assistant-proposals.ts`: 8 |
+| `ProjectField` | 3 | `server/services/custom-fields.ts`: 3 |
+| `TaskFieldValue` | 2 | `server/services/custom-fields.ts`: 2 |
 | `CheckinConfig` | 1 | `server/services/checkins.ts`: 1 |
 | `CheckinAnswer` | 5 | `server/services/checkins.ts`: 5 |
 
@@ -530,13 +537,14 @@ before it. A switch is only honest if something reads it, so this is the list of
 | `taskRewards` | 4 — `app/api/instant/route.ts`, `server/services/my-work.ts`, `server/services/reward-guard.ts`, `server/services/rewards.ts` |
 | `ownerAssistant` | 2 — `lib/nav/places.ts`, `server/services/owner-assistant-access.ts` |
 | `chatOutbox` | 1 — `server/chat/topics.ts` |
+| `customFields` | 2 — `app/(app)/projects/[id]/page.tsx`, `server/services/custom-fields.ts` |
 | `checkins` | 6 — `app/(app)/checkins/page.tsx`, `app/(app)/page.tsx`, `lib/guide/page-help.ts`, `lib/nav/places.ts`, `server/jobs/run.ts`, `server/services/checkins.ts` |
 
 ## 9. What this map noticed
 
 Written down, not fixed: Phase E decides what becomes a PR. Every item was read in the code, not guessed.
 
-- **Every guarded route asks a guard — none compares a role name.** 207 of 213 routes open with a function from §3; the other 6 are the doors listed in §5.
+- **Every guarded route asks a guard — none compares a role name.** 211 of 217 routes open with a function from §3; the other 6 are the doors listed in §5.
 - **Two doors carry most of the traffic.** `activeOrgCtx()` and `requireActor()` are the first call of 131 routes; both re-read the membership and its status from the database on every request, so a suspension takes effect on the next call, not on the next sign-in.
 - **16 route handlers write to the database themselves instead of calling a service.** 10 of them write their own `audit()` row (`/api/auth/login`, `/api/boards`, `/api/boards/[id]`, `/api/boards/[id]/columns`, `/api/boards/[id]/columns/[columnId]`, `/api/labels`, `/api/organizations/[id]`, `/api/projects`, `/api/projects/[id]`, `/api/workspaces/[id]`); 2 write a task-feed row instead (`/api/tasks/[id]/comments`, `/api/tasks/[id]/comments/[commentId]`); 4 write neither (`/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read`); 4 of those are one person's own preference (`/api/me/digits`, `/api/me/theme`, `/api/notifications/[id]`, `/api/notifications/read`), which is right. Nothing is silently lost today, but *who may, what is logged and what is notified* lives in the handler, not in one place. No screen file writes directly: every write comes through `/api`.
 - **14 models are written from more than three files** — see §7 for the list. Those are where a new invariant has to be added more than once, and where a half-written row is possible if one caller forgets a field.

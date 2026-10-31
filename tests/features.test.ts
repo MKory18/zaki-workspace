@@ -25,6 +25,14 @@ describe("«الميزات»: the owner's switches", () => {
     expect(featureOn({ features: { watch: true } }, "watch")).toBe(true);
   });
 
+  it("«حقول مخصصة» is a switch like the others: on until the owner turns it off, and off is only that key", () => {
+    expect(FEATURES).toContain("customFields");
+    expect(FEATURE_DEFAULTS.customFields).toBe(true);
+    expect(featureOn({}, "customFields")).toBe(true);
+    expect(featureOn({ features: { customFields: false } }, "customFields")).toBe(false);
+    expect(featuresOff({ features: { customFields: false } })).toEqual(["ownerHiddenOnline", "ownerAssistant", "customFields"]);
+  });
+
   it("a broken stored value is ignored, never read as off", () => {
     for (const settings of [{ features: "nope" }, { features: { watch: "false" } }, { features: { watch: 0 } }, "x", 42]) {
       expect(featureOn(settings, "watch"), JSON.stringify(settings)).toBe(FEATURE_DEFAULTS.watch);
