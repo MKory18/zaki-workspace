@@ -10,6 +10,7 @@ import { apiPost, apiPatch, apiDelete, apiUpload, ApiError } from "@/lib/api-cli
 import { compressImage } from "@/lib/chat/compress-image";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
+import { LastSeenToggle } from "@/components/last-seen-toggle";
 
 export interface MeData {
   id: string;
@@ -38,7 +39,16 @@ export function passwordErrorText(err: unknown, t: (key: string) => string): str
 }
 
 /** Self-service account form: the picture, then identity + job title + bio + password change. */
-export function ProfileForm({ me, withPicture = true }: { me: MeData; withPicture?: boolean }) {
+export function ProfileForm({
+  me,
+  withPicture = true,
+  lastSeen,
+}: {
+  me: MeData;
+  withPicture?: boolean;
+  /** «إخفاء آخر ظهوري»: given only when the company's «آخر ظهور» switch is on and the person is not a guest */
+  lastSeen?: { hide: boolean };
+}) {
   const { t } = useI18n();
   const router = useRouter();
   const { toast } = useToast();
@@ -174,6 +184,8 @@ export function ProfileForm({ me, withPicture = true }: { me: MeData; withPictur
           </Button>
         </form>
       </section>
+
+      {lastSeen ? <LastSeenToggle initialHide={lastSeen.hide} /> : null}
 
       <section>
         <h2 className="mb-3 text-base font-semibold text-fg">{t("profile.changePassword")}</h2>

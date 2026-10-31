@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/db", () => ({
   db: {
+    // the presence layer records «آخر ظهور» through one raw UPDATE (fire-and-forget)
+    $executeRaw: vi.fn().mockResolvedValue(0),
     user: { update: vi.fn().mockResolvedValue({}) },
     conversation: { findUnique: vi.fn().mockResolvedValue({ kind: "TOPIC" }) },
     organizationMember: { findMany: vi.fn().mockResolvedValue([{ userId: "u1" }]) },

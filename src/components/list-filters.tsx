@@ -16,6 +16,7 @@ export function ListFilters({
   members,
   labels,
   rewardChip,
+  extraParams,
 }: {
   wsId: string;
   group: string;
@@ -26,6 +27,8 @@ export function ListFilters({
   labels: Record<string, string>;
   /** «المهام بمكافأة»: the chip, drawn only for somebody who may see rewards; `on` = the filter is applied. */
   rewardChip?: { label: string; on: boolean };
+  /** «حقول مخصصة»: the address parameters of the fields bar (project, field filter, field sort): kept when one of these filters changes. */
+  extraParams?: Record<string, string>;
 }) {
   const router = useRouter();
 
@@ -34,6 +37,7 @@ export function ListFilters({
     const sp = new URLSearchParams({ workspace: wsId, group, priority, assignee: assigneeId });
     if (q) sp.set("q", q);
     if (rewardChip?.on) sp.set("reward", "1");
+    for (const [k, v] of Object.entries(extraParams ?? {})) if (v) sp.set(k, v);
     for (const [k, v] of Object.entries(next)) {
       if (v) sp.set(k, v);
     }
@@ -95,6 +99,7 @@ export function ListFilters({
           onClick={() => {
             const sp = new URLSearchParams({ workspace: wsId, group, priority, assignee: assigneeId });
             if (q) sp.set("q", q);
+            for (const [k, v] of Object.entries(extraParams ?? {})) if (v) sp.set(k, v);
             if (!rewardChip.on) sp.set("reward", "1");
             router.push(`/list?${sp.toString()}`);
           }}

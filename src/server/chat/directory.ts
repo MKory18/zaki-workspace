@@ -3,6 +3,7 @@ import { onlineUserIds } from "@/server/realtime/presence";
 import type { DirectoryPersonDto } from "@/server/chat/dto";
 import { spacePeopleWhere } from "@/server/chat/space-people";
 import { isFeatureOn } from "@/server/services/features";
+import { lastSeenReader, type LastSeenReader } from "@/server/services/last-seen";
 
 /**
  * The people picker: ACTIVE non-guests of the company, the viewer excluded. It is the staff
@@ -12,7 +13,7 @@ import { isFeatureOn } from "@/server/services/features";
  * Inside a space (`spaceId`, the space the person is in) only that space's people: you write privately to the
  * colleagues you share the space with, like the contacts of one account.
  */
-export async function chatDirectory(orgId: string, spaceId?: string | null): Promise<DirectoryPersonDto[]> {
+export async function chatDirectory(orgId: string, spaceId?: string | null, viewerId?: string | LastSeenReader): Promise<DirectoryPersonDto[]> {
   const rows = await db.organizationMember.findMany({
     where: {
       organizationId: orgId,
@@ -20,15 +21,25 @@ export async function chatDirectory(orgId: string, spaceId?: string | null): Pro
       status: "ACTIVE",
       ...(spaceId !== undefined ? { AND: [spaceId ? spacePeopleWhere(orgId, spaceId) : { userId: { in: [] } }] } : {}),
     },
-    select: { userId: true, role: true, user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } } },
+    select: {
+      userId: true,
+      role: true,
+      status: true,
+      lastSeenAt: true,
+      hideLastSeen: true,
+      user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
+  // «آخر ظهور»: only when the caller is known (the route passes them); absent otherwise, and absent for a guest or a switched-off company
+  const seen = !viewerId ? null : typeof viewerId === "string" ? await lastSeenReader(orgId, viewerId) : viewerId;
   return rows.map((r) => ({
     userId: r.userId,
     name: r.user.name,
     jobTitle: r.user.jobTitle,
     role: r.role,
     avatarUrl: r.user.avatarUrl,
+    ...(seen ? seen.field(r) : {}),
   }));
 }
 
@@ -53,12 +64,20 @@ export interface CompanyPersonDto extends DirectoryPersonDto {
  * Guests stay out (a guest is nobody's colleague and has no DMs at all); the viewer is included,
  * the route drops them.
  */
-export async function companyDirectory(orgId: string, viewerId: string, spaceId: string | null): Promise<CompanyPersonDto[]> {
+export async function companyDirectory(orgId: string, viewerId: string, spaceId: string | null, reader?: LastSeenReader): Promise<CompanyPersonDto[]> {
   const hideOwner = await isFeatureOn(orgId, "ownerHiddenOnline");
+  const seen = reader ?? (await lastSeenReader(orgId, viewerId));
   const [rows, ofSpace, online] = await Promise.all([
     db.organizationMember.findMany({
       where: { organizationId: orgId, role: { not: "GUEST" }, status: "ACTIVE" },
-      select: { userId: true, role: true, user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } } },
+      select: {
+        userId: true,
+        role: true,
+        status: true,
+        lastSeenAt: true,
+        hideLastSeen: true,
+        user: { select: { id: true, name: true, jobTitle: true, avatarUrl: true } },
+      },
       orderBy: { createdAt: "asc" },
     }),
     spaceId
@@ -75,6 +94,7 @@ export async function companyDirectory(orgId: string, viewerId: string, spaceId:
     jobTitle: r.user.jobTitle,
     role: r.role,
     avatarUrl: r.user.avatarUrl,
+    ...seen.field(r),
     // no space at all (a company without spaces): the DM is opened company-wide, so nobody is fenced off
     inSpace: spaceId ? space.has(r.userId) : true,
     // «إخفاء المالك من متصل»: the owner does not light up for anybody but himself

@@ -807,6 +807,10 @@ model OrganizationMember {
   omsStaffRef    String?
   statusChangedAt   DateTime?
   statusChangedById String?
+  // «آخر ظهور»: the last moment this person was at their screen in THIS company (written by the real-time presence, at
+  // most once a minute: src/server/realtime/presence.ts), and their own «إخفاء آخر ظهوري» choice (null counts as false).
+  lastSeenAt        DateTime?
+  hideLastSeen      Boolean? @default(false)
   createdAt      DateTime     @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -983,6 +987,8 @@ model Project {
   tasks      Task[]
   milestones Milestone[]
   taskRecurrences TaskRecurrence[]
+  // «حقول مخصصة»: the project's own schema of task fields (they die with the project)
+  customFields ProjectField[]
 
   @@unique([workspaceId, systemKey])
   @@index([workspaceId])
@@ -1120,6 +1126,8 @@ model Task {
   // «خطوات»: the short checklist of the task; «ذكّرني»: the reminders people set on it (both die with the task)
   steps          TaskStep[]
   reminders      Reminder[]
+  // «حقول مخصصة»: the values of the project's custom fields on this task (they die with the task)
+  fieldValues    TaskFieldValue[]
   // «حساب وقت الشغل»: the time people logged on it. An entry OUTLIVES the task (the foreign key sets taskId to null).
   timeEntries    TimeEntry[]
   // «مهمة متكررة»: the series this task belongs to (every occurrence points at it), and the series it is the template of
@@ -1894,6 +1902,61 @@ model AiProposal {
 
   @@index([orgId, status, createdAt])
   @@index([conversationId, createdAt])
+}
+
+// ---------- «حقول مخصصة»: custom fields on the tasks of a project ----------
+
+// One field of a project's schema. `type` is one of src/lib/custom-fields.ts FIELD_TYPES (a string, validated there: a new type is
+// code, not a migration). `config` carries what the type needs: { unit } for a number, { currency } for money, { options: [{ id,
+// label, color, deleted? }] } for the two choice types. An option that is taken away is MARKED deleted, never removed, so the
+// values that point at its id keep making sense (they read «محذوف»). Archiving a field hides it and keeps every value.
+model ProjectField {
+  id          String   @id @default(cuid())
+  orgId       String
+  projectId   String
+  label       String
+  type        String
+  required    Boolean  @default(false)
+  // fractional position (like the board's tasks): a drag writes ONE row
+  position    Decimal  @db.Decimal(22, 10)
+  archived    Boolean  @default(false)
+  config      Json     @default("{}")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  values  TaskFieldValue[]
+
+  @@index([projectId, position])
+  @@index([orgId])
+}
+
+// The value of one field on one task, in a typed column so numbers sort and sum exactly (Decimal, never a float):
+// valueText   short text, long text, link, single choice (the option id), person (the user id)
+// valueNumber number, money (integer MINOR units), yes/no (1 or 0)
+// valueDate   date (a calendar day)
+// valueJson   multiple choice (the array of option ids)
+model TaskFieldValue {
+  id          String    @id @default(cuid())
+  orgId       String
+  taskId      String
+  fieldId     String
+  valueText   String?
+  valueNumber Decimal?  @db.Decimal(18, 4)
+  valueDate   DateTime? @db.Date
+  valueJson   Json?
+  updatedById String?
+  updatedAt   DateTime  @updatedAt
+
+  task  Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  field ProjectField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, fieldId])
+  @@index([fieldId, valueNumber])
+  @@index([fieldId, valueDate])
+  @@index([fieldId, valueText])
+  @@index([orgId])
 }
 
 // ---------- «الأداء والتطوير» (team development): the skills checklist ----------

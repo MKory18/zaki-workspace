@@ -194,6 +194,12 @@ export interface ConversationDto {
   archived?: boolean;
   closed: boolean;
   space?: { id: string; name: string; hasExternal: boolean } | null;
+  /**
+   * «آخر ظهور» of the other person of a PRIVATE chat (a DM only; never on a topic or a group). An ISO time, null (unknown or
+   * hidden), or ABSENT (the company's switch is off, or a guest asks). `timeZone` (the company's) comes with it.
+   */
+  peerLastSeenAt?: string | null;
+  timeZone?: string;
   /** `canJoin`: the OWNER in oversight of an open topic may join it («شارك بالمحادثة») to post there. */
   me: {
     canPost: boolean;
@@ -225,6 +231,8 @@ export interface ConversationDto {
   readers: ReaderDto[];
   /** the company's «شكل الرسائل الحديث» switch, read on the server (`src/lib/features.ts`); absent: on */
   chatBubbles?: boolean;
+  /** the company's «الرسائل بدون نت» switch (`chatOutbox`): off, the composer neither queues an unsent message nor keeps a draft; absent: on */
+  chatOutbox?: boolean;
   /** pagination: the oldest message id on the page; pass it as `before` for the next page. */
   oldestId?: string | null;
 }
@@ -284,6 +292,8 @@ export interface DirectoryPersonDto {
   name: string;
   jobTitle: string | null;
   avatarUrl?: string | null;
+  /** «آخر ظهور»: an ISO time, null (unknown or hidden), or ABSENT (switch off / a guest asks); see services/last-seen.ts */
+  lastSeenAt?: string | null;
 }
 
 /** A search hit in the chat (src/server/chat/search.ts). */

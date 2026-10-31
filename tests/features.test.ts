@@ -25,6 +25,14 @@ describe("«الميزات»: the owner's switches", () => {
     expect(featureOn({ features: { watch: true } }, "watch")).toBe(true);
   });
 
+  it("«حقول مخصصة» is a switch like the others: on until the owner turns it off, and off is only that key", () => {
+    expect(FEATURES).toContain("customFields");
+    expect(FEATURE_DEFAULTS.customFields).toBe(true);
+    expect(featureOn({}, "customFields")).toBe(true);
+    expect(featureOn({ features: { customFields: false } }, "customFields")).toBe(false);
+    expect(featuresOff({ features: { customFields: false } })).toEqual(["ownerHiddenOnline", "ownerAssistant", "customFields"]);
+  });
+
   it("a broken stored value is ignored, never read as off", () => {
     for (const settings of [{ features: "nope" }, { features: { watch: "false" } }, { features: { watch: 0 } }, "x", 42]) {
       expect(featureOn(settings, "watch"), JSON.stringify(settings)).toBe(FEATURE_DEFAULTS.watch);
@@ -42,12 +50,23 @@ describe("«الميزات»: the owner's switches", () => {
     expect(featuresOff({})).toEqual(["ownerHiddenOnline", "ownerAssistant"]);
     expect(featuresOff({ features: { ownerHiddenOnline: true, ownerAssistant: true } })).toEqual([]);
     expect(FEATURE_DEFAULTS.ownerAssistant).toBe(false);
+    // «الرسائل بدون نت» is ON until the owner turns it off (so it is never in the list of the ones that are off)
+    expect(FEATURE_DEFAULTS.chatOutbox).toBe(true);
+    expect(featuresOff({ features: { chatOutbox: false } })).toContain("chatOutbox");
   });
 
   it("setting one switch keeps every other key of the company's settings", () => {
     const before = { transparencyVersion: 3, features: { other: true }, somethingElse: { a: 1 } };
     expect(withFeature(before, "watch", false)).toEqual({ transparencyVersion: 3, features: { other: true, watch: false }, somethingElse: { a: 1 } });
     expect(withFeature(null, "watch", true)).toEqual({ features: { watch: true } });
+  });
+
+  it("«آخر ظهور» is a switch, ON by default (a company that never touched it has the feature), named in Arabic", () => {
+    expect(FEATURES).toContain("lastSeen");
+    expect(FEATURE_DEFAULTS.lastSeen).toBe(true);
+    expect(featureOn({}, "lastSeen")).toBe(true);
+    expect(featuresOff({ features: { ownerHiddenOnline: true, ownerAssistant: true, lastSeen: false } })).toEqual(["lastSeen"]);
+    expect(AR["features.lastSeen.name"]).toBe("آخر ظهور");
   });
 
   it("knows its own keys and nothing else", () => {

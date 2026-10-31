@@ -9,6 +9,7 @@ import { Users } from "lucide-react";
 import { apiGet, apiPost, ApiError } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n";
 import { arabicPlural } from "@/lib/format";
+import { lastSeenLabel } from "@/lib/last-seen";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 
@@ -20,9 +21,13 @@ export interface PresencePersonDto {
   role: string;
   online: boolean;
   avatarUrl?: string | null;
+  /** «آخر ظهور»: an ISO time, null (unknown or hidden), or absent (the switch is off / a guest): then the old «غير متصل» stays */
+  lastSeenAt?: string | null;
 }
 
 export interface PresenceRosterDto {
+  /** the company's zone, so «اليوم» and «أمس» are the company's days; present only with «آخر ظهور» */
+  timeZone?: string;
   /** only the owner may choose between his space and the whole company */
   canChooseScope?: boolean;
   scope?: "space" | "company";
@@ -161,8 +166,8 @@ export function PeopleDock({ enabled = true, defaultOpen = false }: { enabled?: 
                   <span className={cn("block truncate text-sm font-semibold", !p.online && "text-fg-muted")}>{p.name}</span>
                   <span className="block truncate text-xs text-fg-muted">{p.jobTitle ?? t("shell.dock.no_title")}</span>
                 </span>
-                <span className={cn("shrink-0 text-xs", p.online ? "font-semibold text-ok" : "text-fg-muted")}>
-                  {p.online ? t("shell.dock.online_now") : t("shell.dock.offline")}
+                <span data-last-seen className={cn("max-w-[8.5rem] shrink-0 text-end text-xs leading-tight", p.online ? "font-semibold text-ok" : "text-fg-muted")}>
+                  {lastSeenLabel(p, { timeZone: query.data?.timeZone }) ?? (p.online ? t("shell.dock.online_now") : t("shell.dock.offline"))}
                 </span>
                 </Row>
               </li>
