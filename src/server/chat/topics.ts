@@ -418,6 +418,7 @@ export async function conversationDetail(
     oldestId: hasOlder ? (messages[0]?.id ?? null) : null,
     // the company's switch, so the log draws the shape it is set to (the words of a message never change)
     chatBubbles: await isFeatureOn(ctx.orgId, "chatBubbles"),
+    chatOutbox: await isFeatureOn(ctx.orgId, "chatOutbox"),
   };
 }
 
