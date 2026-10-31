@@ -28,6 +28,9 @@ import OwnerBoardPage from "@/app/(app)/owner/page";
 import OwnerBoardPersonPage from "@/app/(app)/owner/people/[id]/page";
 import OwnerAssistantPage from "@/app/(app)/owner/assistant/page";
 import OwnerAssistantSettingsPage from "@/app/(app)/owner/assistant/settings/page";
+import ApprovalsPage from "@/app/(app)/approvals/page";
+import ApprovalPage from "@/app/(app)/approvals/[id]/page";
+import ApprovalFormsPage from "@/app/(app)/approvals/forms/page";
 import StructurePage from "@/app/(app)/structure/page";
 import DevelopmentPage from "@/app/(app)/development/page";
 import DevelopmentPersonPage from "@/app/(app)/development/people/[id]/page";
@@ -108,7 +111,7 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25, and «نتفرّج سوا» (`/watch`, `/watch/[id]`, the owner's
  * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30), and `/cards` («اللوحات») with the page inside a card (`/cards/[id]`), and `/time` («تقرير الوقت», 2026-10-30: owned by «الشغل», linked from a task and from «وقتي اليوم»).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]", "/time", "/owner", "/owner/people/[id]", "/owner/assistant", "/owner/assistant/settings", "/structure", "/development", "/development/skills", "/development/people/[id]"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]", "/time", "/owner", "/owner/people/[id]", "/owner/assistant", "/owner/assistant/settings", "/approvals", "/approvals/[id]", "/approvals/forms", "/structure", "/development", "/development/skills", "/development/people/[id]"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -165,6 +168,9 @@ const PAGES: Record<string, PageCall> = {
   "/owner/people/[id]": (args) => OwnerBoardPersonPage({ params: idOf(args), searchParams: {} }),
   "/owner/assistant": ({ searchParams }) => OwnerAssistantPage({ searchParams }),
   "/owner/assistant/settings": () => OwnerAssistantSettingsPage(),
+  "/approvals": ({ searchParams }) => ApprovalsPage({ searchParams }),
+  "/approvals/[id]": (args) => ApprovalPage({ params: idOf(args) }),
+  "/approvals/forms": ({ searchParams }) => ApprovalFormsPage({ searchParams }),
   "/structure": () => StructurePage(),
   "/development": ({ searchParams }) => DevelopmentPage({ searchParams }),
   "/development/skills": () => DevelopmentSkillsPage(),
@@ -351,7 +357,11 @@ async function linkWorld() {
   const watch = await db.watchSession.create({
     data: { orgId, spaceId: teamSpace.space.id, conversationId: watchTopic.id, hostId: team.member.id, title: "Watch", sourceKind: "YOUTUBE", sourceRef: "dQw4w9WgXcQ", sourceUrl: "https://youtu.be/dQw4w9WgXcQ" },
   });
-  return { ...team, lead, teamSpace, shared, closed, teamTopic, closedTopic, topicCall, closedMeeting, watch };
+  // an approval request of the team's space (the member asked, the admin is the approver): the owner opens it, a partner never does
+  const approval = await db.approvalRequest.create({
+    data: { orgId, workspaceId: teamSpace.space.id, requesterId: team.member.id, title: "Approval", steps: { create: [{ version: 1, position: 1, approverId: team.admin.id }] } },
+  });
+  return { ...team, lead, teamSpace, shared, closed, approval, teamTopic, closedTopic, topicCall, closedMeeting, watch };
 }
 
 type World = Awaited<ReturnType<typeof linkWorld>>;
@@ -380,6 +390,9 @@ function addressesOf(route: string, w: World): string[] {
     case "/cards/[id]":
       // a card of the team's space, one of the space shared with the partner, one of the space nobody is in, and one that is gone
       return [...spaces.map((s) => s.card.id), GONE].map((id) => `/cards/${id}`);
+    case "/approvals/[id]":
+      // a request the owner and the people of the space open, and one that is gone
+      return [w.approval.id, GONE].map((id) => `/approvals/${id}`);
     case "/owner/people/[id]":
       // every staff rank (a guest is not a person of the board: 404 for the owner too), and one that is gone
       return [w.owner.id, w.admin.id, w.lead.id, w.member.id, GONE].map((id) => `/owner/people/${id}`);

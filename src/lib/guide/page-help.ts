@@ -86,6 +86,28 @@ export const PAGE_HELP: readonly PageHelp[] = [
     guestNextKey: INTERNAL,
     article: "chat",
   },
+  // «الموافقات»: the static page `/approvals/forms` is listed BEFORE `/approvals/:id` (same length, the first one listed wins a tie)
+  {
+    id: "approval-forms",
+    pattern: "/approvals/forms",
+    whatKey: "guide.page.approval-forms.what",
+    nextKey: "guide.page.approval-forms.next",
+    guestNextKey: INTERNAL,
+  },
+  {
+    id: "approval",
+    pattern: "/approvals/:id",
+    whatKey: "guide.page.approval.what",
+    nextKey: "guide.page.approval.next",
+    guestNextKey: INTERNAL,
+  },
+  {
+    id: "approvals",
+    pattern: "/approvals",
+    whatKey: "guide.page.approvals.what",
+    nextKey: "guide.page.approvals.next",
+    guestNextKey: INTERNAL,
+  },
   {
     id: "owner-board",
     pattern: "/owner",

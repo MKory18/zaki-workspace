@@ -158,7 +158,7 @@ describe("applyNavOrder: over what the person may see", () => {
 
   it("reorders the tabs of a place only, leaving the other places' tabs and every address alone", () => {
     const nav = buildNav(who("OWNER"));
-    const out = applyNavOrder(nav, { places: [], tabs: { work: ["crm", "list", "my-work", "projects", "calendar", "goals", "ideas", "production", "departments", "tickets", "campaigns"] } });
+    const out = applyNavOrder(nav, { places: [], tabs: { work: ["crm", "list", "my-work", "projects", "calendar", "goals", "ideas", "production", "departments", "tickets", "campaigns", "approvals"] } });
     expect(tabKeys(out, "work").slice(0, 3)).toEqual(["crm", "list", "my-work"]);
     expect([...tabKeys(out, "work")].sort()).toEqual([...tabKeys(nav, "work")].sort());
     expect(tabKeys(out, "admin")).toEqual(tabKeys(nav, "admin"));
