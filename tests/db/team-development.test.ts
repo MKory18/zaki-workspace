@@ -519,7 +519,8 @@ describe("«الأداء والتطوير»: the switch", () => {
       expect(nav.places.flatMap((p) => p.tabs.map((t) => t.key))).not.toContain("development");
     }
     await as(w.owner.id);
-    for (const page of [() => StructurePage(), () => DevelopmentPage({ searchParams: {} }), () => SkillsPage(), () => html(PersonPage({ params: { id: w.r1.id }, searchParams: {} }))]) {
+    const pages: (() => unknown)[] = [() => StructurePage(), () => DevelopmentPage({ searchParams: {} }), () => SkillsPage(), () => html(PersonPage({ params: { id: w.r1.id }, searchParams: {} }))];
+    for (const page of pages) {
       await expect(Promise.resolve().then(page)).rejects.toThrow("NEXT_NOT_FOUND");
     }
     await setFeature(w, true);
