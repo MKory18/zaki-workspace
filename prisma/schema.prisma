@@ -878,6 +878,8 @@ model Workspace {
   calls         Call[]
   watchSessions WatchSession[]
   cards         Card[]
+  checkinConfig CheckinConfig?
+  checkinRounds CheckinRound[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, systemKey])
@@ -1953,6 +1955,65 @@ model TaskFieldValue {
   @@index([fieldId, valueDate])
   @@index([fieldId, valueText])
   @@index([orgId])
+}
+
+/// «التسجيل اليومي» (daily check-in): the short stand-up a space's ADMIN turns on. One configuration per space.
+/// `questions` is a JSON array of 1 to 5 strings; `weekdays` counts 0 = الأحد to 6 = السبت (the company's week);
+/// `timeOfDay` is `HH:MM` in the COMPANY's zone. `participantsMode` is ALL (everybody ACTIVE and not a guest in the space)
+/// or LIST (the people of `participantIds`, a JSON array of user ids).
+model CheckinConfig {
+  id               String   @id @default(cuid())
+  workspaceId      String   @unique
+  questions        Json     @default("[]")
+  timeOfDay        String   @default("09:00")
+  weekdays         Int[]    @default([0, 1, 2, 3, 4])
+  participantsMode String   @default("ALL")
+  participantIds   Json     @default("[]")
+  active           Boolean  @default(false)
+  updatedById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/// One round of a space's check-in on one day of the company's calendar. Made exactly once by the job runner
+/// (`INSERT ... ON CONFLICT ("workspaceId", "day") DO NOTHING`), with the questions and the participants as they were that
+/// morning (a later change of the configuration does not rewrite a past day). `closedAt` is the instant the round closes
+/// (the end of the company's day): answers are accepted and edited until then. `nudgedAt` is set ONCE, by the reminder step.
+model CheckinRound {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  day            DateTime  @db.Date
+  openedAt       DateTime  @default(now())
+  closedAt       DateTime
+  questions      Json      @default("[]")
+  participantIds Json      @default("[]")
+  nudgedAt       DateTime?
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  answers   CheckinAnswer[]
+
+  @@unique([workspaceId, day])
+  @@index([day])
+}
+
+/// A person's answer to one round: the texts (aligned with the round's questions), the open tasks they attached (read-only
+/// links), or an «إجازة اليوم» (`excused`, no texts). One row per person per round.
+model CheckinAnswer {
+  id          String    @id @default(cuid())
+  roundId     String
+  userId      String
+  answers     Json      @default("[]")
+  taskIds     Json      @default("[]")
+  excused     Boolean   @default(false)
+  submittedAt DateTime  @default(now())
+  editedAt    DateTime?
+
+  round CheckinRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, userId])
+  @@index([userId])
 }
 
 // «طلبات الموافقة ونماذج» (the owner's backlog, 2026-10-31): a person asks for a decision from ONE approver or a chain of up

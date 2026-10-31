@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox", "customFields", "lastSeen", "approvals", "teamDevelopment"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox", "customFields", "lastSeen", "approvals", "teamDevelopment", "checkins"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -96,6 +96,10 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // مخصصة» card on the task, no «إدارة الحقول» on the project, no chips, filter or sort on the list and the board, the routes answer
   // «not found» and a required field stops asking at completion; the fields and the values already stored stay and come back with the switch
   customFields: true,
+  // «التسجيل اليومي» (src/server/services/checkins.ts): a short daily stand-up per space. Off, the tab, the card on «اليوم» and the
+  // page are gone (the page and the routes answer «not found»), the job runner opens no round and sends no nudge; the
+  // configurations, rounds and answers already stored stay and come back with the switch
+  checkins: true,
   // «آخر ظهور» (src/server/services/last-seen.ts): under a person's name, when they were last at their screen («آخر ظهور قبل 10 دقايق»), in the
   // people dock, the quick chat, the header of a private chat and the profile page. Off: those places say «غير متصل» as before, the
   // fields leave every answer, `PATCH /api/me/last-seen` answers «not found» and the presence layer records no new time; the times

@@ -81,6 +81,7 @@ export type TabKey =
   | "tickets"
   | "campaigns"
   | "crm"
+  | "checkins"
   | "files"
   | "team"
   | "space"
@@ -182,6 +183,9 @@ export const PLACES: readonly PlaceDef[] = [
       // «الموافقات» (the owner's backlog, 2026-10-31): requests for a decision from one approver or a chain, and the forms that create
       // them. For staff (a guest never asks, sees or is asked: the pages and /api/approvals refuse them too), behind its switch.
       { key: "approvals", href: "/approvals", labelKey: "nav.approvals", requires: "staff", feature: "approvals" },
+      // «التسجيل اليومي» (the owner's ask, 2026-10-31): the space's short stand-up. Staff only (an external partner never sees the
+      // team's answers), and only while its switch in «الميزات» is on; the page and the routes decide again on the server.
+      { key: "checkins", href: "/checkins", labelKey: "nav.tab.checkins", requires: "staff", feature: "checkins" },
     ],
   },
   {
