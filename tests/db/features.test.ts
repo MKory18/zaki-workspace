@@ -54,6 +54,7 @@ describe("«الميزات»: who switches", () => {
     expect(res.status).toBe(200);
     expect(res.json?.["features"]).toEqual(FEATURES.map((key) => ({ key, on: key !== "ownerHiddenOnline" && key !== "ownerAssistant" })));
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
+    expect(await isFeatureOn(w.org.id, "chatOutbox")).toBe(true); // «الرسائل بدون نت»: on until the owner turns it off
   });
 
   it("only the owner switches: an admin and a member are refused, and nothing changes", async () => {

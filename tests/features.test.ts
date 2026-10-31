@@ -42,6 +42,9 @@ describe("«الميزات»: the owner's switches", () => {
     expect(featuresOff({})).toEqual(["ownerHiddenOnline", "ownerAssistant"]);
     expect(featuresOff({ features: { ownerHiddenOnline: true, ownerAssistant: true } })).toEqual([]);
     expect(FEATURE_DEFAULTS.ownerAssistant).toBe(false);
+    // «الرسائل بدون نت» is ON until the owner turns it off (so it is never in the list of the ones that are off)
+    expect(FEATURE_DEFAULTS.chatOutbox).toBe(true);
+    expect(featuresOff({ features: { chatOutbox: false } })).toContain("chatOutbox");
   });
 
   it("setting one switch keeps every other key of the company's settings", () => {
