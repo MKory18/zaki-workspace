@@ -41,6 +41,7 @@ import taskRewards from "./ar.task-rewards.json";
 import calendarFeed from "./ar.calendar-feed.json";
 import ownerBoard from "./ar.owner-board.json";
 import ownerAssistant from "./ar.owner-assistant.json";
+import lastSeen from "./ar.last-seen.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
@@ -93,4 +94,5 @@ export const AR: Record<string, string> = {
   ...calendarFeed,
   ...ownerBoard,
   ...ownerAssistant,
+  ...lastSeen,
 };

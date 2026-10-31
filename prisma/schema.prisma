@@ -800,6 +800,10 @@ model OrganizationMember {
   omsStaffRef    String?
   statusChangedAt   DateTime?
   statusChangedById String?
+  // «آخر ظهور»: the last moment this person was at their screen in THIS company (written by the real-time presence, at
+  // most once a minute: src/server/realtime/presence.ts), and their own «إخفاء آخر ظهوري» choice (null counts as false).
+  lastSeenAt        DateTime?
+  hideLastSeen      Boolean? @default(false)
   createdAt      DateTime     @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

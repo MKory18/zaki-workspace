@@ -50,6 +50,14 @@ describe("«الميزات»: the owner's switches", () => {
     expect(withFeature(null, "watch", true)).toEqual({ features: { watch: true } });
   });
 
+  it("«آخر ظهور» is a switch, ON by default (a company that never touched it has the feature), named in Arabic", () => {
+    expect(FEATURES).toContain("lastSeen");
+    expect(FEATURE_DEFAULTS.lastSeen).toBe(true);
+    expect(featureOn({}, "lastSeen")).toBe(true);
+    expect(featuresOff({ features: { ownerHiddenOnline: true, ownerAssistant: true, lastSeen: false } })).toEqual(["lastSeen"]);
+    expect(AR["features.lastSeen.name"]).toBe("آخر ظهور");
+  });
+
   it("knows its own keys and nothing else", () => {
     expect(isFeatureKey("watch")).toBe(true);
     expect(isFeatureKey("nope")).toBe(false);
