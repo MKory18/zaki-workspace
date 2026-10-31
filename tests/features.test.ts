@@ -44,6 +44,16 @@ describe("«الميزات»: the owner's switches", () => {
     expect(FEATURE_DEFAULTS.ownerAssistant).toBe(false);
   });
 
+  it("«طلبات الموافقة والنماذج» (`approvals`) is a switch of its own, on by default, so it is never in the list of the ones that are off", () => {
+    expect(FEATURES).toContain("approvals");
+    expect(FEATURE_DEFAULTS.approvals).toBe(true);
+    expect(featuresOff({})).not.toContain("approvals");
+    expect(featuresOff({ features: { approvals: false } })).toContain("approvals");
+    expect(featureOn({ features: { approvals: false } }, "approvals")).toBe(false);
+    expect(buildNav({ ...owner, off: ["approvals"] }).places.flatMap((p) => p.tabs.map((t) => t.key))).not.toContain("approvals");
+    expect(buildNav(owner).places.flatMap((p) => p.tabs.map((t) => t.key))).toContain("approvals");
+  });
+
   it("setting one switch keeps every other key of the company's settings", () => {
     const before = { transparencyVersion: 3, features: { other: true }, somethingElse: { a: 1 } };
     expect(withFeature(before, "watch", false)).toEqual({ transparencyVersion: 3, features: { other: true, watch: false }, somethingElse: { a: 1 } });
