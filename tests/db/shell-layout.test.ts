@@ -53,7 +53,7 @@ const places = (shell: Shell) => shell.props.nav.places.map((p) => p.key);
 const placeOf = (shell: Shell, key: PlaceKey) => shell.props.nav.places.find((p) => p.key === key);
 const tabs = (shell: Shell, key: PlaceKey) => placeOf(shell, key)?.tabs.map((t) => t.key);
 
-const WORK_ALL = ["my-work", "projects", "list", "calendar", "goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "checkins"];
+const WORK_ALL = ["my-work", "projects", "list", "calendar", "goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "approvals", "checkins"];
 // goals and ideas are the team's own (docs/PHASE0-AUDIT.md R10): not offered to an external partner
 const WORK_GUEST = ["my-work", "projects", "list", "calendar"];
 

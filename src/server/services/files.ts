@@ -14,6 +14,7 @@ import { canReadConversation } from "@/server/policy/conversation";
 import { MAX_FILE_BYTES, canManageFile, checksumHex, safeStoredName, sniffMimeType } from "@/server/files/sniff";
 import { accessibleWorkspaceIds } from "@/server/services/access";
 import { libraryOnDrive } from "@/server/services/google";
+import { mayReadApprovalFile } from "@/server/services/approval-access";
 import {
   DriveStoreError,
   type DriveSpace,
@@ -178,6 +179,8 @@ export async function assertMayReadFile(ctx: OrgAccessContext, id: string): Prom
     if (m.deletedAt && ctx.orgRole !== "OWNER") continue;
     if (await canReadConversation(ctx.userId, m.conversationId)) return;
   }
+  // a file attached to an approval request opens for the people who may read that request
+  if (await mayReadApprovalFile({ userId: ctx.userId, orgId: ctx.orgId, role: ctx.orgRole }, id)) return;
   throw new NotFoundError("files.not_found");
 }
 

@@ -10,6 +10,7 @@ import type { ConversationDto, MemberDto, MessageDto, ReaderDto } from "@/server
 import { presentMessage, previewOf, type Viewer } from "@/server/chat/redact";
 import { messageInclude, dmStatusFor } from "@/server/chat/messages";
 import { isFeatureOn } from "@/server/services/features";
+import { lastSeenReader } from "@/server/services/last-seen";
 import type { Prisma } from "@prisma/client";
 
 /** ---------- create topic ---------- */
@@ -361,6 +362,23 @@ export async function conversationDetail(
     avatarUrl: m.user.avatarUrl,
   }));
 
+  // «آخر ظهور» of the OTHER person of a private chat, for the line under the name (a DM only, and only for one of its two
+  // people: the owner reading a DM in oversight is not the peer of anybody there). Left out (key absent) when the company's
+  // switch is off or the viewer is not told anything (a guest); null when it is unknown or hidden (services/last-seen.ts).
+  let peerSeen: { peerLastSeenAt?: string | null; timeZone?: string } = {};
+  if (facts.kind === "DM" && facts.viewerIsMember) {
+    const peer = conv.members.find((m) => m.userId !== ctx.userId);
+    const reader = await lastSeenReader(ctx.orgId, ctx.userId);
+    if (peer && reader.enabled) {
+      const row = await db.organizationMember.findUnique({
+        // all-statuses: the reader answers null for anybody who is not ACTIVE
+        where: { organizationId_userId: { organizationId: ctx.orgId, userId: peer.userId } },
+        select: { userId: true, role: true, status: true, lastSeenAt: true, hideLastSeen: true },
+      });
+      if (row) peerSeen = { peerLastSeenAt: reader.read(row) ?? null, timeZone: reader.timeZone };
+    }
+  }
+
   const title =
     facts.kind === "DM"
       ? (conv.members.find((m) => m.userId !== ctx.userId)?.user.name ?? conv.title ?? "")
@@ -379,6 +397,7 @@ export async function conversationDetail(
     pinned: !!conv.pinnedAt,
     archived: !!conv.archivedAt,
     space: conv.space ? { id: conv.space.id, name: conv.space.name, hasExternal: false } : null,
+    ...peerSeen,
     me: {
       canPost: canPost(facts, org!, { ownerJoined: facts.viewerIsMember }),
       canModerate: canModerateHere,

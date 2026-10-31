@@ -44,6 +44,8 @@ import ownerAssistant from "./ar.owner-assistant.json";
 import customFields from "./ar.custom-fields.json";
 import outbox from "./ar.outbox.json";
 import checkins from "./ar.checkins.json";
+import lastSeen from "./ar.last-seen.json";
+import approvals from "./ar.approvals.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
@@ -99,4 +101,6 @@ export const AR: Record<string, string> = {
   ...customFields,
   ...outbox,
   ...checkins,
+  ...lastSeen,
+  ...approvals,
 };

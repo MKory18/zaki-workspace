@@ -150,7 +150,7 @@ describe("the frame for the owner, on a project page", () => {
 
   it("shows «الشغل»'s twelve tabs above the page, «المشاريع» as the current page", () => {
     const strip = tabStrip(html);
-    expect(hrefs(strip)).toEqual(["/my-work", "/projects", "/list", "/calendar", "/goals", "/ideas", "/production", "/departments", "/tickets", "/campaigns", "/crm", "/checkins"]);
+    expect(hrefs(strip)).toEqual(["/my-work", "/projects", "/list", "/calendar", "/goals", "/ideas", "/production", "/departments", "/tickets", "/campaigns", "/crm", "/approvals", "/checkins"]);
     expect(linkTo(strip, "/projects")).toContain('aria-current="page"');
     expect(strip).toContain(`aria-label="${AR["shell.tabs"]?.replace("{place}", AR["nav.place.work"] as string)}"`);
   });

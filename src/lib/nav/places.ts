@@ -85,7 +85,8 @@ export type TabKey =
   | "settings"
   | "archive"
   | "board"
-  | "assistant";
+  | "assistant"
+  | "approvals";
 
 /** An icon by NAME: the shell maps it to a drawing (src/components/shell/nav-icons.tsx). Data only, so it crosses from server to browser. */
 export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings" | "watch" | "cards";
@@ -169,6 +170,9 @@ export const PLACES: readonly PlaceDef[] = [
       { key: "tickets", href: "/tickets", labelKey: "nav.tickets", requires: { capability: "tickets.view" } },
       { key: "campaigns", href: "/campaigns", labelKey: "nav.campaigns", requires: { capability: "campaigns.view" } },
       { key: "crm", href: "/crm", labelKey: "nav.crm", requires: { capability: "crm.view" } },
+      // «الموافقات» (the owner's backlog, 2026-10-31): requests for a decision from one approver or a chain, and the forms that create
+      // them. For staff (a guest never asks, sees or is asked: the pages and /api/approvals refuse them too), behind its switch.
+      { key: "approvals", href: "/approvals", labelKey: "nav.approvals", requires: "staff", feature: "approvals" },
       // «التسجيل اليومي» (the owner's ask, 2026-10-31): the space's short stand-up. Staff only (an external partner never sees the
       // team's answers), and only while its switch in «الميزات» is on; the page and the routes decide again on the server.
       { key: "checkins", href: "/checkins", labelKey: "nav.tab.checkins", requires: "staff", feature: "checkins" },

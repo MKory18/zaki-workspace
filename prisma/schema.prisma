@@ -800,6 +800,10 @@ model OrganizationMember {
   omsStaffRef    String?
   statusChangedAt   DateTime?
   statusChangedById String?
+  // «آخر ظهور»: the last moment this person was at their screen in THIS company (written by the real-time presence, at
+  // most once a minute: src/server/realtime/presence.ts), and their own «إخفاء آخر ظهوري» choice (null counts as false).
+  lastSeenAt        DateTime?
+  hideLastSeen      Boolean? @default(false)
   createdAt      DateTime     @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -2007,4 +2011,105 @@ model CheckinAnswer {
 
   @@unique([roundId, userId])
   @@index([userId])
+
+// «طلبات الموافقة ونماذج» (the owner's backlog, 2026-10-31): a person asks for a decision from ONE approver or a chain of up
+// to three in order; a form template is a reusable way to ask. An approval ONLY RECORDS a decision: it never moves money
+// (`amountMinor` is a note, in integer minor units like a task reward). Nothing here is ever deleted: a cancelled request is a
+// status, a resubmitted one is a new `version` with the old steps and attachments kept under their own version number.
+// No foreign keys to the company, the space or the person on purpose (the same as the other owner tables): the service
+// checks them, and the rows of one request (steps, files) die only with the request.
+model ApprovalRequest {
+  id          String    @id @default(cuid())
+  orgId       String
+  workspaceId String
+  requesterId String
+  title       String
+  details     String    @default("")
+  // integer minor units (1250 = 12.50) and its currency: both or neither (a CHECK). Never shown to an external partner.
+  amountMinor Int?
+  currency    String?
+  // PENDING | APPROVED | REJECTED | CANCELLED | CHANGES_REQUESTED (a text with a CHECK)
+  status      String    @default("PENDING")
+  // 1 at the start; a resubmit after «اطلب تعديل» adds one
+  version     Int       @default(1)
+  // the position (1..3) of the step that decides now, in the current version
+  currentStep Int       @default(1)
+  // a task, a card or a message this request is about: TASK | CARD | MESSAGE
+  linkKind    String?
+  linkId      String?
+  // the form (the template row of the VERSION it was filled from) and the answers, as validated against that version
+  formId      String?
+  answers     Json?
+  // the earlier versions' content: [{ version, title, details, amountMinor, currency, answers, submittedAt }]
+  history     Json      @default("[]")
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  form        FormTemplate?        @relation(fields: [formId], references: [id], onDelete: SetNull)
+  steps       ApprovalStep[]
+  attachments ApprovalAttachment[]
+
+  @@index([workspaceId, status])
+  @@index([requesterId])
+  @@index([orgId, createdAt])
+}
+
+// One approver of one version of a request. PENDING | APPROVED | REJECTED | CHANGES_REQUESTED | SKIPPED (a later step that was
+// never reached: the chain ended, or the request was cancelled). `notifiedAt`: when this approver was told it is their turn.
+model ApprovalStep {
+  id         String    @id @default(cuid())
+  requestId  String
+  version    Int
+  position   Int
+  approverId String
+  status     String    @default("PENDING")
+  reason     String?
+  notifiedAt DateTime?
+  decidedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  request ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, version, position])
+  @@index([approverId, status])
+}
+
+// A file of a request: a chat upload (`StoredFile`, sniffed by the upload route) linked to the version it was attached for.
+model ApprovalAttachment {
+  id        String   @id @default(cuid())
+  requestId String
+  fileId    String
+  version   Int      @default(1)
+  addedById String
+  createdAt DateTime @default(now())
+
+  request ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, fileId, version])
+  @@index([requestId])
+  @@index([fileId])
+}
+
+// «نموذج»: a reusable form of one space. A template edit never changes a row: it adds the next `version` of the same `familyId`
+// (the old row stops being `isLatest`), so a request keeps exactly the questions it was filled with.
+// `schema` is { fields: [{ id, type, label, required, ... }], approvers: [userId] } (src/lib/approvals/forms.ts checks it).
+model FormTemplate {
+  id          String    @id @default(cuid())
+  orgId       String
+  workspaceId String
+  familyId    String
+  version     Int       @default(1)
+  name        String
+  description String?
+  schema      Json
+  isLatest    Boolean   @default(true)
+  archivedAt  DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  requests ApprovalRequest[]
+
+  @@unique([familyId, version])
+  @@index([orgId, workspaceId, isLatest])
 }
