@@ -17,6 +17,7 @@ import {
   type AssignRequestInfo,
 } from "./task-assign";
 import { onTaskCompleted } from "./recurrence-spawn";
+import { assertRequiredFilled } from "./custom-fields";
 
 export interface ActorContext {
   userId: string;
@@ -346,6 +347,8 @@ export async function moveTask(
       where: { id: input.columnId, boardId: task.boardId },
     });
     if (!column) throw new ForbiddenError("column.invalid");
+    // «حقول مخصصة»: finishing a task (open -> done) asks for the project's required fields, here and in `setTaskCompletion`
+    if (column.done && task.completedAt == null) await assertRequiredFilled(tx, { id: taskId, projectId: task.projectId, orgId: actor.orgId });
 
     const updated = await tx.task.update({
       where: { id: taskId },
@@ -557,6 +560,8 @@ export async function setTaskCompletion(
     }
     const alreadyDone = task.completedAt != null;
     if (alreadyDone === complete) return tx.task.findFirstOrThrow({ where: { id: taskId }, include: TASK_INCLUDE });
+    // «حقول مخصصة»: the same door as `moveTask`: finishing asks for the project's required fields
+    if (complete) await assertRequiredFilled(tx, { id: taskId, projectId: task.projectId, orgId: actor.orgId });
     const updated = await tx.task.update({
       where: { id: taskId },
       data: {

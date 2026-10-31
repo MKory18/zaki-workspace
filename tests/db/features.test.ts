@@ -48,6 +48,8 @@ describe("«الميزات»: who switches", () => {
     expect(res.status).toBe(200);
     expect(res.json?.["features"]).toEqual(FEATURES.map((key) => ({ key, on: key !== "ownerHiddenOnline" && key !== "ownerAssistant" })));
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
+    // «حقول مخصصة» is listed and on by default (its doors are pinned in custom-fields.test.ts)
+    expect(await isFeatureOn(w.org.id, "customFields")).toBe(true);
     expect(await isFeatureOn(w.org.id, "chatOutbox")).toBe(true); // «الرسائل بدون نت»: on until the owner turns it off
   });
 
