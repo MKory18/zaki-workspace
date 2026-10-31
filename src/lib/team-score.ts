@@ -142,8 +142,8 @@ const clamp100 = (n: number) => Math.min(100, Math.max(0, n));
 /** Reviewers' ratings 1-5 (their average) → 0-100. */
 export const manualToScore = (average: number | null): number | null => (average === null ? null : clamp100(((average - 1) / 4) * 100));
 
-/** The on-time rate (0-1) → 0-100 as it is. */
-export const onTimeToScore = (rate: number | null): number | null => (rate === null ? null : clamp100(rate * 100));
+/** The on-time rate as the board gives it (a whole percentage, 0-100) → 0-100 as it is. */
+export const onTimeToScore = (rate: number | null): number | null => (rate === null ? null : clamp100(rate));
 
 /** A count against its baseline: 100 at the baseline or above; nothing to compare with (no baseline, or 0) is «—». */
 export function countToScore(count: number, baseline: number | null): number | null {

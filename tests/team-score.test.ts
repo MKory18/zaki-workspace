@@ -73,9 +73,10 @@ describe("each indicator to 0-100", () => {
   });
 
   it("on-time: the rate as it is; no rate is «—», never 0", () => {
-    expect(onTimeToScore(0.75)).toBe(75);
+    expect(onTimeToScore(75)).toBe(75); // the board's rate is already a percentage
     expect(onTimeToScore(0)).toBe(0);
-    expect(onTimeToScore(1)).toBe(100);
+    expect(onTimeToScore(100)).toBe(100);
+    expect(onTimeToScore(250)).toBe(100);
     expect(onTimeToScore(null)).toBeNull();
   });
 
