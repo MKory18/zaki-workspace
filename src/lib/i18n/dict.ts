@@ -46,6 +46,7 @@ import outbox from "./ar.outbox.json";
 import checkins from "./ar.checkins.json";
 import lastSeen from "./ar.last-seen.json";
 import approvals from "./ar.approvals.json";
+import teamDevelopment from "./ar.team-development.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
@@ -103,4 +104,5 @@ export const AR: Record<string, string> = {
   ...checkins,
   ...lastSeen,
   ...approvals,
+  ...teamDevelopment,
 };

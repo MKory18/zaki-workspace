@@ -51,6 +51,12 @@ export interface NavSubject {
    * behind it decide again, on the server.
    */
   spaceManager?: boolean;
+  /**
+   * Does somebody ACTIVE answer to this person («الهيكل»)? Read from the database by the layout (a reporting line is data, not a
+   * capability). An external partner never is. It only decides whether «الهيكل» is offered and whether the file tab is called
+   * «الأداء والتطوير» or «ملفي»: the pages and the routes decide again, on the server.
+   */
+  supervisor?: boolean;
   /** The company's switched-off features (src/lib/features.ts): their places are not drawn. */
   off?: readonly FeatureKey[];
   /**
@@ -86,7 +92,9 @@ export type TabKey =
   | "archive"
   | "board"
   | "assistant"
-  | "approvals";
+  | "approvals"
+  | "structure"
+  | "development";
 
 /** An icon by NAME: the shell maps it to a drawing (src/components/shell/nav-icons.tsx). Data only, so it crosses from server to browser. */
 export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings" | "watch" | "cards";
@@ -99,6 +107,7 @@ export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team
  *   { rankAtLeast }       that rank or above
  *   { anyOf }             one of these
  *   { spaceManager }      staff who manage the space they are in (`NavSubject.spaceManager`)
+ *   { supervisor }        staff somebody answers to (`NavSubject.supervisor`)
  *   { workCapability }    an external partner (the space's own rules decide for them), or staff holding that box
  */
 export type Requirement =
@@ -108,7 +117,8 @@ export type Requirement =
   | { readonly rankAtLeast: NavRole }
   | { readonly anyOf: readonly Requirement[] }
   | { readonly workCapability: string }
-  | { readonly spaceManager: true };
+  | { readonly spaceManager: true }
+  | { readonly supervisor: true };
 
 export interface TabDef {
   readonly key: TabKey;
@@ -228,6 +238,27 @@ export const PLACES: readonly PlaceDef[] = [
       // «مساعد المالك» (the owner's ask, 2026-10-30): next to «لوحة المالك», for the OWNER rank alone (the owner and his partners)
       // and only while its switch in «الميزات» is on. The pages and routes decide again on the server (404 for everybody else).
       { key: "assistant", href: "/owner/assistant", labelKey: "nav.tab.assistant", icon: "reports", requires: { rankAtLeast: "OWNER" }, feature: "ownerAssistant" },
+      // «الهيكل» (the owner's ask, 2026-10-31): who answers to whom. The owner, whoever holds `people.manage_lines` and every supervisor
+      // (for their own people); a plain employee reads their own supervisor on their «ملفي» page. Behind its switch in «الميزات».
+      {
+        key: "structure",
+        href: "/structure",
+        labelKey: "nav.tab.structure",
+        icon: "team",
+        requires: { anyOf: [{ rankAtLeast: "OWNER" }, { capability: "people.manage_lines" }, { supervisor: true }] },
+        feature: "teamDevelopment",
+      },
+      // «الأداء والتطوير»: skills, scores, reviews and plans of the people one reads: the owner, a supervisor, a holder of `people.review`
+      // or `people.manage_lines`. A plain employee reads their OWN file («ملفي») from a link on «لوحتي» (their menu stays as it was);
+      // the page serves them, and the routes decide again on the server.
+      {
+        key: "development",
+        href: "/development",
+        labelKey: "nav.tab.development",
+        icon: "reports",
+        requires: { anyOf: [{ rankAtLeast: "OWNER" }, { capability: "people.review" }, { capability: "people.manage_lines" }, { supervisor: true }] },
+        feature: "teamDevelopment",
+      },
       { key: "reports", href: "/analytics", labelKey: "nav.analytics", icon: "reports", requires: { capability: "reports.view" } },
       { key: "automation", href: "/automation", labelKey: "nav.tab.automation", icon: "automation", requires: { capability: "integrations.manage" } },
       { key: "telegram", href: "/telegram", labelKey: "nav.telegram", icon: "telegram", requires: { capability: "integrations.manage" } },
@@ -316,6 +347,7 @@ function meets(req: Requirement, subject: NavSubject): boolean {
   if ("anyOf" in req) return req.anyOf.some((r) => meets(r, subject));
   // an outsider works in what is shared with them by the space's rules; staff need the box
   if ("spaceManager" in req) return !outsider && subject.spaceManager === true;
+  if ("supervisor" in req) return !outsider && subject.supervisor === true;
   if ("workCapability" in req) return outsider || subject.caps.includes(req.workCapability);
   if ("capability" in req) return !outsider && subject.caps.includes(req.capability);
   return rankAtLeast(subject.role, req.rankAtLeast);

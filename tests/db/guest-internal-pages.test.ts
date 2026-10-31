@@ -40,6 +40,8 @@ import OwnerBoardPage from "@/app/(app)/owner/page";
 import OwnerAssistantPage from "@/app/(app)/owner/assistant/page";
 import CheckinsPage from "@/app/(app)/checkins/page";
 import ApprovalsPage from "@/app/(app)/approvals/page";
+import StructurePage from "@/app/(app)/structure/page";
+import DevelopmentPage from "@/app/(app)/development/page";
 import CurrentSpacePage from "@/app/(app)/spaces/current/page";
 import WatchPage from "@/app/(app)/watch/page";
 import * as goalsRoute from "@/app/api/goals/route";
@@ -402,6 +404,8 @@ const TAB_PAGES: Record<TabKey, PageCall> = {
   assistant: () => OwnerAssistantPage({ searchParams: {} }),
   checkins: () => CheckinsPage(),
   approvals: () => ApprovalsPage({ searchParams: {} }),
+  structure: () => StructurePage(),
+  development: () => DevelopmentPage({ searchParams: {} }),
 };
 
 /** The places that are one page and have no tabs (Today, the chat). */

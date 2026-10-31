@@ -776,6 +776,9 @@ model Organization {
   whiteboards      Whiteboard[]
   calls            Call[]
   watchSessions    WatchSession[]
+  skills           Skill[]
+  personSkills     PersonSkill[]
+  skillHistory     PersonSkillHistory[]
 
   @@index([slug])
 }
@@ -2113,4 +2116,75 @@ model FormTemplate {
 
   @@unique([familyId, version])
   @@index([orgId, workspaceId, isLatest])
+}
+
+// ---------- «الأداء والتطوير» (team development): the skills checklist ----------
+
+/// Who entered a skill level: a supervisor or the owner (MANUAL), or the person about themselves (SELF). The two are
+/// kept side by side and one never replaces the other.
+enum SkillSource {
+  MANUAL
+  SELF
+}
+
+/// A skill of the company's checklist («المهارات»). Defined by the owner or whoever holds `people.manage_lines`; never
+/// deleted, only archived (the levels already entered keep their meaning).
+model Skill {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  category       String    @default("")
+  description    String    @default("")
+  archivedAt     DateTime?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  levels       PersonSkill[]
+
+  @@index([organizationId, archivedAt])
+}
+
+/// One person's level (0-4) in one skill, per source: at most one MANUAL row and one SELF row per person and skill.
+model PersonSkill {
+  id             String      @id @default(cuid())
+  organizationId String
+  userId         String
+  skillId        String
+  source         SkillSource
+  level          Int
+  note           String      @default("")
+  updatedById    String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  skill        Skill        @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId, source])
+  @@index([organizationId, userId])
+  @@index([skillId])
+}
+
+/// Every change of a level: who, when, from what to what. Append-only: the database refuses an UPDATE (the migration's trigger).
+model PersonSkillHistory {
+  id             String      @id @default(cuid())
+  organizationId String
+  userId         String
+  skillId        String
+  source         SkillSource
+  /// null: the first entry.
+  oldLevel       Int?
+  newLevel       Int
+  note           String      @default("")
+  /// Why, when it is not a plain edit: `goal:<id>` for a development goal confirmed in one click.
+  reason         String      @default("")
+  changedById    String
+  createdAt      DateTime    @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, skillId, createdAt])
+  @@index([organizationId, createdAt])
 }

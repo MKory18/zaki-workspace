@@ -67,7 +67,7 @@ describe("the layout draws each person's own places", () => {
     expect(places(shell)).toEqual(["today", "chat", "work", "library", "watch", "admin"]);
     expect(tabs(shell, "work")).toEqual(WORK_ALL);
     // Phase 3: «الأرشيف» (archive.view, the owner's alone) joined the admin place
-    expect(tabs(shell, "admin")).toEqual(["team", "board", "reports", "automation", "telegram", "settings", "archive"]);
+    expect(tabs(shell, "admin")).toEqual(["team", "board", "structure", "development", "reports", "automation", "telegram", "settings", "archive"]);
     expect(placeOf(shell, "admin")?.labelKey).toBe("nav.place.admin");
     expect(shell.props).toMatchObject({ rank: "OWNER", isGuest: false, audience: "managers" });
     // the shell gets the three fields it draws, never the session facts (WP-ARABIC2 (g))

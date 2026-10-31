@@ -37,6 +37,7 @@ export type PrismaEnumName =
   | "ReminderRepeat"
   | "ReminderStatus"
   | "TimeEntrySource"
+  | "SkillSource"
   | "RecurrenceMode"
   | "IdeaStatus"
   | "IntegrationType"
@@ -113,6 +114,8 @@ export const ENUM_KEYS: Record<EnumName, Readonly<Record<string, string>>> = {
   ReminderRepeat: own("ReminderRepeat", ["NONE", "DAILY", "WEEKLY", "MONTHLY"]),
   ReminderStatus: own("ReminderStatus", ["PENDING", "FIRED", "DISMISSED"]),
   TimeEntrySource: own("TimeEntrySource", ["TIMER", "MANUAL"]),
+  // who entered a skill level («الأداء والتطوير»): the supervisor, or the person about themselves (the words are the skills screen's own)
+  SkillSource: { MANUAL: "teamdev.skill.manual", SELF: "teamdev.skill.self" },
   RecurrenceMode: own("RecurrenceMode", ["ON_COMPLETE", "SCHEDULE"]),
   IdeaStatus: {
     NEW: "ideas.status.NEW",

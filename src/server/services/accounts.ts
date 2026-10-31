@@ -21,6 +21,7 @@ import { pushNotification } from "@/server/notify";
 import { getServerT } from "@/lib/i18n/server";
 import { addPersonToHq, removePersonAudit, removePersonFromHq } from "@/server/chat/hq";
 import { ROLE_KEYS } from "@/lib/i18n/roles";
+import { MAX_LINE_DEPTH, depthAbove, exceedsLineDepth } from "@/lib/team-development";
 import { generateTemporaryPassword, passwordSchema, usernameSchema } from "@/server/services/credentials";
 import {
   STATUS_TRANSITIONS,
@@ -220,15 +221,19 @@ async function managerChain(client: Prisma.TransactionClient, orgId: string) {
 }
 
 /** A manager is an ACTIVE, non-guest member of the organization, and never closes a loop. */
-async function assertManager(client: Prisma.TransactionClient, orgId: string, managerId: string, subjectId: string | null): Promise<void> {
+export async function assertManager(client: Prisma.TransactionClient, orgId: string, managerId: string, subjectId: string | null): Promise<void> {
   const members = await managerChain(client, orgId);
   const manager = members.find((m) => m.userId === managerId);
   if (!manager || manager.status !== "ACTIVE" || manager.role === "GUEST") {
     throw invalid("managerId", "accounts.manager_invalid");
   }
-  if (subjectId && wouldCreateManagerCycle(new Map(members.map((m) => [m.userId, m.managerId])), subjectId, managerId)) {
+  const managerOf = new Map(members.map((m) => [m.userId, m.managerId]));
+  if (subjectId && wouldCreateManagerCycle(managerOf, subjectId, managerId)) {
     throw invalid("managerId", "accounts.manager_cycle");
   }
+  // no chain of more than MAX_LINE_DEPTH supervisors («الهيكل»); a new account is a leaf under the manager
+  const tooDeep = subjectId ? exceedsLineDepth(managerOf, subjectId, managerId) : depthAbove(managerOf, managerId) + 1 > MAX_LINE_DEPTH;
+  if (tooDeep) throw invalid("managerId", "accounts.manager_too_deep");
 }
 
 /** The advisory-lock namespace of manager changes (the second key is the organization). */
@@ -239,7 +244,7 @@ const MANAGER_CHAIN_LOCK = 41_001;
  * released at commit. Whoever holds it reads the chain again before writing, so two changes made
  * at the same moment cannot close a loop between them.
  */
-async function lockManagerChain(tx: Prisma.TransactionClient, orgId: string): Promise<void> {
+export async function lockManagerChain(tx: Prisma.TransactionClient, orgId: string): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${MANAGER_CHAIN_LOCK}::int, hashtext(${orgId}))`;
 }
 

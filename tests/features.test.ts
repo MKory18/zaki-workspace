@@ -86,6 +86,19 @@ describe("«الميزات»: the owner's switches", () => {
   });
 });
 
+describe("«الأداء والتطوير» (teamDevelopment)", () => {
+  it("is a switch, on until the owner turns it off, with its name and hint; off, «الهيكل» and «الأداء والتطوير» leave the map for everybody", () => {
+    expect(FEATURES).toContain("teamDevelopment");
+    expect(FEATURE_DEFAULTS.teamDevelopment).toBe(true);
+    expect(featureOn({}, "teamDevelopment")).toBe(true);
+    expect(featuresOff({ features: { teamDevelopment: false } })).toContain("teamDevelopment");
+    const tabs = (off: string[]) => buildNav({ ...owner, off: off as never[] }).places.flatMap((p) => p.tabs.map((t) => t.key));
+    expect(tabs([])).toEqual(expect.arrayContaining(["structure", "development"]));
+    expect(tabs(["teamDevelopment"])).not.toContain("structure");
+    expect(tabs(["teamDevelopment"])).not.toContain("development");
+  });
+});
+
 describe("«الميزات»: a switched-off feature is gone from the map and from «جديد»", () => {
   it("«نتفرّج سوا» off: no sixth place, no «جديد» entry; on again: both back", () => {
     expect(buildNav({ ...owner, off: ["watch"] }).places.map((p) => p.key)).not.toContain("watch");
