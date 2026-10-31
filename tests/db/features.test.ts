@@ -51,6 +51,9 @@ describe("«الميزات»: who switches", () => {
     // «حقول مخصصة» is listed and on by default (its doors are pinned in custom-fields.test.ts)
     expect(await isFeatureOn(w.org.id, "customFields")).toBe(true);
     expect(await isFeatureOn(w.org.id, "chatOutbox")).toBe(true); // «الرسائل بدون نت»: on until the owner turns it off
+    // «طلبات الموافقة والنماذج» is on by default, and the owner alone switches it
+    expect((res.json?.["features"] as { key: string; on: boolean }[]).find((f) => f.key === "approvals")).toEqual({ key: "approvals", on: true });
+    expect(await isFeatureOn(w.org.id, "approvals")).toBe(true);
   });
 
   it("«آخر ظهور» is listed ON, and the owner's switch turns it off and on for his company alone", async () => {

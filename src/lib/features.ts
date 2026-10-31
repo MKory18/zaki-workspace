@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox", "customFields", "lastSeen"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox", "customFields", "lastSeen", "approvals"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -101,6 +101,11 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // fields leave every answer, `PATCH /api/me/last-seen` answers «not found» and the presence layer records no new time; the times
   // already recorded and each person's «إخفاء آخر ظهوري» choice stay and come back with the switch.
   lastSeen: true,
+  // «طلبات الموافقة ونماذج» (src/server/services/approvals.ts, approval-forms.ts): a request for a decision from one approver or a chain of
+  // up to three, and reusable forms that create them. Off: the «الموافقات» tab is not drawn, the pages /approvals and the routes under
+  // /api/approvals and /api/approval-forms answer «not found» for everybody, the owner included, and no bell notice is written; the
+  // requests, steps and forms already stored stay and come back with the switch. An approval only records a decision: it never moves money.
+  approvals: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {
