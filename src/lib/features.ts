@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox", "approvals"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox", "customFields", "approvals"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -92,6 +92,10 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // typed and not sent is kept per conversation. Off: sending fails with an error and the text stays in the box, as before; the
   // messages already waiting stay in the browser and are sent when the switch is back on
   chatOutbox: true,
+  // «حقول مخصصة» (src/server/services/custom-fields.ts): the fields a space's ADMIN defines on a project's tasks. Off: no «حقول
+  // مخصصة» card on the task, no «إدارة الحقول» on the project, no chips, filter or sort on the list and the board, the routes answer
+  // «not found» and a required field stops asking at completion; the fields and the values already stored stay and come back with the switch
+  customFields: true,
   // «طلبات الموافقة ونماذج» (src/server/services/approvals.ts, approval-forms.ts): a request for a decision from one approver or a chain of
   // up to three, and reusable forms that create them. Off: the «الموافقات» tab is not drawn, the pages /approvals and the routes under
   // /api/approvals and /api/approval-forms answer «not found» for everybody, the owner included, and no bell notice is written; the

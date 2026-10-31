@@ -281,6 +281,22 @@ export interface ViewQuery {
    * the company's switch is on passes it (`rewardLensFor`): without it a row carries no reward field at all.
    */
   rewards?: boolean;
+  /**
+   * «حقول مخصصة»: keep only the tasks whose custom field `fieldId` holds this answer. Only a caller that has checked the viewer is
+   * not a partner, the company's switch is on and the field is one of the project's passes it (`resolveFieldQuery`). It narrows
+   * on top of every other rule and the field is looked up with the company's id too: another company's field matches nothing.
+   */
+  fieldFilter?: FieldFilter;
+  /** «حقول مخصصة»: order by a NUMBER or DATE field (tasks with no value last). The same trust as `fieldFilter`. */
+  fieldSort?: FieldSort;
+}
+
+export type FieldFilter = { fieldId: string } & ({ kind: "text"; value: string } | { kind: "boolean"; value: boolean });
+export interface FieldSort {
+  fieldId: string;
+  projectId: string;
+  column: "valueNumber" | "valueDate";
+  dir: "asc" | "desc";
 }
 
 /** What a list row shows of a reward: the badge's three facts. Absent from every row a partner (or an off switch) is handed. */
@@ -323,6 +339,45 @@ export function sortPinnedFirst<T extends { pinnedAt?: Date | null }>(rows: T[])
   return [...pinned, ...rows.filter((r) => !r.pinnedAt)];
 }
 
+/** The relation filter of «حقول مخصصة»: a parameterised join on `TaskFieldValue`, always with the company's id. */
+function fieldFilterWhere(orgId: string, f: FieldFilter): Prisma.TaskWhereInput {
+  if (f.kind === "text") return { fieldValues: { some: { fieldId: f.fieldId, orgId, valueText: f.value } } };
+  const yes: Prisma.TaskWhereInput = { fieldValues: { some: { fieldId: f.fieldId, orgId, valueNumber: new Prisma.Decimal(1) } } };
+  // «لا» is a task answered «no» AND a task nobody answered: everything that is not «نعم»
+  return f.value ? yes : { NOT: yes };
+}
+
+/**
+ * «حقول مخصصة»: the ids of a project's tasks in the order of one NUMBER or DATE field, tasks with no value last (a LEFT JOIN on
+ * `TaskFieldValue`, every value a parameter; the column and the direction come from a closed list, never from the request).
+ * The pool is only an ORDER: the rows are then read through the caller's own `where`, so every access rule still applies.
+ */
+async function sortedPool(q: ViewQuery, s: FieldSort): Promise<string[]> {
+  const col = s.column === "valueDate" ? Prisma.raw('v."valueDate"') : Prisma.raw('v."valueNumber"');
+  const dir = s.dir === "desc" ? Prisma.raw("DESC") : Prisma.raw("ASC");
+  const rows = await db.$queryRaw<{ id: string }[]>(Prisma.sql`
+    SELECT t."id" FROM "Task" t
+    LEFT JOIN "TaskFieldValue" v ON v."taskId" = t."id" AND v."fieldId" = ${s.fieldId} AND v."orgId" = ${q.orgId}
+    WHERE t."orgId" = ${q.orgId} AND t."projectId" = ${s.projectId} AND t."archived" = FALSE
+    ORDER BY ${col} ${dir} NULLS LAST, t."id" ASC
+    LIMIT 2000`);
+  return rows.map((r) => r.id);
+}
+
+async function loadByFieldSort<I extends Prisma.TaskInclude>(
+  q: ViewQuery,
+  where: Prisma.TaskWhereInput,
+  include: I,
+  orderBy: Prisma.TaskOrderByWithRelationInput[],
+) {
+  const pool = await sortedPool(q, q.fieldSort as FieldSort);
+  const found = await db.task.findMany({ where: { ...where, id: { in: pool } }, orderBy, include });
+  const at = new Map(pool.map((id, i) => [id, i]));
+  const sorted = [...found].sort((a, b) => (at.get(a.id) ?? 0) - (at.get(b.id) ?? 0));
+  // pinned tasks keep the lead the view gave them (a stable sort over the field's order)
+  return (q.pinnedFirst ? sortPinnedFirst(sorted) : sorted).slice(0, Math.min(q.limit ?? 200, 500));
+}
+
 /** Single query core for every task view; always org-scoped. */
 export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
   const where: Prisma.TaskWhereInput = {
@@ -340,7 +395,9 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
   } else if (q.workspaceId) {
     where.workspaceId = q.workspaceId;
   }
-  if (q.visible) where.AND = [q.visible];
+  const and: Prisma.TaskWhereInput[] = q.visible ? [q.visible] : [];
+  if (q.fieldFilter) and.push(fieldFilterWhere(q.orgId, q.fieldFilter));
+  if (and.length) where.AND = and;
   if (q.priority) where.priority = q.priority;
   if (q.dueFrom || q.dueTo) {
     where.dueDate = {
@@ -391,7 +448,9 @@ export async function queryTasksForView(q: ViewQuery): Promise<ViewTask[]> {
         take,
         load: (ids) => db.task.findMany({ where: { ...where, id: { in: ids } }, orderBy, include }),
       })
-    : await db.task.findMany({ where, orderBy, take, include });
+    : q.fieldSort
+      ? await loadByFieldSort(q, where, include, orderBy)
+      : await db.task.findMany({ where, orderBy, take, include });
 
   return rows.map((t): ViewTask => {
     // «لمين» with more than one person: the primary first, then the people beside them
