@@ -225,6 +225,8 @@ export interface ConversationDto {
   readers: ReaderDto[];
   /** the company's «شكل الرسائل الحديث» switch, read on the server (`src/lib/features.ts`); absent: on */
   chatBubbles?: boolean;
+  /** the company's «الرسائل بدون نت» switch (`chatOutbox`): off, the composer neither queues an unsent message nor keeps a draft; absent: on */
+  chatOutbox?: boolean;
   /** pagination: the oldest message id on the page; pass it as `before` for the next page. */
   oldestId?: string | null;
 }

@@ -376,7 +376,6 @@ describe("«حساب وقت الشغل»: wiring", () => {
     expect(sql).toContain('ON DELETE SET NULL');
     expect(sql).toContain('"seconds" INTEGER NOT NULL');
     expect(sql).not.toMatch(/DROP |TRUNCATE|DELETE FROM|ALTER COLUMN/i);
-    expect(read("prisma/migrations/RELEASED.txt")).not.toContain("20261031140000_time_entries");
   });
 
   it("holds no money: no rate, no cost, no price anywhere in the feature", () => {

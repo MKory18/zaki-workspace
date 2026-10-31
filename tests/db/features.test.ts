@@ -50,6 +50,7 @@ describe("«الميزات»: who switches", () => {
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
     // «حقول مخصصة» is listed and on by default (its doors are pinned in custom-fields.test.ts)
     expect(await isFeatureOn(w.org.id, "customFields")).toBe(true);
+    expect(await isFeatureOn(w.org.id, "chatOutbox")).toBe(true); // «الرسائل بدون نت»: on until the owner turns it off
   });
 
   it("only the owner switches: an admin and a member are refused, and nothing changes", async () => {
