@@ -5,12 +5,15 @@ import { ForbiddenError, NotFoundError, ValidationError, audit, requireProjectAc
 import { assertMemberCan } from "@/server/policy/actor";
 import { assertFeatureOn, isFeatureOn } from "@/server/services/features";
 import { assertRewardEditable } from "@/server/services/reward-guard";
+import type { FieldFilter, FieldSort } from "@/server/services/views";
 import { RequiredFieldsError } from "@/server/custom-fields-error";
 import { STEP_GAP, crowded, positionBetween, reorder } from "@/lib/task-steps";
 import { cellOf, type FieldCell } from "@/lib/custom-fields-display";
 import {
+  FILTER_TYPES,
   MAX_ACTIVE_FIELDS,
   MAX_TOTAL_FIELDS,
+  SORT_TYPES,
   cleanLabel,
   cleanUnit,
   fromStored,
@@ -64,7 +67,7 @@ export async function isPartnerIn(ctx: { orgId: string; userId: string; orgRole?
   if (ctx.orgRole === "GUEST") return true;
   const org = ctx.orgRole
     ? null
-    : await db.organizationMember.findUnique({ where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } }, select: { role: true } });
+    : await db.organizationMember.findFirst({ where: { organizationId: ctx.orgId, userId: ctx.userId, status: "ACTIVE" }, select: { role: true } });
   if (org?.role === "GUEST") return true;
   if (org?.role === "OWNER") return false;
   const row = await db.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId: ctx.userId } }, select: { role: true } });
@@ -400,7 +403,7 @@ export async function assertRequiredFilled(tx: Tx, task: { id: string; projectId
 
 export interface FieldCellsDto {
   /** The live fields of the projects on the page (the picker lists them), each with its project. */
-  defs: { id: string; projectId: string; label: string; type: FieldType }[];
+  defs: { id: string; projectId: string; projectName: string; label: string; type: FieldType }[];
   /** taskId -> fieldId -> chip */
   cells: Record<string, Record<string, FieldCell>>;
 }
@@ -422,7 +425,7 @@ export async function fieldCellsFor(
   const fieldRows = await db.projectField.findMany({
     where: { orgId: ctx.orgId, projectId: { in: projectIds }, archived: false },
     orderBy: [{ position: "asc" }, { id: "asc" }],
-    select: { ...DEF_SELECT, projectId: true },
+    select: { ...DEF_SELECT, projectId: true, project: { select: { name: true } } },
   });
   if (fieldRows.length === 0) return { defs: [], cells: {} };
   const defs = new Map(fieldRows.map((r) => [r.id, { projectId: r.projectId, dto: toDefDto(r) }]));
@@ -441,19 +444,98 @@ export async function fieldCellsFor(
     const cell = cellOf(def.dto, fromStored(def.dto.type, v), names);
     if (cell) (cells[v.taskId] ??= {})[v.fieldId] = cell;
   }
-  return { defs: fieldRows.map((r) => ({ id: r.id, projectId: r.projectId, label: r.label, type: toDefDto(r).type })), cells };
+  return { defs: fieldRows.map((r) => ({ id: r.id, projectId: r.projectId, projectName: r.project.name, label: r.label, type: toDefDto(r).type })), cells };
 }
 
-/** The exact total of a NUMBER field over the tasks of a project (decimal text): SQL's own DECIMAL sum, never a float. */
-export async function sumNumberField(orgId: string, projectId: string, fieldId: string): Promise<string> {
+/**
+ * The exact total of a NUMBER field over the tasks of a project (decimal text): SQL's own DECIMAL sum, never a float. With
+ * `taskIds` only those tasks count (the rows a list shows: what the viewer may see, after every filter).
+ */
+export async function sumNumberField(orgId: string, projectId: string, fieldId: string, taskIds?: readonly string[]): Promise<string> {
+  if (taskIds && taskIds.length === 0) return "0";
+  const only = taskIds ? Prisma.sql`AND t."id" IN (${Prisma.join([...taskIds])})` : Prisma.empty;
   const rows = await db.$queryRaw<{ total: string | null }[]>(Prisma.sql`
     SELECT SUM(v."valueNumber")::text AS total
     FROM "TaskFieldValue" v
     JOIN "Task" t ON t."id" = v."taskId"
     JOIN "ProjectField" f ON f."id" = v."fieldId"
     WHERE v."orgId" = ${orgId} AND f."id" = ${fieldId} AND f."projectId" = ${projectId} AND f."type" = 'NUMBER'
-      AND t."projectId" = ${projectId} AND t."archived" = FALSE`);
+      AND t."projectId" = ${projectId} AND t."archived" = FALSE ${only}`);
   const total = rows[0]?.total ?? "0";
   return total.includes(".") ? total.replace(/0+$/, "").replace(/\.$/, "") : total;
 }
 
+
+// ---------- the list's field bar ----------
+
+export interface FieldListInput {
+  project?: string | undefined;
+  ff?: string | undefined;
+  fv?: string | undefined;
+  fs?: string | undefined;
+  fd?: string | undefined;
+}
+
+export interface ResolvedFieldList {
+  /** The projects of the space the person may open (the selector). */
+  projects: { id: string; name: string }[];
+  /** The selected project, when it is one of those. */
+  project: { id: string; name: string } | null;
+  filterFields: { id: string; label: string; type: "SINGLE_CHOICE" | "BOOLEAN" | "PERSON"; options: { id: string; label: string }[] }[];
+  sortFields: { id: string; label: string; type: FieldType }[];
+  /** What `queryTasksForView` is told (absent when the parameter was not valid for this project's fields). */
+  filter?: FieldFilter;
+  sort?: FieldSort;
+  /** The parameters that survived validation, to be kept in every link of the page. */
+  params: Record<string, string>;
+}
+
+/**
+ * The list page's custom-field parameters, validated against the project's OWN fields: a project the person may not open, a field
+ * of another project, a type that cannot be filtered or sorted, an option that is not the field's own are all dropped (the page
+ * then simply shows the unfiltered list). `null` when the switch is off or the viewer is an external partner. Nothing here builds SQL:
+ * the result is a typed filter and a typed sort for `queryTasksForView`.
+ */
+export async function resolveFieldList(
+  ctx: { orgId: string; userId: string; orgRole?: string },
+  workspaceId: string,
+  visibleProjects: Prisma.ProjectWhereInput,
+  input: FieldListInput,
+): Promise<ResolvedFieldList | null> {
+  if (!(await isFeatureOn(ctx.orgId, FEATURE))) return null;
+  if (await isPartnerIn(ctx, workspaceId)) return null;
+  const projects = await db.project.findMany({
+    where: { workspaceId, workspace: { organizationId: ctx.orgId }, systemKey: null, AND: [visibleProjects] },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+  const project = projects.find((p) => p.id === input.project) ?? null;
+  const out: ResolvedFieldList = { projects, project, filterFields: [], sortFields: [], params: {} };
+  if (!project) return out;
+  out.params["project"] = project.id;
+  const defs = await fieldDefsOf(project.id);
+  out.filterFields = defs.flatMap((f) =>
+    f.type === "SINGLE_CHOICE" || f.type === "BOOLEAN" || f.type === "PERSON"
+      ? [{ id: f.id, label: f.label, type: f.type, options: f.options.filter((o) => !o.deleted).map((o) => ({ id: o.id, label: o.label })) }]
+      : [],
+  );
+  out.sortFields = defs.filter((f) => SORT_TYPES.includes(f.type)).map((f) => ({ id: f.id, label: f.label, type: f.type }));
+  const ff = defs.find((f) => f.id === input.ff && FILTER_TYPES.includes(f.type));
+  if (ff && input.fv) {
+    if (ff.type === "BOOLEAN" && (input.fv === "yes" || input.fv === "no")) out.filter = { fieldId: ff.id, kind: "boolean", value: input.fv === "yes" };
+    else if (ff.type === "SINGLE_CHOICE" && ff.options.some((o) => o.id === input.fv && !o.deleted)) out.filter = { fieldId: ff.id, kind: "text", value: input.fv };
+    else if (ff.type === "PERSON" && /^[A-Za-z0-9_-]{1,64}$/.test(input.fv)) out.filter = { fieldId: ff.id, kind: "text", value: input.fv };
+    if (out.filter) {
+      out.params["ff"] = ff.id;
+      out.params["fv"] = input.fv;
+    }
+  } else if (ff) out.params["ff"] = ff.id;
+  const fs = defs.find((f) => f.id === input.fs && SORT_TYPES.includes(f.type));
+  if (fs) {
+    const dir = input.fd === "desc" ? "desc" : "asc";
+    out.sort = { fieldId: fs.id, projectId: project.id, column: fs.type === "DATE" ? "valueDate" : "valueNumber", dir };
+    out.params["fs"] = fs.id;
+    out.params["fd"] = dir;
+  }
+  return out;
+}

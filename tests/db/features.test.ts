@@ -48,6 +48,8 @@ describe("«الميزات»: who switches", () => {
     expect(res.status).toBe(200);
     expect(res.json?.["features"]).toEqual(FEATURES.map((key) => ({ key, on: key !== "ownerHiddenOnline" && key !== "ownerAssistant" })));
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
+    // «حقول مخصصة» is listed and on by default (its doors are pinned in custom-fields.test.ts)
+    expect(await isFeatureOn(w.org.id, "customFields")).toBe(true);
   });
 
   it("only the owner switches: an admin and a member are refused, and nothing changes", async () => {

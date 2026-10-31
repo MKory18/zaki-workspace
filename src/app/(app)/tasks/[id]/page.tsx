@@ -18,6 +18,8 @@ import { RewardCard, type RewardCardData } from "@/components/rewards/reward-car
 import { PinButton } from "@/components/rewards/pin-button";
 import { buildTaskTimeCard } from "@/server/services/time-tracking";
 import { recurrenceOfTask } from "@/server/services/task-recurrence";
+import { taskFieldsCard } from "@/server/services/custom-fields";
+import { TaskFieldsCard } from "@/components/custom-fields/task-fields-card";
 
 export default async function TaskPage({ params }: { params: { id: string } }) {
   const user = await pageUser();
@@ -99,6 +101,11 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
   // space he is not in does not (a series acts as the person who set it: silent reading leaves no trace)
   const recurrenceOn = await actorFeatureOn(actor, "recurringTasks");
   const recurrence = recurrenceOn ? await recurrenceOfTask(task.id, task.orgId) : null;
+
+  // «حقول مخصصة»: the project's fields and this task's values. `null` while the switch is off, empty for an external partner
+  // (no field, no money). Editable by whoever may edit the task, except the owner reading a space he is not in, and a reward
+  // task stays the owner's (`lockedFields`: the server refuses the others anyway)
+  const fieldsCard = await taskFieldsCard({ orgId: task.orgId, userId: user.id, orgRole: membership?.role ?? actor.role }, { id: task.id, projectId: task.projectId, workspaceId: task.workspaceId });
 
   // a request to give this task to somebody of a higher rank, and what the viewer may do with it
   // (a task may hold several: the main one and one per higher person beside the first; each is read for the viewer)
@@ -241,6 +248,17 @@ export default async function TaskPage({ params }: { params: { id: string } }) {
       }
       pinSlot={lens.canPin ? <PinButton taskId={task.id} pinned={task.pinnedAt != null} /> : null}
       time={timeCard}
+      customFieldsSlot={
+        fieldsCard && fieldsCard.fields.length > 0 ? (
+          <TaskFieldsCard
+            taskId={task.id}
+            fields={fieldsCard.fields}
+            initialValues={fieldsCard.values}
+            people={fieldsCard.people}
+            canEdit={canEdit && !lockedFields && !(membership?.role === "OWNER" && !spaceRow)}
+          />
+        ) : null
+      }
       recurrence={recurrence ? { initial: recurrence.recurrence, timeZone: recurrence.timeZone, canEdit: canEdit && !(membership?.role === "OWNER" && !spaceRow) } : null}
     />
   );

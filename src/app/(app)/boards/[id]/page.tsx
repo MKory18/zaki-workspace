@@ -14,6 +14,7 @@ import { rewardLensFor } from "@/server/services/rewards";
 import { listBadgeStatus } from "@/lib/rewards";
 import { myRunningTaskId } from "@/server/services/time-tracking";
 import { recurringTaskIds } from "@/server/services/task-recurrence";
+import { fieldCellsFor } from "@/server/services/custom-fields";
 
 /**
  * A board opens for whoever may open its space (`accessibleWorkspaceIds`: a row in the space, or the owner) and is
@@ -82,6 +83,9 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
   // «🔁 متكررة» on the cards: one read for the whole board, and only while the company's switch is on
   const recurring = (await actorFeatureOn(actor, "recurringTasks")) ? await recurringTaskIds(tasks.map((t) => t.id)) : new Set<string>();
 
+  // «حقول مخصصة» on the cards: one read for the whole board; `null` while the switch is off and for an external partner
+  const fieldCells = await fieldCellsFor({ orgId: actor.orgId, userId: user.id, orgRole: member.role }, board.project.workspace.id, tasks.map((t) => ({ id: t.id, projectId: t.projectId })));
+
   const taskData: TaskCardData[] = tasks.map((t) => ({
     id: t.id,
     key: `${org?.keyPrefix ?? "ZW"}-${t.number}`,
@@ -102,6 +106,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
     pinned: lens.pins && t.pinnedAt != null,
     running: t.id === runningTaskId,
     recurring: recurring.has(t.id),
+    ...(fieldCells?.cells[t.id] ? { fields: fieldCells.cells[t.id] } : {}),
   }));
 
   return (
@@ -115,6 +120,7 @@ export default async function BoardPage({ params }: { params: { id: string } }) 
       }}
       columns={columns}
       tasks={taskData}
+      fieldDefs={fieldCells?.defs ?? []}
       // the space's rule, and the tasks row's «يضيف ويعدّل» box of the section grid (add, drag, edit)
       canEdit={canWriteInWorkspace(member.role, wsRow?.role) && actorCanWork(actor, "tasks.edit")}
     />
