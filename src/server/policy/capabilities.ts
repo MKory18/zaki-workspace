@@ -21,6 +21,8 @@ export const CAPABILITIES = [
   "archive.view", // the owner's archive and "all of the company" chat view: never grantable
   "board.self", // «لوحتي»: the person's OWN page of the owner's board (their days, tasks, steps, message counts)
   "board.team", // «لوحة الفريق»: the board for the people of the spaces the person manages (never the owner's, never the company's totals)
+  "people.manage_lines", // «الهيكل»: sets who answers to whom, and keeps the skills checklist («المهارات»); off for every rank, the owner switches it per person
+  "people.review", // «الأداء والتطوير»: ENTERS skills, reviews, plans and notes about the people of one's own subtree (every supervisor READS the subtree without it)
   // the sections, each with «يشوف» (view), «يضيف ويعدّل» (edit) and «يحذف» (delete): the per-person grid
   "projects.view",
   "projects.edit",
@@ -124,6 +126,8 @@ export const WIRED_CAPABILITIES: readonly Capability[] = [
   "prices.view",
   "board.self",
   "board.team",
+  "people.manage_lines",
+  "people.review",
   ...SECTION_CAPABILITIES,
 ];
 

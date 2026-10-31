@@ -48,6 +48,8 @@ describe("«الميزات»: who switches", () => {
     expect(res.status).toBe(200);
     expect(res.json?.["features"]).toEqual(FEATURES.map((key) => ({ key, on: key !== "ownerHiddenOnline" && key !== "ownerAssistant" })));
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
+    // «الأداء والتطوير» is a switch of its own, on by default
+    expect((res.json?.["features"] as { key: string; on: boolean }[]).find((f) => f.key === "teamDevelopment")).toEqual({ key: "teamDevelopment", on: true });
   });
 
   it("only the owner switches: an admin and a member are refused, and nothing changes", async () => {

@@ -20,22 +20,31 @@ import { currentSpace } from "./current-space";
  * Who the map is drawn for — the one place that turns an actor into a `NavSubject`, shared by the (app) layout and by
  * the save below, so «what the person may see» is decided the same way in both.
  */
-export function navSubjectOf(actor: Pick<Actor, "role" | "caps" | "isExternal">, orgSettings: unknown, space: { manager: boolean; layout?: SpaceLayout } | null): NavSubject {
+export function navSubjectOf(actor: Pick<Actor, "role" | "caps" | "isExternal">, orgSettings: unknown, space: { manager: boolean; layout?: SpaceLayout } | null, supervisor = false): NavSubject {
   return {
     role: actor.role,
     caps: [...actor.caps],
     off: featuresOff(orgSettings),
     spaceManager: !actor.isExternal && space?.manager === true,
+    // somebody answers to this person («الهيكل»): read by the callers that have the database at hand
+    supervisor: !actor.isExternal && supervisor,
     // a space of «لوحات» or «تصنيع» offers «اللوحات» and «الإدارة» only (the pure map decides: src/lib/nav/places.ts)
     ...(space?.layout ? { spaceLayout: space.layout } : {}),
   };
+}
+
+/** Does an ACTIVE, non-guest person answer to this one («الهيكل»)? One indexed count; read from the database on every layout render. */
+export async function hasActiveReports(actor: Pick<Actor, "orgId" | "userId" | "isExternal">): Promise<boolean> {
+  if (actor.isExternal) return false;
+  const n = await db.organizationMember.count({ where: { organizationId: actor.orgId, managerId: actor.userId, status: "ACTIVE", role: { not: "GUEST" } } });
+  return n > 0;
 }
 
 /** The map this person is offered right now (read from the database, the cookie decides nothing). */
 export async function visibleNavFor(actor: Actor): Promise<NavModel> {
   const org = await db.organization.findUnique({ where: { id: actor.orgId }, select: { settings: true } });
   const space = await currentSpace(actor);
-  return buildNav(navSubjectOf(actor, org?.settings, space));
+  return buildNav(navSubjectOf(actor, org?.settings, space, await hasActiveReports(actor)));
 }
 
 /** The person's saved order (null: the code's order). A stored value that is damaged reads as «none», never as an error. */
