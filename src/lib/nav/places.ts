@@ -84,7 +84,8 @@ export type TabKey =
   | "settings"
   | "archive"
   | "board"
-  | "assistant";
+  | "assistant"
+  | "approvals";
 
 /** An icon by NAME: the shell maps it to a drawing (src/components/shell/nav-icons.tsx). Data only, so it crosses from server to browser. */
 export type NavIconKey = "today" | "chat" | "work" | "library" | "admin" | "team" | "reports" | "automation" | "telegram" | "settings" | "watch" | "cards";
@@ -168,6 +169,9 @@ export const PLACES: readonly PlaceDef[] = [
       { key: "tickets", href: "/tickets", labelKey: "nav.tickets", requires: { capability: "tickets.view" } },
       { key: "campaigns", href: "/campaigns", labelKey: "nav.campaigns", requires: { capability: "campaigns.view" } },
       { key: "crm", href: "/crm", labelKey: "nav.crm", requires: { capability: "crm.view" } },
+      // «الموافقات» (the owner's backlog, 2026-10-31): requests for a decision from one approver or a chain, and the forms that create
+      // them. For staff (a guest never asks, sees or is asked: the pages and /api/approvals refuse them too), behind its switch.
+      { key: "approvals", href: "/approvals", labelKey: "nav.approvals", requires: "staff", feature: "approvals" },
     ],
   },
   {
