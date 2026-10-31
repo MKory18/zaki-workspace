@@ -13,7 +13,7 @@ import { PersonFile, tabOf } from "@/components/team-development/person-file";
  */
 const pill = "inline-flex min-h-11 items-center rounded-lg border border-border bg-surface px-3 hover:bg-surface-2 md:min-h-9";
 
-export default async function DevelopmentPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> } = {}) {
+export default async function DevelopmentPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const { actor } = await pageActor();
   const home = await loadDevelopmentHome(actor).catch((err: unknown) => {
     if (err instanceof NotFoundError) notFound();
