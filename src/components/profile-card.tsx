@@ -5,6 +5,7 @@ import { AR } from "@/lib/i18n/dict";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { enumLabel } from "@/lib/i18n/enums";
 import { fmtLongDate, fmtNumber } from "@/lib/format";
+import { lastSeenText } from "@/lib/last-seen";
 import type { PublicProfile } from "@/server/services/users";
 
 const word = (key: string, vars?: Record<string, string | number>) => interpolate(AR[key] ?? key, vars);
@@ -35,6 +36,12 @@ export function ProfileCard({ profile, mine }: { profile: PublicProfile; mine: b
               <p className="text-xs text-fg-muted">
                 {profile.organizationName} · {enumLabel("OrgRole", profile.organizationRole)}
               </p>
+              {/* «آخر ظهور»: the server leaves it out on one's own page, when the switch is off, and for a guest (services/last-seen.ts) */}
+              {!mine && profile.lastSeenAt !== undefined ? (
+                <p data-last-seen className={profile.online ? "text-xs font-semibold text-ok" : "text-xs text-fg-muted"}>
+                  {lastSeenText({ online: profile.online === true, lastSeenAt: profile.lastSeenAt, timeZone: profile.lastSeenTimeZone })}
+                </p>
+              ) : null}
             </div>
           </div>
           {mine ? (
