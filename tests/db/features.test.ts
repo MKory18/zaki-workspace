@@ -54,6 +54,8 @@ describe("«الميزات»: who switches", () => {
     // «طلبات الموافقة والنماذج» is on by default, and the owner alone switches it
     expect((res.json?.["features"] as { key: string; on: boolean }[]).find((f) => f.key === "approvals")).toEqual({ key: "approvals", on: true });
     expect(await isFeatureOn(w.org.id, "approvals")).toBe(true);
+    // «الأداء والتطوير» is a switch of its own, on by default
+    expect((res.json?.["features"] as { key: string; on: boolean }[]).find((f) => f.key === "teamDevelopment")).toEqual({ key: "teamDevelopment", on: true });
   });
 
   it("«آخر ظهور» is listed ON, and the owner's switch turns it off and on for his company alone", async () => {

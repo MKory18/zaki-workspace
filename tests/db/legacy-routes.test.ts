@@ -31,6 +31,10 @@ import OwnerAssistantSettingsPage from "@/app/(app)/owner/assistant/settings/pag
 import ApprovalsPage from "@/app/(app)/approvals/page";
 import ApprovalPage from "@/app/(app)/approvals/[id]/page";
 import ApprovalFormsPage from "@/app/(app)/approvals/forms/page";
+import StructurePage from "@/app/(app)/structure/page";
+import DevelopmentPage from "@/app/(app)/development/page";
+import DevelopmentPersonPage from "@/app/(app)/development/people/[id]/page";
+import DevelopmentSkillsPage from "@/app/(app)/development/skills/page";
 import MyWorkPage from "@/app/(app)/my-work/page";
 import TimeReportPage from "@/app/(app)/time/page";
 import ProjectsPage from "@/app/(app)/projects/page";
@@ -107,7 +111,7 @@ const APP_DIR = path.resolve(__dirname, "../../src/app");
  * conversation's whiteboard (`/chat/[id]/whiteboard`), both 2026-10-25, and «نتفرّج سوا» (`/watch`, `/watch/[id]`, the owner's
  * sixth place, 2026-10-26) and `/spaces/current` («الإدارة» > «المساحة»: edit the space, its people; 2026-10-30), and `/cards` («اللوحات») with the page inside a card (`/cards/[id]`), and `/time` («تقرير الوقت», 2026-10-30: owned by «الشغل», linked from a task and from «وقتي اليوم»).
  */
-const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]", "/time", "/owner", "/owner/people/[id]", "/owner/assistant", "/owner/assistant/settings", "/approvals", "/approvals/[id]", "/approvals/forms"] as const;
+const SHELL_PAGES_SINCE_PHASE_2 = ["/guide", "/guide/[slug]", "/chat/[id]", "/archive", "/spaces", "/spaces/current", "/tickets", "/campaigns", "/calls/[id]", "/chat/[id]/whiteboard", "/watch", "/watch/[id]", "/cards", "/cards/[id]", "/time", "/owner", "/owner/people/[id]", "/owner/assistant", "/owner/assistant/settings", "/approvals", "/approvals/[id]", "/approvals/forms", "/structure", "/development", "/development/skills", "/development/people/[id]"] as const;
 /**
  * The pages outside the shell: sign-in, opening a new company (the form, «شوف بريدك» and the mailed
  * link's confirmation) and the one-time onboarding.
@@ -167,6 +171,10 @@ const PAGES: Record<string, PageCall> = {
   "/approvals": ({ searchParams }) => ApprovalsPage({ searchParams }),
   "/approvals/[id]": (args) => ApprovalPage({ params: idOf(args) }),
   "/approvals/forms": ({ searchParams }) => ApprovalFormsPage({ searchParams }),
+  "/structure": () => StructurePage(),
+  "/development": ({ searchParams }) => DevelopmentPage({ searchParams }),
+  "/development/skills": () => DevelopmentSkillsPage(),
+  "/development/people/[id]": (args) => DevelopmentPersonPage({ params: idOf(args), searchParams: {} }),
   "/my-work": ({ searchParams }) => MyWorkPage({ searchParams }),
   "/time": ({ searchParams }) => TimeReportPage({ searchParams }),
   "/projects": ({ searchParams }) => ProjectsPage({ searchParams }),
@@ -388,6 +396,9 @@ function addressesOf(route: string, w: World): string[] {
     case "/owner/people/[id]":
       // every staff rank (a guest is not a person of the board: 404 for the owner too), and one that is gone
       return [w.owner.id, w.admin.id, w.lead.id, w.member.id, GONE].map((id) => `/owner/people/${id}`);
+    case "/development/people/[id]":
+      // every staff rank (a guest is not a person of the file: not found for the owner too), and one that is gone
+      return [w.owner.id, w.admin.id, w.lead.id, w.member.id, GONE].map((id) => `/development/people/${id}`);
     case "/u/[id]":
       return [w.owner.id, w.admin.id, w.lead.id, w.member.id, w.guest.id, GONE].map((id) => `/u/${id}`);
     case "/guide/[slug]":

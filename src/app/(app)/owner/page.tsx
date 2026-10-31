@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getServerT } from "@/lib/i18n/server";
 import { pageActor } from "@/app/(app)/_access";
 import { NotFoundError } from "@/server/auth";
+import { actorFeatureOn } from "@/server/services/features";
 import { boardAccess } from "@/server/policy/board";
 import { loadOverview, loadPerson, OwnerBoardError, type BoardQuery } from "@/server/services/owner-board";
 import { parseBoardQuery } from "@/server/services/owner-board-io";
@@ -25,12 +27,19 @@ export default async function OwnerBoardPage({ searchParams }: { searchParams?: 
   const query = parseBoardQuery(searchParams ?? {});
   const title = t(`ownerboard.title.${access.mode}`);
   const subtitle = t(`ownerboard.subtitle.${access.mode}`);
+  // «ملفي» (الأداء والتطوير): a plain employee has no tab for it, so their own board page links to their file
+  const fileLink = (await actorFeatureOn(actor, "teamDevelopment")) && !actor.isExternal;
   const frame = (children: React.ReactNode, notice?: string) => (
     <div dir="rtl" className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
       <header>
         <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
         <p className="mt-1 text-sm text-muted">{subtitle}</p>
       </header>
+      {fileLink ? (
+        <Link href="/development" className="inline-flex min-h-11 items-center rounded-lg border border-border bg-surface px-3 text-sm hover:bg-surface-2 md:min-h-9" data-my-file-link>
+          {t("teamdev.my_file_link")}
+        </Link>
+      ) : null}
       {notice ? <p className="rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn" role="status">{notice}</p> : null}
       {children}
     </div>

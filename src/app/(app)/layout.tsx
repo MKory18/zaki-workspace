@@ -9,7 +9,7 @@ import { db } from "@/server/db";
 import { cookies } from "next/headers";
 import { parseSidebarCookie, SIDEBAR_COOKIE } from "@/components/shell/sidebar-cookie";
 import { currentSpace } from "@/server/services/current-space";
-import { navSubjectOf } from "@/server/services/nav-order";
+import { hasActiveReports, navSubjectOf } from "@/server/services/nav-order";
 import { CallRing } from "@/components/calls/call-ring";
 import { CallProvider } from "@/components/calls/call-provider";
 
@@ -43,7 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const space = await currentSpace(actor);
   // «الإدارة» > «المساحة» is offered to whoever manages THIS space (a space role is not a capability: read here from
   // the database, never from the cookie; an external partner never does). The page decides again.
-  const subject = navSubjectOf(actor, org?.settings, space);
+  const subject = navSubjectOf(actor, org?.settings, space, await hasActiveReports(actor));
   return (
     <AppShell
       // the shell draws a name, a username and an e-mail; session facts (tv, locale, onboarding

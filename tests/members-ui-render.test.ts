@@ -405,11 +405,11 @@ describe("the panel of one person: only what the actor may do is offered", () =>
   it("a person who cannot hand out a switch sees it locked, with why (a team lead who was given users.manage lacks integrations.manage and, since 2026-10-25, spaces.create)", () => {
     const markup = render(sheet(MEMBER, leadManagerActor));
     expect(markup).toContain(t("members.caps_locked_actor"));
-    // integrations.manage, spaces.create and «لوحة الفريق» (board.team: only the owner holds it by default)
-    expect(count(markup, /role="switch"[^>]*disabled=""/g)).toBe(3);
-    // an ADMIN holds every wired switch but «لوحة الفريق»: that one alone is locked
+    // integrations.manage, spaces.create, «لوحة الفريق» (board.team), «الهيكل» (people.manage_lines) and «تقييم الفريق» (people.review): only the owner holds them by default
+    expect(count(markup, /role="switch"[^>]*disabled=""/g)).toBe(5);
+    // an ADMIN holds every wired switch but the three the owner alone hands out (board.team, people.manage_lines, people.review): those are locked
     const admin = render(sheet(MEMBER, adminActor));
-    expect(count(admin, /role="switch"[^>]*disabled=""/g)).toBe(1);
+    expect(count(admin, /role="switch"[^>]*disabled=""/g)).toBe(3);
   });
 
   it("a suspended person can be reactivated or offboarded, not suspended again", () => {

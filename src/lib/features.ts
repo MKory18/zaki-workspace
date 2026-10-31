@@ -13,7 +13,7 @@
  */
 
 /** Every switch, in the order «الميزات» lists them. */
-export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox", "customFields", "lastSeen", "approvals"] as const;
+export const FEATURES = ["watch", "sectionPermissions", "libraryDrive", "pushEverything", "chatRowMenu", "callNoiseFilter", "instantWork", "avatars", "peopleDock", "chatBubbles", "taskLinks", "milestones", "ownerHiddenOnline", "quickChat", "taskSteps", "reminders", "calendarFeed", "recurringTasks", "timeTracking", "taskRewards", "ownerBoard", "ownerAssistant", "chatOutbox", "customFields", "lastSeen", "approvals", "teamDevelopment"] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 /** A key nobody switched yet is this (a new feature is on unless its key says otherwise). */
@@ -106,6 +106,10 @@ export const FEATURE_DEFAULTS: Readonly<Record<FeatureKey, boolean>> = {
   // /api/approvals and /api/approval-forms answer «not found» for everybody, the owner included, and no bell notice is written; the
   // requests, steps and forms already stored stay and come back with the switch. An approval only records a decision: it never moves money.
   approvals: true,
+  // «الأداء والتطوير» (src/server/services/team-*.ts): the reporting lines («الهيكل»), the skills checklist, the scores, the reviews and the
+  // development plans. Off, the tabs are not drawn and every page and route under /structure, /development and /api/team-development
+  // answers «not found» for everybody, the owner included; nothing it stores is touched and everything is back with the switch.
+  teamDevelopment: true,
 };
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

@@ -45,6 +45,7 @@ import customFields from "./ar.custom-fields.json";
 import outbox from "./ar.outbox.json";
 import lastSeen from "./ar.last-seen.json";
 import approvals from "./ar.approvals.json";
+import teamDevelopment from "./ar.team-development.json";
 
 /**
  * The Arabic dictionary: `ar.json` plus one fragment per feature (accounts, policy, onboarding,
@@ -101,4 +102,5 @@ export const AR: Record<string, string> = {
   ...outbox,
   ...lastSeen,
   ...approvals,
+  ...teamDevelopment,
 };
