@@ -38,6 +38,9 @@ export type PrismaEnumName =
   | "ReminderStatus"
   | "TimeEntrySource"
   | "SkillSource"
+  | "ReviewStatus"
+  | "ReviewLight"
+  | "DevGoalStatus"
   | "RecurrenceMode"
   | "IdeaStatus"
   | "IntegrationType"
@@ -116,6 +119,10 @@ export const ENUM_KEYS: Record<EnumName, Readonly<Record<string, string>>> = {
   TimeEntrySource: own("TimeEntrySource", ["TIMER", "MANUAL"]),
   // who entered a skill level («الأداء والتطوير»): the supervisor, or the person about themselves (the words are the skills screen's own)
   SkillSource: { MANUAL: "teamdev.skill.manual", SELF: "teamdev.skill.self" },
+  // «الأداء والتطوير»: a review's status, the reviewer's status light and a development goal's status (the words are the feature's own)
+  ReviewStatus: { DRAFT: "teamdev.review.status.DRAFT", SUBMITTED: "teamdev.review.status.SUBMITTED", SHARED: "teamdev.review.status.SHARED" },
+  ReviewLight: { GREEN: "teamdev.light.GREEN", AMBER: "teamdev.light.AMBER", RED: "teamdev.light.RED" },
+  DevGoalStatus: { OPEN: "teamdev.plan.status.OPEN", DONE: "teamdev.plan.status.DONE", CANCELLED: "teamdev.plan.status.CANCELLED" },
   RecurrenceMode: own("RecurrenceMode", ["ON_COMPLETE", "SCHEDULE"]),
   IdeaStatus: {
     NEW: "ideas.status.NEW",
