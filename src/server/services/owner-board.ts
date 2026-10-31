@@ -761,3 +761,20 @@ async function spacesOfPerson(access: BoardAccess, userId: string, scope: BoardS
   return rows.map((r) => r.workspace).sort((a, b) => a.name.localeCompare(b.name, "ar"));
 }
 
+
+// ───────────────────────────────────────── the same numbers, for another feature ─────────────────────────────────────────
+
+/**
+ * The board's own per-person numbers (completed, on time, late, steps, messages, open, overdue) for these people over one window, the
+ * whole company's data (no space or team limit). «الأداء والتطوير» builds its automatic indicators from THIS function, so the score and
+ * the board can never disagree. The caller decides who may read whom: nothing here checks access, and nothing here writes.
+ * People who are not (non-guest) members of the company are left out.
+ */
+export async function loadPeopleActivity(orgId: string, userIds: readonly string[], win: BoardWindow, tz: string, now: Date = new Date()): Promise<PersonRow[]> {
+  if (userIds.length === 0) return [];
+  const members = await membersByIds(orgId, userIds);
+  const c: Ctx = { orgId, tz, win, scope: { restricted: false, workspaceIds: [], teamIds: [] } };
+  const access: BoardAccess = { mode: "owner", orgId, viewerId: "", reach: null, ownPage: false, companyWide: true, scope: c.scope };
+  const { rows } = await assemble(access, c, userIds, members, now, true);
+  return rows;
+}

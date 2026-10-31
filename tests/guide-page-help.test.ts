@@ -23,6 +23,7 @@ const PAGES: [string, string][] = [
   ["/structure", "structure"],
   ["/development", "development"],
   ["/development/skills", "development-skills"],
+  ["/development/settings", "development-settings"],
   ["/development/people/ckabc123", "development-person"],
   ["/spaces", "spaces"],
   ["/spaces/current", "space"],

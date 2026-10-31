@@ -779,6 +779,10 @@ model Organization {
   skills           Skill[]
   personSkills     PersonSkill[]
   skillHistory     PersonSkillHistory[]
+  reviewCriteria   ReviewCriterion[]
+  reviews          Review[]
+  devGoals         DevGoal[]
+  reviewNotes      ReviewNote[]
 
   @@index([slug])
 }
@@ -2142,6 +2146,7 @@ model Skill {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   levels       PersonSkill[]
+  goals        DevGoal[]
 
   @@index([organizationId, archivedAt])
 }
@@ -2187,4 +2192,111 @@ model PersonSkillHistory {
 
   @@index([userId, skillId, createdAt])
   @@index([organizationId, createdAt])
+}
+
+// ---------- «الأداء والتطوير» (team development): reviews, development plans, 1:1 notes ----------
+
+/// DRAFT → SUBMITTED → SHARED. Only SHARED reaches the person; a SHARED review is locked (a correction is a new version).
+enum ReviewStatus {
+  DRAFT
+  SUBMITTED
+  SHARED
+}
+
+/// The reviewer's own status light: تمام / انتبه / يحتاج تدخل. The system only suggests one; this is the one that counts.
+enum ReviewLight {
+  GREEN
+  AMBER
+  RED
+}
+
+enum DevGoalStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+/// What a reviewer rates 1-5: five by default (`code` quality / commitment / collaboration / initiative / communication), which the
+/// owner may rename, add to (8 in use at most) and archive. Never deleted: the ratings already given keep their meaning.
+model ReviewCriterion {
+  id             String    @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  position       Int       @default(0)
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
+}
+
+/// A reviewer's review of one person for one period («2026-10» or «2026-Q4»). One live review per reviewer, person and period; a
+/// correction of a SHARED one is the next `version` (the old row is kept). `ratings` is `{ <criterion id>: 1..5 }`. `privateNote`
+/// never reaches the person.
+model Review {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  reviewerId     String
+  period         String
+  version        Int          @default(1)
+  ratings        Json         @default("{}")
+  light          ReviewLight?
+  strengths      String       @default("")
+  improvement    String       @default("")
+  privateNote    String       @default("")
+  status         ReviewStatus @default(DRAFT)
+  submittedAt    DateTime?
+  sharedAt       DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reviewerId, period, version])
+  @@index([organizationId, userId, period])
+  @@index([organizationId, period, status])
+}
+
+/// One goal of a person's development plan: a skill of the catalogue or a free title, a target level, actions, a due day. `proposal`
+/// marks a suggestion the person made that a supervisor has not accepted yet. `appliedAt`: its target level was written to the skill.
+model DevGoal {
+  id             String        @id @default(cuid())
+  organizationId String
+  userId         String
+  skillId        String?
+  title          String
+  targetLevel    Int?
+  actions        String        @default("")
+  dueDate        DateTime?     @db.Date
+  status         DevGoalStatus @default(OPEN)
+  proposal       Boolean       @default(false)
+  appliedAt      DateTime?
+  createdById    String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  skill        Skill?       @relation(fields: [skillId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, userId, status])
+}
+
+/// A note of the 1:1 thread about a person, between the owner and the supervisors. The person reads only the ones with `shared`.
+/// Never edited or deleted.
+model ReviewNote {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  authorId       String
+  body           String
+  shared         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, createdAt])
 }

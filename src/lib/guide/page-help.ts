@@ -130,6 +130,13 @@ export const PAGE_HELP: readonly PageHelp[] = [
     guestNextKey: INTERNAL,
   },
   {
+    id: "development-settings",
+    pattern: "/development/settings",
+    whatKey: "guide.page.development-settings.what",
+    nextKey: "guide.page.development-settings.next",
+    guestNextKey: INTERNAL,
+  },
+  {
     id: "development-skills",
     pattern: "/development/skills",
     whatKey: "guide.page.development-skills.what",

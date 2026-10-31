@@ -7,7 +7,7 @@ import { PersonFile, tabOf } from "@/components/team-development/person-file";
  */
 export default async function PersonDevelopmentPage({ params, searchParams }: { params: { id: string }; searchParams?: Record<string, string | string[] | undefined> }) {
   const { actor } = await pageActor();
-  return <PersonFile actor={actor} userId={params.id} tab={tabOf(searchParams?.["tab"])} basePath={`/development/people/${params.id}`} />;
+  return <PersonFile actor={actor} userId={params.id} tab={tabOf(searchParams?.["tab"])} basePath={`/development/people/${params.id}`} query={searchParams} />;
 }
 
 export const dynamic = "force-dynamic";
