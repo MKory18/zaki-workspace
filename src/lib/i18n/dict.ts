@@ -41,6 +41,7 @@ import taskRewards from "./ar.task-rewards.json";
 import calendarFeed from "./ar.calendar-feed.json";
 import ownerBoard from "./ar.owner-board.json";
 import ownerAssistant from "./ar.owner-assistant.json";
+import outbox from "./ar.outbox.json";
 import lastSeen from "./ar.last-seen.json";
 
 /**
@@ -94,5 +95,6 @@ export const AR: Record<string, string> = {
   ...calendarFeed,
   ...ownerBoard,
   ...ownerAssistant,
+  ...outbox,
   ...lastSeen,
 };
