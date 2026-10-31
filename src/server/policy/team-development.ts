@@ -115,6 +115,8 @@ export function assertMayEnterFor(access: DevAccess, userId: string): void {
   // outside reach the person does not exist for the viewer (404); inside reach without `people.review` the form was never
   // offered: 403 `teamdev.review_denied` (the viewer already reads this person, so it tells them nothing new)
   if (!readsAsReviewer(access, userId)) throw nobody();
+  // a suspended or offboarded person takes nothing new (the owner still reads their history): not found, like any person who is gone
+  if (!access.staff.has(userId)) throw nobody();
   if (!mayEnterFor(access, userId)) throw new ForbiddenError("teamdev.review_denied");
 }
 

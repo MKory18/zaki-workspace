@@ -519,7 +519,7 @@ describe("«الأداء والتطوير»: the switch", () => {
       expect(nav.places.flatMap((p) => p.tabs.map((t) => t.key))).not.toContain("development");
     }
     await as(w.owner.id);
-    for (const page of [() => StructurePage(), () => DevelopmentPage({ searchParams: {} }), () => SkillsPage(), () => PersonPage({ params: { id: w.r1.id }, searchParams: {} })]) {
+    for (const page of [() => StructurePage(), () => DevelopmentPage({ searchParams: {} }), () => SkillsPage(), () => html(PersonPage({ params: { id: w.r1.id }, searchParams: {} }))]) {
       await expect(Promise.resolve().then(page)).rejects.toThrow("NEXT_NOT_FOUND");
     }
     await setFeature(w, true);
@@ -591,7 +591,7 @@ describe("the screens render for the right people", () => {
     expect(theirs).toContain(`data-skill-editor="${skill.id}:MANUAL"`);
     expect(theirs).not.toContain(`data-skill-editor="${skill.id}:SELF"`);
     await as(w.r2.id);
-    await expect(Promise.resolve().then(() => PersonPage({ params: { id: w.r1.id }, searchParams: {} }))).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(html(PersonPage({ params: { id: w.r1.id }, searchParams: {} }))).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("the people list is sorted by name, a plain employee lands on their own file, and the matrix page has its legend", async () => {
