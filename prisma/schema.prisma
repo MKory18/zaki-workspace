@@ -1953,6 +1953,7 @@ model TaskFieldValue {
   @@index([fieldId, valueDate])
   @@index([fieldId, valueText])
   @@index([orgId])
+}
 
 // ---------- «الأداء والتطوير» (team development): the skills checklist ----------
 
