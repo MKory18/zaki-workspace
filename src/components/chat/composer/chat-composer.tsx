@@ -4,7 +4,7 @@ import type { ConversationDto, MessageDto } from "@/server/chat/dto";
 import { useI18n } from "@/lib/i18n";
 import { classifyFile, exceedsKindLimit, MAX_ATTACHMENTS_PER_MESSAGE, type FileKind } from "@/lib/chat/file-kinds";
 import { compressImage } from "@/lib/chat/compress-image";
-import { buildChatMessagePayload, createChatUploadFormData, createVoiceUploadFormData, enterSends, messageClientId } from "@/lib/chat/conversation/client";
+import { createChatUploadFormData, createVoiceUploadFormData, enterSends, messageClientId } from "@/lib/chat/conversation/client";
 import { filterMentionChoices, findMentionQuery, insertMention, MENTION_ALL_NAME, mentionsAll, selectedMentionIds } from "@/lib/chat/conversation/mentions";
 import { Avatar } from "@/components/ui/avatar";
 import { useTyping } from "@/lib/realtime/use-realtime";
@@ -13,11 +13,17 @@ import { uploadWithProgress } from "@/lib/chat/upload-with-progress";
 import { VoiceRecorder, type VoiceTake } from "@/lib/chat/voice-recorder";
 import { barsFor, formatDuration } from "@/lib/chat/waveform";
 import { PollDialog } from "@/components/chat/composer/poll-dialog";
+import type { Outbox } from "@/lib/chat/outbox/queue";
+import { postChatMessage, SEND_TIMEOUT_MS, type ChatSendPayload } from "@/lib/chat/outbox/send";
+import { clearComposerDraft, loadComposerDraft, saveComposerDraft } from "@/lib/chat/composer-draft";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type PendingFile = { file: File; kind: FileKind; preview: string | null };
 /** idle: the text row; recording: the mic is open; review: a take that stopped by itself waits for send or cancel. */
 type VoiceState = { mode: "idle" } | { mode: "recording"; elapsedMs: number; peaks: number[]; hold: boolean } | { mode: "review"; take: VoiceTake };
+
+/** The words (and the people mentioned) of a message that failed for good, put back in the box by «عدّل». */
+export interface OutboxRestore { id: string; body: string; mentions: string[] }
 
 /** A finger that slides this far from the mic while holding throws the take away. */
 export const HOLD_CANCEL_PX = 80;
@@ -28,7 +34,9 @@ const iconButton = "flex h-11 w-11 shrink-0 items-center justify-center rounded-
  * `editing`: «تعديل» from the message menu edits IN this box (there is no second edit box): the text is
  * loaded here, «+» and the microphone step aside, and sending saves the edit.
  */
-export function ChatComposer({ conversationId, detail, onMessage, reply, onCancelReply, editing = null, onCancelEdit, onEdited }: { conversationId: string; detail: ConversationDto; onMessage: (message: MessageDto) => void; reply: MessageDto | null; onCancelReply: () => void; editing?: MessageDto | null; onCancelEdit?: () => void; onEdited?: (message: MessageDto) => void }) {
+export function ChatComposer({ conversationId, detail, onMessage, reply, onCancelReply, editing = null, onCancelEdit, onEdited, outbox = null, restore = null, onRestored }: { conversationId: string; detail: ConversationDto; onMessage: (message: MessageDto) => void; reply: MessageDto | null; onCancelReply: () => void; editing?: MessageDto | null; onCancelEdit?: () => void; onEdited?: (message: MessageDto) => void;
+  /** the person's outbox («الرسائل بدون نت»): a text that cannot be sent is kept there instead of failing; null: the switch is off, a failure shows an error as before */
+  outbox?: Outbox | null; restore?: OutboxRestore | null; onRestored?: () => void }) {
  const { t } = useI18n(); const { notifyTyping } = useTyping(conversationId); const [body,setBody]=React.useState(""); const [files,setFiles]=React.useState<PendingFile[]>([]); const [mentions,setMentions]=React.useState<Array<{id:string;name:string}>>([]); const [busy,setBusy]=React.useState(false); const [error,setError]=React.useState("");
  const [progress, setProgress] = React.useState<number[]>([]);
  const [voice, setVoice] = React.useState<VoiceState>({ mode: "idle" });
@@ -56,11 +64,40 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
   recorder.current?.cancel(); // never leave the microphone on behind a closed conversation
  }, []);
 
- // an edit starts with the message's own words in the box, and ends with an empty box
+ // the unsent words of this conversation survive a navigation, a reload and a closed tab («الرسائل بدون نت»); the switch off: no draft is kept
+ const meId = detail.me.id ?? "";
+ const draftOn = detail.chatOutbox !== false && !detail.me.oversight && meId !== "";
+ const textRef = React.useRef<HTMLTextAreaElement | null>(null);
+ const membersRef = React.useRef(memberOptions);
+ membersRef.current = memberOptions;
+ function keepDraft(nextBody: string, nextMentions: Array<{ id: string; name: string }>) {
+  if (draftOn && !editing) saveComposerDraft(meId, conversationId, { body: nextBody, mentions: nextMentions.map(m => m.id) });
+ }
+ // an edit starts with the message's own words in the box; without one the box starts with this conversation's draft (or empty)
  React.useEffect(() => {
-  setBody(editing ? (editing.body ?? "") : "");
+  if (editing) {
+   setBody(editing.body ?? "");
+  } else {
+   const draft = draftOn ? loadComposerDraft(meId, conversationId) : null;
+   setBody(draft ? draft.body : "");
+   if (draft) setMentions(draft.mentions.flatMap(id => { const m = membersRef.current.find(x => x.id === id); return m ? [{ id: m.id, name: m.name }] : []; }));
+  }
   setError("");
- }, [editing]);
+ }, [editing, conversationId, meId, draftOn]);
+ // «عدّل» on a message that failed for good: its words come back to the box (after what is already typed there)
+ React.useEffect(() => {
+  if (!restore) return;
+  const next = body.trim() ? `${body}\n${restore.body}` : restore.body;
+  const restored = restore.mentions.flatMap(id => { const m = membersRef.current.find(x => x.id === id); return m ? [{ id: m.id, name: m.name }] : []; });
+  const nextMentions = [...mentions, ...restored.filter(r => !mentions.some(m => m.id === r.id))];
+  setClientId(messageClientId());
+  setBody(next);
+  setMentions(nextMentions);
+  keepDraft(next, nextMentions);
+  textRef.current?.focus();
+  onRestored?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per restored message
+ }, [restore]);
 
  function addFiles(list: FileList | null) {
   if (!list) return;
@@ -81,24 +118,53 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
  }
  function selectMention(id: string, name: string) {
   setClientId(messageClientId());
-  setBody(value => insertMention(value, name));
-  if (id === "*") return; // «@الكل» is read from the words of the message at send time, it is no person
-  setMentions(current => current.some(member => member.id === id) ? current : [...current, { id, name }]);
+  const nextBody = insertMention(body, name);
+  setBody(nextBody);
+  if (id === "*") { keepDraft(nextBody, mentions); return; } // «@الكل» is read from the words of the message at send time, it is no person
+  const nextMentions = mentions.some(member => member.id === id) ? mentions : [...mentions, { id, name }];
+  setMentions(nextMentions);
+  keepDraft(nextBody, nextMentions);
  }
  const failText = (e: unknown, fallback: string) => {
   const key = e instanceof Error ? e.message : "";
   return key.startsWith("chat.") ? t(key) : key || t(fallback);
  };
 
- async function postMessage(payload: Parameters<typeof buildChatMessagePayload>[0]) {
-  const response = await fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`, {
-   method: "POST",
-   headers: { "content-type": "application/json" },
-   body: JSON.stringify(buildChatMessagePayload(payload)),
-  });
-  if (!response.ok) throw new Error(t("chatc.message_failed"));
-  onMessage(await response.json() as MessageDto);
-  playChatSound("sent");
+ /** Keep a message in the outbox (the pending bubble appears from there). A full outbox is a clear error and the text stays in the box. */
+ function keep(queue: Outbox, payload: ChatSendPayload, retryAfterSec?: number) {
+  const result = queue.enqueue({
+   clientId: payload.clientId, conversationId, body: payload.body.trim(), mentions: payload.mentions,
+   ...(payload.replyToId ? { replyToId: payload.replyToId } : {}),
+   ...(payload.attachmentIds.length ? { attachmentIds: payload.attachmentIds } : {}),
+   ...(payload.mentionAll ? { mentionAll: true } : {}),
+  }, Date.now(), retryAfterSec !== undefined ? { retryAfterSec } : {});
+  if (!result.ok) throw new Error(t("outbox.full"));
+ }
+
+ /**
+  * Send one message. Through the outbox (a text, or a text with files already uploaded) when the network is gone or
+  * answers 502/503/504, or when this conversation already has messages waiting (they leave first: the order is kept);
+  * a voice note is never queued (`queueable` false): it keeps the error, as before.
+  */
+ async function postMessage(payload: ChatSendPayload, queueable = true) {
+  const queue = queueable ? outbox : null;
+  if (queue) {
+   const waiting = queue.forConversation(conversationId).some(i => !i.failed);
+   if (waiting || (typeof navigator !== "undefined" && navigator.onLine === false)) {
+    keep(queue, payload);
+    if (waiting) void queue.flush({ force: true });
+    return;
+   }
+  }
+  const outcome = await postChatMessage(conversationId, payload, undefined, queue ? SEND_TIMEOUT_MS : 0);
+  if (outcome.kind === "sent") {
+   onMessage(outcome.message);
+   playChatSound("sent");
+   return;
+  }
+  if (queue && outcome.kind === "transient") return keep(queue, payload);
+  if (queue && outcome.kind === "limited") return keep(queue, payload, outcome.retryAfterSec);
+  throw new Error(outcome.kind === "refused" ? t(outcome.failure.key) : t("chatc.message_failed"));
  }
 
  async function saveEdit() {
@@ -148,6 +214,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
    }
    await postMessage({ body: body.trim(), attachmentIds, mentions: selectedMentionIds(body, mentions), ...(canAll && mentionsAll(body) ? { mentionAll: true } : {}), ...(reply ? { replyToId: reply.id } : {}), clientId });
    for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
+   if (draftOn) clearComposerDraft(meId, conversationId);
    setBody("");
    setFiles([]);
    setMentions([]);
@@ -205,7 +272,7 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
   try {
    const result = await uploadWithProgress("/api/chat/uploads", createVoiceUploadFormData(recording), percent => setProgress([percent]));
    if (typeof result["id"] !== "string") throw new Error(t("chat.f.upload_failed"));
-   await postMessage({ body: "", attachmentIds: [result["id"]], mentions: [], ...(reply ? { replyToId: reply.id } : {}), clientId: messageClientId(), voice: true });
+   await postMessage({ body: "", attachmentIds: [result["id"]], mentions: [], ...(reply ? { replyToId: reply.id } : {}), clientId: messageClientId(), voice: true }, false);
    onCancelReply();
   } catch (e) {
    setError(failText(e, "chat.f.upload_failed"));
@@ -354,9 +421,10 @@ export function ChatComposer({ conversationId, detail, onMessage, reply, onCance
     <label className="sr-only" htmlFor="chat-message">{t("chatc.message")}</label>
     <textarea
      id="chat-message"
+     ref={textRef}
      rows={1}
      value={body}
-     onChange={event => { setClientId(messageClientId()); setBody(event.currentTarget.value); if (!editing && event.currentTarget.value.trim()) notifyTyping(); }}
+     onChange={event => { setClientId(messageClientId()); setBody(event.currentTarget.value); keepDraft(event.currentTarget.value, mentions); if (!editing && event.currentTarget.value.trim()) notifyTyping(); }}
      // Enter sends (the owner, 2026-10-26), Shift+Enter is a new line; never while an input method is composing a word
      onKeyDown={event => {
       // while the list of people is open the keys drive IT: arrows move, Enter or Tab picks, Escape closes it

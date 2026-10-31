@@ -48,8 +48,22 @@ describe("«الميزات»: who switches", () => {
     expect(res.status).toBe(200);
     expect(res.json?.["features"]).toEqual(FEATURES.map((key) => ({ key, on: key !== "ownerHiddenOnline" && key !== "ownerAssistant" })));
     expect(await isFeatureOn(w.org.id, "watch")).toBe(true);
+    // «حقول مخصصة» is listed and on by default (its doors are pinned in custom-fields.test.ts)
+    expect(await isFeatureOn(w.org.id, "customFields")).toBe(true);
+    expect(await isFeatureOn(w.org.id, "chatOutbox")).toBe(true); // «الرسائل بدون نت»: on until the owner turns it off
     // «الأداء والتطوير» is a switch of its own, on by default
     expect((res.json?.["features"] as { key: string; on: boolean }[]).find((f) => f.key === "teamDevelopment")).toEqual({ key: "teamDevelopment", on: true });
+  });
+
+  it("«آخر ظهور» is listed ON, and the owner's switch turns it off and on for his company alone", async () => {
+    const w = await world();
+    await as(w.owner.id, w.ws.id);
+    const listed = (await call(featuresRoute.GET)).json?.["features"] as { key: string; on: boolean }[];
+    expect(listed.find((f) => f.key === "lastSeen")).toEqual({ key: "lastSeen", on: true });
+    expect((await flip("lastSeen", false)).status).toBe(200);
+    expect(await isFeatureOn(w.org.id, "lastSeen")).toBe(false);
+    expect((await flip("lastSeen", true)).status).toBe(200);
+    expect(await isFeatureOn(w.org.id, "lastSeen")).toBe(true);
   });
 
   it("only the owner switches: an admin and a member are refused, and nothing changes", async () => {

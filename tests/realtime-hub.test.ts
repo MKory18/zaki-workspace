@@ -23,6 +23,8 @@ import { resetPresenceForTests } from "@/server/realtime/presence";
 
 vi.mock("@/server/db", () => ({
   db: {
+    // the presence layer records «آخر ظهور» through one raw UPDATE (fire-and-forget)
+    $executeRaw: vi.fn().mockResolvedValue(0),
     user: { update: vi.fn().mockResolvedValue({}) },
     conversation: { findUnique: vi.fn().mockResolvedValue({ kind: "DM" }) },
   },

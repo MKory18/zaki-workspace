@@ -20,6 +20,8 @@ import { listMilestones } from "@/server/services/milestones";
 import { rewardLensFor } from "@/server/services/rewards";
 import { pinnedTasks } from "@/server/services/pinned";
 import { PinnedStrip } from "@/components/rewards/pinned-strip";
+import { fieldDefsOf, isPartnerIn } from "@/server/services/custom-fields";
+import { ManageFields } from "@/components/custom-fields/manage-fields";
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
   const { t } = getServerT();
@@ -59,6 +61,18 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     canWriteInWorkspace(membership.role, spaceRow?.role) &&
     actorCanWork(actor, "projects.edit");
   const milestones = milestonesOn ? await listMilestones(project.id, actor.orgId) : [];
+
+  // «حقول مخصصة»: «إدارة الحقول» is drawn while the company's switch is on and never for an external partner (no field is
+  // theirs to read); the controls are the space's ADMIN's and the owner's (the server decides again on every request)
+  const fieldsOn =
+    (await actorFeatureOn(actor, "customFields")) &&
+    !(await isPartnerIn({ orgId: actor.orgId, userId: user.id, orgRole: membership?.role ?? actor.role }, project.workspace.id));
+  const canManageFields =
+    fieldsOn &&
+    membership != null &&
+    (membership.role === "OWNER" || (membership.role !== "GUEST" && (spaceRow?.role === "ADMIN" || (membership.role === "ADMIN" && spaceRow != null)))) &&
+    actorCanWork(actor, "projects.edit");
+  const customFields = fieldsOn ? await fieldDefsOf(project.id, { archived: canManageFields }) : [];
 
   // «مثبّتة»: the tasks pinned in this project, first thing on the page (while the company's switch is on)
   const lens = await rewardLensFor(actor, project.workspace.id);
@@ -101,7 +115,14 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       <section>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-fg">{t("proj.boards")}</h2>
-          <BoardCreateButton projectId={project.id} />
+          <div className="flex items-center gap-2">
+            {fieldsOn ? (
+              <Link href={`/list?project=${project.id}`} className="text-xs text-accent hover:underline">
+                {t("fields.list.open")}
+              </Link>
+            ) : null}
+            <BoardCreateButton projectId={project.id} />
+          </div>
         </div>
         {project.boards.length === 0 ? (
           <p className="text-sm text-fg-muted">{t("board.empty")}</p>
@@ -120,6 +141,8 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           </div>
         )}
       </section>
+
+      {fieldsOn ? <ManageFields projectId={project.id} initial={customFields} canEdit={canManageFields} /> : null}
 
       {milestonesOn ? (
         <MilestonesCard

@@ -33,6 +33,10 @@ import { RunningChip } from "@/components/time/running-chip";
 import { RecurringBadge } from "@/components/recurrence/recurring-badge";
 import type { StepProgress } from "@/lib/task-steps";
 import { PinMark, RewardBadge } from "@/components/rewards/reward-badge";
+import { FieldChipPicker, FieldChips, type PickerDef } from "@/components/custom-fields/field-chips";
+import { FIELDS_ANCHOR, requiredFieldsOf } from "@/lib/custom-fields";
+import type { FieldCell } from "@/lib/custom-fields-display";
+import { rt } from "@/lib/reminders/client";
 
 export interface ColumnData {
   id: string;
@@ -57,6 +61,8 @@ export interface TaskCardData {
   completed: boolean;
   /** «٣ من ٥»: the task's checklist progress; absent when it has no steps or the company's «الخطوات» switch is off. */
   steps?: StepProgress;
+  /** «حقول مخصصة»: the task's answers as chips, by field id; absent for a partner or while the switch is off. */
+  fields?: Record<string, FieldCell>;
   /** «الوقت شغّال»: the viewer's own timer runs on this task (only while the company's «حساب الوقت» switch is on). */
   running?: boolean;
   /** «🔁 متكررة»: the task belongs to a running series; absent when it does not or the company's «مهمة متكررة» switch is off. */
@@ -72,6 +78,8 @@ interface BoardViewProps {
   columns: ColumnData[];
   tasks: TaskCardData[];
   canEdit: boolean;
+  /** «حقول مخصصة»: the fields the person may pick to show on the cards (empty: no picker). */
+  fieldDefs?: PickerDef[];
 }
 
 interface QuickAddState {
@@ -81,7 +89,7 @@ interface QuickAddState {
 }
 
 /** Kanban board. Optimistic DnD with server rollback on failure. */
-export function BoardView({ board, columns, tasks, canEdit }: BoardViewProps) {
+export function BoardView({ board, columns, tasks, canEdit, fieldDefs = [] }: BoardViewProps) {
   const { t } = useI18n();
   const { toast } = useToast();
   const [items, setItems] = useState<TaskCardData[]>(tasks);
@@ -138,10 +146,17 @@ export function BoardView({ board, columns, tasks, canEdit }: BoardViewProps) {
     moveMutation.mutate(
       { taskId: activeTaskId, columnId: targetColumnId, index },
       {
-        onError: () => {
+        onError: (err) => {
           // rollback — never show success when the server rejected the move
           setItems(previous);
           queryClient.invalidateQueries({ queryKey: ["board"] });
+          // «حقول مخصصة»: finishing needs the project's required fields: say which, and open the task where they are filled
+          const missing = requiredFieldsOf(err);
+          if (missing) {
+            toast(rt("fields.required_toast", { labels: missing.map((m) => m.label).join("، ") }), "error");
+            window.location.assign(`/tasks/${activeTaskId}#${FIELDS_ANCHOR}`);
+            return;
+          }
           toast(t("board.moveFailed"), "error");
           setQuick((q) => ({ ...q, error: t("board.moveFailed") }));
           window.setTimeout(
@@ -194,6 +209,7 @@ export function BoardView({ board, columns, tasks, canEdit }: BoardViewProps) {
           <h1 className="text-base font-semibold text-fg">{board.name}</h1>
           <p className="text-xs text-fg-muted">{board.projectName}</p>
         </div>
+        <FieldChipPicker defs={fieldDefs} />
       </header>
 
       <DndContext
@@ -455,6 +471,7 @@ function TaskCardContent({ task }: { task: TaskCardData }) {
         <RunningChip running={task.running} />
         <RecurringBadge recurring={task.recurring} />
       </div>
+      <FieldChips cells={task.fields} block />
     </div>
   );
 }
