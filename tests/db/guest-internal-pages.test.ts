@@ -38,6 +38,7 @@ import SettingsPage from "@/app/(app)/settings/page";
 import ArchivePage from "@/app/(app)/archive/page";
 import OwnerBoardPage from "@/app/(app)/owner/page";
 import OwnerAssistantPage from "@/app/(app)/owner/assistant/page";
+import CheckinsPage from "@/app/(app)/checkins/page";
 import ApprovalsPage from "@/app/(app)/approvals/page";
 import StructurePage from "@/app/(app)/structure/page";
 import DevelopmentPage from "@/app/(app)/development/page";
@@ -401,6 +402,7 @@ const TAB_PAGES: Record<TabKey, PageCall> = {
   archive: () => ArchivePage(),
   board: () => OwnerBoardPage({ searchParams: {} }),
   assistant: () => OwnerAssistantPage({ searchParams: {} }),
+  checkins: () => CheckinsPage(),
   approvals: () => ApprovalsPage({ searchParams: {} }),
   structure: () => StructurePage(),
   development: () => DevelopmentPage({ searchParams: {} }),

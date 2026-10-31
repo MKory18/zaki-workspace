@@ -38,7 +38,7 @@ const place = (nav: NavModel, key: PlaceKey): NavPlace => {
 };
 const tabs = (nav: NavModel, key: PlaceKey) => place(nav, key).tabs.map((t) => t.key);
 
-const WORK_ALL: TabKey[] = ["my-work", "projects", "list", "calendar", "goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "approvals"];
+const WORK_ALL: TabKey[] = ["my-work", "projects", "list", "calendar", "goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "approvals", "checkins"];
 // goals and ideas are the team's own (docs/PHASE0-AUDIT.md R10): a guest is offered the four tabs about their own work
 const WORK_GUEST: TabKey[] = ["my-work", "projects", "list", "calendar"];
 // «لوحتي» (`board.self`) is on by rank for every staff rank (the owner's ask, 2026-10-30), so each of them has the «board» tab
@@ -258,9 +258,9 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
     ["an unknown rank with every capability", { role: "SUPERUSER" as unknown as NavSubject["role"], caps: [...CAPABILITIES] }],
   ];
 
-  it("the tabs are the twenty-four of the map, each once", () => {
-    expect(ALL_TABS).toHaveLength(24);
-    expect(new Set(ALL_TABS).size).toBe(24);
+  it("the tabs are the twenty-five of the map, each once", () => {
+    expect(ALL_TABS).toHaveLength(25);
+    expect(new Set(ALL_TABS).size).toBe(25);
   });
 
   it("agrees with buildNav for every tab and every kind of person: a tab is open exactly when the map draws it", () => {
@@ -283,7 +283,7 @@ describe("canOpenTab / offeredToGuests: the one rule behind «is this tab offere
   it("offeredToGuests: exactly my work, projects, list and calendar", () => {
     expect(ALL_TABS.filter((key) => offeredToGuests(key))).toEqual(WORK_GUEST);
     expect(ALL_TABS.filter((key) => !offeredToGuests(key))).toEqual(
-      ["goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "approvals", "files", "team", "space", "board", "assistant", "structure", "development", "reports", "automation", "telegram", "settings", "archive"],
+      ["goals", "ideas", "production", "departments", "tickets", "campaigns", "crm", "approvals", "checkins", "files", "team", "space", "board", "assistant", "structure", "development", "reports", "automation", "telegram", "settings", "archive"],
     );
   });
 
@@ -410,6 +410,7 @@ describe("the words", () => {
       tickets: "التذاكر",
       campaigns: "الحملات",
       crm: "العملاء",
+      checkins: "التسجيل اليومي",
       approvals: "الموافقات",
       files: "الملفات",
       team: "الفريق",

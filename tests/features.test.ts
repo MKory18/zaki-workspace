@@ -107,6 +107,17 @@ describe("«الميزات»: a switched-off feature is gone from the map and fr
     expect(newActionsFor(owner)).toContain("watch");
   });
 
+  it("«التسجيل اليومي» off: no tab in «الشغل» for anybody, and its place is still there; on again: the tab is back, for staff only", () => {
+    const work = (subject: Parameters<typeof buildNav>[0]) => buildNav(subject).places.find((p) => p.key === "work")?.tabs.map((t) => t.key) ?? [];
+    expect(work(owner)).toContain("checkins");
+    expect(work({ ...owner, off: ["checkins"] })).not.toContain("checkins");
+    expect(work({ ...owner, off: ["checkins"] })).toEqual(work(owner).filter((k) => k !== "checkins"));
+    expect(buildNav({ ...owner, off: ["checkins"] }).places.map((p) => p.key)).toContain("work");
+    // never for an external partner, switch or no switch
+    expect(work({ role: "GUEST" as const, caps: [] })).not.toContain("checkins");
+    expect(featuresOff({ features: { checkins: false } })).toContain("checkins");
+  });
+
   it("switching a feature off changes nothing else on the map", () => {
     const on = buildNav(owner).places.filter((p) => p.key !== "watch");
     expect(buildNav({ ...owner, off: ["watch"] }).places).toEqual(on);

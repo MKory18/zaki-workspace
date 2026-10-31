@@ -1,3 +1,4 @@
+import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 
 // the pages call notFound(); no running Next app is needed here
@@ -18,10 +19,15 @@ import * as watchRoute from "@/app/api/watch/route";
 import * as sessionRoute from "@/app/api/watch/[id]/route";
 import * as remoteRoute from "@/app/api/watch/[id]/remote/route";
 import WatchPage from "@/app/(app)/watch/page";
+import CheckinsPage from "@/app/(app)/checkins/page";
+import * as checkinsTodayRoute from "@/app/api/checkins/today/route";
 import { SPACE_COOKIE } from "@/server/services/current-space";
 import { actorFeatureOn, isFeatureOn } from "@/server/services/features";
 import { FEATURES } from "@/lib/features";
 import { call, db, loginAs, makeTeam, makeUser, makeWorkspace } from "./helpers";
+
+// the pages are TSX: under vitest their JSX compiles to React.createElement, which needs a global React
+(globalThis as { React?: typeof React }).React = React;
 
 const jar = () => (globalThis as { __zkCookieJar?: Map<string, string> }).__zkCookieJar as Map<string, string>;
 const LINK = "https://youtu.be/dQw4w9WgXcQ";
@@ -130,5 +136,30 @@ describe("«الميزات»: «نتفرّج سوا» switched off is gone, and 
     const back = await call(watchRoute.GET);
     expect(back.status).toBe(200);
     expect((back.json?.["sessions"] as { id: string }[]).map((s) => s.id)).toEqual([id]);
+  });
+});
+
+describe("«الميزات»: «التسجيل اليومي» (on by default) switched off is gone, and back when switched on", () => {
+  it("off: its routes answer «not found» and its page is not there; on: both answer again", async () => {
+    const w = await world();
+    await as(w.member.id, w.ws.id);
+    const url = `http://localhost/api/checkins/today?workspaceId=${w.ws.id}`;
+    expect((await call(checkinsTodayRoute.GET, { url })).status).toBe(200);
+    expect(await isFeatureOn(w.org.id, "checkins")).toBe(true);
+
+    await as(w.owner.id, w.ws.id);
+    expect((await flip("checkins", false)).json).toEqual({ key: "checkins", on: false });
+    await as(w.member.id, w.ws.id);
+    const off = await call(checkinsTodayRoute.GET, { url });
+    expect(off.status).toBe(404);
+    expect(off.json?.["message"]).toBe("features.off");
+    await expect(CheckinsPage()).rejects.toThrow("NEXT_NOT_FOUND");
+
+    await as(w.owner.id, w.ws.id);
+    await flip("checkins", true);
+    await as(w.member.id, w.ws.id);
+    expect((await call(checkinsTodayRoute.GET, { url })).status).toBe(200);
+    // the page draws again (it does not throw «not found»)
+    await expect(CheckinsPage()).resolves.toBeTruthy();
   });
 });

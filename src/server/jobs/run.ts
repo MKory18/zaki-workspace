@@ -3,6 +3,7 @@ import { fireDueReminders, type RemindersRun } from "./reminders";
 import { fireDueRecurrences, type RecurrencesRun } from "./recurrence";
 import { autoStopTimers, type TimeEntriesRun } from "./time-entries";
 import { expireAiProposals, type AiProposalsRun } from "./ai-proposals";
+import { runCheckins, type CheckinsRun } from "./checkins";
 
 /**
  * Every background job of the app, in one place: `runDueJobs(now)` runs whatever is due at `now`.
@@ -19,12 +20,14 @@ export interface JobsRun {
   timeEntries: TimeEntriesRun | null;
   /** «مساعد المالك»: the proposals nobody decided in 48 hours, marked EXPIRED. */
   aiProposals: AiProposalsRun | null;
+  /** «التسجيل اليومي»: the rounds opened for the spaces whose time has come, and the one nudge three hours later. */
+  checkins: CheckinsRun | null;
   /** The names of the jobs that threw. */
   failed: string[];
 }
 
 export async function runDueJobs(now: Date = new Date()): Promise<JobsRun> {
-  const result: JobsRun = { reminders: null, recurrences: null, timeEntries: null, aiProposals: null, failed: [] };
+  const result: JobsRun = { reminders: null, recurrences: null, timeEntries: null, aiProposals: null, checkins: null, failed: [] };
   try {
     result.reminders = await fireDueReminders(now);
   } catch (err) {
@@ -48,6 +51,12 @@ export async function runDueJobs(now: Date = new Date()): Promise<JobsRun> {
   } catch (err) {
     result.failed.push("aiProposals");
     log.error("jobs.failed", { job: "aiProposals", message: err instanceof Error ? err.message : String(err) });
+  }
+  try {
+    result.checkins = await runCheckins(now);
+  } catch (err) {
+    result.failed.push("checkins");
+    log.error("jobs.failed", { job: "checkins", message: err instanceof Error ? err.message : String(err) });
   }
   return result;
 }
